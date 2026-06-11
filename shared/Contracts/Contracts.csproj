@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Fts.Contracts</RootNamespace>
+    <AssemblyName>Fts.Contracts</AssemblyName>
+    <Deterministic>true</Deterministic>
+  </PropertyGroup>
+
+</Project>
