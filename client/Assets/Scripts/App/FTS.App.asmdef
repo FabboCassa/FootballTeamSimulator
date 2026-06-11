@@ -1,0 +1,21 @@
+{
+    "name": "FTS.App",
+    "rootNamespace": "Fts.App",
+    "references": [
+        "FTS.Services",
+        "FTS.Presenters",
+        "FTS.Views",
+        "FTS.MatchView",
+        "VContainer",
+        "UniTask"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

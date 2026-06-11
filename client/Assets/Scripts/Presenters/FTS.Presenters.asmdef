@@ -1,0 +1,18 @@
+{
+    "name": "FTS.Presenters",
+    "rootNamespace": "Fts.Presenters",
+    "references": [
+        "FTS.Services",
+        "FTS.Views",
+        "UniTask"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
