@@ -25,6 +25,7 @@ client/crashlytics-build.properties
 
 # Unity meta files for the generated DLLs are kept (stable GUIDs)
 !client/Assets/Plugins/SimCore/*.dll.meta
+!client/Assets/Plugins/SimCore/*.pdb.meta
 
 # ===== OS =====
 .DS_Store
