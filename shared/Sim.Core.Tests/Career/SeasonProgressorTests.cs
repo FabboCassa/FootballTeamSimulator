@@ -1,0 +1,191 @@
+using System.Collections.Generic;
+using System.Linq;
+using NUnit.Framework;
+using Sim.Core.Career;
+using Sim.Core.Config;
+using Sim.Core.Domain;
+using Sim.Core.Generation;
+using Sim.Core.Match;
+using Sim.Core.Random;
+
+namespace Sim.Core.Tests.Career
+{
+    [TestFixture]
+    public class SeasonProgressorTests
+    {
+        private const ulong WorldSeed = 987654321;
+
+        private static (League league, Season season) NewWorld()
+        {
+            League league = new LeagueGenerator().Generate(new Pcg32(WorldSeed));
+            var season = new Season
+            {
+                Fixtures = new FixtureGenerator().Generate(league, new Pcg32(WorldSeed, 777))
+            };
+            return (league, season);
+        }
+
+        private static List<MatchOutcome> AdvanceDays(
+            SeasonProgressor progressor,
+            League league,
+            Season season,
+            int days,
+            IReadOnlyDictionary<int, LineupPlan>? plans = null)
+        {
+            var outcomes = new List<MatchOutcome>();
+            for (int i = 0; i < days; i++)
+                outcomes.AddRange(progressor.AdvanceDay(league, season, WorldSeed, plans));
+            return outcomes;
+        }
+
+        [Test]
+        public void QuietDays_PlayNothing_AndAdvanceTheCalendar()
+        {
+            (League league, Season season) = NewWorld();
+            var progressor = new SeasonProgressor();
+
+            List<MatchOutcome> outcomes = progressor.AdvanceDay(league, season, WorldSeed);
+
+            Assert.That(outcomes, Is.Empty);
+            Assert.That(season.CurrentDay, Is.EqualTo(2));
+        }
+
+        [Test]
+        public void FirstMatchDay_PlaysExactlyRoundOne()
+        {
+            (League league, Season season) = NewWorld();
+            var progressor = new SeasonProgressor();
+            int firstMatchDay = new SeasonBalance().FirstMatchDay;
+
+            List<MatchOutcome> outcomes = AdvanceDays(progressor, league, season, firstMatchDay - 1);
+
+            Assert.That(outcomes, Has.Count.EqualTo(10), "20 clubs => 10 matches on matchday 1.");
+            Assert.That(outcomes.All(o => o.Fixture.Round == 1 && o.Fixture.Played), Is.True);
+            Assert.That(season.Fixtures.Count(f => f.Played), Is.EqualTo(10));
+        }
+
+        [Test]
+        public void Results_AreDeterministicPerWorldSeed()
+        {
+            (League leagueA, Season seasonA) = NewWorld();
+            (League leagueB, Season seasonB) = NewWorld();
+            var progressor = new SeasonProgressor();
+
+            AdvanceDays(progressor, leagueA, seasonA, 14);
+            AdvanceDays(progressor, leagueB, seasonB, 14);
+
+            for (int i = 0; i < seasonA.Fixtures.Count; i++)
+            {
+                Fixture a = seasonA.Fixtures[i];
+                Fixture b = seasonB.Fixtures[i];
+                Assert.That((b.Played, b.HomeGoals, b.AwayGoals),
+                    Is.EqualTo((a.Played, a.HomeGoals, a.AwayGoals)),
+                    $"Fixture {a.Id} diverged between identical worlds.");
+            }
+
+            Assert.That(seasonA.Fixtures.Count(f => f.Played), Is.EqualTo(20),
+                "Two matchdays should have been played in 14 days.");
+        }
+
+        [Test]
+        public void Scores_StayWithinSaneBounds()
+        {
+            (League league, Season season) = NewWorld();
+            var progressor = new SeasonProgressor();
+
+            List<MatchOutcome> outcomes = AdvanceDays(progressor, league, season, 14);
+
+            foreach (Fixture f in outcomes.Select(o => o.Fixture))
+            {
+                Assert.That(f.HomeGoals, Is.InRange(0, 12));
+                Assert.That(f.AwayGoals, Is.InRange(0, 12));
+            }
+        }
+
+        [Test]
+        public void LeagueTable_TotalsAreConsistent_AfterTwoMatchdays()
+        {
+            (League league, Season season) = NewWorld();
+            var progressor = new SeasonProgressor();
+
+            AdvanceDays(progressor, league, season, 14);
+
+            List<LeagueTableRow> table = LeagueTable.Compute(league, season);
+
+            Assert.That(table.Sum(r => r.Played), Is.EqualTo(40), "20 played fixtures => 40 club-appearances.");
+            Assert.That(table.Sum(r => r.GoalsFor), Is.EqualTo(table.Sum(r => r.GoalsAgainst)));
+            Assert.That(table.Sum(r => r.Wins), Is.EqualTo(table.Sum(r => r.Losses)));
+            Assert.That(table.All(r => r.Played == 2), Is.True);
+        }
+
+        [Test]
+        public void ScorerTallies_MatchTotalGoals()
+        {
+            (League league, Season season) = NewWorld();
+            var progressor = new SeasonProgressor();
+
+            AdvanceDays(progressor, league, season, 14);
+
+            int goalsFromFixtures = season.Fixtures.Where(f => f.Played).Sum(f => f.HomeGoals + f.AwayGoals);
+
+            Assert.That(season.Scorers.Sum(t => t.Goals), Is.EqualTo(goalsFromFixtures));
+            Assert.That(season.Scorers.All(t => t.Goals > 0), Is.True);
+            Assert.That(season.Scorers.Select(t => t.PlayerId).Distinct().Count(),
+                Is.EqualTo(season.Scorers.Count), "One tally per player.");
+            Assert.That(season.Scorers.All(t => league.FindPlayer(t.PlayerId) != null), Is.True,
+                "Every scorer must exist in the league.");
+        }
+
+        [Test]
+        public void LineupPlan_IsUsedForThatClub()
+        {
+            (League league, Season season) = NewWorld();
+            var progressor = new SeasonProgressor();
+            Club club = league.Clubs[0];
+
+            // A distinctive XI: first 11 players by id, regardless of fit.
+            var plan = new LineupPlan { ClubId = club.Id };
+            List<Player> byId = club.Squad.Players.OrderBy(p => p.Id).ToList();
+            for (int i = 0; i < Lineup.Size; i++)
+                plan.Slots.Add(new LineupPlanSlot
+                {
+                    Role = LineupSelector.DefaultFormation[i],
+                    PlayerId = byId[i].Id
+                });
+
+            var plans = new Dictionary<int, LineupPlan> { [club.Id] = plan };
+            var planIds = plan.Slots.Select(s => s.PlayerId).ToHashSet();
+
+            List<MatchOutcome> outcomes = AdvanceDays(progressor, league, season, 7, plans);
+            MatchOutcome userMatch = outcomes.Single(o => o.Fixture.Involves(club.Id));
+
+            var clubEvents = userMatch.Report.Events.Where(e => e.ClubId == club.Id).ToList();
+            Assert.That(clubEvents, Is.Not.Empty, "Expected at least one chance for the club over a match.");
+            Assert.That(clubEvents.All(e => planIds.Contains(e.PlayerId)), Is.True,
+                "Every event of the planned club must involve a planned player.");
+        }
+
+        [Test]
+        public void InvalidLineupPlan_FallsBackToBestEleven()
+        {
+            (League league, Season season) = NewWorld();
+            var progressor = new SeasonProgressor();
+            Club club = league.Clubs[0];
+
+            var plan = new LineupPlan { ClubId = club.Id };
+            for (int i = 0; i < Lineup.Size; i++)
+                plan.Slots.Add(new LineupPlanSlot
+                {
+                    Role = LineupSelector.DefaultFormation[i],
+                    PlayerId = 99000 + i // not in the squad
+                });
+
+            var plans = new Dictionary<int, LineupPlan> { [club.Id] = plan };
+
+            List<MatchOutcome> outcomes = AdvanceDays(progressor, league, season, 7, plans);
+            MatchOutcome userMatch = outcomes.Single(o => o.Fixture.Involves(club.Id));
+
+            Assert.That(userMatch.Fixture.Played, Is.True, "Invalid plan must not prevent the match.");
+        }
+    }
+}

@@ -13,6 +13,23 @@ namespace Sim.Core.Config
 
         public GenerationBalance Generation { get; set; } = new GenerationBalance();
         public MatchBalance Match { get; set; } = new MatchBalance();
+        public SeasonBalance Season { get; set; } = new SeasonBalance();
+    }
+
+    /// <summary>Tunables for the season calendar and league table.</summary>
+    public sealed class SeasonBalance
+    {
+        /// <summary>Career day of matchday 1.</summary>
+        public int FirstMatchDay { get; set; } = 7;
+
+        /// <summary>Days between consecutive matchdays.</summary>
+        public int DaysBetweenRounds { get; set; } = 7;
+
+        public int PointsForWin { get; set; } = 3;
+        public int PointsForDraw { get; set; } = 1;
+
+        /// <summary>Clubs promoted/relegated between adjacent divisions at season end.</summary>
+        public int PromotedRelegatedCount { get; set; } = 3;
     }
 
     /// <summary>Tunables for procedural league/player generation.</summary>
@@ -23,6 +40,9 @@ namespace Sim.Core.Config
         public int BottomClubStrength { get; set; } = 52;
         /// <summary>Random jitter (+/-) applied to each club's baseline strength.</summary>
         public int ClubStrengthJitter { get; set; } = 2;
+
+        /// <summary>How much weaker each lower division is (applied to top/bottom strength).</summary>
+        public int DivisionStrengthStep { get; set; } = 14;
 
         // --- Player skills ---
         /// <summary>Random jitter (+/-) applied to each player's target overall around the club baseline.</summary>

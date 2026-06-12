@@ -271,3 +271,4 @@ Navigation = a `ScreenNavigator` managing a stack of UI Toolkit screens (cheap, 
 | 6 | Online seasons reset squads; ranking persists | Fairness in ranked, no pay/grind snowball |
 | 7 | No injuries; fatigue/form with capped maluses | "Challenge, not chaos" design pillar |
 | 8 | Offline-first SP (no account needed) | SP must work without servers; servers added in later phases |
+| 9 | Localization: flat key→text JSON per language in `Resources/Localization/`; views get a translate delegate from presenters | Translator-friendly files; views stay dumb without referencing Services; missing keys fall back to EN then render the key (visible in playtests) |

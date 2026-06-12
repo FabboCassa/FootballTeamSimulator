@@ -40,12 +40,12 @@ namespace Sim.Core.Generation
 
                 var club = new Club
                 {
-                    Id = c + 1,
+                    Id = _options.FirstClubId + c,
                     Name = clubNames[c],
                     ShortName = MakeShortName(clubNames[c]),
                     Coach = new Coach
                     {
-                        Id = c + 1,
+                        Id = _options.FirstClubId + c,
                         Name = $"{NameDatabase.FirstNames[rng.NextInt(0, NameDatabase.FirstNames.Length)]} " +
                                $"{NameDatabase.LastNames[rng.NextInt(0, NameDatabase.LastNames.Length)]}",
                         IsHuman = false,
@@ -80,13 +80,18 @@ namespace Sim.Core.Generation
             return league;
         }
 
-        /// <summary>Linear strength spread from top club to bottom club.</summary>
+        /// <summary>
+        /// Linear strength spread from top club to bottom club; lower divisions
+        /// shift the whole range down by DivisionStrengthStep per division.
+        /// </summary>
         private int ClubBaseline(int clubIndex)
         {
-            if (_options.ClubCount <= 1) return _cfg.TopClubStrength;
+            int step = _cfg.DivisionStrengthStep * (_options.Division - 1);
+            int top = _cfg.TopClubStrength - step;
+            int bottom = _cfg.BottomClubStrength - step;
 
-            int top = _cfg.TopClubStrength;
-            int bottom = _cfg.BottomClubStrength;
+            if (_options.ClubCount <= 1) return top;
+
             return top - (top - bottom) * clubIndex / (_options.ClubCount - 1);
         }
 

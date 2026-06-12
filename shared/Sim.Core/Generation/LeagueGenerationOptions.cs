@@ -11,7 +11,10 @@ namespace Sim.Core.Generation
         public int Division { get; set; } = 1;
         public int ClubCount { get; set; } = 20;
 
-        /// <summary>First id assigned to generated players (clubs use 1..ClubCount).</summary>
+        /// <summary>First id assigned to generated players.</summary>
         public int FirstPlayerId { get; set; } = 1;
+
+        /// <summary>First id assigned to generated clubs (keep divisions non-overlapping).</summary>
+        public int FirstClubId { get; set; } = 1;
     }
 }

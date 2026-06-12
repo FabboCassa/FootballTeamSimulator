@@ -15,7 +15,7 @@ Phases are sequential; each task is small and **individually testable** (✅ = h
   ✅ A test MonoBehaviour calls a Sim.Core function and logs its result in Unity.
 - [x] **0.4 Deterministic RNG** — PCG32 implementation in `Sim.Core.Random`, seedable, serializable state.
   ✅ Unit test: same seed ⇒ identical 10,000-number sequence; state save/restore mid-stream works.
-- [~] **0.5 CI** — GitHub Actions: build + test Sim.Core on every push.
+- [x] **0.5 CI** — GitHub Actions: build + test Sim.Core on every push.
   ✅ Badge green on a test PR; a deliberately broken test fails the pipeline.
 
 ---
@@ -41,19 +41,19 @@ Phases are sequential; each task is small and **individually testable** (✅ = h
 ## Phase 2 — Single Player Core Loop
 *Goal: playable skeleton — start a career, advance days, see matches happen, finish a season.*
 
-- [ ] **2.1 App shell & navigation** — Boot → MainMenu → Hub with ScreenNavigator (screen stack), DI scopes (App/Game/Screen), message bus.
+- [x] **2.1 App shell & navigation** — Boot → MainMenu → Hub with ScreenNavigator (screen stack), DI scopes (App/Game/Screen), message bus.
   ✅ Navigate between placeholder screens on desktop and phone aspect ratios; back button works.
-- [ ] **2.2 Career setup & save system** — New career: pick generated league + club; versioned gzip-JSON save/load via `ISaveRepository`.
+- [x] **2.2 Career setup & save system** — New career: pick generated league + club; versioned gzip-JSON save/load via `ISaveRepository`.
   ✅ Create career, quit, relaunch, continue — state identical. Corrupted file shows friendly error, doesn't crash.
-- [ ] **2.3 Calendar & advance day** — `LocalClock`, fixture generation (double round-robin), advance-day button simulating due AI matches headless.
+- [x] **2.3 Calendar & advance day** — `LocalClock`, fixture generation (double round-robin), advance-day button simulating due AI matches headless.
   ✅ Advance through a week: AI fixtures get results, league table updates correctly (points, GD tiebreakers).
-- [ ] **2.4 Squad screen** — Roster list with attributes, positions, age, value; lineup picker (formation slots, validity checks).
+- [x] **2.4 Squad screen** — Roster list with attributes, positions, age, value; lineup picker (formation slots, validity checks).
   ✅ Set a lineup, save, advance to match day — chosen XI is used in the sim.
-- [ ] **2.5 League screen** — Table, fixtures/results, top scorers.
+- [x] **2.5 League screen** — Table, fixtures/results, top scorers.
   ✅ Data matches simulated results; updates after each advance.
-- [ ] **2.6 Match day (instant)** — User match simulates with chosen lineup; result + event summary screen.
+- [x] **2.6 Match day (instant)** — User match simulates with chosen lineup; result + event summary screen.
   ✅ Play 5 matches; results reflect lineup strength (bench the XI ⇒ visibly worse outcomes over a season harness).
-- [ ] **2.7 Season rollover** — End of season: final standings, promotion/relegation between two generated divisions, new fixtures, player ages +1.
+- [x] **2.7 Season rollover** — End of season: final standings, promotion/relegation between two generated divisions, new fixtures, player ages +1.
   ✅ Finish a full season (can be auto-advanced); correct teams promoted/relegated; new season starts clean.
 
 🏁 **Milestone: vertical slice — a full season is playable end-to-end.**
@@ -119,7 +119,7 @@ Phases are sequential; each task is small and **individually testable** (✅ = h
 
 - [ ] **6.1 Art pass** — Cartoon style: kits, player tokens (faces later), pitch, UI theme, club color/logo generator.
   ✅ Visual review on phone + desktop; build size within target.
-- [ ] **6.2 UX pass** — Onboarding/tutorial, Inbox notifications hub, confirmations, empty states, localization IT/EN.
+- [ ] **6.2 UX pass** — Onboarding/tutorial, Inbox notifications hub, confirmations, empty states, localization IT/EN *(string-table infrastructure + IT/EN tables already in place since Phase 2)*.
   ✅ A new player reaches their first match without external help (playtest).
 - [ ] **6.3 WebGL build** — Compressed build, loading screen, save persistence (IndexedDB), performance pass.
   ✅ Plays a full match day in Chrome/Firefox/Safari, <50 MB download, no freezes.

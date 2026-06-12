@@ -15,5 +15,31 @@ namespace Sim.Core.Domain
         public int Division { get; set; } = 1;
 
         public List<Club> Clubs { get; set; } = new List<Club>();
+
+        public Club? FindClub(int clubId)
+        {
+            foreach (Club club in Clubs)
+            {
+                if (club.Id == clubId)
+                    return club;
+            }
+
+            return null;
+        }
+
+        /// <summary>Finds a player across every club's squad (null if absent).</summary>
+        public Player? FindPlayer(int playerId)
+        {
+            foreach (Club club in Clubs)
+            {
+                foreach (Player player in club.Squad.Players)
+                {
+                    if (player.Id == playerId)
+                        return player;
+                }
+            }
+
+            return null;
+        }
     }
 }
