@@ -23,17 +23,17 @@ Phases are sequential; each task is small and **individually testable** (✅ = h
 ## Phase 1 — Domain & Match Engine v1
 *Goal: a match can be simulated headless and the result is sensible.*
 
-- [~] **1.1 Domain entities** — Player (attributes 1–100 per position role, age), Team, Squad, Club, Coach skeletons. Plain C#, serializable.
+- [x] **1.1 Domain entities** — Player (attributes 1–100 per position role, age), Team, Squad, Club, Coach skeletons. Plain C#, serializable.
   ✅ Unit tests construct entities, round-trip serialize/deserialize.
-- [ ] **1.2 Player & league generation** — Seeded procedural generation: leagues of N clubs, squads of ~22 with realistic attribute/age/position distributions; name database.
+- [x] **1.2 Player & league generation** — Seeded procedural generation: leagues of N clubs, squads of ~22 with realistic attribute/age/position distributions; name database.
   ✅ Test generates a 20-team league; histogram of attributes/ages matches expected curves (test asserts bounds).
-- [ ] **1.3 BalanceConfig** — All tunables in one JSON-loaded config object injected into every system.
+- [x] **1.3 BalanceConfig** — All tunables in one JSON-loaded config object injected into every system.
   ✅ Changing a JSON value (e.g. home advantage) changes sim output; no tunables hard-coded (review).
-- [ ] **1.4 Match engine: result model** — Zone-based action resolution producing score + event timeline from lineups, attributes and a seed. No movement yet.
+- [x] **1.4 Match engine: result model** — Zone-based action resolution producing score + event timeline from lineups, attributes and a seed. No movement yet.
   ✅ Golden-master test: fixed seed ⇒ exact same report. 1,000-match harness: strong team beats weak ~70–80%, realistic score distribution (most common 1-0/1-1/2-1), no 15-0 outliers.
-- [ ] **1.5 Match engine: position stream** — Tick-based player/ball movement generation consistent with the event timeline (top-down coordinates).
+- [x] **1.5 Match engine: position stream** — Tick-based player/ball movement generation consistent with the event timeline (top-down coordinates).
   ✅ Test: ball position coincides with scorer's position at each goal tick; stream is deterministic per seed.
-- [ ] **1.6 Determinism cross-check** — Same sim run under .NET (server-like) and Unity IL2CPP.
+- [x] **1.6 Determinism cross-check** — Same sim run under .NET (server-like) and Unity IL2CPP.
   ✅ Identical MatchReport hash on both runtimes for 50 seeded matches.
 
 ---
