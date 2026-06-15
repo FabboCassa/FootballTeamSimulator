@@ -14,6 +14,55 @@ namespace Sim.Core.Config
         public GenerationBalance Generation { get; set; } = new GenerationBalance();
         public MatchBalance Match { get; set; } = new MatchBalance();
         public SeasonBalance Season { get; set; } = new SeasonBalance();
+        public TacticsBalance Tactics { get; set; } = new TacticsBalance();
+    }
+
+    /// <summary>
+    /// Tunables for the tactics system (task 3.2). All effects are percent deltas
+    /// applied to a side's attack/midfield/defense before the chance model.
+    ///
+    /// Two design invariants keep the ladder fair (acceptance: no tactic &gt; 55%
+    /// win rate across the field):
+    ///   - self-effects are trade-offs: every bonus on one rating is paid for by an
+    ///     equal malus on another, so no instruction is strictly better in a vacuum;
+    ///   - counter contributions use zero-sum patterns (each option's effect summed
+    ///     over a uniform field of opponents is zero), so no tactic gains on average.
+    /// Magnitudes live here; the +/- patterns (who counters whom) are structural and
+    /// live in TacticModifiers.
+    /// </summary>
+    public sealed class TacticsBalance
+    {
+        // --- Self-effects (trade-offs) ---
+        /// <summary>Attacking: +attack / -defense (Defensive mirrors it).</summary>
+        public int MentalitySwingPercent { get; set; } = 8;
+        /// <summary>High press: +attack / -defense — win it high, leave space behind (Low mirrors it).</summary>
+        public int PressingSwingPercent { get; set; } = 6;
+        /// <summary>Fast: +attack / -defense — direct and committed (Slow mirrors it).</summary>
+        public int TempoSwingPercent { get; set; } = 5;
+        /// <summary>Wide: +attack / -midfield — the only possession-moving axis (Narrow mirrors it).</summary>
+        public int WidthSwingPercent { get; set; } = 5;
+
+        // --- Counter-matrix (zero-sum patterns) ---
+        /// <summary>Press vs tempo: fast tempo gains attack through a high press, which is left exposed at the back.</summary>
+        public int CounterPressVsTempoPercent { get; set; } = 6;
+        /// <summary>My mentality vs their tempo: a high line is punished by fast play, rewarded vs slow.</summary>
+        public int CounterMentalityVsTempoPercent { get; set; } = 5;
+        /// <summary>My width vs their width: cyclic edge (Wide&gt;Narrow&gt;Normal&gt;Wide).</summary>
+        public int CounterWidthPercent { get; set; } = 5;
+
+        // --- Familiarity ---
+        /// <summary>Familiarity scale; full familiarity = no penalty.</summary>
+        public int FamiliarityMax { get; set; } = 100;
+        /// <summary>Effectiveness malus (attack &amp; defense) at zero familiarity.</summary>
+        public int UnfamiliarPenaltyPercent { get; set; } = 12;
+        /// <summary>Familiarity gained each match a tactic is used (capped at max).</summary>
+        public int FamiliarityGainPerMatch { get; set; } = 20;
+
+        // --- Guardrails ---
+        /// <summary>Lower clamp for any tactic rating multiplier (percent of base).</summary>
+        public int MinMultiplierPercent { get; set; } = 70;
+        /// <summary>Upper clamp for any tactic rating multiplier (percent of base).</summary>
+        public int MaxMultiplierPercent { get; set; } = 130;
     }
 
     /// <summary>Tunables for the season calendar and league table.</summary>

@@ -61,5 +61,9 @@ namespace Sim.Core.Match
 
         public TeamRatings Scaled(double factor) =>
             new TeamRatings(Attack * factor, Midfield * factor, Defense * factor);
+
+        /// <summary>Applies independent per-component multipliers (used by the tactics system, task 3.2).</summary>
+        public TeamRatings WithMultipliers(double attack, double midfield, double defense) =>
+            new TeamRatings(Attack * attack, Midfield * midfield, Defense * defense);
     }
 }

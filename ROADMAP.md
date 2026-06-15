@@ -63,9 +63,9 @@ Phases are sequential; each task is small and **individually testable** (✅ = h
 ## Phase 3 — Match Experience
 *Goal: watching matches is fun; tactics matter.*
 
-- [ ] **3.1 Match renderer** — Top-down 2D pitch, circle players/ball, playback of position stream, speed controls (1x/2x/4x/skip), event toasts, score/clock HUD.
+- [x] **3.1 Match renderer** — Top-down 2D pitch, circle players/ball, playback of position stream, speed controls (1x/2x/4x/skip), event toasts, score/clock HUD.
   ✅ Watch a match start-to-finish at all speeds on desktop + phone; events match the report; 60fps, no GC spikes (profiler).
-- [ ] **3.2 Tactics system (Sim.Core)** — Formations + instructions, counter-matrix, tactic familiarity accumulation, role-fit.
+- [x] **3.2 Tactics system (Sim.Core)** — Formations + instructions, counter-matrix, tactic familiarity accumulation, role-fit.
   ✅ Harness: counter-tactic gives measurable edge (~55–60% vs equal squads, config-tunable); familiar tactic beats freshly-switched identical tactic; no tactic >55% win rate vs all others across 1,000 matches.
 - [ ] **3.3 Tactics screen** — Formation editor, instruction toggles, familiarity display, opponent info panel.
   ✅ Change tactics → next match behaves accordingly (verify via harness stats and in-match shape).
@@ -197,7 +197,7 @@ Phases are sequential; each task is small and **individually testable** (✅ = h
 ---
 
 ## Later / Ideas Backlog
-National cups · continental competitions · player personalities & press conferences · cosmetic monetization (club customization) · spectator mode for friends' matches · seasonal events · replays sharing · cross-world tournaments · cloud saves for SP.
+Match renderer movement realism (possession-aware steering / less wandery off-ball positioning beyond the 1.5 stream + 3.1 smoothing) · National cups · continental competitions · player personalities & press conferences · cosmetic monetization (club customization) · spectator mode for friends' matches · seasonal events · replays sharing · cross-world tournaments · cloud saves for SP.
 
 ---
 

@@ -193,14 +193,14 @@ Boot → MainMenu → ┬ SP: CareerSetup → Hub (persistent scene)
 Hub (single scene, UI Toolkit screen stack):
   Squad · Tactics · Training · Market/Scouting · League/Fixtures
   · Club/Facilities · Career · Inbox
-Match scene: loaded additively when watching a match
+Watch match: a UI Toolkit screen pushed onto the stack (see §5.4)
 ```
 
-Navigation = a `ScreenNavigator` managing a stack of UI Toolkit screens (cheap, instant, mobile-friendly). Only 3 Unity scenes total → fast load, small WebGL build.
+Navigation = a `ScreenNavigator` managing a stack of UI Toolkit screens (cheap, instant, mobile-friendly). The whole client is code-built UI Toolkit (no per-screen UXML/scene assets), so the match renderer (3.1) ships as another screen in this stack drawn with the painter2D vector API, rather than a separate additively-loaded Unity scene as earlier sketched — same Boot scene, no editor wiring, fully Play-mode testable. Decision #2 (Unity + UI Toolkit) is unchanged.
 
 ### 5.4 Match renderer
 
-- Top-down 2D pitch; players/ball as cartoon circles (faces/kits later). Plays back the `MatchReport` position stream; interpolates between sim ticks.
+- Top-down 2D pitch; players/ball as cartoon circles (faces/kits later). Plays back the `MatchReport` position stream; interpolates between sim ticks. Implemented in `client/.../MatchView/MatchRenderer.cs` as a `VisualElement` drawn with the UI Toolkit painter2D API: the pitch dm-space (1050×680) is letterboxed into the element, playback advances in wall-clock time scaled by speed, no per-frame allocations.
 - Time controls (1x/2x/4x/skip), event toasts, live tactic panel that injects inputs (SP: re-sim locally; MP: send to server).
 - Renderer is pure presentation — it can never change a result.
 

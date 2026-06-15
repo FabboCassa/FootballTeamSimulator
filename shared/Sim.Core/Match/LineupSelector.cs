@@ -1,11 +1,12 @@
 using System.Collections.Generic;
 using Sim.Core.Domain;
+using Sim.Core.Tactics;
 
 namespace Sim.Core.Match
 {
     /// <summary>
     /// Picks a club's best eleven for a formation (greedy, deterministic).
-    /// Until the tactics system arrives (task 3.2) everyone plays 4-3-3.
+    /// Defaults to 4-3-3; the tactics system (task 3.2) can request any shape.
     /// </summary>
     public static class LineupSelector
     {
@@ -22,6 +23,10 @@ namespace Sim.Core.Match
         };
 
         public static Lineup BestEleven(Club club) => BestEleven(club, DefaultFormation);
+
+        /// <summary>Best eleven for a named formation shape (task 3.2).</summary>
+        public static Lineup BestEleven(Club club, Formation formation) =>
+            BestEleven(club, Formations.Roles(formation));
 
         public static Lineup BestEleven(Club club, PositionRole[] formation)
         {

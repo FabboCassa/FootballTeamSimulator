@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using Sim.Core.Config;
 using Sim.Core.Domain;
 using Sim.Core.Random;
+using Sim.Core.Tactics;
 
 namespace Sim.Core.Match
 {
@@ -28,19 +29,37 @@ namespace Sim.Core.Match
         private const int MatchMinutes = 90;
 
         private readonly MatchBalance _cfg;
+        private readonly TacticsBalance _tactics;
 
         public MatchEngine(BalanceConfig? config = null)
         {
-            _cfg = (config ?? new BalanceConfig()).Match;
+            BalanceConfig cfg = config ?? new BalanceConfig();
+            _cfg = cfg.Match;
+            _tactics = cfg.Tactics;
         }
 
-        public MatchReport Simulate(Lineup home, Lineup away, IRandomSource rng)
+        /// <summary>
+        /// Simulates a match. When <paramref name="tactics"/> is null the engine
+        /// runs exactly as before the tactics system (task 3.2): same score/events
+        /// per seed, so existing golden masters and replays are unaffected.
+        /// </summary>
+        public MatchReport Simulate(Lineup home, Lineup away, IRandomSource rng, MatchTactics? tactics = null)
         {
             home.Validate();
             away.Validate();
 
             TeamRatings homeRatings = TeamRatings.From(home).Scaled((100 + _cfg.HomeAdvantagePercent) / 100.0);
             TeamRatings awayRatings = TeamRatings.From(away);
+
+            if (tactics != null)
+            {
+                TacticInstructions hi = tactics.Home.Tactic.Instructions;
+                TacticInstructions ai = tactics.Away.Tactic.Instructions;
+                TacticModifiers.Multipliers hm = TacticModifiers.Compute(hi, ai, tactics.Home.Familiarity, _tactics);
+                TacticModifiers.Multipliers am = TacticModifiers.Compute(ai, hi, tactics.Away.Familiarity, _tactics);
+                homeRatings = homeRatings.WithMultipliers(hm.Attack, hm.Midfield, hm.Defense);
+                awayRatings = awayRatings.WithMultipliers(am.Attack, am.Midfield, am.Defense);
+            }
 
             double homePossession = Share(homeRatings.Midfield, awayRatings.Midfield, _cfg.PossessionSharpness);
 
