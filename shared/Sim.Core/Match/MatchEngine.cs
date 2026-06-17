@@ -45,36 +45,58 @@ namespace Sim.Core.Match
         /// </summary>
         public MatchReport Simulate(Lineup home, Lineup away, IRandomSource rng, MatchTactics? tactics = null)
         {
-            home.Validate();
-            away.Validate();
+            return Simulate(new MatchPlan(new MatchInput(home, away, tactics)), rng);
+        }
 
-            TeamRatings homeRatings = TeamRatings.From(home).Scaled((100 + _cfg.HomeAdvantagePercent) / 100.0);
-            TeamRatings awayRatings = TeamRatings.From(away);
+        /// <summary>
+        /// Simulates a match from a <see cref="MatchPlan"/>: the kickoff input plus
+        /// any scheduled input changes (substitutions, tactic changes) injected at
+        /// given minutes (task 3.4). A plan with no changes consumes the RNG in the
+        /// exact same order as the single-input <see cref="Simulate(Lineup,Lineup,IRandomSource,MatchTactics?)"/>
+        /// overload, so existing golden masters/replays are unaffected.
+        ///
+        /// Determinism: minutes before a change use the unchanged input, so they
+        /// reproduce byte-for-byte; only the remainder diverges. Re-running the
+        /// same plan with the same seed reproduces the whole report.
+        /// </summary>
+        public MatchReport Simulate(MatchPlan plan, IRandomSource rng)
+        {
+            MatchInput active = plan.Initial;
+            active.Home.Validate();
+            active.Away.Validate();
 
-            if (tactics != null)
-            {
-                TacticInstructions hi = tactics.Home.Tactic.Instructions;
-                TacticInstructions ai = tactics.Away.Tactic.Instructions;
-                TacticModifiers.Multipliers hm = TacticModifiers.Compute(hi, ai, tactics.Home.Familiarity, _tactics);
-                TacticModifiers.Multipliers am = TacticModifiers.Compute(ai, hi, tactics.Away.Familiarity, _tactics);
-                homeRatings = homeRatings.WithMultipliers(hm.Attack, hm.Midfield, hm.Defense);
-                awayRatings = awayRatings.WithMultipliers(am.Attack, am.Midfield, am.Defense);
-            }
-
-            double homePossession = Share(homeRatings.Midfield, awayRatings.Midfield, _cfg.PossessionSharpness);
+            ComputeRatings(active, out TeamRatings homeRatings, out TeamRatings awayRatings, out double homePossession);
 
             var report = new MatchReport
             {
-                HomeClubId = home.ClubId,
-                AwayClubId = away.ClubId
+                HomeClubId = active.Home.ClubId,
+                AwayClubId = active.Away.ClubId
             };
 
+            int changeIndex = 0;
             for (int minute = 1; minute <= MatchMinutes; minute++)
             {
+                // Apply every change effective by this minute, before any draw, so
+                // the prefix is identical and the change first bites at FromMinute.
+                bool changed = false;
+                while (changeIndex < plan.Changes.Count && plan.Changes[changeIndex].FromMinute <= minute)
+                {
+                    active = plan.Changes[changeIndex].Input;
+                    changeIndex++;
+                    changed = true;
+                }
+
+                if (changed)
+                {
+                    active.Home.Validate();
+                    active.Away.Validate();
+                    ComputeRatings(active, out homeRatings, out awayRatings, out homePossession);
+                }
+
                 if (rng.NextDouble() >= _cfg.ActionChancePerMinute) continue;
 
                 bool homeAttacks = rng.NextDouble() < homePossession;
-                Lineup attackingLineup = homeAttacks ? home : away;
+                Lineup attackingLineup = homeAttacks ? active.Home : active.Away;
                 TeamRatings att = homeAttacks ? homeRatings : awayRatings;
                 TeamRatings def = homeAttacks ? awayRatings : homeRatings;
 
@@ -108,10 +130,32 @@ namespace Sim.Core.Match
 
             // Position stream (1.5): generated after the result so it draws from
             // the RNG *after* every outcome roll - scores/events per seed are
-            // identical to engine v1.
-            report.Positions = new PositionStreamGenerator(_cfg).Generate(home, away, report, rng);
+            // identical to engine v1. Uses the final active lineups; for a match
+            // with substitutions the rendered geometry reflects the latest XI
+            // (presentation-only, never affects the result).
+            report.Positions = new PositionStreamGenerator(_cfg).Generate(active.Home, active.Away, report, rng);
 
             return report;
+        }
+
+        /// <summary>Home/away ratings (home advantage + optional tactics) and possession share for an input.</summary>
+        private void ComputeRatings(
+            MatchInput input, out TeamRatings homeRatings, out TeamRatings awayRatings, out double homePossession)
+        {
+            homeRatings = TeamRatings.From(input.Home).Scaled((100 + _cfg.HomeAdvantagePercent) / 100.0);
+            awayRatings = TeamRatings.From(input.Away);
+
+            if (input.Tactics != null)
+            {
+                TacticInstructions hi = input.Tactics.Home.Tactic.Instructions;
+                TacticInstructions ai = input.Tactics.Away.Tactic.Instructions;
+                TacticModifiers.Multipliers hm = TacticModifiers.Compute(hi, ai, input.Tactics.Home.Familiarity, _tactics);
+                TacticModifiers.Multipliers am = TacticModifiers.Compute(ai, hi, input.Tactics.Away.Familiarity, _tactics);
+                homeRatings = homeRatings.WithMultipliers(hm.Attack, hm.Midfield, hm.Defense);
+                awayRatings = awayRatings.WithMultipliers(am.Attack, am.Midfield, am.Defense);
+            }
+
+            homePossession = Share(homeRatings.Midfield, awayRatings.Midfield, _cfg.PossessionSharpness);
         }
 
         /// <summary>Possession share of side A: a^e / (a^e + b^e).</summary>

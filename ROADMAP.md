@@ -67,9 +67,9 @@ Phases are sequential; each task is small and **individually testable** (✅ = h
   ✅ Watch a match start-to-finish at all speeds on desktop + phone; events match the report; 60fps, no GC spikes (profiler).
 - [x] **3.2 Tactics system (Sim.Core)** — Formations + instructions, counter-matrix, tactic familiarity accumulation, role-fit.
   ✅ Harness: counter-tactic gives measurable edge (~55–60% vs equal squads, config-tunable); familiar tactic beats freshly-switched identical tactic; no tactic >55% win rate vs all others across 1,000 matches.
-- [ ] **3.3 Tactics screen** — Formation editor, instruction toggles, familiarity display, opponent info panel.
+- [x] **3.3 Tactics screen** — Formation editor, instruction toggles, familiarity display, opponent info panel.
   ✅ Change tactics → next match behaves accordingly (verify via harness stats and in-match shape).
-- [ ] **3.4 In-match interaction** — Pause for substitutions/tactic changes; engine re-sims from current tick.
+- [x] **3.4 In-match interaction** — Pause for substitutions/tactic changes; engine re-sims from current tick.
   ✅ Sub a striker on while losing — re-sim from that tick changes the remainder; replay of final report is consistent.
 - [ ] **3.5 Pre-match plans** — Conditional rules ("if losing at 60' → mentality attacking; tired player → sub"). Foundation for online AI-delegation.
   ✅ Plan triggers correctly in 10 harness scenarios; executes when match is skipped/unwatched.
