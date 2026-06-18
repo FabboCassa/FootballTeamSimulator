@@ -43,7 +43,13 @@ namespace Sim.Core.Generation
 
             player.Condition.Form = 50;
             player.Condition.Morale = rng.NextInt(_cfg.MoraleMin, _cfg.MoraleMax + 1);
-            player.Condition.Fitness = rng.NextInt(_cfg.FitnessMin, _cfg.FitnessMax + 1);
+
+            // Everyone starts at full fitness so the bars are equal; how fast a player
+            // tires is driven by his Stamina (ConditionModel), not by a random starting
+            // value. The draw is kept and discarded so the generation RNG stream — and
+            // every golden master — stays byte-identical.
+            rng.NextInt(_cfg.FitnessMin, _cfg.FitnessMax + 1);
+            player.Condition.Fitness = AttributeScale.MaxCondition;
 
             player.Contract.WeeklyWage = (long)overall * overall * _cfg.WageFactor;
             player.Contract.SeasonsRemaining = rng.NextInt(_cfg.ContractSeasonsMin, _cfg.ContractSeasonsMax + 1);

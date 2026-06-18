@@ -57,23 +57,43 @@ namespace Sim.Core.Condition
         /// <summary>
         /// Evolves a player's condition after a match he was involved with the squad for.
         /// <paramref name="minutesPlayed"/> is 0 for an unused player (bench/stands).
-        /// Fitness drains in proportion to minutes; form takes its mean-reverting walk
-        /// (plus a result nudge if he featured); morale moves with playing time and result.
+        /// Fitness drains in proportion to minutes, bent by <paramref name="stamina"/>
+        /// (low stamina tires faster, high stamina slower; the default is the neutral
+        /// pivot = no modifier, so callers that pass nothing are byte-identical); form
+        /// takes its mean-reverting walk (plus a result nudge if he featured); morale
+        /// moves with playing time and result.
         /// </summary>
         public static void ApplyMatchResult(
             PlayerCondition condition, int minutesPlayed, TeamResult result,
-            IRandomSource rng, ConditionBalance cfg)
+            IRandomSource rng, ConditionBalance cfg, int stamina = 50)
         {
             bool played = minutesPlayed > 0;
 
             if (played)
-                condition.Fitness -= cfg.FitnessDrainPer90Minutes * minutesPlayed / 90;
+                condition.Fitness -= StaminaScaledDrain(minutesPlayed, stamina, cfg);
 
             StepForm(condition, played, result, rng, cfg);
 
             condition.Morale += played ? cfg.MoralePlayBonus : -cfg.MoraleBenchPenalty;
             if (result == TeamResult.Win) condition.Morale += cfg.MoraleWinBonus;
             else if (result == TeamResult.Loss) condition.Morale -= cfg.MoraleLossPenalty;
+        }
+
+        /// <summary>
+        /// Fitness lost for the minutes played, scaled by stamina. At
+        /// <see cref="ConditionBalance.StaminaNeutral"/> the multiplier is exactly 1.0,
+        /// so a neutral-stamina player loses the plain per-90 amount (keeps the default
+        /// path byte-identical); below it he loses more (up to +swing), above it less.
+        /// Integer math throughout for cross-platform determinism.
+        /// </summary>
+        private static int StaminaScaledDrain(int minutesPlayed, int stamina, ConditionBalance cfg)
+        {
+            int baseDrain = cfg.FitnessDrainPer90Minutes * minutesPlayed / 90;
+
+            int permille = 1000 + (cfg.StaminaNeutral - stamina) * cfg.StaminaDrainSwingPermille / cfg.StaminaNeutral;
+            if (permille < 0) permille = 0;
+
+            return baseDrain * permille / 1000;
         }
 
         /// <summary>

@@ -81,7 +81,7 @@ Phases are sequential; each task is small and **individually testable** (✅ = h
 
 - [x] **4.1 Condition model (Sim.Core)** — Form (mean-reverting walk), morale (playing time/results/chemistry), fitness (minutes/rest), all feeding match performance with capped maluses.
   ✅ Harness over 3 seasons: no player stuck in bad form >6 matches; performance floor ≥70% ability; rotation measurably outperforms fixed XI fatigue-wise.
-- [ ] **4.2 Condition UI** — Form arrows, morale faces, fitness bars on squad/lineup screens; tooltips explaining *why* (transparency = anti-frustration).
+- [x] **4.2 Condition UI** — Form arrows, morale faces, fitness bars on squad/lineup screens; tooltips explaining *why* (transparency = anti-frustration). Also made condition LIVE (chosen with user): matches simulated condition-aware + whole-world daily evolution, uniform starting fitness with stamina-driven drain, and within-match fatigue with half-time recovery (MatchFatigueAt90Permille 60). Calibration accepted: 2.59 g/m, draws 21.3%, golden master unchanged; 118 tests green.
   ✅ Every low value shows a cause in its tooltip; bench a tired player ⇒ fitness recovers visibly.
 - [ ] **4.3 Training system** — Weekly team focus + individual focuses; affects development and tactic familiarity; simple schedule UI.
   ✅ Two identical save seeds, different training → diverging attributes after a season (harness assert).

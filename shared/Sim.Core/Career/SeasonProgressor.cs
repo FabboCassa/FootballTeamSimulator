@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Sim.Core.Condition;
 using Sim.Core.Config;
 using Sim.Core.Domain;
 using Sim.Core.Match;
@@ -25,12 +26,22 @@ namespace Sim.Core.Career
         private const ulong FixtureSeedMix = 0x9E3779B97F4A7C15UL;
 
         private readonly MatchEngine _engine;
+        private readonly ConditionProgressor _conditionProgressor;
         private readonly int _familiarityMax;
 
-        public SeasonProgressor(BalanceConfig? config = null)
+        /// <summary>
+        /// <paramref name="applyCondition"/> opts simulated matches into the 4.1 model
+        /// (ratings scaled by form/morale/fitness); defaults false so AdvanceDay stays
+        /// byte-identical. <paramref name="applyMatchFatigue"/> additionally opts into
+        /// within-match fatigue (4.2 refinement; separate flag, default off). Condition
+        /// evolution across days is a separate host-driven step (<see cref="EvolveCondition"/>),
+        /// so results and evolution opt in independently.
+        /// </summary>
+        public SeasonProgressor(BalanceConfig? config = null, bool applyCondition = false, bool applyMatchFatigue = false)
         {
             BalanceConfig cfg = config ?? new BalanceConfig();
-            _engine = new MatchEngine(cfg);
+            _engine = new MatchEngine(cfg, applyCondition, applyMatchFatigue);
+            _conditionProgressor = new ConditionProgressor(cfg.Condition);
             _familiarityMax = cfg.Tactics.FamiliarityMax;
         }
 
@@ -49,17 +60,11 @@ namespace Sim.Core.Career
         /// <summary>
         /// Moves to the next day and simulates every unplayed fixture due by
         /// then, across all divisions. Returns the outcomes (empty on a quiet day).
-        ///
-        /// <paramref name="tactics"/> maps a club id to its own tactical setup
-        /// (tactic + familiarity). A club with no entry plays a neutral tactic,
-        /// which is the engine identity, so a fixture in which neither side has a
-        /// tactic is byte-identical to the pre-tactics result (task 3.2 guarantee).
-        ///
-        /// <paramref name="rules"/> maps a club id to its resolved conditional
-        /// pre-match plan (task 3.5). A fixture in which neither side has rules runs
-        /// through the unchanged legacy path, so AI-vs-AI results stay byte-identical;
-        /// a club with rules has them executed automatically — this is the
-        /// skipped/unwatched ("AI fallback") execution path.
+        /// <paramref name="tactics"/> maps a club id to its tactic+familiarity (no
+        /// entry = neutral = engine identity, task 3.2). <paramref name="rules"/> maps a
+        /// club id to its resolved conditional plan (task 3.5); neither side having
+        /// rules keeps the byte-identical legacy path, a club with rules has them
+        /// executed automatically (the skipped/unwatched "AI fallback" path).
         /// </summary>
         public List<MatchOutcome> AdvanceDay(
             IReadOnlyList<League> leagues,
@@ -81,6 +86,53 @@ namespace Sim.Core.Career
             }
 
             return outcomes;
+        }
+
+        /// <summary>
+        /// Evolves the whole world's condition for the day just advanced (task 4.2).
+        /// Call AFTER AdvanceDay: clubs that played (from <paramref name="dayOutcomes"/>)
+        /// drain their kickoff XI and step the whole squad; every other club rests a day.
+        /// Kickoff lineups are resolved exactly as the match used them (same
+        /// <paramref name="lineupPlans"/> fallback); subs' partial minutes are not modelled
+        /// in v1. Opt-in by being called — never calling it leaves condition untouched.
+        /// </summary>
+        public void EvolveCondition(
+            IReadOnlyList<League> leagues,
+            Season season,
+            IReadOnlyList<MatchOutcome> dayOutcomes,
+            ulong worldSeed,
+            IReadOnlyDictionary<int, LineupPlan>? lineupPlans = null)
+        {
+            var played = new Dictionary<int, ConditionProgressor.Participation>();
+            foreach (MatchOutcome outcome in dayOutcomes)
+            {
+                Fixture fixture = outcome.Fixture;
+                Club? home = FindClub(leagues, fixture.HomeClubId);
+                Club? away = FindClub(leagues, fixture.AwayClubId);
+
+                if (home != null)
+                    played[fixture.HomeClubId] = new ConditionProgressor.Participation(
+                        StarterIds(ResolveLineup(home, lineupPlans)), ResultFor(fixture, asHome: true));
+                if (away != null)
+                    played[fixture.AwayClubId] = new ConditionProgressor.Participation(
+                        StarterIds(ResolveLineup(away, lineupPlans)), ResultFor(fixture, asHome: false));
+            }
+
+            _conditionProgressor.Evolve(leagues, played, worldSeed, season.CurrentDay);
+        }
+
+        private static HashSet<int> StarterIds(Lineup lineup)
+        {
+            var ids = new HashSet<int>();
+            foreach (LineupSlot slot in lineup.Slots) ids.Add(slot.Player.Id);
+            return ids;
+        }
+
+        private static TeamResult ResultFor(Fixture fixture, bool asHome)
+        {
+            int own = asHome ? fixture.HomeGoals : fixture.AwayGoals;
+            int opp = asHome ? fixture.AwayGoals : fixture.HomeGoals;
+            return own > opp ? TeamResult.Win : own < opp ? TeamResult.Loss : TeamResult.Draw;
         }
 
         private MatchOutcome Simulate(

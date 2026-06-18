@@ -32,6 +32,7 @@ namespace Sim.Core.Match
         private readonly TacticsBalance _tactics;
         private readonly ConditionBalance _condition;
         private readonly bool _applyCondition;
+        private readonly bool _applyMatchFatigue;
 
         /// <summary>
         /// <paramref name="applyCondition"/> opts the engine into the condition model
@@ -39,14 +40,22 @@ namespace Sim.Core.Match
         /// defaults to false so the standard match path is byte-identical to the
         /// pre-condition engine (existing golden masters and replays are unaffected);
         /// a squad of neutral-condition players is also identical even when it is true.
+        ///
+        /// <paramref name="applyMatchFatigue"/> opts into within-match fatigue (task 4.2
+        /// refinement): each side's rating fades as the match wears on (scaled by its
+        /// on-pitch XI's average Stamina), with a small recovery at the half-time break.
+        /// Separate flag (defaults false) so it never touches the golden masters or the
+        /// flag-off identity, and a neutral-condition squad with only this flag stays
+        /// stamina-driven rather than condition-driven.
         /// </summary>
-        public MatchEngine(BalanceConfig? config = null, bool applyCondition = false)
+        public MatchEngine(BalanceConfig? config = null, bool applyCondition = false, bool applyMatchFatigue = false)
         {
             BalanceConfig cfg = config ?? new BalanceConfig();
             _cfg = cfg.Match;
             _tactics = cfg.Tactics;
             _condition = cfg.Condition;
             _applyCondition = applyCondition;
+            _applyMatchFatigue = applyMatchFatigue;
         }
 
         /// <summary>
@@ -97,7 +106,11 @@ namespace Sim.Core.Match
             active.Home.Validate();
             active.Away.Validate();
 
-            ComputeRatings(active, out TeamRatings homeRatings, out TeamRatings awayRatings, out double homePossession);
+            // Ratings are recomputed each minute below so within-match fatigue can track
+            // the clock. With fatigue off they are minute-independent, so recomputing
+            // yields identical values and consumes no RNG -> byte-identical to before.
+            TeamRatings homeRatings = default, awayRatings = default;
+            double homePossession = 0;
 
             var report = new MatchReport
             {
@@ -133,8 +146,9 @@ namespace Sim.Core.Match
                 {
                     active.Home.Validate();
                     active.Away.Validate();
-                    ComputeRatings(active, out homeRatings, out awayRatings, out homePossession);
                 }
+
+                ComputeRatings(active, minute, out homeRatings, out awayRatings, out homePossession);
 
                 if (rng.NextDouble() >= _cfg.ActionChancePerMinute) continue;
 
@@ -223,9 +237,9 @@ namespace Sim.Core.Match
             return changed;
         }
 
-        /// <summary>Home/away ratings (home advantage + optional tactics) and possession share for an input.</summary>
+        /// <summary>Home/away ratings (home advantage + optional tactics + within-match fatigue) and possession share at a given minute.</summary>
         private void ComputeRatings(
-            MatchInput input, out TeamRatings homeRatings, out TeamRatings awayRatings, out double homePossession)
+            MatchInput input, int minute, out TeamRatings homeRatings, out TeamRatings awayRatings, out double homePossession)
         {
             homeRatings = BaseRatings(input.Home).Scaled((100 + _cfg.HomeAdvantagePercent) / 100.0);
             awayRatings = BaseRatings(input.Away);
@@ -240,7 +254,45 @@ namespace Sim.Core.Match
                 awayRatings = awayRatings.WithMultipliers(am.Attack, am.Midfield, am.Defense);
             }
 
+            if (_applyMatchFatigue)
+            {
+                homeRatings = homeRatings.Scaled(FatigueFactor(minute, AvgStamina(input.Home)));
+                awayRatings = awayRatings.Scaled(FatigueFactor(minute, AvgStamina(input.Away)));
+            }
+
             homePossession = Share(homeRatings.Midfield, awayRatings.Midfield, _cfg.PossessionSharpness);
+        }
+
+        /// <summary>
+        /// Within-match rating multiplier for a side at <paramref name="minute"/> (task 4.2
+        /// refinement). Tiredness builds linearly toward <see cref="ConditionBalance.MatchFatigueAt90Permille"/>
+        /// by full time, steps back by <see cref="ConditionBalance.HalfTimeRecoveryPermille"/> at the
+        /// break (so the second half restarts fresher than the close of the first), and is
+        /// scaled by the side's average stamina: a low-stamina XI fades more, a high-stamina
+        /// one barely fades. Both sides tiring equally is scale-invariant, so the effect on a
+        /// result is relative — the fresher side gains the edge. Integer math; no RNG.
+        /// </summary>
+        private double FatigueFactor(int minute, int avgStamina)
+        {
+            int permille = _condition.MatchFatigueAt90Permille * minute / MatchMinutes;
+            if (minute > MatchMinutes / 2) permille -= _condition.HalfTimeRecoveryPermille;
+            if (permille < 0) permille = 0;
+
+            int neutral = _condition.StaminaNeutral;
+            int scaled = neutral > 0 ? permille * (2 * neutral - avgStamina) / neutral : permille;
+            if (scaled < 0) scaled = 0;
+
+            return (1000 - scaled) / 1000.0;
+        }
+
+        /// <summary>Average Stamina of the on-pitch XI (so substitutions of fresher legs lift it).</summary>
+        private static int AvgStamina(Lineup lineup)
+        {
+            if (lineup.Slots.Count == 0) return 50;
+
+            int sum = 0;
+            foreach (LineupSlot slot in lineup.Slots) sum += slot.Player.Attributes.Stamina;
+            return sum / lineup.Slots.Count;
         }
 
         /// <summary>Lineup ratings, condition-scaled when the engine opts in (else the pre-condition aggregation).</summary>

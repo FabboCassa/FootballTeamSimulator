@@ -48,6 +48,16 @@ namespace Sim.Core.Config
         public int FitnessDrainPer90Minutes { get; set; } = 24;
         /// <summary>Fitness recovered per rested day (capped at 100). Calibrated so a weekly cycle of full matches slowly accumulates fatigue.</summary>
         public int FitnessRecoveryPerDay { get; set; } = 3;
+        /// <summary>Stamina value at which the drain is unmodified (the neutral pivot).</summary>
+        public int StaminaNeutral { get; set; } = 50;
+        /// <summary>How much stamina bends the fitness drain, in 1/1000 at the stamina extremes (400 = ±40%): low stamina tires faster, high stamina slower. Everyone starts at full fitness, so stamina is the differentiator — how fast they drop.</summary>
+        public int StaminaDrainSwingPermille { get; set; } = 400;
+
+        // --- Within-match fatigue (opt-in: only when the engine's applyMatchFatigue is on) ---
+        /// <summary>A neutral-stamina side's rating fade by the 90th minute, in 1/1000 (60 = −6%). Both sides tiring equally is scale-invariant (no net goal change); the effect is RELATIVE — a fresher / higher-stamina side gains the edge, especially late. Tuned down from 80 to keep draws near the historic ~24% while still making condition matter.</summary>
+        public int MatchFatigueAt90Permille { get; set; } = 60;
+        /// <summary>Fade recovered at the half-time break, in 1/1000 (20 = +2%): the second half restarts a little fresher, then tiredness builds again. "A bit, but not too much."</summary>
+        public int HalfTimeRecoveryPermille { get; set; } = 20;
 
         // --- Form dynamics (bounded, mean-reverting walk) ---
         /// <summary>Neutral form; the walk reverts toward it so cold streaks always end.</summary>
