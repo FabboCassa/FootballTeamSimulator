@@ -71,7 +71,7 @@ Phases are sequential; each task is small and **individually testable** (✅ = h
   ✅ Change tactics → next match behaves accordingly (verify via harness stats and in-match shape).
 - [x] **3.4 In-match interaction** — Pause for substitutions/tactic changes; engine re-sims from current tick.
   ✅ Sub a striker on while losing — re-sim from that tick changes the remainder; replay of final report is consistent.
-- [ ] **3.5 Pre-match plans** — Conditional rules ("if losing at 60' → mentality attacking; tired player → sub"). Foundation for online AI-delegation.
+- [x] **3.5 Pre-match plans** — Conditional rules ("if losing at 60' → mentality attacking; tired player → sub"). Foundation for online AI-delegation.
   ✅ Plan triggers correctly in 10 harness scenarios; executes when match is skipped/unwatched.
 
 ---

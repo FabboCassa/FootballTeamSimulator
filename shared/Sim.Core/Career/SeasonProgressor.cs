@@ -40,9 +40,10 @@ namespace Sim.Core.Career
             Season season,
             ulong worldSeed,
             IReadOnlyDictionary<int, LineupPlan>? lineupPlans = null,
-            IReadOnlyDictionary<int, TacticContext>? tactics = null)
+            IReadOnlyDictionary<int, TacticContext>? tactics = null,
+            IReadOnlyDictionary<int, IReadOnlyList<MatchRule>>? rules = null)
         {
-            return AdvanceDay(new[] { league }, season, worldSeed, lineupPlans, tactics);
+            return AdvanceDay(new[] { league }, season, worldSeed, lineupPlans, tactics, rules);
         }
 
         /// <summary>
@@ -53,13 +54,20 @@ namespace Sim.Core.Career
         /// (tactic + familiarity). A club with no entry plays a neutral tactic,
         /// which is the engine identity, so a fixture in which neither side has a
         /// tactic is byte-identical to the pre-tactics result (task 3.2 guarantee).
+        ///
+        /// <paramref name="rules"/> maps a club id to its resolved conditional
+        /// pre-match plan (task 3.5). A fixture in which neither side has rules runs
+        /// through the unchanged legacy path, so AI-vs-AI results stay byte-identical;
+        /// a club with rules has them executed automatically — this is the
+        /// skipped/unwatched ("AI fallback") execution path.
         /// </summary>
         public List<MatchOutcome> AdvanceDay(
             IReadOnlyList<League> leagues,
             Season season,
             ulong worldSeed,
             IReadOnlyDictionary<int, LineupPlan>? lineupPlans = null,
-            IReadOnlyDictionary<int, TacticContext>? tactics = null)
+            IReadOnlyDictionary<int, TacticContext>? tactics = null,
+            IReadOnlyDictionary<int, IReadOnlyList<MatchRule>>? rules = null)
         {
             season.CurrentDay++;
 
@@ -69,7 +77,7 @@ namespace Sim.Core.Career
                 if (fixture.Played || fixture.Day > season.CurrentDay)
                     continue;
 
-                outcomes.Add(Simulate(leagues, season, fixture, worldSeed, lineupPlans, tactics));
+                outcomes.Add(Simulate(leagues, season, fixture, worldSeed, lineupPlans, tactics, rules));
             }
 
             return outcomes;
@@ -81,7 +89,8 @@ namespace Sim.Core.Career
             Fixture fixture,
             ulong worldSeed,
             IReadOnlyDictionary<int, LineupPlan>? lineupPlans,
-            IReadOnlyDictionary<int, TacticContext>? tactics)
+            IReadOnlyDictionary<int, TacticContext>? tactics,
+            IReadOnlyDictionary<int, IReadOnlyList<MatchRule>>? rules)
         {
             Club home = FindClub(leagues, fixture.HomeClubId)
                 ?? throw new InvalidOperationException($"Fixture {fixture.Id}: home club {fixture.HomeClubId} not in world.");
@@ -90,11 +99,29 @@ namespace Sim.Core.Career
 
             Pcg32 rng = FixtureRng(worldSeed, fixture.Id);
             MatchTactics? matchTactics = BuildTactics(fixture, tactics);
-            MatchReport report = _engine.Simulate(
-                ResolveLineup(home, lineupPlans), ResolveLineup(away, lineupPlans), rng, matchTactics);
+            Lineup homeLineup = ResolveLineup(home, lineupPlans);
+            Lineup awayLineup = ResolveLineup(away, lineupPlans);
+
+            IReadOnlyList<MatchRule>? homeRules = RulesFor(rules, fixture.HomeClubId);
+            IReadOnlyList<MatchRule>? awayRules = RulesFor(rules, fixture.AwayClubId);
+
+            // No rules on either side -> unchanged legacy call (byte-identical).
+            MatchReport report = homeRules == null && awayRules == null
+                ? _engine.Simulate(homeLineup, awayLineup, rng, matchTactics)
+                : _engine.Simulate(new MatchPlan(new MatchInput(homeLineup, awayLineup, matchTactics)), homeRules, awayRules, rng);
 
             RecordResult(season, fixture, report);
             return new MatchOutcome(fixture, report);
+        }
+
+        /// <summary>A club's resolved rules, or null when it has none (so the legacy path is kept).</summary>
+        private static IReadOnlyList<MatchRule>? RulesFor(
+            IReadOnlyDictionary<int, IReadOnlyList<MatchRule>>? rules, int clubId)
+        {
+            if (rules != null && rules.TryGetValue(clubId, out IReadOnlyList<MatchRule>? r) && r != null && r.Count > 0)
+                return r;
+
+            return null;
         }
 
         /// <summary>

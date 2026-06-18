@@ -59,7 +59,28 @@ namespace Sim.Core.Match
         /// reproduce byte-for-byte; only the remainder diverges. Re-running the
         /// same plan with the same seed reproduces the whole report.
         /// </summary>
-        public MatchReport Simulate(MatchPlan plan, IRandomSource rng)
+        public MatchReport Simulate(MatchPlan plan, IRandomSource rng) => Simulate(plan, null, null, rng);
+
+        /// <summary>
+        /// Simulates a match with conditional pre-match plans (task 3.5):
+        /// <paramref name="homeRules"/>/<paramref name="awayRules"/> are evaluated at
+        /// each minute boundary against the live score and fire at most once,
+        /// injecting an input change (substitution / tactic change) exactly as a
+        /// scheduled <see cref="MatchInputChange"/> would. This is the AI-fallback /
+        /// "skipped match" execution path and the foundation for online delegation.
+        ///
+        /// Determinism: rule evaluation consumes no randomness, so when both rule
+        /// lists are null/empty (or simply never fire) the RNG is consumed in the
+        /// exact same order as <see cref="Simulate(MatchPlan,IRandomSource)"/> —
+        /// the result is byte-identical and existing golden masters/replays hold.
+        /// A rule that fires leaves the prefix identical and only re-rolls the
+        /// remainder, just like a static change.
+        /// </summary>
+        public MatchReport Simulate(
+            MatchPlan plan,
+            IReadOnlyList<MatchRule>? homeRules,
+            IReadOnlyList<MatchRule>? awayRules,
+            IRandomSource rng)
         {
             MatchInput active = plan.Initial;
             active.Home.Validate();
@@ -73,6 +94,9 @@ namespace Sim.Core.Match
                 AwayClubId = active.Away.ClubId
             };
 
+            bool[]? homeFired = homeRules != null && homeRules.Count > 0 ? new bool[homeRules.Count] : null;
+            bool[]? awayFired = awayRules != null && awayRules.Count > 0 ? new bool[awayRules.Count] : null;
+
             int changeIndex = 0;
             for (int minute = 1; minute <= MatchMinutes; minute++)
             {
@@ -85,6 +109,14 @@ namespace Sim.Core.Match
                     changeIndex++;
                     changed = true;
                 }
+
+                // Conditional rules: evaluate against the score so far (goals from
+                // minutes < this one). Home rules read (home, away) goals; away rules
+                // the mirror. No RNG is touched here, so a quiet ruleset is identity.
+                if (homeFired != null)
+                    changed |= FireRules(homeRules!, homeFired, minute, report.HomeGoals, report.AwayGoals, true, ref active);
+                if (awayFired != null)
+                    changed |= FireRules(awayRules!, awayFired, minute, report.AwayGoals, report.HomeGoals, false, ref active);
 
                 if (changed)
                 {
@@ -136,6 +168,48 @@ namespace Sim.Core.Match
             report.Positions = new PositionStreamGenerator(_cfg).Generate(active.Home, active.Away, report, rng);
 
             return report;
+        }
+
+        /// <summary>
+        /// Fires every not-yet-fired rule whose minute and scoreline gates are met
+        /// this minute, mutating <paramref name="active"/>. Rules are evaluated in
+        /// list order, so a later rule sees the input as a same-minute earlier rule
+        /// left it (author rules in priority order). A rule that resolves to an
+        /// invalid input (e.g. a substitution that would duplicate a player) is
+        /// skipped but still marked spent — the silent fallback used elsewhere.
+        /// Consumes no randomness. Returns whether the active input changed.
+        /// </summary>
+        private bool FireRules(
+            IReadOnlyList<MatchRule> rules, bool[] fired, int minute,
+            int ownGoals, int opponentGoals, bool isHome, ref MatchInput active)
+        {
+            bool changed = false;
+            for (int i = 0; i < rules.Count; i++)
+            {
+                if (fired[i]) continue;
+
+                MatchRule rule = rules[i];
+                if (minute < rule.FromMinute) continue;
+                if (rule.Action.IsEmpty || !rule.ConditionMet(ownGoals, opponentGoals)) continue;
+
+                fired[i] = true; // spent once its gates open, applies cleanly or not
+
+                MatchInput candidate = MatchRuleApplier.Apply(active, rule, isHome, _tactics.FamiliarityMax);
+                try
+                {
+                    candidate.Home.Validate();
+                    candidate.Away.Validate();
+                }
+                catch (System.InvalidOperationException)
+                {
+                    continue; // illegal change -> ignore silently, keep the prior input
+                }
+
+                active = candidate;
+                changed = true;
+            }
+
+            return changed;
         }
 
         /// <summary>Home/away ratings (home advantage + optional tactics) and possession share for an input.</summary>
