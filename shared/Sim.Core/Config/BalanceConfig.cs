@@ -15,6 +15,63 @@ namespace Sim.Core.Config
         public MatchBalance Match { get; set; } = new MatchBalance();
         public SeasonBalance Season { get; set; } = new SeasonBalance();
         public TacticsBalance Tactics { get; set; } = new TacticsBalance();
+        public ConditionBalance Condition { get; set; } = new ConditionBalance();
+    }
+
+    /// <summary>
+    /// Tunables for the condition model (task 4.1): form, morale and fitness, and
+    /// how they feed match performance. See ARCHITECTURE.md §4.4 — "challenge, not
+    /// chaos": every malus is capped and dynamics are gentle and self-correcting.
+    ///
+    /// Identity invariant: at neutral condition (Form = FormNeutral,
+    /// Morale = MoraleNeutral, Fitness = 100) the performance multiplier is exactly
+    /// 1.0, so a squad of neutral players plays byte-identically to the
+    /// pre-condition engine (proven by test). Condition is opt-in on the engine, so
+    /// the default match path is unchanged regardless.
+    /// </summary>
+    public sealed class ConditionBalance
+    {
+        // --- Performance multiplier (feeds match ratings; capped maluses) ---
+        /// <summary>Hard floor: a player never performs below this % of his ability, however bad his condition.</summary>
+        public int PerformanceFloorPercent { get; set; } = 70;
+        /// <summary>Ceiling for a player on hot form and full fitness.</summary>
+        public int PerformanceCapPercent { get; set; } = 108;
+        /// <summary>Max performance swing from form, in 1/1000 (±6% at the form extremes).</summary>
+        public int FormSwingPermille { get; set; } = 60;
+        /// <summary>Max performance swing from morale, in 1/1000 (±5% at the morale extremes).</summary>
+        public int MoraleSwingPermille { get; set; } = 50;
+        /// <summary>Performance loss at zero fitness, in 1/1000 (−20%; fitness only ever reduces, never boosts).</summary>
+        public int FitnessSwingPermille { get; set; } = 200;
+
+        // --- Fitness dynamics (drains with minutes, recovers with rest) ---
+        /// <summary>Fitness lost for a full 90 minutes played (scaled by actual minutes).</summary>
+        public int FitnessDrainPer90Minutes { get; set; } = 24;
+        /// <summary>Fitness recovered per rested day (capped at 100). Calibrated so a weekly cycle of full matches slowly accumulates fatigue.</summary>
+        public int FitnessRecoveryPerDay { get; set; } = 3;
+
+        // --- Form dynamics (bounded, mean-reverting walk) ---
+        /// <summary>Neutral form; the walk reverts toward it so cold streaks always end.</summary>
+        public int FormNeutral { get; set; } = 50;
+        /// <summary>Uniform random step applied to form each match, ± this many points.</summary>
+        public int FormRandomStep { get; set; } = 5;
+        /// <summary>Mean reversion per match, in 1/1000 of the gap to neutral (350 = 35% of the gap pulled back).</summary>
+        public int FormReversionPermille { get; set; } = 350;
+        /// <summary>Form nudge from the match result (win +, loss −) for players who featured.</summary>
+        public int FormResultNudge { get; set; } = 3;
+
+        // --- Morale dynamics (playing time + results, decays to neutral) ---
+        /// <summary>Neutral morale; morale decays toward it when nothing happens.</summary>
+        public int MoraleNeutral { get; set; } = 50;
+        /// <summary>Morale gained for featuring in a match.</summary>
+        public int MoralePlayBonus { get; set; } = 2;
+        /// <summary>Morale lost for being left out of a match.</summary>
+        public int MoraleBenchPenalty { get; set; } = 3;
+        /// <summary>Morale gained on a win.</summary>
+        public int MoraleWinBonus { get; set; } = 4;
+        /// <summary>Morale lost on a loss.</summary>
+        public int MoraleLossPenalty { get; set; } = 4;
+        /// <summary>Morale drift toward neutral per rested day.</summary>
+        public int MoraleDecayPerDay { get; set; } = 1;
     }
 
     /// <summary>

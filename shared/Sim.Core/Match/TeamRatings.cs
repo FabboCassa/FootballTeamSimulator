@@ -1,3 +1,5 @@
+using Sim.Core.Condition;
+using Sim.Core.Config;
 using Sim.Core.Domain;
 
 namespace Sim.Core.Match
@@ -19,7 +21,17 @@ namespace Sim.Core.Match
             Defense = defense;
         }
 
-        public static TeamRatings From(Lineup lineup)
+        public static TeamRatings From(Lineup lineup) => Build(lineup, null);
+
+        /// <summary>
+        /// Condition-aware aggregation (task 4.1): each player's rating is scaled by his
+        /// current form/morale/fitness via <see cref="ConditionModel.PerformanceMultiplier"/>.
+        /// A squad of neutral players (form/morale neutral, full fitness) yields exactly
+        /// the same numbers as <see cref="From(Lineup)"/>, so this is opt-in and identity-safe.
+        /// </summary>
+        public static TeamRatings FromWithCondition(Lineup lineup, ConditionBalance cfg) => Build(lineup, cfg);
+
+        private static TeamRatings Build(Lineup lineup, ConditionBalance? condition)
         {
             double gk = 0;
             double defSum = 0, midSum = 0, attSum = 0;
@@ -27,7 +39,11 @@ namespace Sim.Core.Match
 
             foreach (LineupSlot slot in lineup.Slots)
             {
-                int rating = PlayerRating.OverallFor(slot.Player, slot.Role);
+                // When condition is null this is the integer overall, so the default
+                // path is byte-identical to the pre-condition aggregation.
+                double rating = PlayerRating.OverallFor(slot.Player, slot.Role);
+                if (condition != null)
+                    rating *= ConditionModel.PerformanceMultiplier(slot.Player.Condition, condition);
 
                 switch (slot.Role)
                 {

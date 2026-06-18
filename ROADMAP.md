@@ -79,7 +79,7 @@ Phases are sequential; each task is small and **individually testable** (✅ = h
 ## Phase 4 — Living Players
 *Goal: form, morale, fitness, development — realistic, never frustrating.*
 
-- [ ] **4.1 Condition model (Sim.Core)** — Form (mean-reverting walk), morale (playing time/results/chemistry), fitness (minutes/rest), all feeding match performance with capped maluses.
+- [x] **4.1 Condition model (Sim.Core)** — Form (mean-reverting walk), morale (playing time/results/chemistry), fitness (minutes/rest), all feeding match performance with capped maluses.
   ✅ Harness over 3 seasons: no player stuck in bad form >6 matches; performance floor ≥70% ability; rotation measurably outperforms fixed XI fatigue-wise.
 - [ ] **4.2 Condition UI** — Form arrows, morale faces, fitness bars on squad/lineup screens; tooltips explaining *why* (transparency = anti-frustration).
   ✅ Every low value shows a cause in its tooltip; bench a tired player ⇒ fitness recovers visibly.

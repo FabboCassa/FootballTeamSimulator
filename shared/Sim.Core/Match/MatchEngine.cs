@@ -30,12 +30,23 @@ namespace Sim.Core.Match
 
         private readonly MatchBalance _cfg;
         private readonly TacticsBalance _tactics;
+        private readonly ConditionBalance _condition;
+        private readonly bool _applyCondition;
 
-        public MatchEngine(BalanceConfig? config = null)
+        /// <summary>
+        /// <paramref name="applyCondition"/> opts the engine into the condition model
+        /// (task 4.1): each player's rating is scaled by his form/morale/fitness. It
+        /// defaults to false so the standard match path is byte-identical to the
+        /// pre-condition engine (existing golden masters and replays are unaffected);
+        /// a squad of neutral-condition players is also identical even when it is true.
+        /// </summary>
+        public MatchEngine(BalanceConfig? config = null, bool applyCondition = false)
         {
             BalanceConfig cfg = config ?? new BalanceConfig();
             _cfg = cfg.Match;
             _tactics = cfg.Tactics;
+            _condition = cfg.Condition;
+            _applyCondition = applyCondition;
         }
 
         /// <summary>
@@ -216,8 +227,8 @@ namespace Sim.Core.Match
         private void ComputeRatings(
             MatchInput input, out TeamRatings homeRatings, out TeamRatings awayRatings, out double homePossession)
         {
-            homeRatings = TeamRatings.From(input.Home).Scaled((100 + _cfg.HomeAdvantagePercent) / 100.0);
-            awayRatings = TeamRatings.From(input.Away);
+            homeRatings = BaseRatings(input.Home).Scaled((100 + _cfg.HomeAdvantagePercent) / 100.0);
+            awayRatings = BaseRatings(input.Away);
 
             if (input.Tactics != null)
             {
@@ -231,6 +242,10 @@ namespace Sim.Core.Match
 
             homePossession = Share(homeRatings.Midfield, awayRatings.Midfield, _cfg.PossessionSharpness);
         }
+
+        /// <summary>Lineup ratings, condition-scaled when the engine opts in (else the pre-condition aggregation).</summary>
+        private TeamRatings BaseRatings(Lineup lineup) =>
+            _applyCondition ? TeamRatings.FromWithCondition(lineup, _condition) : TeamRatings.From(lineup);
 
         /// <summary>Possession share of side A: a^e / (a^e + b^e).</summary>
         private static double Share(double a, double b, int exponent)
