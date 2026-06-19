@@ -19,5 +19,50 @@ namespace Sim.Core.Domain
         public int Defending   { get => _defending;   set => _defending   = AttributeScale.ClampSkill(value); }
         public int Positioning { get => _positioning; set => _positioning = AttributeScale.ClampSkill(value); }
         public int Goalkeeping { get => _goalkeeping; set => _goalkeeping = AttributeScale.ClampSkill(value); }
+
+        /// <summary>Number of skills addressable by <see cref="this[int]"/>.</summary>
+        public const int SkillCount = 10;
+
+        /// <summary>
+        /// Skill access by index, in the canonical order used everywhere in the engine:
+        /// 0 Pace, 1 Strength, 2 Stamina, 3 Technique, 4 Passing, 5 Dribbling, 6 Shooting,
+        /// 7 Defending, 8 Positioning, 9 Goalkeeping (see <see cref="PlayerRating"/>'s weight
+        /// table). Setters clamp like the named properties. Lets systems iterate skills
+        /// generically (e.g. the training model) without a duplicated switch.
+        /// </summary>
+        public int this[int skillIndex]
+        {
+            get => skillIndex switch
+            {
+                0 => _pace,
+                1 => _strength,
+                2 => _stamina,
+                3 => _technique,
+                4 => _passing,
+                5 => _dribbling,
+                6 => _shooting,
+                7 => _defending,
+                8 => _positioning,
+                9 => _goalkeeping,
+                _ => throw new System.IndexOutOfRangeException($"skillIndex {skillIndex} out of [0,{SkillCount - 1}]")
+            };
+            set
+            {
+                switch (skillIndex)
+                {
+                    case 0: Pace = value; break;
+                    case 1: Strength = value; break;
+                    case 2: Stamina = value; break;
+                    case 3: Technique = value; break;
+                    case 4: Passing = value; break;
+                    case 5: Dribbling = value; break;
+                    case 6: Shooting = value; break;
+                    case 7: Defending = value; break;
+                    case 8: Positioning = value; break;
+                    case 9: Goalkeeping = value; break;
+                    default: throw new System.IndexOutOfRangeException($"skillIndex {skillIndex} out of [0,{SkillCount - 1}]");
+                }
+            }
+        }
     }
 }

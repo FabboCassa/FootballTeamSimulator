@@ -16,6 +16,52 @@ namespace Sim.Core.Config
         public SeasonBalance Season { get; set; } = new SeasonBalance();
         public TacticsBalance Tactics { get; set; } = new TacticsBalance();
         public ConditionBalance Condition { get; set; } = new ConditionBalance();
+        public DevelopmentBalance Development { get; set; } = new DevelopmentBalance();
+    }
+
+    /// <summary>
+    /// Tunables for the training-driven development model (task 4.3). A weekly team
+    /// focus (plus optional per-player individual focus) biases which skills grow;
+    /// growth is gated by the player's hidden <see cref="Domain.PlayerDevelopment.Potential"/>
+    /// (no growth once overall reaches it), and players at/above potential drift gently
+    /// downward — so the whole world improves OR declines, never stagnates.
+    ///
+    /// Anti-frustration (ARCHITECTURE.md §4.4/§4.5): every decline is capped (a player
+    /// never falls more than <see cref="DeclineFloorPoints"/> below his potential), and
+    /// the chosen focus protects the skills you drill. Magnitudes only live here; the
+    /// per-focus skill weight patterns are structural and live in TrainingModel.
+    ///
+    /// The richer age-curve / minutes / facilities / performance modifiers and the
+    /// monthly cadence arrive in task 4.4 — 4.3 is the training foundation that 4.4
+    /// builds on, the way 4.1 preceded the 4.2 wiring.
+    /// </summary>
+    public sealed class DevelopmentBalance
+    {
+        // --- Growth (players below their potential) ---
+        /// <summary>
+        /// Per-week +1 probability (in 1/1000) for a skill carrying a focus weight of 100,
+        /// at full headroom. A single-focus skill (weight ~90) then gains a few points a
+        /// season; a Balanced week spreads a smaller gain across every skill.
+        /// </summary>
+        public int GrowthPerMillePerWeight { get; set; } = 130;
+        /// <summary>Upper clamp on a single skill's weekly +1 probability (1/1000), so stacked focuses can't run away.</summary>
+        public int GrowthMaxPerMille { get; set; } = 250;
+        /// <summary>Headroom (potential − overall) at or above which growth runs at full rate; below it growth slows linearly toward the cap.</summary>
+        public int HeadroomScaleCap { get; set; } = 10;
+
+        // --- Decline (players at or above their potential) ---
+        /// <summary>Per-week −1 probability (in 1/1000) for an unprotected skill once a player has no headroom left. Gentle by design.</summary>
+        public int DeclinePerMille { get; set; } = 35;
+        /// <summary>A skill counts as "drilled" (and so decline-protected) when its combined training weight reaches this threshold — above the all-round baseline (~40), below a real emphasis (60+).</summary>
+        public int DeclineProtectionWeightThreshold { get; set; } = 55;
+        /// <summary>How much a drilled skill's decline probability is reduced, in percent (drilling a skill keeps it sharp longer).</summary>
+        public int DeclineProtectionPercent { get; set; } = 70;
+        /// <summary>A player's overall never declines more than this many points below his potential (anti-frustration cap on ageing/decline).</summary>
+        public int DeclineFloorPoints { get; set; } = 8;
+
+        // --- Tactic familiarity (the "affects tactic familiarity" half of 4.3) ---
+        /// <summary>Familiarity points a club gains for its current tactic per week of Tactical team focus (host applies it to the stored level; 0 for any other focus).</summary>
+        public int TacticalFocusFamiliarityGainPerWeek { get; set; } = 8;
     }
 
     /// <summary>

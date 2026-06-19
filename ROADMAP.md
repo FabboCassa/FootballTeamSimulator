@@ -83,12 +83,14 @@ Phases are sequential; each task is small and **individually testable** (✅ = h
   ✅ Harness over 3 seasons: no player stuck in bad form >6 matches; performance floor ≥70% ability; rotation measurably outperforms fixed XI fatigue-wise.
 - [x] **4.2 Condition UI** — Form arrows, morale faces, fitness bars on squad/lineup screens; tooltips explaining *why* (transparency = anti-frustration). Also made condition LIVE (chosen with user): matches simulated condition-aware + whole-world daily evolution, uniform starting fitness with stamina-driven drain, and within-match fatigue with half-time recovery (MatchFatigueAt90Permille 60). Calibration accepted: 2.59 g/m, draws 21.3%, golden master unchanged; 118 tests green.
   ✅ Every low value shows a cause in its tooltip; bench a tired player ⇒ fitness recovers visibly.
-- [ ] **4.3 Training system** — Weekly team focus + individual focuses; affects development and tactic familiarity; simple schedule UI.
-  ✅ Two identical save seeds, different training → diverging attributes after a season (harness assert).
+- [x] **4.3 Training system** — Weekly team focus + individual focuses; affects development and tactic familiarity; simple schedule UI. Sim.Core `Development` namespace (TrainingFocus/TrainingPlan/TrainingModel/TrainingProgressor) + DevelopmentBalance; growth gated by Potential (strict ceiling), capped gentle decline at/above it, Tactical focus drills tactic familiarity; whole-world weekly evolution (user club follows its plan, AI clubs Balanced). Client: Training screen + Hub button + LocalClock weekly EvolveWeek (before matchday, keeps the watched re-sim consistent) + CareerState.UserTraining/LastTrainingWeek (save v4→v5, no retroactive training). 124 tests green, golden master unchanged.
+  ✅ Two identical save seeds, different training → diverging attributes after a season (harness assert — verified: attacking shoot+drib 2828 vs 2669, defending defend 1586 vs 1501). *(Client Training-screen Play-mode spot-check still up to the user.)*
 - [ ] **4.4 Development & aging** — Potential, growth curves, monthly dev tick, modifiers (minutes, training, facilities, performances); decline capped.
   ✅ 10-season harness: youth with minutes grow, benched youth grow less, 33-year-olds decline gently; no attribute collapse possible.
 - [ ] **4.5 Player support actions** — Praise/encourage/rest conversations (lightweight), morale effects with cooldowns.
   ✅ Actions move morale as configured; spamming is ineffective (cooldown works).
+- [ ] **4.6 Player profile screen** — Tap a player (from the Squad/roster) to open a profile: full 10-attribute breakdown, condition (form/morale/fitness with the 4.2 "why" tooltips), role/age/known-potential, season goals. Market value, scouted attribute ranges, contract, appearances/ratings and career history fill in as their systems land (5.1/5.4/5.6 — appearances/ratings need tracking added then). Pushed detail screen, no new Hub button.
+  ✅ Open a player from the Squad screen; the attributes/condition shown match his live state and update after training and matches.
 
 ---
 
