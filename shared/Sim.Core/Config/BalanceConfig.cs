@@ -17,6 +17,57 @@ namespace Sim.Core.Config
         public TacticsBalance Tactics { get; set; } = new TacticsBalance();
         public ConditionBalance Condition { get; set; } = new ConditionBalance();
         public DevelopmentBalance Development { get; set; } = new DevelopmentBalance();
+        public SupportBalance Support { get; set; } = new SupportBalance();
+    }
+
+    /// <summary>
+    /// Tunables for the lightweight player support actions (task 4.5) — the coach's
+    /// morale levers from ARCHITECTURE.md §4.4. Five conversations (praise, encourage,
+    /// motivate, criticize, rest) nudge a player's <see cref="Domain.PlayerCondition"/>;
+    /// the effect is context-sensitive (structural, in SupportActionModel) and each
+    /// action is on a per-player cooldown so spamming is ineffective.
+    ///
+    /// Anti-frustration ("challenge, not chaos"): every move is small and capped by the
+    /// 0..100 condition clamp, the upside saturates near the morale ceiling (so repeated
+    /// praise yields nothing), and the one negative action (criticize) has a bounded
+    /// downside that is telegraphed by the condition UI. These actions are opt-in: the
+    /// match engine and SeasonProgressor never call them, so golden masters/replays are
+    /// unaffected. Magnitudes live here; the "when does it land" context patterns are
+    /// structural and live in SupportActionModel.
+    /// </summary>
+    public sealed class SupportBalance
+    {
+        // --- Morale magnitudes (points at full contextual effect, before the 0..100 clamp) ---
+        /// <summary>Praise: morale lift for a job well done. Best when there is room to lift and recent form is good; ~0 on a maxed-morale or out-of-form player.</summary>
+        public int PraiseMoraleBoost { get; set; } = 8;
+        /// <summary>Encourage: a pick-me-up. Strongest when morale is low, tapering to ~0 as morale rises.</summary>
+        public int EncourageMoraleBoost { get; set; } = 10;
+        /// <summary>Motivate: a challenge/push. Small morale lift, peaks for a mid-morale player (the maxed have nothing to prove, the broken need encouragement first).</summary>
+        public int MotivateMoraleBoost { get; set; } = 5;
+        /// <summary>Criticize: the stick. Morale hit that lands harder on an already-fragile (low-morale) player and gentler on a confident one.</summary>
+        public int CriticizeMoraleHit { get; set; } = 8;
+        /// <summary>Rest: a breather. Small flat morale lift on top of the fitness recovery.</summary>
+        public int RestMoraleBoost { get; set; } = 3;
+
+        // --- Secondary form/fitness magnitudes ---
+        /// <summary>Motivate: small form nudge (the push sharpens focus), scaled by the same context as its morale lift.</summary>
+        public int MotivateFormNudge { get; set; } = 3;
+        /// <summary>Criticize: a form "wake-up" spark that a confident (high-morale) player converts well; near-zero for a fragile one.</summary>
+        public int CriticizeFormSpark { get; set; } = 4;
+        /// <summary>Rest: fitness recovered, scaled by how tired the player is (~0 when already fresh).</summary>
+        public int RestFitnessRecovery { get; set; } = 15;
+
+        // --- Cooldowns (calendar days) per action, per player: an action is blocked until this many days pass ---
+        /// <summary>Days before praise can be used again on the same player.</summary>
+        public int PraiseCooldownDays { get; set; } = 14;
+        /// <summary>Days before encourage can be used again on the same player.</summary>
+        public int EncourageCooldownDays { get; set; } = 14;
+        /// <summary>Days before motivate can be used again on the same player.</summary>
+        public int MotivateCooldownDays { get; set; } = 14;
+        /// <summary>Days before criticize can be used again on the same player (longer — a stern word loses its weight if overused).</summary>
+        public int CriticizeCooldownDays { get; set; } = 21;
+        /// <summary>Days before rest can be used again on the same player.</summary>
+        public int RestCooldownDays { get; set; } = 21;
     }
 
     /// <summary>
