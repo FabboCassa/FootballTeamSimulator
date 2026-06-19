@@ -1,0 +1,208 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.UIElements;
+
+namespace Fts.Views
+{
+    /// <summary>One attribute row: a name, its 1-100 value and a bar.</summary>
+    public sealed class AttrRowVm
+    {
+        public string Name;
+        public int Value;
+    }
+
+    /// <summary>
+    /// The player's live condition, formatted by the presenter (task 4.2 wording):
+    /// the strip glyphs plus the three "why" lines shown in full on the profile
+    /// (transparency = anti-frustration, ARCHITECTURE.md §4.4).
+    /// </summary>
+    public sealed class ProfileConditionVm
+    {
+        public int Fitness;
+        public string FormArrow;
+        public string MoraleFace;
+        public string FitnessLine;
+        public string FormLine;
+        public string MoraleLine;
+    }
+
+    /// <summary>
+    /// Player profile (task 4.6): a pushed detail screen opened from the Squad roster.
+    /// Shows the full 10-attribute breakdown, live condition with the 4.2 "why" lines,
+    /// role/age/overall/potential and season goals. Dumb view — every value and every
+    /// string is computed by the presenter; this only lays things out and paints bars.
+    /// Market value, scouted ranges, contract and appearances/ratings land with their
+    /// systems (5.1/5.4/5.6).
+    /// </summary>
+    public sealed class PlayerProfileView
+    {
+        private static readonly Color BarTrackColor = new Color(0f, 0f, 0f, 0.45f);
+        private static readonly Color AttrBarColor = new Color(0.45f, 0.70f, 0.95f);
+        private static readonly Color SectionColor = new Color(1f, 1f, 1f, 0.7f);
+
+        public event Action BackClicked;
+
+        public VisualElement Root { get; }
+
+        private readonly Label _name;
+        private readonly Label _subline;
+        private readonly Label _potential;
+        private readonly Label _seasonGoals;
+        private readonly VisualElement _conditionBlock;
+        private readonly ScrollView _attrList;
+
+        public PlayerProfileView(Func<string, string> tr)
+        {
+            Root = new VisualElement();
+            Root.style.flexGrow = 1f;
+            Root.style.backgroundColor = UiKit.PanelGray;
+            Root.style.paddingTop = 12;
+            Root.style.paddingBottom = 12;
+            Root.style.paddingLeft = 16;
+            Root.style.paddingRight = 16;
+
+            _name = UiKit.Title(string.Empty);
+            _name.style.fontSize = 28;
+            _name.style.marginBottom = 2;
+            Root.Add(_name);
+
+            _subline = UiKit.Subtitle(string.Empty);
+            _subline.style.marginBottom = 4;
+            Root.Add(_subline);
+
+            _potential = new Label(string.Empty);
+            _potential.style.color = SectionColor;
+            _potential.style.fontSize = 13;
+            _potential.style.marginBottom = 10;
+            Root.Add(_potential);
+
+            var body = new ScrollView();
+            body.style.flexGrow = 1f;
+            Root.Add(body);
+
+            body.Add(SectionLabel(tr("profile.condition_caption")));
+            _conditionBlock = new VisualElement();
+            _conditionBlock.style.marginBottom = 12;
+            body.Add(_conditionBlock);
+
+            body.Add(SectionLabel(tr("profile.attributes_caption")));
+            _attrList = new ScrollView();
+            body.Add(_attrList);
+
+            _seasonGoals = new Label(string.Empty);
+            _seasonGoals.style.color = SectionColor;
+            _seasonGoals.style.fontSize = 14;
+            _seasonGoals.style.marginTop = 10;
+            body.Add(_seasonGoals);
+
+            var footer = new VisualElement();
+            footer.style.flexDirection = FlexDirection.Row;
+            footer.style.justifyContent = Justify.Center;
+            footer.style.marginTop = 10;
+            var back = UiKit.MenuButton(tr("common.back"), () => BackClicked?.Invoke());
+            back.style.width = 150;
+            back.style.height = 44;
+            back.style.fontSize = 16;
+            footer.Add(back);
+            Root.Add(footer);
+        }
+
+        public void SetIdentity(string name, string subline, string potential)
+        {
+            _name.text = name;
+            _subline.text = subline;
+            _potential.text = potential;
+        }
+
+        public void SetSeasonGoals(string text) => _seasonGoals.text = text;
+
+        public void SetCondition(ProfileConditionVm vm)
+        {
+            _conditionBlock.Clear();
+
+            var strip = new VisualElement();
+            strip.style.flexDirection = FlexDirection.Row;
+            strip.style.alignItems = Align.Center;
+            strip.style.height = 28;
+            ConditionStrip.Append(strip, vm.FormArrow, vm.MoraleFace, vm.Fitness);
+            _conditionBlock.Add(strip);
+
+            _conditionBlock.Add(CauseLine(vm.FitnessLine));
+            _conditionBlock.Add(CauseLine(vm.FormLine));
+            _conditionBlock.Add(CauseLine(vm.MoraleLine));
+        }
+
+        public void SetAttributes(IReadOnlyList<AttrRowVm> rows)
+        {
+            _attrList.Clear();
+            foreach (AttrRowVm vm in rows)
+                _attrList.Add(AttributeRow(vm.Name, vm.Value));
+        }
+
+        private static Label CauseLine(string text)
+        {
+            var label = new Label(text ?? string.Empty);
+            label.style.color = new Color(1f, 1f, 1f, 0.85f);
+            label.style.fontSize = 13;
+            label.style.marginTop = 2;
+            label.style.whiteSpace = WhiteSpace.Normal;
+            return label;
+        }
+
+        private static Label SectionLabel(string caption)
+        {
+            var label = new Label(caption);
+            label.style.color = SectionColor;
+            label.style.fontSize = 13;
+            label.style.marginBottom = 4;
+            label.style.marginTop = 2;
+            return label;
+        }
+
+        /// <summary>A row: attribute name on the left, value, then a 1-100 bar.</summary>
+        private static VisualElement AttributeRow(string name, int value)
+        {
+            int clamped = value < 0 ? 0 : (value > 100 ? 100 : value);
+
+            var row = new VisualElement();
+            row.style.flexDirection = FlexDirection.Row;
+            row.style.alignItems = Align.Center;
+            row.style.height = 26;
+            row.style.marginBottom = 2;
+
+            var label = new Label(name);
+            label.style.width = 110;
+            label.style.fontSize = 13;
+            label.style.unityTextAlign = TextAnchor.MiddleLeft;
+            row.Add(label);
+
+            var number = new Label(clamped.ToString());
+            number.style.width = 34;
+            number.style.fontSize = 13;
+            number.style.unityTextAlign = TextAnchor.MiddleRight;
+            number.style.marginRight = 8;
+            row.Add(number);
+
+            var track = new VisualElement();
+            track.style.flexGrow = 1f;
+            track.style.height = 8;
+            track.style.backgroundColor = BarTrackColor;
+            track.style.borderTopLeftRadius = 3;
+            track.style.borderTopRightRadius = 3;
+            track.style.borderBottomLeftRadius = 3;
+            track.style.borderBottomRightRadius = 3;
+
+            var fill = new VisualElement();
+            fill.style.height = Length.Percent(100);
+            fill.style.width = Length.Percent(clamped);
+            fill.style.backgroundColor = AttrBarColor;
+            fill.style.borderTopLeftRadius = 3;
+            fill.style.borderBottomLeftRadius = 3;
+            track.Add(fill);
+            row.Add(track);
+
+            return row;
+        }
+    }
+}
