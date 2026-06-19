@@ -62,6 +62,42 @@ namespace Sim.Core.Config
         // --- Tactic familiarity (the "affects tactic familiarity" half of 4.3) ---
         /// <summary>Familiarity points a club gains for its current tactic per week of Tactical team focus (host applies it to the stored level; 0 for any other focus).</summary>
         public int TacticalFocusFamiliarityGainPerWeek { get; set; } = 8;
+
+        // ===================== Development & aging (task 4.4) =====================
+        // The age curve and per-player modifiers ride the SAME weekly cadence as the
+        // 4.3 training tick (chosen with the user) rather than a separate monthly tick.
+        // Magnitudes only live here; the per-role peak/onset offsets are structural and
+        // live in Development.AgeCurve (like the tactic +/- patterns in TacticModifiers).
+
+        // --- Age growth curve (young players grow, fading to zero at the role peak) ---
+        /// <summary>At or below this age the age curve never slows growth (youth grow at full speed before any taper).</summary>
+        public int GrowthYouthFullAge { get; set; } = 19;
+        /// <summary>Base age at which the age-growth factor reaches zero (per-role offsets shift it; ARCHITECTURE.md §4.5 "peak ~27").</summary>
+        public int GrowthPeakAge { get; set; } = 27;
+
+        // --- Age decline curve (older players decline, faster with age, position-dependent) ---
+        /// <summary>Base age at which ageing decline begins (per-role offsets shift it; "decline after ~30").</summary>
+        public int DeclineOnsetAge { get; set; } = 30;
+        /// <summary>Per-week −1 probability (1/1000) per skill for a player exactly at his decline-onset age (gentle by design). Scales up with age and down with drilling.</summary>
+        public int AgeDeclineBasePerMille { get; set; } = 45;
+        /// <summary>Extra age-decline multiplier (1/1000) added per year beyond the onset age (120 = +12% of the base rate per year).</summary>
+        public int AgeDeclineRampPerMillePerYear { get; set; } = 120;
+        /// <summary>Upper clamp on the age-decline multiplier (1/1000), so the very old still decline gently — no cliff (anti-collapse).</summary>
+        public int AgeDeclineMaxMultiplierPermille { get; set; } = 1800;
+        /// <summary>Ageing never drives a player's overall below this percent of his potential — a hard anti-collapse floor (a pot-80 veteran bottoms out near 44).</summary>
+        public int AgeDeclineFloorPercentOfPotential { get; set; } = 55;
+
+        // --- Growth modifiers (all neutral = 1000/no change; default callers stay 4.3-identical) ---
+        /// <summary>Growth speed (1/1000) for a player who gets no minutes; full minutes = 1000. Benched youth still develop, just slower ("youth need games").</summary>
+        public int MinutesGrowthFloorPermille { get; set; } = 350;
+        /// <summary>Facility level (0–100) at which the training ground neither helps nor hinders growth. Real levels arrive with facilities (task 5.5); until then hosts pass neutral.</summary>
+        public int FacilityNeutralLevel { get; set; } = 50;
+        /// <summary>Growth swing (1/1000) from facilities at the level extremes (300 = ±30% at level 0 vs 100).</summary>
+        public int FacilityGrowthSwingPermille { get; set; } = 300;
+        /// <summary>Performance rating (0–100) that neither helps nor hinders growth. Hosts can feed match ratings or use form/condition as a proxy.</summary>
+        public int PerformanceNeutralRating { get; set; } = 50;
+        /// <summary>Growth swing (1/1000) from performances at the rating extremes (good games accelerate growth, poor ones slow it).</summary>
+        public int PerformanceGrowthSwingPermille { get; set; } = 300;
     }
 
     /// <summary>
