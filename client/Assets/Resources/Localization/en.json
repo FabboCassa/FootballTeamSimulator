@@ -40,7 +40,7 @@
   "squad.roster_caption": "Roster (tap a player for his profile)",
   "squad.auto_pick": "Auto Pick",
   "squad.save_lineup": "Save Lineup",
-  "squad.row": "{0}  {1}  {2}y  OVR {3}",
+  "squad.row": "{0}  {1}  {2}y  OVR {3}  ·  {4}",
   "squad.status.no_saved": "No saved lineup yet — AI picks the best eleven until you save one.",
   "squad.status.select_slot": "Select a lineup slot first.",
   "squad.status.auto": "Auto-picked the best eleven (not saved yet).",
@@ -194,6 +194,7 @@
   "profile.attributes_caption": "Attributes",
   "profile.subline": "{0} · {1}y · OVR {2}",
   "profile.potential_unknown": "Potential: unknown (revealed by scouting later)",
+  "profile.market_value": "Market value: {0}",
   "profile.season_goals": "Season goals: {0}",
   "profile.unknown_player": "Player not found",
 

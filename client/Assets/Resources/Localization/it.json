@@ -40,7 +40,7 @@
   "squad.roster_caption": "Rosa (tocca un giocatore per il profilo)",
   "squad.auto_pick": "Auto",
   "squad.save_lineup": "Salva formazione",
-  "squad.row": "{0}  {1}  {2} anni  MED {3}",
+  "squad.row": "{0}  {1}  {2} anni  MED {3}  ·  {4}",
   "squad.status.no_saved": "Nessuna formazione salvata — l'IA schiera gli 11 migliori finché non ne salvi una.",
   "squad.status.select_slot": "Seleziona prima uno slot della formazione.",
   "squad.status.auto": "Schierati gli 11 migliori (non ancora salvato).",
@@ -194,6 +194,7 @@
   "profile.attributes_caption": "Attributi",
   "profile.subline": "{0} · {1} anni · MED {2}",
   "profile.potential_unknown": "Potenziale: sconosciuto (svelato dallo scouting più avanti)",
+  "profile.market_value": "Valore di mercato: {0}",
   "profile.season_goals": "Gol stagionali: {0}",
   "profile.unknown_player": "Giocatore non trovato",
 

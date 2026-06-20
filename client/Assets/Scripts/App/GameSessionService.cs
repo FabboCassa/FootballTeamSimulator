@@ -3,6 +3,8 @@ using Fts.Presenters;
 using Fts.Services;
 using Fts.Services.Navigation;
 using Fts.Services.Persistence;
+using Sim.Core.Config;
+using Sim.Core.Market;
 using VContainer;
 using VContainer.Unity;
 
@@ -76,6 +78,12 @@ namespace Fts.App
         private void OpenCareer(CareerState career)
         {
             _career = career;
+
+            // Populate market values up front (task 5.1) so the Squad/Profile screens show
+            // a figure immediately — for a brand-new career and for a pre-5.1 save where
+            // Player.MarketValue is still 0. Pure/deterministic, never read by the engine.
+            new ValuationProgressor(new BalanceConfig()).Reprice(career.Leagues);
+
             _gameScope = _appScope.CreateChild(builder =>
             {
                 builder.RegisterInstance(career);

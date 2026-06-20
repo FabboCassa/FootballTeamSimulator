@@ -12,10 +12,10 @@ namespace Fts.Presenters
     /// Player profile (task 4.6): a pushed detail screen opened from the Squad roster.
     /// Reads the target player id from <see cref="PlayerProfileTarget"/> and renders his
     /// live state — full 10-attribute breakdown, condition with the 4.2 "why" lines,
-    /// role/age/overall and season goals. Everything is read fresh on Enter, so the
-    /// values track training and matches (the task's ✅). Potential stays hidden until
-    /// scouting (5.4); market value/scouted ranges/contract/appearances fill in with
-    /// their systems (5.1/5.4/5.6).
+    /// role/age/overall, market value and season goals. Everything is read fresh on Enter,
+    /// so the values track training and matches (the task's ✅). Market value is the stored
+    /// figure re-priced on the weekly tick (task 5.1). Potential stays hidden until scouting
+    /// (5.4); scouted ranges/contract/appearances fill in with their systems (5.4/5.6).
     /// </summary>
     public sealed class PlayerProfileScreenPresenter : IScreenPresenter
     {
@@ -66,6 +66,7 @@ namespace Fts.Presenters
             if (player == null)
             {
                 _view.SetIdentity(_loc.Tr("profile.unknown_player"), string.Empty, string.Empty);
+                _view.SetValue(string.Empty);
                 _view.SetCondition(new ProfileConditionVm());
                 _view.SetAttributes(new List<AttrRowVm>());
                 _view.SetSeasonGoals(string.Empty);
@@ -76,6 +77,9 @@ namespace Fts.Presenters
                 player.FullName,
                 _loc.Tr("profile.subline", RoleName(player.Role), player.Age, PlayerRating.Overall(player)),
                 _loc.Tr("profile.potential_unknown"));
+
+            // Market value is the stored figure, re-priced on the weekly tick (task 5.1).
+            _view.SetValue(_loc.Tr("profile.market_value", MoneyFormat.Short(player.MarketValue)));
 
             _view.SetCondition(BuildCondition(player.Condition));
             _view.SetAttributes(BuildAttributes(player.Attributes));

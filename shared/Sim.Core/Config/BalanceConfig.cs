@@ -18,6 +18,87 @@ namespace Sim.Core.Config
         public ConditionBalance Condition { get; set; } = new ConditionBalance();
         public DevelopmentBalance Development { get; set; } = new DevelopmentBalance();
         public SupportBalance Support { get; set; } = new SupportBalance();
+        public MarketBalance Market { get; set; } = new MarketBalance();
+    }
+
+    /// <summary>
+    /// Tunables for the valuation model (task 5.1) — the transfer price of a player from
+    /// his attributes, age, potential, form, contract and league level (ARCHITECTURE.md
+    /// §4.7). Pure and deterministic: <see cref="Market.ValuationModel"/> uses integer math
+    /// and NO RNG, so a player's price is a stable function of his state (re-priced on a
+    /// host cadence, not flickering daily).
+    ///
+    /// Shape of the model (structural patterns live in ValuationModel; only magnitudes here):
+    ///   base = ValueUnitPerRatingCubed × (valueRating − RatingValueFloor)^ValueExponent,
+    /// where valueRating = overall + a youth-scaled share of the remaining potential headroom
+    /// (so young stars are dearer than equal-ability veterans). The base is then scaled by
+    /// permille multipliers for age (value fades after the prime), short-term form, contract
+    /// length (an expiring deal discounts the fee — he can leave cheap) and league level, and
+    /// finally clamped to [<see cref="MinValue"/>, <see cref="MaxValue"/>] and rounded — so a
+    /// price is always positive and never absurd (the 5.1 acceptance).
+    ///
+    /// Scale is calibrated against the wage anchor (WeeklyWage = overall² × WageFactor): a
+    /// prime ~70-overall player lands near €15M, a ~90 top talent near €50M, squad filler a
+    /// few hundred k. Currency units are abstract "game money".
+    /// </summary>
+    public sealed class MarketBalance
+    {
+        // --- Base value curve (convex in a potential-adjusted rating) ---
+        /// <summary>Currency per (valueRating − RatingValueFloor)^ValueExponent. Tuned so a prime 70-overall ≈ €15M and the curve is steeply convex (top talents cost far more).</summary>
+        public long ValueUnitPerRatingCubed { get; set; } = 230;
+        /// <summary>Rating at/below which the base value is ~0 (only the MinValue floor remains). Amplifies the dynamic range so weak players are cheap and stars are dear.</summary>
+        public int RatingValueFloor { get; set; } = 30;
+        /// <summary>Exponent on the rating excess (3 = cubic convexity).</summary>
+        public int ValueExponent { get; set; } = 3;
+        /// <summary>Upper clamp on the potential-adjusted value rating before the curve (guards the base against overflow / runaway premiums).</summary>
+        public int ValueRatingCap { get; set; } = 110;
+
+        // --- Potential premium (young players priced toward their ceiling) ---
+        /// <summary>Percent of the remaining headroom (potential − overall), itself scaled by the youth age curve, that is added to the value rating. 60 = a young prospect is valued well above his current overall; a peaked player gets none (his age-growth factor is 0).</summary>
+        public int PotentialWeightPercent { get; set; } = 60;
+
+        // --- Elite premium (the fat top tail: a few phenoms cost an order of magnitude more) ---
+        // Real markets (Transfermarkt) are extremely top-heavy: the masses sit at a few M, top
+        // stars at tens of M, and a handful of phenoms at €150-230M. Our overall scale is
+        // compressed (top ~76), so the cubic base alone tops out too low — this premium makes the
+        // rare elite value rating (high overall AND/OR a young high-potential prospect) explode,
+        // while leaving everyone below the threshold untouched.
+        /// <summary>Value rating above which the elite premium starts to apply (~the top division's quality). Below it the base curve is used as-is.</summary>
+        public int EliteValueThreshold { get; set; } = 72;
+        /// <summary>Extra value per value-rating point above the elite threshold, in 1/1000 (110 = +11% per point → a phenom is worth multiples of a merely good player). The MaxValue cap still bounds the very tip.</summary>
+        public int ElitePremiumPermillePerPoint { get; set; } = 110;
+
+        // --- Age value multiplier (resale value fades after the prime) ---
+        /// <summary>Age from which transfer value starts to decline (independent of the development decline onset — a 30-year-old at his peak ability is still worth less than a 24-year-old).</summary>
+        public int ValueDeclineOnsetAge { get; set; } = 29;
+        /// <summary>Value lost per year beyond the onset age, in 1/1000 (90 = −9% per year).</summary>
+        public int ValueDeclinePerMillePerYear { get; set; } = 90;
+        /// <summary>Floor on the age multiplier, in 1/1000 (250 = a veteran never drops below 25% of his prime value on age alone).</summary>
+        public int ValueAgeFloorPermille { get; set; } = 250;
+
+        // --- Short-term form (small swing; the cached value is otherwise stable) ---
+        /// <summary>Max value swing from form at the form extremes, in 1/1000 (40 = ±4% between cold and hot form around neutral 50).</summary>
+        public int FormValueSwingPermille { get; set; } = 40;
+
+        // --- Contract length (an expiring deal discounts the fee) ---
+        /// <summary>Seasons remaining at/above which a contract carries no discount (full value).</summary>
+        public int ContractFullSeasons { get; set; } = 3;
+        /// <summary>Value multiplier at zero seasons remaining, in 1/1000 (350 = a player in his final months fetches ~35% of value — he can leave on a free soon). Scales linearly up to 1000 at ContractFullSeasons.</summary>
+        public int ContractExpiringFloorPermille { get; set; } = 350;
+
+        // --- League level (top-flight players priced higher) ---
+        /// <summary>Value discount per division below the top flight, in 1/1000 (150 = −15% per division down).</summary>
+        public int LeagueLevelDiscountPermille { get; set; } = 150;
+        /// <summary>Floor on the league multiplier, in 1/1000 (400 = the lowest divisions still retain 40% of top-flight pricing).</summary>
+        public int LeagueLevelFloorPermille { get; set; } = 400;
+
+        // --- Guardrails (no negative/absurd prices — the 5.1 acceptance) ---
+        /// <summary>Hard floor: every player is worth at least this much (keeps prices positive even for the weakest).</summary>
+        public long MinValue { get; set; } = 25_000;
+        /// <summary>Hard ceiling: an absurdity guard so no combination of multipliers produces a silly price.</summary>
+        public long MaxValue { get; set; } = 250_000_000;
+        /// <summary>Final prices are rounded to the nearest multiple of this (tidy display). Must divide MinValue/MaxValue.</summary>
+        public long ValueRoundingUnit { get; set; } = 5_000;
     }
 
     /// <summary>

@@ -6,6 +6,7 @@ using Sim.Core.Career;
 using Sim.Core.Config;
 using Sim.Core.Development;
 using Sim.Core.Domain;
+using Sim.Core.Market;
 using Sim.Core.Match;
 using Sim.Core.Tactics;
 using UnityEngine;
@@ -39,6 +40,10 @@ namespace Fts.Services
         private readonly DevelopmentProgressor _development = new DevelopmentProgressor(new BalanceConfig().Development);
         private readonly DevelopmentBalance _developmentConfig = new BalanceConfig().Development;
         private readonly int _trainingPeriodDays = new BalanceConfig().Season.DaysBetweenRounds;
+        // Market values are re-priced once per training week (task 5.1): the cached figure
+        // tracks development/ageing and contract decay without flickering with daily form.
+        // Pure/deterministic, no RNG, never read by the engine — golden masters stay safe.
+        private readonly ValuationProgressor _valuation = new ValuationProgressor(new BalanceConfig());
 
         /// <summary>
         /// Stride for folding the season year into the per-week development RNG. The
@@ -183,6 +188,9 @@ namespace Fts.Services
 
             // Skipped: undo development for the rested players (their training cost).
             RestoreRestedSkills(restedSkills);
+
+            // Re-price the whole world now that attributes/ages have moved this week (5.1).
+            _valuation.Reprice(_career.Leagues);
 
             // Window consumed: start fresh for the next tick.
             _career.StartsSinceTraining.Clear();

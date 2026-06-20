@@ -164,7 +164,8 @@ namespace Fts.Presenters
                 {
                     PlayerId = player.Id,
                     Label = _loc.Tr("squad.row",
-                        RoleAbbr(player.Role), player.FullName, player.Age, PlayerRating.Overall(player)),
+                        RoleAbbr(player.Role), player.FullName, player.Age, PlayerRating.Overall(player),
+                        MoneyFormat.Short(player.MarketValue)),
                     InLineup = inLineup.Contains(player.Id)
                 };
                 ApplyCondition(vm, player);
