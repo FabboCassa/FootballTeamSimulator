@@ -26,6 +26,7 @@ namespace Fts.Services
         private readonly IMessageBroker _broker;
         private readonly UserMatchLog _matchLog;
         private readonly UserMatchContextHolder _matchContext;
+        private readonly LocalMarketService _market;
         // Condition is live (task 4.2): matches are simulated condition-aware and the
         // whole world's form/morale/fitness evolves each day via EvolveCondition below.
         // applyMatchFatigue also fades each side within the match (by avg stamina) with
@@ -59,19 +60,27 @@ namespace Fts.Services
             ISaveRepository saveRepository,
             IMessageBroker broker,
             UserMatchLog matchLog,
-            UserMatchContextHolder matchContext)
+            UserMatchContextHolder matchContext,
+            LocalMarketService market)
         {
             _career = career;
             _saveRepository = saveRepository;
             _broker = broker;
             _matchLog = matchLog;
             _matchContext = matchContext;
+            _market = market;
         }
 
         public int CurrentDay => _career.Season.CurrentDay;
 
         public void AdvanceDay()
         {
+            // Run any transfer window now due (task 5.2b) BEFORE the day's matches, so the
+            // start-of-season and mid-season AI markets are reflected in the squads that play
+            // (and in the user's upcoming opponents). The user's club is excluded; whole-world
+            // AI↔AI otherwise. Guarded by TransferWindowsRun so it fires at most twice a season.
+            _market.RunDueWindows();
+
             // Develop the world for any training week the upcoming day completes, BEFORE
             // the day's matches: attributes then stay stable through the match sim and the
             // watched-match re-sim (task 3.4), so the re-sim still reproduces the committed

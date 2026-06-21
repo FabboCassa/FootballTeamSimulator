@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Sim.Core.Config;
 using Sim.Core.Domain;
 using Sim.Core.Generation;
+using Sim.Core.Market;
 using Sim.Core.Random;
 
 namespace Fts.Services
@@ -55,6 +56,10 @@ namespace Fts.Services
 
         public CareerState Create(ulong seed, List<League> leagues, int userClubId)
         {
+            // Seed initial transfer budgets (task 5.2b) so the world is coherent from creation;
+            // the start-of-season window re-seeds them identically when the career opens.
+            new BudgetModel(_config).SeedBudgets(leagues);
+
             return new CareerState
             {
                 Seed = seed,

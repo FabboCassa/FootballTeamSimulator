@@ -16,7 +16,7 @@ namespace Fts.Services.Persistence
     /// </summary>
     public sealed class LocalJsonSaveRepository : ISaveRepository
     {
-        private const int CurrentSaveVersion = 7;
+        private const int CurrentSaveVersion = 8;
         private const string FileName = "career.sav";
 
         private static string SavePath => Path.Combine(Application.persistentDataPath, FileName);
@@ -179,6 +179,20 @@ namespace Fts.Services.Persistence
                 state.RestedSinceTraining ??= new System.Collections.Generic.List<int>();
                 state.SaveVersion = 7;
                 Debug.Log("[Save] Migrated save v6 -> v7 (player support actions added).");
+            }
+
+            // v7 -> v8 (task 5.2b): AI transfer market went live. Additive — guarantee a
+            // non-null news list, and mark BOTH windows of the loaded season as already run
+            // so an existing mid-season save doesn't get a sudden mass-transfer on load
+            // (club budgets are still 0 here; they get seeded at the next season's start
+            // window, where the market begins cleanly). New careers start at 0 and trade
+            // from their first window.
+            if (state.SaveVersion < 8)
+            {
+                state.TransferNews ??= new System.Collections.Generic.List<Sim.Core.Market.TransferRecord>();
+                state.TransferWindowsRun = 2;
+                state.SaveVersion = 8;
+                Debug.Log("[Save] Migrated save v7 -> v8 (AI transfer market; market begins next season).");
             }
         }
 

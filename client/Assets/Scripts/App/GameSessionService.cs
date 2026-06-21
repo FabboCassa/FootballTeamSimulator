@@ -92,8 +92,14 @@ namespace Fts.App
                 builder.Register<UserMatchContextHolder>(Lifetime.Singleton);
                 builder.Register<PlayerProfileTarget>(Lifetime.Singleton);
                 builder.Register<SeasonService>(Lifetime.Singleton);
+                builder.Register<LocalMarketService>(Lifetime.Singleton);
             });
             _gameScope.name = "GameScope";
+
+            // Run any transfer window due now (task 5.2b): for a brand-new career this fires the
+            // start-of-season window (seeding budgets + AI↔AI trades) so the world is "live" the
+            // moment the career opens; a loaded save resumes via TransferWindowsRun (no re-fire).
+            _gameScope.Container.Resolve<LocalMarketService>().RunDueWindows();
 
             _navigator.SetActiveScope(_gameScope);
             _navigator.Push<HubPresenter>();

@@ -58,6 +58,12 @@ namespace Fts.Services
             _career.SupportCooldowns.Clear();
             _career.RestedSinceTraining.Clear();
 
+            // New season: reset the transfer-window counter so the start-of-season window fires
+            // again (re-seeding budgets) and clear last season's transfer news feed (task 5.2b).
+            // The windows themselves run from LocalClock/GameSessionService on the next advance.
+            _career.TransferWindowsRun = 0;
+            _career.TransferNews.Clear();
+
             _saveRepository.Save(_career);
         }
     }

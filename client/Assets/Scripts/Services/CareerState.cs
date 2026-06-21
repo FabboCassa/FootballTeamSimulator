@@ -27,7 +27,12 @@ namespace Fts.Services
         /// </summary>
         /// v7 (task 4.5): player support actions — SupportCooldowns + RestedSinceTraining,
         /// both additive (old saves load with empty support state, nothing to regenerate).
-        public int SaveVersion { get; set; } = 7;
+        /// v8 (task 5.2b): AI transfer market went live — TransferNews + TransferWindowsRun,
+        /// both additive. Club.TransferBudget rides Club serialization (no field here). The
+        /// migration suppresses the market for the rest of the loaded season (sets
+        /// TransferWindowsRun = done) so an old save doesn't get a jarring mid-season window;
+        /// the market begins cleanly at the next season's start window.
+        public int SaveVersion { get; set; } = 8;
 
         /// <summary>Seed used to generate the world (kept for debugging/replays).</summary>
         public ulong Seed { get; set; }
@@ -110,6 +115,22 @@ namespace Fts.Services
         /// Consumed and cleared each tick (and at season rollover), like the minutes window.
         /// </summary>
         public List<int> RestedSinceTraining { get; set; } = new List<int>();
+
+        /// <summary>
+        /// Completed AI transfers this season (task 5.2b), newest appended last, for the
+        /// transfer-news feed the Inbox/market UI shows (task 5.3). Filled by
+        /// <see cref="LocalMarketService"/> at each window and cleared at season rollover.
+        /// The user's own deals (5.3) will be recorded here too once that UI lands.
+        /// </summary>
+        public List<Sim.Core.Market.TransferRecord> TransferNews { get; set; } = new List<Sim.Core.Market.TransferRecord>();
+
+        /// <summary>
+        /// How many transfer windows have already run this season (task 5.2b): 0 = none yet
+        /// (the start-of-season window — which also seeds club budgets — is due), 1 = start done
+        /// (the mid-season window is due once the calendar reaches halfway), 2 = both done.
+        /// Reset to 0 at season rollover so each new season seeds budgets and trades afresh.
+        /// </summary>
+        public int TransferWindowsRun { get; set; }
 
         /// <summary>Write-only adapter for v2 saves, which stored a single "League".</summary>
         [JsonProperty("League")]

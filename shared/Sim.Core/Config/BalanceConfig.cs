@@ -19,6 +19,7 @@ namespace Sim.Core.Config
         public DevelopmentBalance Development { get; set; } = new DevelopmentBalance();
         public SupportBalance Support { get; set; } = new SupportBalance();
         public MarketBalance Market { get; set; } = new MarketBalance();
+        public TransferBalance Transfer { get; set; } = new TransferBalance();
     }
 
     /// <summary>
@@ -99,6 +100,82 @@ namespace Sim.Core.Config
         public long MaxValue { get; set; } = 250_000_000;
         /// <summary>Final prices are rounded to the nearest multiple of this (tidy display). Must divide MinValue/MaxValue.</summary>
         public long ValueRoundingUnit { get; set; } = 5_000;
+    }
+
+    /// <summary>
+    /// Tunables for the transfer market (task 5.2, ARCHITECTURE.md §4.7) — club budgets,
+    /// AI personalities, squad-need analysis and offer/counteroffer negotiation. Built on
+    /// top of the 5.1 <see cref="Market.ValuationModel"/> (which prices the player); these
+    /// magnitudes shape how the AI BUYS and SELLS around that price.
+    ///
+    /// Pure and deterministic: <see cref="Market.NegotiationModel"/> uses integer math and
+    /// NO RNG (a negotiation is a stable function of its inputs); only the world-orchestration
+    /// in <see cref="Market.TransferMarket"/> draws from a seeded RNG (window seed) for
+    /// buyer/target ordering, so a window replays identically. The match engine never touches
+    /// any of this → golden masters/replays are unaffected (opt-in by being called).
+    ///
+    /// Budgets are minimal-but-real until full finances land at 5.5: seeded once per season
+    /// from squad strength + division, debited on a buy, credited on a sale.
+    /// </summary>
+    public sealed class TransferBalance
+    {
+        // --- Budget seeding (a club's transfer kitty for the season) ---
+        /// <summary>Strength at/below which a club's seeded budget is ~0 (only the floor remains). Mirrors the valuation rating floor so weak clubs are poor and strong clubs rich.</summary>
+        public int BudgetStrengthFloor { get; set; } = 35;
+        /// <summary>Currency per (clubStrength − BudgetStrengthFloor)² / 100. Tuned so a top club can afford a couple of marquee signings per window (clubs spend best-target-first, so a bigger kitty = more deals, not pricier ones): the budget — not need count — was the live throttle holding the window to ~1 signing/club.</summary>
+        public long BudgetUnitPerStrengthSquared { get; set; } = 6_000_000;
+        /// <summary>Budget discount per division below the top flight, in 1/1000 (200 = −20% per division down).</summary>
+        public int BudgetLeagueDiscountPermille { get; set; } = 200;
+        /// <summary>Floor on the league budget multiplier, in 1/1000 (300 = lower divisions still get 30% of the top-flight kitty).</summary>
+        public int BudgetLeagueFloorPermille { get; set; } = 300;
+        /// <summary>Hard floor on a seeded budget so even the smallest club can do some business.</summary>
+        public long MinBudget { get; set; } = 250_000;
+
+        // --- Squad-need analysis (who to buy / who is sellable) ---
+        /// <summary>A role is a "need" if its best player rates below (squad standard − this), or the role is below its template depth. NEGATIVE = ambition: the club shops roles up to |value| points ABOVE its own standard, so it tries to improve nearly every position and the REAL gate becomes "does an affordable upgrade actually exist". Calibration: 4→2→0 gave 2→7→23 transfers (cross-role coverage keeps most roles near standard, so a positive threshold starves the market); negative widens the pool toward the 50-150 band, with the per-club signing cap (×40 clubs) as the hard ceiling and budget the live throttle.</summary>
+        public int NeedQualityGapPoints { get; set; } = -3;
+        /// <summary>A signing must rate at least (club's current best in the role + this) to be bought. 0 = a below-standard role may be filled by an at-least-equal player (not a downgrade). This widens the pool of mutually-beneficial trades — in a closed world the count of genuine upgrades is intrinsically limited (~47 with +1), so 0 lifts the window into the 50-150 band; the cap still bounds the top.</summary>
+        public int UpgradeMinPoints { get; set; } = 0;
+        /// <summary>Minimum squad size; a club never sells below this (keeps a legal squad).</summary>
+        public int MinSquadSize { get; set; } = 18;
+        /// <summary>A club keeps at least this many players per role (template depth is the target; this is the hard floor before a sale is refused).</summary>
+        public int MinPerRoleDepth { get; set; } = 1;
+
+        // --- Negotiation (multi-round offer/counteroffer) ---
+        /// <summary>Max negotiation rounds before the parties give up (each side responds in turn).</summary>
+        public int MaxNegotiationRounds { get; set; } = 4;
+        /// <summary>Buyer's opening offer as a permille of the seller's asking price (850 = opens at 85%).</summary>
+        public int OpeningOfferPermille { get; set; } = 850;
+        /// <summary>Seller accepts immediately if the offer is at least this permille of the asking price (970 = within 3%).</summary>
+        public int SellerAcceptPermille { get; set; } = 970;
+        /// <summary>Seller rejects outright (no counter) if the offer is below this permille of asking (600 = a lowball under 60% is waved away).</summary>
+        public int SellerWalkAwayPermille { get; set; } = 600;
+        /// <summary>When countering, the seller concedes this permille of the gap between its last ask and the offer (400 = moves 40% toward the buyer each round → convergence).</summary>
+        public int SellerConcessionPermille { get; set; } = 400;
+        /// <summary>When countering, the buyer closes this permille of the gap between its last offer and the seller's ask, capped by its max price (500 = meets halfway).</summary>
+        public int BuyerConcessionPermille { get; set; } = 500;
+
+        // --- Asking-price shaping (importance + personality) ---
+        /// <summary>Asking-price premium in 1/1000 for a player who is a regular starter (best XI) — a club only parts with the spine at a premium over plain value (1500 = asks 150%).</summary>
+        public int StarterAskPremillePermille { get; set; } = 1500;
+        /// <summary>Asking discount in 1/1000 for a clearly surplus player a club wants off the books (900 = priced at 90% to move him).</summary>
+        public int SurplusAskPermille { get; set; } = 900;
+        /// <summary>A starter is only ever sold if the offer reaches this permille of his plain value — the "never sells its best XI for peanuts" guard (1300 = a 30% premium minimum; still clearly not peanuts, but a determined buyer CAN prise him away).</summary>
+        public int StarterMinSalePermille { get; set; } = 1300;
+        /// <summary>Floor on ANY AI sale as a permille of the player's plain value — no peanuts even for squad players (800 = never below 80% of value).</summary>
+        public int MinSalePermille { get; set; } = 800;
+
+        // --- Buyer willingness ---
+        /// <summary>A buyer will pay up to this permille of a target's value before walking (1450 = up to 145% of valuation, budget permitting). Must sit ABOVE StarterMinSalePermille so a wanted starter is actually reachable; cheap squad/surplus deals still settle near value because the negotiation converges on the (much lower) asking price, not on this ceiling.</summary>
+        public int BuyerMaxValuePermille { get; set; } = 1450;
+
+        // --- Window throughput ---
+        /// <summary>Max players one club signs in a single window (keeps activity sane and budgets meaningful). The primary throttle on total window volume once needs are generous.</summary>
+        public int MaxSigningsPerClubPerWindow { get; set; } = 3;
+        /// <summary>Hard safety cap on total transfers processed in one window (guards runaway loops).</summary>
+        public int MaxTransfersPerWindow { get; set; } = 400;
+        /// <summary>Seasons remaining written onto a transferred player's contract on signing.</summary>
+        public int SignedContractSeasons { get; set; } = 4;
     }
 
     /// <summary>
