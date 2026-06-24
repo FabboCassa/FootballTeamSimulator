@@ -64,6 +64,12 @@ namespace Fts.Services
             _career.TransferWindowsRun = 0;
             _career.TransferNews.Clear();
 
+            // The user's own pending market state is season-local too (task 5.3): clear listings
+            // and any incoming offers at rollover (budgets reset, the calendar resets). The
+            // shortlist is a watch list, so it intentionally persists across the season break.
+            _career.TransferList.Clear();
+            _career.IncomingOffers.Clear();
+
             _saveRepository.Save(_career);
         }
     }

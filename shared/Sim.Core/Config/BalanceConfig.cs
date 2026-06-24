@@ -156,12 +156,12 @@ namespace Sim.Core.Config
         public int BuyerConcessionPermille { get; set; } = 500;
 
         // --- Asking-price shaping (importance + personality) ---
-        /// <summary>Asking-price premium in 1/1000 for a player who is a regular starter (best XI) — a club only parts with the spine at a premium over plain value (1500 = asks 150%).</summary>
-        public int StarterAskPremillePermille { get; set; } = 1500;
+        /// <summary>Asking-price premium in 1/1000 for a player who is a regular starter (best XI) — a club only parts with the spine at a premium over plain value (1250 = asks 125%). Lowered from 1500 (task 5.3 feedback: 150% felt too high and pushed fair-value offers under the lowball band, so the user only ever saw rejections; at 125% a near-value offer now lands in the counter band).</summary>
+        public int StarterAskPremillePermille { get; set; } = 1250;
         /// <summary>Asking discount in 1/1000 for a clearly surplus player a club wants off the books (900 = priced at 90% to move him).</summary>
         public int SurplusAskPermille { get; set; } = 900;
-        /// <summary>A starter is only ever sold if the offer reaches this permille of his plain value — the "never sells its best XI for peanuts" guard (1300 = a 30% premium minimum; still clearly not peanuts, but a determined buyer CAN prise him away).</summary>
-        public int StarterMinSalePermille { get; set; } = 1300;
+        /// <summary>A starter is only ever sold if the offer reaches this permille of his plain value — the "never sells its best XI for peanuts" guard (1150 = a 15% premium minimum; still clearly not peanuts, but a determined buyer CAN prise him away). Lowered from 1300 with the ask above (task 5.3 feedback); still well under BuyerMaxValuePermille so a wanted starter stays reachable.</summary>
+        public int StarterMinSalePermille { get; set; } = 1150;
         /// <summary>Floor on ANY AI sale as a permille of the player's plain value — no peanuts even for squad players (800 = never below 80% of value).</summary>
         public int MinSalePermille { get; set; } = 800;
 

@@ -16,7 +16,7 @@ namespace Fts.Services.Persistence
     /// </summary>
     public sealed class LocalJsonSaveRepository : ISaveRepository
     {
-        private const int CurrentSaveVersion = 8;
+        private const int CurrentSaveVersion = 9;
         private const string FileName = "career.sav";
 
         private static string SavePath => Path.Combine(Application.persistentDataPath, FileName);
@@ -193,6 +193,18 @@ namespace Fts.Services.Persistence
                 state.TransferWindowsRun = 2;
                 state.SaveVersion = 8;
                 Debug.Log("[Save] Migrated save v7 -> v8 (AI transfer market; market begins next season).");
+            }
+
+            // v8 -> v9 (task 5.3): the user's own market UI. All three collections are additive —
+            // an upgraded save simply starts with an empty watch list, no listings and no pending
+            // offers, so there is nothing to regenerate; just guarantee the lists are non-null.
+            if (state.SaveVersion < 9)
+            {
+                state.Shortlist ??= new System.Collections.Generic.List<int>();
+                state.TransferList ??= new System.Collections.Generic.List<TransferListing>();
+                state.IncomingOffers ??= new System.Collections.Generic.List<IncomingOffer>();
+                state.SaveVersion = 9;
+                Debug.Log("[Save] Migrated save v8 -> v9 (user market UI: shortlist/listings/offers).");
             }
         }
 

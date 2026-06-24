@@ -61,6 +61,7 @@ namespace Fts.Presenters
             _view.TacticsClicked += OnTactics;
             _view.TrainingClicked += OnTraining;
             _view.SupportClicked += OnSupport;
+            _view.MarketClicked += OnMarket;
             _view.LeagueClicked += OnLeague;
             _view.ExitCareerClicked += OnExitCareer;
             _dayAdvancedSubscription = _broker.Subscribe<DayAdvancedMessage>(OnDayAdvanced);
@@ -76,6 +77,7 @@ namespace Fts.Presenters
             _view.TacticsClicked -= OnTactics;
             _view.TrainingClicked -= OnTraining;
             _view.SupportClicked -= OnSupport;
+            _view.MarketClicked -= OnMarket;
             _view.LeagueClicked -= OnLeague;
             _view.ExitCareerClicked -= OnExitCareer;
             _dayAdvancedSubscription?.Dispose();
@@ -159,6 +161,7 @@ namespace Fts.Presenters
         private void OnTactics() => _navigator.Push<TacticsScreenPresenter>();
         private void OnTraining() => _navigator.Push<TrainingScreenPresenter>();
         private void OnSupport() => _navigator.Push<SupportScreenPresenter>();
+        private void OnMarket() => _navigator.Push<MarketScreenPresenter>();
         private void OnLeague() => _navigator.Push<LeagueScreenPresenter>();
         private void OnExitCareer() => _session.EndCareer();
     }

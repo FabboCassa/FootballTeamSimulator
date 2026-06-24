@@ -81,6 +81,10 @@ namespace Fts.Services
             // AI↔AI otherwise. Guarded by TransferWindowsRun so it fires at most twice a season.
             _market.RunDueWindows();
 
+            // Top up incoming AI offers for the user's listed players (task 5.3). No-op unless a
+            // window is open and the user has listed someone; deterministic, saves only if changed.
+            _market.GenerateListingOffers();
+
             // Develop the world for any training week the upcoming day completes, BEFORE
             // the day's matches: attributes then stay stable through the match sim and the
             // watched-match re-sim (task 3.4), so the re-sim still reproduces the committed

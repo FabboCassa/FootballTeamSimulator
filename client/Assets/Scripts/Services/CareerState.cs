@@ -32,7 +32,11 @@ namespace Fts.Services
         /// migration suppresses the market for the rest of the loaded season (sets
         /// TransferWindowsRun = done) so an old save doesn't get a jarring mid-season window;
         /// the market begins cleanly at the next season's start window.
-        public int SaveVersion { get; set; } = 8;
+        /// v9 (task 5.3): the user's own market UI — Shortlist + TransferList + IncomingOffers,
+        /// all additive (old saves load with empty market state, nothing to regenerate). The
+        /// user's executed deals are recorded into TransferNews too. TransferList/IncomingOffers
+        /// are cleared at season rollover; Shortlist persists (it's a watch list).
+        public int SaveVersion { get; set; } = 9;
 
         /// <summary>Seed used to generate the world (kept for debugging/replays).</summary>
         public ulong Seed { get; set; }
@@ -131,6 +135,27 @@ namespace Fts.Services
         /// Reset to 0 at season rollover so each new season seeds budgets and trades afresh.
         /// </summary>
         public int TransferWindowsRun { get; set; }
+
+        /// <summary>
+        /// Player ids the user is watching on the market (task 5.3). A simple watch list shown
+        /// flagged on the Buy tab and filterable; purely a convenience, never read by the sim.
+        /// Persists across seasons (unlike listings/offers), so a target tracked all season stays.
+        /// </summary>
+        public List<int> Shortlist { get; set; } = new List<int>();
+
+        /// <summary>
+        /// User-club players currently up for sale with their asking price (task 5.3). Interested
+        /// AI clubs bid against these during an open transfer window, producing <see cref="IncomingOffers"/>.
+        /// Cleared at season rollover (a listing never carries across the break).
+        /// </summary>
+        public List<TransferListing> TransferList { get; set; } = new List<TransferListing>();
+
+        /// <summary>
+        /// Pending AI bids for the user's listed players (task 5.3), shown on the Market "Sell"
+        /// tab for the user to accept or reject. Generated deterministically (no RNG) during open
+        /// windows; cleared at season rollover with the listings.
+        /// </summary>
+        public List<IncomingOffer> IncomingOffers { get; set; } = new List<IncomingOffer>();
 
         /// <summary>Write-only adapter for v2 saves, which stored a single "League".</summary>
         [JsonProperty("League")]
