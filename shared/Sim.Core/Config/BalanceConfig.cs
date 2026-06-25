@@ -21,6 +21,7 @@ namespace Sim.Core.Config
         public MarketBalance Market { get; set; } = new MarketBalance();
         public TransferBalance Transfer { get; set; } = new TransferBalance();
         public ScoutingBalance Scouting { get; set; } = new ScoutingBalance();
+        public FinanceBalance Finance { get; set; } = new FinanceBalance();
     }
 
     /// <summary>
@@ -76,6 +77,126 @@ namespace Sim.Core.Config
         // --- Estimate bias (how off-centre a scout's number can be) ---
         /// <summary>Percent of the available slack (half-width − min half-width) the estimate may sit off the true value (100 = full slack, so two clubs see different numbers; the band still always contains the truth, and the bias shrinks to 0 at full knowledge). Set 0 for centred (band-midpoint = truth) estimates.</summary>
         public int EstimateBiasPercent { get; set; } = 100;
+    }
+
+    /// <summary>
+    /// Tunables for club facilities and finances (task 5.5, ARCHITECTURE.md §4.2). Two halves:
+    ///
+    /// FACILITIES — four upgradeable tiers (stadium, training, scouting, academy), each in
+    /// [1, <see cref="MaxFacilityTier"/>]. <see cref="Market.FacilityEffects"/> maps a tier to
+    /// its effect, with tier 1 reproducing the pre-5.5 neutral baseline: training tier 1 maps to
+    /// the development model's neutral facility level (so a fresh world develops exactly as 4.4),
+    /// and scouting tier 1 to the base scout level (task 5.4). Upgrades cost a lump sum that rises
+    /// with the target tier.
+    ///
+    /// FINANCES — income (gate receipts, sponsors, prize money) and expense (wages) evolved over a
+    /// season by <see cref="Market.FinanceProgressor"/>. Pure/integer math, NO RNG. The board
+    /// covers any operating shortfall (the balance is floored at zero → bankruptcy is impossible),
+    /// while the per-season transfer kitty (<see cref="Domain.Club.TransferBudget"/>) is seeded
+    /// from these finances — so overspending on transfers leaves a club unable to sign more
+    /// (the 5.5 acceptance). The match engine never reads any of this (golden masters unaffected;
+    /// opt-in by being called, like the condition/development/valuation progressors).
+    ///
+    /// Wages derive from each player's market value, the club he plays for (its league level,
+    /// carried by the value) and the club's season results (a standings-based ±swing) — the user's
+    /// chosen wage drivers. Magnitudes live here; the tier→effect shapes are structural in
+    /// FacilityEffects. Currency is the same abstract game money as the valuation scale.
+    /// </summary>
+    public sealed class FinanceBalance
+    {
+        // ===================== Facilities =====================
+        /// <summary>Highest tier any facility can reach (1 = the starting baseline).</summary>
+        public int MaxFacilityTier { get; set; } = 5;
+
+        /// <summary>Lump-sum cost of the FIRST upgrade (tier 1→2); higher upgrades scale up with the current tier squared.</summary>
+        public long FacilityUpgradeBaseCost { get; set; } = 4_000_000;
+
+        // --- Training ground → development facility level (the 5.5 ✅) ---
+        /// <summary>Development facility level added per training tier above 1. Tier 1 maps to DevelopmentBalance.FacilityNeutralLevel (neutral), so a fresh world develops exactly as 4.4; each upgrade lifts the FacilityLevel that feeds DevelopmentModel growth.</summary>
+        public int TrainingFacilityLevelPerTier { get; set; } = 12;
+
+        // --- Stadium → seating capacity → gate receipts ---
+        /// <summary>Capacity of a tier-1 stadium (seats).</summary>
+        public int StadiumBaseCapacity { get; set; } = 12_000;
+        /// <summary>Extra capacity per stadium tier above 1.</summary>
+        public int StadiumCapacityPerTier { get; set; } = 13_000;
+
+        // --- Scouting → scout level (task 5.4) ---
+        // Scouting tier maps directly to the effective scout level (tier = level), clamped to
+        // ScoutingBalance.MaxScoutLevel; tier 1 = the base scout level. No extra magnitude needed.
+
+        // --- Academy → youth quality (intake itself is a later system) ---
+        /// <summary>Academy quality rating (0–100) at tier 1.</summary>
+        public int AcademyRatingBase { get; set; } = 30;
+        /// <summary>Academy rating added per academy tier above 1.</summary>
+        public int AcademyRatingPerTier { get; set; } = 15;
+
+        // --- Suggested starting stadium tier (so big clubs start with big grounds → income scales with size) ---
+        /// <summary>Club strength at/below which the suggested starting stadium tier is 1.</summary>
+        public int StadiumTierStrengthFloor { get; set; } = 50;
+        /// <summary>Club-strength points per extra suggested starting stadium tier (strength 50→tier 1, 70→tier 5).</summary>
+        public int StrengthPerStadiumTier { get; set; } = 5;
+
+        // ===================== Finances =====================
+        // --- Gate receipts (per home match) ---
+        /// <summary>Average share of capacity that attends a home match, in percent.</summary>
+        public int AverageAttendancePercent { get; set; } = 85;
+        /// <summary>Ticket price per attendee in the top flight.</summary>
+        public long TicketPriceTopFlight { get; set; } = 30;
+        /// <summary>Ticket-price discount per division below the top flight, in 1/1000 (200 = −20%/division).</summary>
+        public int TicketDivisionDiscountPermille { get; set; } = 200;
+        /// <summary>Floor on the ticket-price league multiplier, in 1/1000.</summary>
+        public int TicketDivisionFloorPermille { get; set; } = 300;
+
+        // --- Sponsors (per week) ---
+        /// <summary>Weekly sponsor income for a top-flight, tier-1-stadium club.</summary>
+        public long SponsorWeeklyTopFlight { get; set; } = 150_000;
+        /// <summary>Extra weekly sponsor income per stadium tier above 1 (bigger ground/brand → much bigger commercial deals). Scales strongly so big clubs' commercial income tracks their size — as in reality, where the elite earn most from commercial/broadcast — bringing their wage-to-revenue ratio down to the realistic ~63-68% (real Premier League average is ~63%) and keeping them clearly profitable (so a top-club save has a meaty transfer budget). Raised from 60k after the first economy run left the champion at a 91% wage ratio.</summary>
+        public long SponsorWeeklyPerStadiumTier { get; set; } = 180_000;
+        /// <summary>Sponsor discount per division below the top flight, in 1/1000 (250 = −25%/division).</summary>
+        public int SponsorDivisionDiscountPermille { get; set; } = 250;
+        /// <summary>Floor on the sponsor league multiplier, in 1/1000.</summary>
+        public int SponsorDivisionFloorPermille { get; set; } = 250;
+
+        // --- Prize money (per season, by final league position) ---
+        /// <summary>Prize for finishing 1st in the top flight (linear down to the wooden-spoon prize for last).</summary>
+        public long PrizeWinnerTopFlight { get; set; } = 8_000_000;
+        /// <summary>Prize for finishing last in the top flight.</summary>
+        public long PrizeLastTopFlight { get; set; } = 1_000_000;
+        /// <summary>Prize discount per division below the top flight, in 1/1000.</summary>
+        public int PrizeDivisionDiscountPermille { get; set; } = 250;
+        /// <summary>Floor on the prize league multiplier, in 1/1000.</summary>
+        public int PrizeDivisionFloorPermille { get; set; } = 250;
+
+        // --- Wages (per week, the dominant expense) ---
+        /// <summary>Weekly wage = player market value / this divisor. Calibrated against the harness so the league wage bill is ~75% of income (clubs lean modestly profitable → the board can fund transfers; big clubs run tightest, minnows bank cash). Raised from 300 after the first run showed wages at 163% of income — the value scale's fat elite tail makes top-club squad values huge, so the divisor must be large.</summary>
+        public long WageWeeklyValueDivisor { get; set; } = 650;
+        /// <summary>Wage multiplier (1/1000) for the club that finishes 1st — success lifts the wage bill (bonuses/renewals).</summary>
+        public int WageResultCeilPermille { get; set; } = 1100;
+        /// <summary>Wage multiplier (1/1000) for the club that finishes last — a poor season trims the wage bill.</summary>
+        public int WageResultFloorPermille { get; set; } = 900;
+
+        // --- Starting finances & board backing ---
+        /// <summary>Operating-cash floor: the board covers shortfalls down to this, so bankruptcy is impossible (the 5.5 acceptance).</summary>
+        public long MinBalance { get; set; } = 0;
+        /// <summary>Cash a fresh top-flight club starts a career with (division-discounted).</summary>
+        public long StartingBalanceTopFlight { get; set; } = 20_000_000;
+        /// <summary>Starting-balance discount per division below the top flight, in 1/1000.</summary>
+        public int StartingBalanceDivisionDiscountPermille { get; set; } = 300;
+        /// <summary>Floor on the starting-balance league multiplier, in 1/1000.</summary>
+        public int StartingBalanceDivisionFloorPermille { get; set; } = 300;
+
+        // --- Transfer budget from finances (replaces the 5.2 strength-based seed in the live path) ---
+        /// <summary>Percent of current cash reserves the board makes available for transfers each season.</summary>
+        public int TransferBudgetCashPercent { get; set; } = 50;
+        /// <summary>Flat board grant on top of the cash share, for a top-flight club (division-discounted).</summary>
+        public long BoardGrantTopFlight { get; set; } = 10_000_000;
+        /// <summary>Board-grant discount per division below the top flight, in 1/1000.</summary>
+        public int BoardGrantDivisionDiscountPermille { get; set; } = 250;
+        /// <summary>Floor on the board-grant league multiplier, in 1/1000.</summary>
+        public int BoardGrantDivisionFloorPermille { get; set; } = 250;
+        /// <summary>Hard floor on a seeded transfer budget so even a skint club can do minimal business.</summary>
+        public long MinTransferBudget { get; set; } = 250_000;
     }
 
     /// <summary>

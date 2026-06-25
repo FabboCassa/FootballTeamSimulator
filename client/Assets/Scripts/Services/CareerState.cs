@@ -40,7 +40,13 @@ namespace Fts.Services
         /// knowledge) + ScoutAssignments (the user's watch list). Both additive; Club.Scouts rides
         /// Club serialization. Knowledge persists across seasons ("you don't forget what you scouted"),
         /// so neither is cleared at rollover. Old saves load with empty knowledge and start scouting fresh.
-        public int SaveVersion { get; set; } = 10;
+        /// v11 (task 5.5): club facilities & finances. Facilities (4 tiers) and Finances (cash balance +
+        /// season income/expense) ride Club serialization — no field here — so an old save deserializes
+        /// them as defaults (all-tier-1 / zero balance); the migration seeds the whole world's finances
+        /// (starting balances, stadium tiers by strength, finance-based transfer budgets) and sets the
+        /// user club's scouting tier from its existing scout department. Finances/facilities persist and
+        /// evolve with the world; the transfer budget is re-seeded from finances each season.
+        public int SaveVersion { get; set; } = 11;
 
         /// <summary>Seed used to generate the world (kept for debugging/replays).</summary>
         public ulong Seed { get; set; }

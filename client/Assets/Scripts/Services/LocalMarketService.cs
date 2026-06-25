@@ -30,7 +30,7 @@ namespace Fts.Services
         private readonly BalanceConfig _config = new BalanceConfig();
         private readonly TransferBalance _t;
         private readonly TransferMarket _market;
-        private readonly BudgetModel _budgets;
+        private readonly FinanceProgressor _finance;
 
         public LocalMarketService(CareerState career, ISaveRepository saveRepository)
         {
@@ -38,7 +38,7 @@ namespace Fts.Services
             _saveRepository = saveRepository;
             _t = _config.Transfer;
             _market = new TransferMarket(_config);
-            _budgets = new BudgetModel(_config);
+            _finance = new FinanceProgressor(_config);
         }
 
         /// <summary>The current transfer-window status (task 5.3) — drives whether the user may trade.</summary>
@@ -56,7 +56,10 @@ namespace Fts.Services
 
             if (_career.TransferWindowsRun <= 0)
             {
-                _budgets.SeedBudgets(_career.Leagues); // start-of-season kitties (overwrites; only here)
+                // Start-of-season kitties now come from each club's FINANCES (task 5.5): a share of
+                // cash reserves + a board grant, replacing the 5.2 strength-based seed. A club that
+                // banked a profitable season gets a bigger budget; one that spent down gets less.
+                _finance.SeedTransferBudgets(_career.Leagues); // overwrites; only here
                 RunWindow(0);
                 _career.TransferWindowsRun = 1;
                 ran = true;

@@ -16,7 +16,7 @@ namespace Fts.Services.Persistence
     /// </summary>
     public sealed class LocalJsonSaveRepository : ISaveRepository
     {
-        private const int CurrentSaveVersion = 10;
+        private const int CurrentSaveVersion = 11;
         private const string FileName = "career.sav";
 
         private static string SavePath => Path.Combine(Application.persistentDataPath, FileName);
@@ -217,6 +217,29 @@ namespace Fts.Services.Persistence
                 state.ScoutAssignments ??= new System.Collections.Generic.List<int>();
                 state.SaveVersion = 10;
                 Debug.Log("[Save] Migrated save v9 -> v10 (scouting / knowledge layer added).");
+            }
+
+            // v10 -> v11 (task 5.5): club facilities & finances. Facilities/Finances ride Club
+            // serialization (defaults all-tier-1 / zero balance for an old save), so we seed the
+            // whole world's finances now — starting balances, stadium tiers by strength and a
+            // finance-based transfer budget — to give an upgraded save a coherent economy from
+            // here on. The user club's scouting facility tier is set from its existing scout
+            // department so the new Club screen and the 5.4 scouting stay consistent.
+            if (state.SaveVersion < 11)
+            {
+                new Sim.Core.Market.FinanceProgressor(config).SeedWorld(state.Leagues);
+
+                Sim.Core.Domain.Club userClub = state.GetUserClub();
+                if (userClub != null)
+                {
+                    int existingScouts = userClub.Scouts != null ? userClub.Scouts.Count : 0;
+                    int tier = existingScouts > 0 ? existingScouts : CareerFactory.UserStartScoutingTier;
+                    if (tier > config.Finance.MaxFacilityTier) tier = config.Finance.MaxFacilityTier;
+                    FacilitySync.ApplyScoutingTier(userClub, tier, config);
+                }
+
+                state.SaveVersion = 11;
+                Debug.Log("[Save] Migrated save v10 -> v11 (facilities & finances seeded).");
             }
         }
 

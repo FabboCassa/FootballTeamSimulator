@@ -46,6 +46,12 @@ namespace Fts.Services
         // tracks development/ageing and contract decay without flickering with daily form.
         // Pure/deterministic, no RNG, never read by the engine — golden masters stay safe.
         private readonly ValuationProgressor _valuation = new ValuationProgressor(new BalanceConfig());
+        // Whole-world finances are live (task 5.5): gate receipts credit the home club each
+        // matchday, sponsors and wages settle on the weekly tick (the board floors the balance so
+        // bankruptcy is impossible), and the training facility tier feeds the development model.
+        // Pure/integer, no RNG, never read by the engine — golden masters stay safe.
+        private readonly BalanceConfig _config = new BalanceConfig();
+        private readonly FinanceProgressor _finance = new FinanceProgressor(new BalanceConfig());
 
         /// <summary>
         /// Stride for folding the season year into the per-week development RNG. The
@@ -135,6 +141,11 @@ namespace Fts.Services
                 }
             }
 
+            // Credit gate receipts to the home club of every fixture played today (task 5.5).
+            // Mutates only Finances.Balance, never attributes/condition — the user-match re-sim
+            // is unaffected. Sponsors/wages settle weekly inside EvolveTrainingUpTo above.
+            _finance.AccrueMatchday(_career.Leagues, outcomes);
+
             // Evolve the whole world's condition for the day just played: starters
             // drain, benched players take the morale/form step, idle clubs recover.
             // Runs after the snapshot capture so the user-match re-sim stays consistent.
@@ -196,6 +207,13 @@ namespace Fts.Services
                 // follows its assignments, every other club the default policy. Pure/no-RNG, never
                 // read by the engine, so attributes the re-sim relies on are unaffected.
                 _scouting.EvolveWeek();
+
+                // Settle one week of the whole world's finances on the same cadence (task 5.5):
+                // sponsor income in, the wage bill out (scaled by each club's current standing),
+                // then the board floors the balance so no club goes bankrupt. Wages read each
+                // player's cached MarketValue (kept fresh by the weekly re-price below). Only
+                // Finances change — attributes/condition are untouched, so the re-sim is safe.
+                _finance.AccrueWeek(_career.Leagues, _career.Season);
 
                 // The Tactical team focus drills the user's current tactic (the "affects
                 // tactic familiarity" half of 4.3); every other focus gains nothing here.
@@ -274,13 +292,17 @@ namespace Fts.Services
             if (userClub == null)
                 return null;
 
+            // Training-ground facility level (task 5.5): tier 1 = the neutral baseline (world
+            // develops as 4.4), each upgrade lifts the development facility level → faster growth.
+            int facilityLevel = FacilityEffects.TrainingFacilityLevel(userClub.Facilities.Training, _config);
+
             int matches = _career.UserMatchesSinceTraining;
             var contexts = new Dictionary<int, DevelopmentContext>();
             foreach (Player p in userClub.Squad.Players)
             {
                 int starts = _career.StartsSinceTraining.TryGetValue(p.Id, out int s) ? s : 0;
                 int share = matches > 0 ? starts * 100 / matches : 100;
-                contexts[p.Id] = new DevelopmentContext(share, _developmentConfig.FacilityNeutralLevel, p.Condition.Form);
+                contexts[p.Id] = new DevelopmentContext(share, facilityLevel, p.Condition.Form);
             }
 
             return contexts;

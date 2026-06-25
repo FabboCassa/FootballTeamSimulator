@@ -29,5 +29,21 @@ namespace Sim.Core.Domain
         /// Additive — defaults 0, so it rides existing Club serialization with no save bump.
         /// </summary>
         public long TransferBudget { get; set; }
+
+        /// <summary>
+        /// The club's upgradeable facilities (task 5.5): stadium, training ground, scouting
+        /// department, academy. Each starts at tier 1 (the baseline that reproduces the
+        /// pre-5.5 neutral effects), and <see cref="Market.FacilityEffects"/> turns a tier
+        /// into its effect. Additive — defaults to all-tier-1, no save bump.
+        /// </summary>
+        public Facilities Facilities { get; set; } = new Facilities();
+
+        /// <summary>
+        /// The club's running finances (task 5.5): operating cash, season income/expense
+        /// breakdown. <see cref="Market.FinanceProgressor"/> evolves it; the transfer kitty
+        /// (<see cref="TransferBudget"/>) is seeded from it each season. Additive — defaults
+        /// to a zero balance (the host seeds a starting balance at career creation), no save bump.
+        /// </summary>
+        public Finances Finances { get; set; } = new Finances();
     }
 }

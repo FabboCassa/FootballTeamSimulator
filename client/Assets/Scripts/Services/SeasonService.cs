@@ -1,4 +1,5 @@
 using Sim.Core.Career;
+using Sim.Core.Market;
 
 namespace Fts.Services
 {
@@ -11,6 +12,7 @@ namespace Fts.Services
     {
         private readonly CareerState _career;
         private readonly Persistence.ISaveRepository _saveRepository;
+        private readonly FinanceProgressor _finance = new FinanceProgressor();
 
         public RolloverResult LastRollover { get; private set; }
 
@@ -39,8 +41,17 @@ namespace Fts.Services
             if (!IsSeasonComplete)
                 return;
 
+            // Award prize money on the COMPLETED season's final standings, before the rollover
+            // swaps the season out (task 5.5). Credits each club per its finishing position, so a
+            // good season also fattens next season's finance-based transfer budget.
+            _finance.AwardPrizeMoney(_career.Leagues, _career.Season);
+
             LastRollover = new SeasonRollover().EndSeason(_career.Leagues, _career.Season, _career.Seed);
             _career.Season = LastRollover.NewSeason;
+
+            // Clear the season-to-date income/expense display counters for the new season (task 5.5);
+            // the cash balance (and the prize just credited) carries over and seeds the new budget.
+            FinanceProgressor.ResetSeasonCounters(_career.Leagues);
 
             // New season: restart the season-local training-week counter so development
             // keeps running every season (the new season's CurrentDay resets to 1; without

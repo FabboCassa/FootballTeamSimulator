@@ -54,16 +54,20 @@ namespace Fts.Services
             return new List<League> { div1, div2 };
         }
 
+        /// <summary>Starting scouting-facility tier for the user's club — drives a 3-scout, level-3 department.</summary>
+        public const int UserStartScoutingTier = 3;
+
         public CareerState Create(ulong seed, List<League> leagues, int userClubId)
         {
-            // Seed initial transfer budgets (task 5.2b) so the world is coherent from creation;
-            // the start-of-season window re-seeds them identically when the career opens.
-            new BudgetModel(_config).SeedBudgets(leagues);
+            // Seed whole-world finances & facilities (task 5.5): a starting cash balance, a stadium
+            // tier scaled to each club's strength (big clubs start with big grounds → income tracks
+            // size) and a finance-based transfer budget — replacing the 5.2 strength-based seed.
+            new FinanceProgressor(_config).SeedWorld(leagues);
 
-            // Give the user's club a scouting department (task 5.4b) so scouting is meaningful
-            // from day one; AI clubs keep the base scout level. Facilities (task 5.5) will own
-            // and let the user upgrade these later.
-            SeedUserScouts(leagues, userClubId);
+            // The user's scouting department is now the scouting FACILITY (task 5.5): start at
+            // tier 3 (a 3-scout, level-3 dept ≈ the 5.4b seed) so scouting is meaningful from day
+            // one and upgrading the facility later adds scouts/level. AI clubs keep tier 1 (base).
+            FacilitySync.ApplyScoutingTier(FindClub(leagues, userClubId), UserStartScoutingTier, _config);
 
             return new CareerState
             {
@@ -75,28 +79,15 @@ namespace Fts.Services
             };
         }
 
-        /// <summary>
-        /// Seeds the user's club a small scouting department (task 5.4b): three scouts whose best
-        /// level (3) drives how fast watched players' ranges narrow (~7 weeks to full knowledge at
-        /// ScoutingBalance defaults). AI clubs are left without scouts and scout at the base level.
-        /// </summary>
-        private static void SeedUserScouts(List<League> leagues, int userClubId)
+        private static Club FindClub(List<League> leagues, int clubId)
         {
-            Club userClub = null;
             foreach (League league in leagues)
             {
-                Club c = league.FindClub(userClubId);
-                if (c != null) { userClub = c; break; }
+                Club c = league.FindClub(clubId);
+                if (c != null)
+                    return c;
             }
-            if (userClub == null)
-                return;
-
-            userClub.Scouts = new List<Scout>
-            {
-                new Scout { Id = 1, Name = "Chief Scout", Level = 3 },
-                new Scout { Id = 2, Name = "Scout", Level = 3 },
-                new Scout { Id = 3, Name = "Scout", Level = 2 }
-            };
+            return null;
         }
 
         public Season BuildFirstSeason(ulong seed, List<League> leagues)
