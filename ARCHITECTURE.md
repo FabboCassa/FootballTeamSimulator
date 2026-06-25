@@ -70,6 +70,7 @@ FootballTeamSimulator/
 │   │   ├── Domain/            # Entities: Player, Team, Club, League, Season...
 │   │   ├── Match/             # Deterministic match engine
 │   │   ├── Market/            # Valuation, AI transfer behaviour, auctions
+│   │   ├── Scouting/          # Knowledge layer: scout levels, narrowing attribute ranges
 │   │   ├── Development/       # Growth/decline, training effects
 │   │   ├── Condition/         # Form, morale, fitness models
 │   │   ├── Tactics/           # Tactic definitions, counter-matrix, familiarity

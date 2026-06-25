@@ -16,7 +16,7 @@ namespace Fts.Services.Persistence
     /// </summary>
     public sealed class LocalJsonSaveRepository : ISaveRepository
     {
-        private const int CurrentSaveVersion = 9;
+        private const int CurrentSaveVersion = 10;
         private const string FileName = "career.sav";
 
         private static string SavePath => Path.Combine(Application.persistentDataPath, FileName);
@@ -205,6 +205,18 @@ namespace Fts.Services.Persistence
                 state.IncomingOffers ??= new System.Collections.Generic.List<IncomingOffer>();
                 state.SaveVersion = 9;
                 Debug.Log("[Save] Migrated save v8 -> v9 (user market UI: shortlist/listings/offers).");
+            }
+
+            // v9 -> v10 (task 5.4b): scouting / knowledge layer. Both collections are additive —
+            // an upgraded save starts with no knowledge and an empty watch list (the world begins
+            // scouting from the next week), and existing clubs have no Scouts so they scout at the
+            // base level until a department is seeded. Nothing to regenerate; just guarantee non-null.
+            if (state.SaveVersion < 10)
+            {
+                state.ScoutKnowledge ??= new System.Collections.Generic.Dictionary<string, int>();
+                state.ScoutAssignments ??= new System.Collections.Generic.List<int>();
+                state.SaveVersion = 10;
+                Debug.Log("[Save] Migrated save v9 -> v10 (scouting / knowledge layer added).");
             }
         }
 

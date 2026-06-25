@@ -94,6 +94,7 @@ namespace Fts.App
                 builder.Register<MarketTarget>(Lifetime.Singleton);
                 builder.Register<SeasonService>(Lifetime.Singleton);
                 builder.Register<LocalMarketService>(Lifetime.Singleton);
+                builder.Register<ScoutingService>(Lifetime.Singleton);
             });
             _gameScope.name = "GameScope";
 

@@ -60,6 +60,11 @@ namespace Fts.Services
             // the start-of-season window re-seeds them identically when the career opens.
             new BudgetModel(_config).SeedBudgets(leagues);
 
+            // Give the user's club a scouting department (task 5.4b) so scouting is meaningful
+            // from day one; AI clubs keep the base scout level. Facilities (task 5.5) will own
+            // and let the user upgrade these later.
+            SeedUserScouts(leagues, userClubId);
+
             return new CareerState
             {
                 Seed = seed,
@@ -67,6 +72,30 @@ namespace Fts.Services
                 UserClubId = userClubId,
                 CreatedUtc = DateTime.UtcNow.ToString("u"),
                 Season = BuildFirstSeason(seed, leagues)
+            };
+        }
+
+        /// <summary>
+        /// Seeds the user's club a small scouting department (task 5.4b): three scouts whose best
+        /// level (3) drives how fast watched players' ranges narrow (~7 weeks to full knowledge at
+        /// ScoutingBalance defaults). AI clubs are left without scouts and scout at the base level.
+        /// </summary>
+        private static void SeedUserScouts(List<League> leagues, int userClubId)
+        {
+            Club userClub = null;
+            foreach (League league in leagues)
+            {
+                Club c = league.FindClub(userClubId);
+                if (c != null) { userClub = c; break; }
+            }
+            if (userClub == null)
+                return;
+
+            userClub.Scouts = new List<Scout>
+            {
+                new Scout { Id = 1, Name = "Chief Scout", Level = 3 },
+                new Scout { Id = 2, Name = "Scout", Level = 3 },
+                new Scout { Id = 3, Name = "Scout", Level = 2 }
             };
         }
 

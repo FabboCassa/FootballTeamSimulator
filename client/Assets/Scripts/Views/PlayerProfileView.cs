@@ -5,11 +5,16 @@ using UnityEngine.UIElements;
 
 namespace Fts.Views
 {
-    /// <summary>One attribute row: a name, its 1-100 value and a bar.</summary>
+    /// <summary>
+    /// One attribute row: a name, a display string and a 1-100 bar value. For an owned player
+    /// <see cref="Text"/> is the exact value; for a scouted player it's a range like "54–72"
+    /// and <see cref="BarValue"/> is the estimate (band centre).
+    /// </summary>
     public sealed class AttrRowVm
     {
         public string Name;
-        public int Value;
+        public string Text;   // exact value or "min–max"
+        public int BarValue;  // 1-100 fill (exact value, or the estimate for a range)
     }
 
     /// <summary>
@@ -50,6 +55,7 @@ namespace Fts.Views
         private readonly Label _potential;
         private readonly Label _value;
         private readonly Label _seasonGoals;
+        private readonly VisualElement _conditionSection;
         private readonly VisualElement _conditionBlock;
         private readonly ScrollView _attrList;
 
@@ -88,10 +94,12 @@ namespace Fts.Views
             body.style.flexGrow = 1f;
             Root.Add(body);
 
-            body.Add(SectionLabel(tr("profile.condition_caption")));
+            _conditionSection = new VisualElement();
+            _conditionSection.Add(SectionLabel(tr("profile.condition_caption")));
             _conditionBlock = new VisualElement();
             _conditionBlock.style.marginBottom = 12;
-            body.Add(_conditionBlock);
+            _conditionSection.Add(_conditionBlock);
+            body.Add(_conditionSection);
 
             body.Add(SectionLabel(tr("profile.attributes_caption")));
             _attrList = new ScrollView();
@@ -126,6 +134,10 @@ namespace Fts.Views
 
         public void SetSeasonGoals(string text) => _seasonGoals.text = text;
 
+        /// <summary>Hides the condition section for non-owned players (you don't know an opponent's form/morale exactly).</summary>
+        public void SetConditionVisible(bool visible) =>
+            _conditionSection.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+
         public void SetCondition(ProfileConditionVm vm)
         {
             _conditionBlock.Clear();
@@ -146,7 +158,7 @@ namespace Fts.Views
         {
             _attrList.Clear();
             foreach (AttrRowVm vm in rows)
-                _attrList.Add(AttributeRow(vm.Name, vm.Value));
+                _attrList.Add(AttributeRow(vm.Name, vm.Text, vm.BarValue));
         }
 
         private static Label CauseLine(string text)
@@ -169,10 +181,10 @@ namespace Fts.Views
             return label;
         }
 
-        /// <summary>A row: attribute name on the left, value, then a 1-100 bar.</summary>
-        private static VisualElement AttributeRow(string name, int value)
+        /// <summary>A row: attribute name on the left, a value/range text, then a 1-100 bar.</summary>
+        private static VisualElement AttributeRow(string name, string text, int barValue)
         {
-            int clamped = value < 0 ? 0 : (value > 100 ? 100 : value);
+            int clamped = barValue < 0 ? 0 : (barValue > 100 ? 100 : barValue);
 
             var row = new VisualElement();
             row.style.flexDirection = FlexDirection.Row;
@@ -186,8 +198,8 @@ namespace Fts.Views
             label.style.unityTextAlign = TextAnchor.MiddleLeft;
             row.Add(label);
 
-            var number = new Label(clamped.ToString());
-            number.style.width = 34;
+            var number = new Label(text ?? clamped.ToString());
+            number.style.width = 56;
             number.style.fontSize = 13;
             number.style.unityTextAlign = TextAnchor.MiddleRight;
             number.style.marginRight = 8;

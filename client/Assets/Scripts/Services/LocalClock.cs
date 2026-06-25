@@ -27,6 +27,7 @@ namespace Fts.Services
         private readonly UserMatchLog _matchLog;
         private readonly UserMatchContextHolder _matchContext;
         private readonly LocalMarketService _market;
+        private readonly ScoutingService _scouting;
         // Condition is live (task 4.2): matches are simulated condition-aware and the
         // whole world's form/morale/fitness evolves each day via EvolveCondition below.
         // applyMatchFatigue also fades each side within the match (by avg stamina) with
@@ -61,7 +62,8 @@ namespace Fts.Services
             IMessageBroker broker,
             UserMatchLog matchLog,
             UserMatchContextHolder matchContext,
-            LocalMarketService market)
+            LocalMarketService market,
+            ScoutingService scouting)
         {
             _career = career;
             _saveRepository = saveRepository;
@@ -69,6 +71,7 @@ namespace Fts.Services
             _matchLog = matchLog;
             _matchContext = matchContext;
             _market = market;
+            _scouting = scouting;
         }
 
         public int CurrentDay => _career.Season.CurrentDay;
@@ -188,6 +191,11 @@ namespace Fts.Services
                 int rngWeek = _career.Season.Year * SeasonWeekStride + weekInSeason;
 
                 _development.EvolveWeek(_career.Leagues, plans, contexts, _career.Seed, rngWeek);
+
+                // Scout the whole world this week on the same cadence (task 5.4b): the user club
+                // follows its assignments, every other club the default policy. Pure/no-RNG, never
+                // read by the engine, so attributes the re-sim relies on are unaffected.
+                _scouting.EvolveWeek();
 
                 // The Tactical team focus drills the user's current tactic (the "affects
                 // tactic familiarity" half of 4.3); every other focus gains nothing here.

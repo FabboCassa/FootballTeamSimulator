@@ -20,6 +20,62 @@ namespace Sim.Core.Config
         public SupportBalance Support { get; set; } = new SupportBalance();
         public MarketBalance Market { get; set; } = new MarketBalance();
         public TransferBalance Transfer { get; set; } = new TransferBalance();
+        public ScoutingBalance Scouting { get; set; } = new ScoutingBalance();
+    }
+
+    /// <summary>
+    /// Tunables for the scouting / knowledge layer (task 5.4, ARCHITECTURE.md §4.7 —
+    /// "uncertainty lives in knowledge, not in the sim"). A club's KNOWLEDGE of a player
+    /// it does not own is a level in [0, <see cref="MaxKnowledge"/>]: at 0 the club sees
+    /// only wide ranges around each true attribute (and a wide potential band), and the
+    /// ranges narrow toward the true values as scouts observe the player week after week.
+    ///
+    /// Pure and deterministic: <see cref="Scouting.ScoutingModel"/> uses integer math and
+    /// NO live RNG — the only "randomness" is a per-(worldSeed, playerId, attribute) hash
+    /// that gives each estimate a stable off-centre bias (so two clubs scout slightly
+    /// different numbers), and it is sized so the TRUE value is ALWAYS inside the shown
+    /// range at every knowledge level (anti-frustration: the truth is never outside what
+    /// the scout reports). The match engine and SeasonProgressor never touch any of this →
+    /// golden masters/replays are unaffected (opt-in by being called).
+    ///
+    /// Shape (magnitudes here; the structure is in ScoutingModel): a band's half-width is
+    /// interpolated linearly from the Max half-width at knowledge 0 to the Min half-width
+    /// at full knowledge; the estimate (band centre) sits at the true value plus a bias
+    /// bounded by (half-width − min half-width) × <see cref="EstimateBiasPercent"/>/100, so
+    /// it converges exactly onto the truth as knowledge fills. Attributes and the overall
+    /// use one width pair; potential (harder to read) uses a wider one.
+    /// </summary>
+    public sealed class ScoutingBalance
+    {
+        // --- Knowledge scale ---
+        /// <summary>Full knowledge; a player scouted to this level shows the tightest ranges.</summary>
+        public int MaxKnowledge { get; set; } = 100;
+        /// <summary>Knowledge gained per week per scout level for an actively-watched player (a level-3 scout fills ~7 weeks). Capped at MaxKnowledge.</summary>
+        public int KnowledgePerScoutLevelPerWeek { get; set; } = 5;
+
+        // --- Scouts ---
+        /// <summary>Upper bound for a scout's level (1..this). Higher = faster knowledge.</summary>
+        public int MaxScoutLevel { get; set; } = 5;
+        /// <summary>Effective scout level for a club with no seeded scouts, so the world still scouts slowly (a club always has SOME scouting). Seeding real scouts (host) speeds it up.</summary>
+        public int BaseClubScoutLevel { get; set; } = 1;
+        /// <summary>How many players an AI club watches by default each week (the policy picks the league's best players outside its own squad). Bounds the world's knowledge growth.</summary>
+        public int DefaultWatchCount { get; set; } = 4;
+
+        // --- Attribute / overall range (band half-width vs knowledge) ---
+        /// <summary>Half-width of an attribute range at zero knowledge (±this around the true value → a wide, vague read). 22 → a ~44-point span.</summary>
+        public int AttributeMaxHalfWidth { get; set; } = 22;
+        /// <summary>Half-width of an attribute range at full knowledge (±this → a tight read, never claimed as exact).</summary>
+        public int AttributeMinHalfWidth { get; set; } = 1;
+
+        // --- Potential band (harder to scout → wider) ---
+        /// <summary>Half-width of the potential band at zero knowledge (potential is the hardest thing to read).</summary>
+        public int PotentialMaxHalfWidth { get; set; } = 30;
+        /// <summary>Half-width of the potential band at full knowledge.</summary>
+        public int PotentialMinHalfWidth { get; set; } = 3;
+
+        // --- Estimate bias (how off-centre a scout's number can be) ---
+        /// <summary>Percent of the available slack (half-width − min half-width) the estimate may sit off the true value (100 = full slack, so two clubs see different numbers; the band still always contains the truth, and the bias shrinks to 0 at full knowledge). Set 0 for centred (band-midpoint = truth) estimates.</summary>
+        public int EstimateBiasPercent { get; set; } = 100;
     }
 
     /// <summary>

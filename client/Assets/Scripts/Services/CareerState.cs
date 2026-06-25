@@ -36,7 +36,11 @@ namespace Fts.Services
         /// all additive (old saves load with empty market state, nothing to regenerate). The
         /// user's executed deals are recorded into TransferNews too. TransferList/IncomingOffers
         /// are cleared at season rollover; Shortlist persists (it's a watch list).
-        public int SaveVersion { get; set; } = 9;
+        /// v10 (task 5.4b): scouting / knowledge layer — ScoutKnowledge (whole-world per-(club,player)
+        /// knowledge) + ScoutAssignments (the user's watch list). Both additive; Club.Scouts rides
+        /// Club serialization. Knowledge persists across seasons ("you don't forget what you scouted"),
+        /// so neither is cleared at rollover. Old saves load with empty knowledge and start scouting fresh.
+        public int SaveVersion { get; set; } = 10;
 
         /// <summary>Seed used to generate the world (kept for debugging/replays).</summary>
         public ulong Seed { get; set; }
@@ -156,6 +160,24 @@ namespace Fts.Services
         /// windows; cleared at season rollover with the listings.
         /// </summary>
         public List<IncomingOffer> IncomingOffers { get; set; } = new List<IncomingOffer>();
+
+        /// <summary>
+        /// Whole-world scouting knowledge (task 5.4b): each entry "{clubId}:{playerId}" → knowledge
+        /// level [0, ScoutingBalance.MaxKnowledge]. Rehydrated into a Sim.Core KnowledgeStore by
+        /// <see cref="ScoutingService"/>, advanced each scouting week by the ScoutingProgressor (the
+        /// user club follows ScoutAssignments, AI clubs the default policy), then written back here.
+        /// Persists across seasons — you don't forget what you scouted — so it's never cleared at
+        /// rollover. Bounded: each club watches only a few players, so this stays small.
+        /// </summary>
+        public Dictionary<string, int> ScoutKnowledge { get; set; } = new Dictionary<string, int>();
+
+        /// <summary>
+        /// The user club's active scouting assignments (task 5.4b): player ids his scouts are
+        /// watching. Drives weekly knowledge gain on those players (AI clubs use the default policy);
+        /// the watch list itself persists across seasons. Capacity is bounded by the club's scouts
+        /// in the Scouting screen.
+        /// </summary>
+        public List<int> ScoutAssignments { get; set; } = new List<int>();
 
         /// <summary>Write-only adapter for v2 saves, which stored a single "League".</summary>
         [JsonProperty("League")]

@@ -7,6 +7,7 @@ using Fts.Views;
 using Sim.Core.Config;
 using Sim.Core.Domain;
 using Sim.Core.Market;
+using Sim.Core.Scouting;
 using UnityEngine.UIElements;
 
 namespace Fts.Presenters
@@ -31,6 +32,7 @@ namespace Fts.Presenters
         private readonly MarketTarget _target;
         private readonly ISaveRepository _saveRepository;
         private readonly ILocalizationService _loc;
+        private readonly ScoutingService _scouting;
         private readonly MarketView _view;
         private readonly TransferBalance _cfg = new BalanceConfig().Transfer;
 
@@ -48,7 +50,8 @@ namespace Fts.Presenters
             LocalMarketService market,
             MarketTarget target,
             ISaveRepository saveRepository,
-            ILocalizationService loc)
+            ILocalizationService loc,
+            ScoutingService scouting)
         {
             _navigator = navigator;
             _career = career;
@@ -56,6 +59,7 @@ namespace Fts.Presenters
             _target = target;
             _saveRepository = saveRepository;
             _loc = loc;
+            _scouting = scouting;
             _view = new MarketView(loc.Tr);
         }
 
@@ -256,7 +260,7 @@ namespace Fts.Presenters
                 {
                     PlayerId = p.Id,
                     Primary = _loc.Tr("market.buy_row", p.FullName, club.Name),
-                    Sub = _loc.Tr("market.player_sub", RoleName(p.Role), p.Age, PlayerRating.Overall(p)),
+                    Sub = ScoutedSub(p),
                     Value = MoneyFormat.Short(_market.ValueOf(p, club.Id)),
                     Tag = shortlisted ? _loc.Tr("market.tag.shortlisted") : string.Empty,
                     ActionAText = shortlisted ? "★" : "☆",
@@ -459,6 +463,21 @@ namespace Fts.Presenters
                 if (p.Id == playerId)
                     return p;
             return null;
+        }
+
+        /// <summary>
+        /// The Buy-row sub line: role · age · scouted overall. The overall is a range that narrows
+        /// with scouting knowledge (task 5.4b), shown as the exact number only once fully scouted —
+        /// so the user buys on what his scouts actually know.
+        /// </summary>
+        private string ScoutedSub(Player p)
+        {
+            int knowledge = _scouting.KnowledgeOf(p.Id);
+            if (knowledge >= _scouting.MaxKnowledge)
+                return _loc.Tr("market.player_sub", RoleName(p.Role), p.Age, PlayerRating.Overall(p));
+
+            ScoutedRange ovr = _scouting.Report(p).Overall;
+            return _loc.Tr("market.player_sub_range", RoleName(p.Role), p.Age, ovr.Min, ovr.Max);
         }
 
         private string RoleFilterText() =>
