@@ -16,6 +16,7 @@ namespace Fts.Views
         public event Action MarketClicked;
         public event Action ScoutingClicked;
         public event Action ClubClicked;
+        public event Action CareerClicked;
         public event Action LeagueClicked;
         public event Action ExitCareerClicked;
 
@@ -53,6 +54,7 @@ namespace Fts.Views
             Root.Add(UiKit.MenuButton(tr("hub.market"), () => MarketClicked?.Invoke()));
             Root.Add(UiKit.MenuButton(tr("hub.scouting"), () => ScoutingClicked?.Invoke()));
             Root.Add(UiKit.MenuButton(tr("hub.club"), () => ClubClicked?.Invoke()));
+            Root.Add(UiKit.MenuButton(tr("hub.career"), () => CareerClicked?.Invoke()));
             Root.Add(UiKit.MenuButton(tr("hub.league"), () => LeagueClicked?.Invoke()));
             Root.Add(UiKit.MenuButton(tr("hub.exit_career"), () => ExitCareerClicked?.Invoke()));
         }

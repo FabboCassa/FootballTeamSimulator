@@ -16,7 +16,7 @@ namespace Fts.Services.Persistence
     /// </summary>
     public sealed class LocalJsonSaveRepository : ISaveRepository
     {
-        private const int CurrentSaveVersion = 11;
+        private const int CurrentSaveVersion = 12;
         private const string FileName = "career.sav";
 
         private static string SavePath => Path.Combine(Application.persistentDataPath, FileName);
@@ -240,6 +240,25 @@ namespace Fts.Services.Persistence
 
                 state.SaveVersion = 11;
                 Debug.Log("[Save] Migrated save v10 -> v11 (facilities & finances seeded).");
+            }
+
+            // v11 -> v12 (task 5.6): coach career. Coach reputation/confidence/objective/last-finish
+            // ride Club.Coach serialization (defaults: rep 50, confidence 50, objective 0). Seed the
+            // whole world's coaches from squad strength (reputation + opening objective + neutral
+            // confidence) so an old save gets a coherent coaching world, then mark the user's coach
+            // human. SeasonEvaluated defaults false; just guarantee a non-null history list.
+            if (state.SaveVersion < 12)
+            {
+                new Sim.Core.Career.CoachCareerProgressor(config).SeedWorld(state.Leagues);
+
+                Sim.Core.Domain.Club userClub = state.GetUserClub();
+                if (userClub != null)
+                    userClub.Coach.IsHuman = true;
+
+                state.CareerHistory ??= new System.Collections.Generic.List<CareerHistoryEntry>();
+                state.SeasonEvaluated = false;
+                state.SaveVersion = 12;
+                Debug.Log("[Save] Migrated save v11 -> v12 (coach career seeded).");
             }
         }
 

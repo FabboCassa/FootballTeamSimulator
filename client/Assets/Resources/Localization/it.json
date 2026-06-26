@@ -1,21 +1,17 @@
 {
   "app.title": "Football Team Simulator",
-
   "common.back": "Indietro",
   "common.continue": "Continua",
-
   "mainmenu.subtitle": "Menu principale",
   "mainmenu.continue": "Continua",
   "mainmenu.new_career": "Nuova carriera",
   "mainmenu.language": "Lingua: {0}",
   "mainmenu.error.corrupted": "Il salvataggio è danneggiato e non può essere caricato. Inizia una nuova carriera.",
   "mainmenu.error.newer_version": "Questo salvataggio è stato creato da una versione più recente del gioco e non può essere caricato.",
-
   "career_setup.title": "Nuova carriera",
   "career_setup.pick_club": "Scegli il tuo club:",
   "career_setup.reroll": "Rigenera lega",
   "career_setup.club_label": "[D{0}] {1}",
-
   "hub.title": "Hub",
   "hub.career_label": "{0} ({1})",
   "hub.advance_day": "Avanza giorno",
@@ -36,7 +32,6 @@
   "hub.status.season_complete": "Stagione finita — concludila per iniziare la prossima.",
   "hub.home_short": "C",
   "hub.away_short": "T",
-
   "squad.title": "Rosa",
   "squad.header": "{0} — {1} giocatori",
   "squad.lineup_caption": "Formazione — tocca uno slot, poi un giocatore",
@@ -48,7 +43,6 @@
   "squad.status.select_slot": "Seleziona prima uno slot della formazione.",
   "squad.status.auto": "Schierati gli 11 migliori (non ancora salvato).",
   "squad.status.saved": "Formazione salvata — usata dal prossimo giorno di partita.",
-
   "condition.tooltip.fitness": "Condizione {0}% — {1}",
   "condition.tooltip.form": "Forma — {0}",
   "condition.tooltip.morale": "Morale — {0}",
@@ -66,7 +60,6 @@
   "condition.morale.settled": "sereno",
   "condition.morale.low": "poco sereno — vuole più spazio",
   "condition.morale.unhappy": "scontento — ha bisogno di giocare",
-
   "league.title": "Campionato",
   "league.tab.table": "Classifica",
   "league.tab.fixtures": "Calendario",
@@ -85,12 +78,10 @@
   "league.fixture.result": "{0}  {1} - {2}  {3}",
   "league.fixture.vs": "{0}  vs  {1}",
   "league.scorer_row": "{0}. {1} ({2}) — {3}",
-
   "season_end.title": "Stagione {0} conclusa",
   "season_end.champion": "Campione: {0}",
   "season_end.promoted": "Promosse: {0}",
   "season_end.relegated": "Retrocesse: {0}",
-
   "match.title": "Giorno di partita",
   "match.score": "{0}  {1} - {2}  {3}",
   "match.round_day": "Giornata {0} — giorno {1}",
@@ -104,7 +95,6 @@
   "match.skip": "Salta",
   "match.pause": "Pausa",
   "match.continue": "Continua",
-
   "inmatch.title": "In pausa",
   "inmatch.paused_at": "In pausa — {0}'",
   "inmatch.on_pitch": "In campo — tocca per sostituire",
@@ -114,7 +104,6 @@
   "inmatch.subs_remaining": "Sostituzioni rimaste: {0}",
   "inmatch.apply": "Applica",
   "inmatch.resume": "Riprendi",
-
   "tactics.title": "Tattiche",
   "tactics.header": "{0}",
   "tactics.formation_caption": "Modulo",
@@ -149,7 +138,6 @@
   "tactics.save": "Salva tattica",
   "tactics.status.saved": "Tattica salvata — usata dal prossimo giorno di partita.",
   "tactics.status.formation_changed": "Tattica salvata. Modulo cambiato — formazione rigenerata; controllala nella schermata Rosa.",
-
   "training.title": "Allenamento",
   "training.header": "{0}",
   "training.team_caption": "Focus di squadra",
@@ -174,7 +162,6 @@
   "training.individual.technical": "Tecnica",
   "training.save": "Salva allenamento",
   "training.status.saved": "Allenamento salvato — applicato dalla prossima settimana di allenamento.",
-
   "support.title": "Supporto ai giocatori",
   "support.header": "{0}",
   "support.help": "Tocca un giocatore, poi un'azione. Ogni azione ha un tempo di recupero — ripeterla non fa nulla finché non è di nuovo pronta, e un'azione che non si adatta al suo umore serve a poco.",
@@ -192,7 +179,6 @@
   "support.delta.fitness": "condizione {0}",
   "support.delta.none": "nessun effetto evidente",
   "support.status.on_cooldown": "Quell'azione non è ancora pronta.",
-
   "market.title": "Calciomercato",
   "market.budget": "Budget: {0}",
   "market.window.open": "Finestra di mercato APERTA — chiude tra {0} giorno/i.",
@@ -229,7 +215,6 @@
   "market.no_news": "Ancora nessun trasferimento questa stagione.",
   "market.news_line": "{0}: {1} → {2} ({3})",
   "market.unknown_player": "Giocatore sconosciuto",
-
   "negotiation.title": "Trattativa",
   "negotiation.title_buy": "Fai un'offerta",
   "negotiation.title_sell": "Vendi giocatore",
@@ -262,7 +247,6 @@
   "negotiation.status.error": "Impossibile completare l'operazione.",
   "negotiation.status.cannot_sell": "Non puoi venderlo — la rosa resterebbe troppo corta.",
   "negotiation.status.not_for_sale": "Il {0} non vende questo giocatore.",
-
   "profile.condition_caption": "Condizione",
   "profile.attributes_caption": "Attributi",
   "profile.subline": "{0} · {1} anni · MED {2}",
@@ -273,7 +257,6 @@
   "profile.market_value": "Valore di mercato: {0}",
   "profile.season_goals": "Gol stagionali: {0}",
   "profile.unknown_player": "Giocatore non trovato",
-
   "scouting.title": "Osservatori",
   "scouting.help": "Assegna i tuoi osservatori ai giocatori per scoprirne le qualità reali. La conoscenza cresce ogni settimana e i range si restringono. Tocca un giocatore per la sua scheda osservata.",
   "scouting.header": "Osservatori: livello {0} · in osservazione {1}/{2}",
@@ -285,7 +268,6 @@
   "scouting.percent": "{0}%",
   "scouting.scout": "Osserva",
   "scouting.stop": "Stop",
-
   "club.title": "Club",
   "club.header": "{0}",
   "club.finances_caption": "Finanze",
@@ -308,7 +290,6 @@
   "club.status.maxed": "Questa struttura è già al livello massimo.",
   "club.status.cant_afford": "Liquidità insufficiente — il potenziamento costa {0}.",
   "club.status.upgraded": "{0} potenziato al livello {1}.",
-
   "attr.pace": "Velocità",
   "attr.strength": "Forza",
   "attr.stamina": "Resistenza",
@@ -319,9 +300,7 @@
   "attr.defending": "Difesa",
   "attr.positioning": "Posizionamento",
   "attr.goalkeeping": "Portiere",
-
   "placeholder.note": "Segnaposto — la schermata vera arriva più avanti.",
-
   "role.goalkeeper": "POR",
   "role.centreback": "DC",
   "role.fullback": "TER",
@@ -329,5 +308,40 @@
   "role.centralmidfielder": "CC",
   "role.attackingmidfielder": "TRQ",
   "role.winger": "ALA",
-  "role.striker": "ATT"
+  "role.striker": "ATT",
+  "hub.career": "Carriera",
+  "career.title": "Carriera",
+  "career.header": "{0}",
+  "career.objective": "Obiettivo società: {0} (posizione {1})",
+  "career.position": "Posizione attuale: {0} su {1}",
+  "career.reputation": "Reputazione: {0}/100",
+  "career.confidence_caption": "Fiducia della società",
+  "career.confidence": "{0}/100 — {1}",
+  "career.confidence.safe": "la società ti sostiene",
+  "career.confidence.warned": "la panchina scotta",
+  "career.confidence.risk": "sei a un passo dall'esonero",
+  "career.history_caption": "Storico",
+  "career.history_row": "Anno {0} — {1}: chiuso {2}° (atteso {3}°) · {4}",
+  "career.history_champion": "🏆 {0}",
+  "career.history_sacked": "{0} — esonerato",
+  "career.history_empty": "Nessuna stagione completata.",
+  "career.tier.win_title": "vincere il titolo",
+  "career.tier.challenge": "lottare per il vertice",
+  "career.tier.upper_mid": "alta metà classifica",
+  "career.tier.mid": "metà classifica",
+  "career.tier.survival": "salvezza",
+  "career.outcome.over": "oltre le attese",
+  "career.outcome.met": "nelle attese",
+  "career.outcome.under": "sotto le attese",
+  "careerend.title": "Bilancio di stagione",
+  "careerend.summary": "Hai chiuso {0}° — la società si aspettava {1}°. {2}.",
+  "careerend.standing": "Fiducia {0}/100 · reputazione {1}/100",
+  "careerend.sacked": "La società ti ha esonerato.",
+  "careerend.warned": "La società è insoddisfatta — migliora o rischi l'esonero.",
+  "careerend.safe": "La società è soddisfatta del tuo lavoro.",
+  "careerend.offers_caption": "Offerte di lavoro",
+  "careerend.offer": "{0} · Div {1} · prestigio {2}",
+  "careerend.accept": "Accetta",
+  "careerend.stay": "Resta a {0}",
+  "careerend.stay_reprieve": "Resta (grazia della società)"
 }

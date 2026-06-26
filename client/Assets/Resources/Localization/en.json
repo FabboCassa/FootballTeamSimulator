@@ -1,21 +1,17 @@
 {
   "app.title": "Football Team Simulator",
-
   "common.back": "Back",
   "common.continue": "Continue",
-
   "mainmenu.subtitle": "Main Menu",
   "mainmenu.continue": "Continue",
   "mainmenu.new_career": "New Career",
   "mainmenu.language": "Language: {0}",
   "mainmenu.error.corrupted": "The save file is corrupted and cannot be loaded. Please start a new career.",
   "mainmenu.error.newer_version": "This save was created by a newer game version and cannot be loaded.",
-
   "career_setup.title": "New Career",
   "career_setup.pick_club": "Pick your club:",
   "career_setup.reroll": "Reroll League",
   "career_setup.club_label": "[D{0}] {1}",
-
   "hub.title": "Hub",
   "hub.career_label": "{0} ({1})",
   "hub.advance_day": "Advance Day",
@@ -36,7 +32,6 @@
   "hub.status.season_complete": "Season complete — end it to start the next one.",
   "hub.home_short": "H",
   "hub.away_short": "A",
-
   "squad.title": "Squad",
   "squad.header": "{0} — {1} players",
   "squad.lineup_caption": "Lineup — tap a slot, then a player",
@@ -48,7 +43,6 @@
   "squad.status.select_slot": "Select a lineup slot first.",
   "squad.status.auto": "Auto-picked the best eleven (not saved yet).",
   "squad.status.saved": "Lineup saved — used from the next match day.",
-
   "condition.tooltip.fitness": "Fitness {0}% — {1}",
   "condition.tooltip.form": "Form — {0}",
   "condition.tooltip.morale": "Morale — {0}",
@@ -66,7 +60,6 @@
   "condition.morale.settled": "settled",
   "condition.morale.low": "unsettled — wants more game time",
   "condition.morale.unhappy": "unhappy — needs game time",
-
   "league.title": "League",
   "league.tab.table": "Table",
   "league.tab.fixtures": "Fixtures",
@@ -85,12 +78,10 @@
   "league.fixture.result": "{0}  {1} - {2}  {3}",
   "league.fixture.vs": "{0}  vs  {1}",
   "league.scorer_row": "{0}. {1} ({2}) — {3}",
-
   "season_end.title": "Season {0} complete",
   "season_end.champion": "Champions: {0}",
   "season_end.promoted": "Promoted: {0}",
   "season_end.relegated": "Relegated: {0}",
-
   "match.title": "Match Day",
   "match.score": "{0}  {1} - {2}  {3}",
   "match.round_day": "Round {0} — day {1}",
@@ -104,7 +95,6 @@
   "match.skip": "Skip",
   "match.pause": "Pause",
   "match.continue": "Continue",
-
   "inmatch.title": "Paused",
   "inmatch.paused_at": "Paused — {0}'",
   "inmatch.on_pitch": "On pitch — tap to sub off",
@@ -114,7 +104,6 @@
   "inmatch.subs_remaining": "Substitutions left: {0}",
   "inmatch.apply": "Apply",
   "inmatch.resume": "Resume",
-
   "tactics.title": "Tactics",
   "tactics.header": "{0}",
   "tactics.formation_caption": "Formation",
@@ -149,7 +138,6 @@
   "tactics.save": "Save Tactic",
   "tactics.status.saved": "Tactic saved — used from the next match day.",
   "tactics.status.formation_changed": "Tactic saved. Formation changed — lineup re-picked; review it on the Squad screen.",
-
   "training.title": "Training",
   "training.header": "{0}",
   "training.team_caption": "Team focus",
@@ -174,7 +162,6 @@
   "training.individual.technical": "Technical",
   "training.save": "Save Training",
   "training.status.saved": "Training saved — applied from the next training week.",
-
   "support.title": "Player Support",
   "support.header": "{0}",
   "support.help": "Tap a player, then an action. Each action has a cooldown — repeating it does nothing until it's ready, and an action that doesn't fit his mood barely helps.",
@@ -192,7 +179,6 @@
   "support.delta.fitness": "fitness {0}",
   "support.delta.none": "no noticeable effect",
   "support.status.on_cooldown": "That action isn't ready yet.",
-
   "market.title": "Transfer Market",
   "market.budget": "Budget: {0}",
   "market.window.open": "Transfer window OPEN — closes in {0} day(s).",
@@ -229,7 +215,6 @@
   "market.no_news": "No transfers yet this season.",
   "market.news_line": "{0}: {1} → {2} ({3})",
   "market.unknown_player": "Unknown player",
-
   "negotiation.title": "Negotiation",
   "negotiation.title_buy": "Make an offer",
   "negotiation.title_sell": "Sell player",
@@ -262,7 +247,6 @@
   "negotiation.status.error": "The deal could not be completed.",
   "negotiation.status.cannot_sell": "You can't sell him — your squad would be too thin.",
   "negotiation.status.not_for_sale": "{0} won't sell this player.",
-
   "profile.condition_caption": "Condition",
   "profile.attributes_caption": "Attributes",
   "profile.subline": "{0} · {1}y · OVR {2}",
@@ -273,7 +257,6 @@
   "profile.market_value": "Market value: {0}",
   "profile.season_goals": "Season goals: {0}",
   "profile.unknown_player": "Player not found",
-
   "scouting.title": "Scouting",
   "scouting.help": "Assign your scouts to players to learn their true ability. Knowledge grows each week and the ranges narrow. Tap a player for his scouted profile.",
   "scouting.header": "Scouts: level {0} · watching {1}/{2}",
@@ -285,7 +268,6 @@
   "scouting.percent": "{0}%",
   "scouting.scout": "Scout",
   "scouting.stop": "Stop",
-
   "club.title": "Club",
   "club.header": "{0}",
   "club.finances_caption": "Finances",
@@ -308,7 +290,6 @@
   "club.status.maxed": "That facility is already at the maximum tier.",
   "club.status.cant_afford": "Not enough cash — that upgrade costs {0}.",
   "club.status.upgraded": "{0} upgraded to tier {1}.",
-
   "attr.pace": "Pace",
   "attr.strength": "Strength",
   "attr.stamina": "Stamina",
@@ -319,9 +300,7 @@
   "attr.defending": "Defending",
   "attr.positioning": "Positioning",
   "attr.goalkeeping": "Goalkeeping",
-
   "placeholder.note": "Placeholder — the real screen comes later.",
-
   "role.goalkeeper": "GK",
   "role.centreback": "CB",
   "role.fullback": "FB",
@@ -329,5 +308,40 @@
   "role.centralmidfielder": "CM",
   "role.attackingmidfielder": "AM",
   "role.winger": "W",
-  "role.striker": "ST"
+  "role.striker": "ST",
+  "hub.career": "Career",
+  "career.title": "Career",
+  "career.header": "{0}",
+  "career.objective": "Board objective: {0} (target position {1})",
+  "career.position": "Current position: {0} of {1}",
+  "career.reputation": "Reputation: {0}/100",
+  "career.confidence_caption": "Board confidence",
+  "career.confidence": "{0}/100 — {1}",
+  "career.confidence.safe": "the board backs you",
+  "career.confidence.warned": "the seat is hot",
+  "career.confidence.risk": "you're on the brink",
+  "career.history_caption": "History",
+  "career.history_row": "Year {0} — {1}: finished {2} (expected {3}) · {4}",
+  "career.history_champion": "🏆 {0}",
+  "career.history_sacked": "{0} — sacked",
+  "career.history_empty": "No completed seasons yet.",
+  "career.tier.win_title": "win the title",
+  "career.tier.challenge": "challenge for honours",
+  "career.tier.upper_mid": "upper mid-table",
+  "career.tier.mid": "mid-table",
+  "career.tier.survival": "avoid relegation",
+  "career.outcome.over": "overachieved",
+  "career.outcome.met": "met expectations",
+  "career.outcome.under": "underachieved",
+  "careerend.title": "Season review",
+  "careerend.summary": "You finished {0} — the board expected {1}. {2}.",
+  "careerend.standing": "Board confidence {0}/100 · reputation {1}/100",
+  "careerend.sacked": "The board has dismissed you.",
+  "careerend.warned": "The board is unhappy — improve or you risk the sack.",
+  "careerend.safe": "The board is satisfied with your work.",
+  "careerend.offers_caption": "Job offers",
+  "careerend.offer": "{0} · Div {1} · stature {2}",
+  "careerend.accept": "Accept",
+  "careerend.stay": "Stay at {0}",
+  "careerend.stay_reprieve": "Stay (board reprieve)"
 }

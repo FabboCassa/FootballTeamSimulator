@@ -22,6 +22,7 @@ namespace Sim.Core.Config
         public TransferBalance Transfer { get; set; } = new TransferBalance();
         public ScoutingBalance Scouting { get; set; } = new ScoutingBalance();
         public FinanceBalance Finance { get; set; } = new FinanceBalance();
+        public CareerBalance Career { get; set; } = new CareerBalance();
     }
 
     /// <summary>
@@ -735,5 +736,106 @@ namespace Sim.Core.Config
 
         /// <summary>Ticks before an event during which the shooter sprints toward the shot spot.</summary>
         public int ShooterApproachTicks { get; set; } = 3;
+    }
+
+    /// <summary>
+    /// Tunables for the coach career (task 5.6): board expectations/objectives, board confidence
+    /// (the sacking meter), coach reputation (drives job offers), and the whole-world hiring
+    /// carousel. ARCHITECTURE.md §7: "reputation from results vs board expectations; job offers
+    /// from other clubs; can be sacked; long-term legacy stats."
+    ///
+    /// Pure and deterministic: <see cref="Career.BoardModel"/>, <see cref="Career.ReputationModel"/>
+    /// and <see cref="Career.JobMarket"/> all use integer math and NO RNG (vacancies are filled and
+    /// offers ranked by a total order on reputation then club id), so a season replays identically.
+    /// NOTHING in the match engine or SeasonProgressor calls any of it → golden masters/replays are
+    /// unaffected (opt-in by being called, like the condition/development/valuation/scouting/finance
+    /// progressors).
+    ///
+    /// TWO separate meters, by design:
+    ///   • BoardConfidence = "how am I doing RIGHT NOW at this club" → warning then sacking;
+    ///   • Reputation      = "how respected am I in the football world" → quality of job offers.
+    /// </summary>
+    public sealed class CareerBalance
+    {
+        // --- Board confidence (the sacking meter, on Coach.BoardConfidence in [0,100]) ---
+
+        /// <summary>The confidence a freshly-appointed coach starts with (neutral trust).</summary>
+        public int NeutralConfidence { get; set; } = 50;
+
+        /// <summary>Confidence at/below which the board issues a public WARNING (the seat is hot) but does NOT sack.</summary>
+        public int ConfidenceWarningThreshold { get; set; } = 30;
+
+        /// <summary>Confidence below which the board SACKS the coach.</summary>
+        public int ConfidenceSackThreshold { get; set; } = 15;
+
+        /// <summary>
+        /// Hard cap on a single evaluation's confidence change. MUST be small enough that a coach
+        /// sitting at or above the warning threshold cannot drop below the sack threshold in one
+        /// evaluation — this is what structurally guarantees a warning season precedes a sacking
+        /// (need: WarningThreshold − MaxConfidenceDeltaPerEvaluation ≥ SackThreshold).
+        /// </summary>
+        public int MaxConfidenceDeltaPerEvaluation { get; set; } = 14;
+
+        /// <summary>Confidence gained/lost per league position finished above/below the objective at season end (before the cap).</summary>
+        public int ConfidencePerPositionVsObjective { get; set; } = 6;
+
+        /// <summary>Flat confidence bonus for meeting the objective exactly (board reassured even with no over-performance).</summary>
+        public int ConfidenceMeetBonus { get; set; } = 4;
+
+        /// <summary>Confidence change per position vs objective at a MID-SEASON running check (gentler than season end).</summary>
+        public int RunningConfidencePerPositionVsObjective { get; set; } = 3;
+
+        // --- Outcome classification (actual vs expected league position) ---
+
+        /// <summary>Finishing this many positions or more ABOVE (better than) the objective counts as overachievement.</summary>
+        public int OverachieveBandPositions { get; set; } = 2;
+
+        /// <summary>Finishing this many positions or more BELOW (worse than) the objective counts as underachievement.</summary>
+        public int UnderachieveBandPositions { get; set; } = 2;
+
+        // --- Objective setting (expected finishing position) ---
+
+        /// <summary>Weight (percent) given to the club's squad-strength rank within its division when setting the objective.</summary>
+        public int ObjectiveStrengthRankWeightPercent { get; set; } = 60;
+
+        /// <summary>Weight (percent) given to last season's finishing position when setting the objective (only when a prior season exists; otherwise strength rank takes the whole weight).</summary>
+        public int ObjectivePrevFinishWeightPercent { get; set; } = 40;
+
+        /// <summary>How many positions a high reputation raises the bar (the board expects more of a famous coach). Applied as − (reputation − NeutralConfidence) × this / 100 on the expected position (higher rep → lower = better expected position).</summary>
+        public int ObjectiveReputationPositionSwingPercent { get; set; } = 10;
+
+        // --- Reputation (on Coach.Reputation in [0,100]) ---
+
+        /// <summary>Reputation gained/lost per position finished above/below the objective at season end (before the cap), in the top division.</summary>
+        public int ReputationPerPositionVsObjective { get; set; } = 3;
+
+        /// <summary>Hard cap on a single season's reputation change.</summary>
+        public int MaxReputationDeltaPerSeason { get; set; } = 10;
+
+        /// <summary>Reputation bonus for winning a division title (position 1).</summary>
+        public int ReputationTitleBonus { get; set; } = 5;
+
+        /// <summary>Reputation change is scaled down by this permille per division below the top flight (lower-division success counts for less). 1000 = top flight full effect.</summary>
+        public int ReputationDivisionScalePermille { get; set; } = 250;
+
+        // --- Club stature & job offers ---
+
+        /// <summary>Squad strength at/below which a club's stature (and required reputation) bottoms out. Set near the WEAKEST generated top-flight squad strength so a genuine minnow maps to a low stature (and a low-rep coach), spreading reputation across the full scale instead of bunching every coach at the top.</summary>
+        public int StatureStrengthFloor { get; set; } = 54;
+
+        /// <summary>Reputation points required per (clubStrength − StatureStrengthFloor) for a top-flight club. Maps the compressed ~[54..82] top-flight strength scale onto the [0..100] reputation scale (a weak side ≈ 25, a giant ≈ 90+).</summary>
+        public int RequiredReputationPerStrengthPermille { get; set; } = 3600;
+
+        /// <summary>Reputation requirement reduced per division below the top flight (lower-division jobs are easier to get).</summary>
+        public int RequiredReputationDivisionDrop { get; set; } = 20;
+
+        /// <summary>A club will approach the user if his reputation is within this margin of the club's requirement (lets a coach reach slightly above his station).</summary>
+        public int OfferReputationMargin { get; set; } = 6;
+
+        /// <summary>Maximum number of job offers presented to the user at one decision point (the best-stature qualifying clubs).</summary>
+        public int MaxUserOffers { get; set; } = 3;
+
+        /// <summary>Initial reputation seeded for an AI coach is derived from his club's stature; this is the floor so even minnow coaches have a little standing.</summary>
+        public int SeedReputationFloor { get; set; } = 20;
     }
 }

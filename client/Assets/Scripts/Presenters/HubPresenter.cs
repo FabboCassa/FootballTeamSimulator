@@ -64,6 +64,7 @@ namespace Fts.Presenters
             _view.MarketClicked += OnMarket;
             _view.ScoutingClicked += OnScouting;
             _view.ClubClicked += OnClub;
+            _view.CareerClicked += OnCareer;
             _view.LeagueClicked += OnLeague;
             _view.ExitCareerClicked += OnExitCareer;
             _dayAdvancedSubscription = _broker.Subscribe<DayAdvancedMessage>(OnDayAdvanced);
@@ -82,6 +83,7 @@ namespace Fts.Presenters
             _view.MarketClicked -= OnMarket;
             _view.ScoutingClicked -= OnScouting;
             _view.ClubClicked -= OnClub;
+            _view.CareerClicked -= OnCareer;
             _view.LeagueClicked -= OnLeague;
             _view.ExitCareerClicked -= OnExitCareer;
             _dayAdvancedSubscription?.Dispose();
@@ -109,9 +111,10 @@ namespace Fts.Presenters
 
         private void OnEndSeason()
         {
-            _seasonService.EndSeason();
-            RefreshStatus();
-            _navigator.Push<SeasonEndScreenPresenter>();
+            // The coach-career decision screen (task 5.6) runs the season-end evaluation, lets the
+            // user act on offers/sacking, then commits the rollover and hands off to the standings
+            // summary. (It replaces the old direct EndSeason + SeasonEnd push.)
+            _navigator.Push<CareerSeasonEndScreenPresenter>();
         }
 
         private void OnDayAdvanced(DayAdvancedMessage message)
@@ -168,6 +171,7 @@ namespace Fts.Presenters
         private void OnMarket() => _navigator.Push<MarketScreenPresenter>();
         private void OnScouting() => _navigator.Push<ScoutingScreenPresenter>();
         private void OnClub() => _navigator.Push<ClubScreenPresenter>();
+        private void OnCareer() => _navigator.Push<CareerScreenPresenter>();
         private void OnLeague() => _navigator.Push<LeagueScreenPresenter>();
         private void OnExitCareer() => _session.EndCareer();
     }

@@ -36,15 +36,43 @@ namespace Fts.Services
             }
         }
 
+        /// <summary>
+        /// Awards prize money on the COMPLETED season's final standings (task 5.5), before any
+        /// rollover. Credits each club per its finishing position, so a good season also fattens next
+        /// season's finance-based transfer budget. Split out of <see cref="EndSeason"/> so the coach
+        /// career (task 5.6) can run its season-end evaluation between the prize award and the rollover.
+        /// Does not save — the caller (CareerService) saves after the full evaluation.
+        /// </summary>
+        public void AwardPrize()
+        {
+            if (!IsSeasonComplete)
+                return;
+            _finance.AwardPrizeMoney(_career.Leagues, _career.Season);
+        }
+
+        /// <summary>
+        /// One-shot end of season (kept for any non-career-aware path): award prize then roll over.
+        /// The live flow runs <see cref="AwardPrize"/> + the coach evaluation + <see cref="Rollover"/>
+        /// via <see cref="CareerService"/> instead, so the user can act on offers/sacking in between.
+        /// </summary>
         public void EndSeason()
         {
             if (!IsSeasonComplete)
                 return;
 
-            // Award prize money on the COMPLETED season's final standings, before the rollover
-            // swaps the season out (task 5.5). Credits each club per its finishing position, so a
-            // good season also fattens next season's finance-based transfer budget.
-            _finance.AwardPrizeMoney(_career.Leagues, _career.Season);
+            AwardPrize();
+            Rollover();
+        }
+
+        /// <summary>
+        /// Runs the Sim.Core rollover (promotion/relegation, aging, new fixtures), resets the
+        /// season-local counters and saves. Prize money is awarded separately by <see cref="AwardPrize"/>
+        /// (already credited by the time this runs in the career flow).
+        /// </summary>
+        public void Rollover()
+        {
+            if (!IsSeasonComplete)
+                return;
 
             LastRollover = new SeasonRollover().EndSeason(_career.Leagues, _career.Season, _career.Seed);
             _career.Season = LastRollover.NewSeason;

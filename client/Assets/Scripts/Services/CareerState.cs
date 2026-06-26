@@ -46,7 +46,13 @@ namespace Fts.Services
         /// (starting balances, stadium tiers by strength, finance-based transfer budgets) and sets the
         /// user club's scouting tier from its existing scout department. Finances/facilities persist and
         /// evolve with the world; the transfer budget is re-seeded from finances each season.
-        public int SaveVersion { get; set; } = 11;
+        /// v12 (task 5.6): coach career — board objectives, confidence, reputation, sackings, job offers
+        /// and the whole-world hiring carousel. Coach state (reputation/confidence/objective/last finish)
+        /// rides Club.Coach serialization, so no field here for it; this version adds SeasonEvaluated (the
+        /// idempotency guard for the season-end evaluation) and CareerHistory (the career-history screen).
+        /// The migration seeds every coach (reputation/objective from squad strength), marks the user's
+        /// coach human, and guarantees the history list — so an old save gets a coherent coaching world.
+        public int SaveVersion { get; set; } = 12;
 
         /// <summary>Seed used to generate the world (kept for debugging/replays).</summary>
         public ulong Seed { get; set; }
@@ -184,6 +190,22 @@ namespace Fts.Services
         /// in the Scouting screen.
         /// </summary>
         public List<int> ScoutAssignments { get; set; } = new List<int>();
+
+        /// <summary>
+        /// Whether the coach-career season-end evaluation (prize money, confidence/reputation moves,
+        /// AI sackings &amp; hires) has already been applied for the CURRENT finished season (task 5.6).
+        /// Set by <see cref="CareerService"/> when the season is evaluated and cleared once the rollover
+        /// commits — so quitting on the season-end decision screen and reloading does NOT double-apply
+        /// the deltas (the screen rebuilds its read-only report instead).
+        /// </summary>
+        public bool SeasonEvaluated { get; set; }
+
+        /// <summary>
+        /// The user's completed coaching seasons (task 5.6), oldest first, for the career-history
+        /// screen. Appended at each season end before the rollover and any club move. Persists for
+        /// the life of the career.
+        /// </summary>
+        public List<CareerHistoryEntry> CareerHistory { get; set; } = new List<CareerHistoryEntry>();
 
         /// <summary>Write-only adapter for v2 saves, which stored a single "League".</summary>
         [JsonProperty("League")]

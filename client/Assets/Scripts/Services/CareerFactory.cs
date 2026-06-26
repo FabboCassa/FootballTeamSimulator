@@ -69,6 +69,14 @@ namespace Fts.Services
             // one and upgrading the facility later adds scouts/level. AI clubs keep tier 1 (base).
             FacilitySync.ApplyScoutingTier(FindClub(leagues, userClubId), UserStartScoutingTier, _config);
 
+            // Seed the coach career (task 5.6): every coach gets a reputation + opening objective
+            // scaled to his club's squad strength and neutral board confidence; the user's coach is
+            // then marked human (he carries his reputation if he later moves clubs).
+            new Sim.Core.Career.CoachCareerProgressor(_config).SeedWorld(leagues);
+            Club userClub = FindClub(leagues, userClubId);
+            if (userClub != null)
+                userClub.Coach.IsHuman = true;
+
             return new CareerState
             {
                 Seed = seed,
