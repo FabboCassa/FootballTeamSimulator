@@ -16,7 +16,7 @@ namespace Fts.Services.Persistence
     /// </summary>
     public sealed class LocalJsonSaveRepository : ISaveRepository
     {
-        private const int CurrentSaveVersion = 12;
+        private const int CurrentSaveVersion = 13;
         private const string FileName = "career.sav";
 
         private static string SavePath => Path.Combine(Application.persistentDataPath, FileName);
@@ -259,6 +259,16 @@ namespace Fts.Services.Persistence
                 state.SeasonEvaluated = false;
                 state.SaveVersion = 12;
                 Debug.Log("[Save] Migrated save v11 -> v12 (coach career seeded).");
+            }
+
+            // v12 -> v13 (task 5.7b): single-player difficulty. The Difficulty field defaults to
+            // Normal via its initializer when the key is absent from an old save, so there is nothing
+            // to regenerate — Normal is a no-op for budgets/board patience and only sets AI lineup
+            // competence to the intended default going forward. Just bump the version.
+            if (state.SaveVersion < 13)
+            {
+                state.SaveVersion = 13;
+                Debug.Log("[Save] Migrated save v12 -> v13 (difficulty added; defaults to Normal).");
             }
         }
 

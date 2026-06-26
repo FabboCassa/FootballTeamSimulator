@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Sim.Core.Config;
+using Sim.Core.Difficulty;
 using Sim.Core.Domain;
 using Sim.Core.Generation;
 using Sim.Core.Market;
@@ -57,7 +58,7 @@ namespace Fts.Services
         /// <summary>Starting scouting-facility tier for the user's club — drives a 3-scout, level-3 department.</summary>
         public const int UserStartScoutingTier = 3;
 
-        public CareerState Create(ulong seed, List<League> leagues, int userClubId)
+        public CareerState Create(ulong seed, List<League> leagues, int userClubId, DifficultyLevel difficulty)
         {
             // Seed whole-world finances & facilities (task 5.5): a starting cash balance, a stadium
             // tier scaled to each club's strength (big clubs start with big grounds → income tracks
@@ -82,6 +83,7 @@ namespace Fts.Services
                 Seed = seed,
                 Leagues = leagues,
                 UserClubId = userClubId,
+                Difficulty = difficulty,
                 CreatedUtc = DateTime.UtcNow.ToString("u"),
                 Season = BuildFirstSeason(seed, leagues)
             };

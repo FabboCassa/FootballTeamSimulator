@@ -23,6 +23,50 @@ namespace Sim.Core.Config
         public ScoutingBalance Scouting { get; set; } = new ScoutingBalance();
         public FinanceBalance Finance { get; set; } = new FinanceBalance();
         public CareerBalance Career { get; set; } = new CareerBalance();
+        public DifficultyBalance Difficulty { get; set; } = new DifficultyBalance();
+    }
+
+    /// <summary>
+    /// Per-level magnitudes for single-player difficulty (task 5.7, ARCHITECTURE.md §7:
+    /// "AI quality + user budget/expectations + market aggressiveness. NEVER cheating AI or
+    /// hidden penalties"). Each array is indexed by <see cref="Difficulty.DifficultyLevel"/>
+    /// (0 = Easy, 1 = Normal, 2 = Hard); <see cref="Difficulty.DifficultyModel"/> reads the row
+    /// for the chosen level into a <see cref="Difficulty.DifficultySettings"/> the host applies.
+    ///
+    /// The four levers (all honest — no stat fudging):
+    ///   • AI lineup competence — how often an AI manager fields his actual best XI. A lower
+    ///     competence fields a genuinely weaker (real) eleven; 100 = always the best XI (= the
+    ///     pre-5.7 AI). This is the win-rate lever.
+    ///   • User vs AI transfer budget — the user starts richer on Easy, the AI clubs richer (more
+    ///     aggressive in the market) on Hard. Asymmetric per club, so it lives outside the global
+    ///     valuation/transfer config.
+    ///   • Board reactivity — how strongly the board's confidence swings with results vs the
+    ///     objective. Easy = patient (slow swings), Hard = demanding (fast swings). The sacking
+    ///     thresholds and the per-evaluation cap are left untouched, so the "a warning season
+    ///     always precedes a sacking" invariant (task 5.6) holds at every difficulty.
+    ///
+    /// Opt-in by being applied: nothing in the match engine reads any of this, so golden masters
+    /// and replays are unaffected. The default rows are the intended balance; Normal is NOT a
+    /// no-op (its AI competence is below 100 — even a "normal" manager makes occasional mistakes),
+    /// which is what gives all three levels a clear, monotone separation.
+    /// </summary>
+    public sealed class DifficultyBalance
+    {
+        // --- AI quality: lineup competence (the win-rate lever) ---
+        /// <summary>Per-level chance (in percent) that an AI club fields the best player for each slot rather than slipping to a weaker one. {Easy, Normal, Hard}. 100 = always best XI (the pre-5.7 AI).</summary>
+        public int[] AiLineupCompetence { get; set; } = { 55, 78, 100 };
+        /// <summary>Most ranks a slot can slip below the best available player when the competence roll misses (bounds how bad a poor selection gets — never the literal worst).</summary>
+        public int AiLineupMaxSlips { get; set; } = 3;
+
+        // --- Money: user vs AI transfer budget (asymmetric) ---
+        /// <summary>Per-level multiplier (1/1000) on the USER club's seeded transfer budget. {Easy generous, Normal neutral, Hard tight}.</summary>
+        public int[] UserBudgetPermille { get; set; } = { 1500, 1000, 700 };
+        /// <summary>Per-level multiplier (1/1000) on every AI club's seeded transfer budget — the market-aggressiveness lever (more kitty = more/bigger AI signings). {Easy passive, Normal neutral, Hard aggressive}.</summary>
+        public int[] AiBudgetPermille { get; set; } = { 750, 1000, 1300 };
+
+        // --- Board: patience (reactivity of the confidence meter) ---
+        /// <summary>Per-level multiplier (1/1000) on the board's confidence swing per league position vs the objective. {Easy patient, Normal neutral, Hard demanding}. Thresholds and the per-evaluation cap are NOT scaled, so warning-before-sacking still holds.</summary>
+        public int[] BoardReactivityPermille { get; set; } = { 700, 1000, 1400 };
     }
 
     /// <summary>

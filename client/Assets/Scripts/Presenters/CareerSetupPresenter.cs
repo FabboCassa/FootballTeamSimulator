@@ -3,6 +3,7 @@ using Fts.Services;
 using Fts.Services.Localization;
 using Fts.Services.Navigation;
 using Fts.Views;
+using Sim.Core.Difficulty;
 using Sim.Core.Domain;
 using UnityEngine.UIElements;
 
@@ -22,6 +23,7 @@ namespace Fts.Presenters
 
         private ulong _seed;
         private List<League> _leagues;
+        private DifficultyLevel _difficulty = DifficultyLevel.Normal;
 
         public VisualElement View => _view.Root;
 
@@ -43,6 +45,8 @@ namespace Fts.Presenters
             _view.ClubSelected += OnClubSelected;
             _view.RerollClicked += Reroll;
             _view.BackClicked += OnBack;
+            _view.DifficultySelected += OnDifficultySelected;
+            _view.SetDifficulty((int)_difficulty);
             Reroll();
         }
 
@@ -51,6 +55,13 @@ namespace Fts.Presenters
             _view.ClubSelected -= OnClubSelected;
             _view.RerollClicked -= Reroll;
             _view.BackClicked -= OnBack;
+            _view.DifficultySelected -= OnDifficultySelected;
+        }
+
+        private void OnDifficultySelected(int level)
+        {
+            _difficulty = (DifficultyLevel)level;
+            _view.SetDifficulty(level);
         }
 
         private void Reroll()
@@ -74,7 +85,7 @@ namespace Fts.Presenters
 
         private void OnClubSelected(int clubId)
         {
-            var state = _factory.Create(_seed, _leagues, clubId);
+            var state = _factory.Create(_seed, _leagues, clubId, _difficulty);
 
             // Pop the setup screen first; StartNewCareer then pushes the Hub.
             _navigator.Pop();

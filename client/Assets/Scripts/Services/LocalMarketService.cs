@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Fts.Services.Persistence;
 using Sim.Core.Config;
+using Sim.Core.Difficulty;
 using Sim.Core.Domain;
 using Sim.Core.Market;
 using UnityEngine;
@@ -60,6 +61,12 @@ namespace Fts.Services
                 // cash reserves + a board grant, replacing the 5.2 strength-based seed. A club that
                 // banked a profitable season gets a bigger budget; one that spent down gets less.
                 _finance.SeedTransferBudgets(_career.Leagues); // overwrites; only here
+
+                // Difficulty (task 5.7b): scale the freshly-seeded kitties — the user's club up on Easy,
+                // the AI clubs up on Hard (more aggressive in the market). Applied BEFORE the window so
+                // the AI trades on its difficulty budget and the user sees his scaled figure immediately.
+                ScaleBudgetsByDifficulty();
+
                 RunWindow(0);
                 _career.TransferWindowsRun = 1;
                 ran = true;
@@ -76,6 +83,29 @@ namespace Fts.Services
                 _saveRepository.Save(_career);
 
             return ran;
+        }
+
+        /// <summary>
+        /// Scales every club's just-seeded transfer budget by difficulty (task 5.7b): the user's club
+        /// by the user multiplier (generous on Easy), every AI club by the AI multiplier (aggressive on
+        /// Hard), floored at the configured minimum. Normal = ×1000/1000 = no change. Composes with the
+        /// finance-based seed (it scales whatever SeedTransferBudgets produced).
+        /// </summary>
+        private void ScaleBudgetsByDifficulty()
+        {
+            DifficultySettings s = DifficultyModel.Resolve(_career.Difficulty, _config);
+            long minBudget = _t.MinBudget;
+
+            foreach (League league in _career.Leagues)
+            {
+                foreach (Club club in league.Clubs)
+                {
+                    int permille = club.Id == _career.UserClubId ? s.UserBudgetPermille : s.AiBudgetPermille;
+                    long scaled = club.TransferBudget * permille / 1000;
+                    if (scaled < minBudget) scaled = minBudget;
+                    club.TransferBudget = scaled;
+                }
+            }
         }
 
         private void RunWindow(int windowIndex)

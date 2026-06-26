@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Newtonsoft.Json;
 using Sim.Core.Development;
+using Sim.Core.Difficulty;
 using Sim.Core.Domain;
 using Sim.Core.Match;
 using Sim.Core.Tactics;
@@ -52,12 +53,23 @@ namespace Fts.Services
         /// idempotency guard for the season-end evaluation) and CareerHistory (the career-history screen).
         /// The migration seeds every coach (reputation/objective from squad strength), marks the user's
         /// coach human, and guarantees the history list — so an old save gets a coherent coaching world.
-        public int SaveVersion { get; set; } = 12;
+        /// v13 (task 5.7b): single-player difficulty — the chosen Difficulty (Easy/Normal/Hard) rides
+        /// here. It's a fixed-for-the-save setting; an old save defaults to Normal (the field initializer
+        /// supplies it when the key is absent), so the migration only bumps the version.
+        public int SaveVersion { get; set; } = 13;
 
         /// <summary>Seed used to generate the world (kept for debugging/replays).</summary>
         public ulong Seed { get; set; }
 
         public int UserClubId { get; set; }
+
+        /// <summary>
+        /// Single-player difficulty (task 5.7), chosen at career creation and fixed for the save.
+        /// Drives AI lineup competence (the user's opponents field weaker XIs on Easy), the user's
+        /// vs the AI's transfer budget, and the board's patience — never a cheating stat bonus.
+        /// Defaults to Normal (also the value an old save without this field deserialises to).
+        /// </summary>
+        public DifficultyLevel Difficulty { get; set; } = DifficultyLevel.Normal;
 
         /// <summary>Creation timestamp, metadata only (never used by sim logic).</summary>
         public string CreatedUtc { get; set; } = string.Empty;

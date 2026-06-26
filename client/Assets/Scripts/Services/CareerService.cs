@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using Fts.Services.Persistence;
 using Sim.Core.Career;
 using Sim.Core.Config;
+using Sim.Core.Difficulty;
 using Sim.Core.Domain;
 
 namespace Fts.Services
@@ -34,6 +35,13 @@ namespace Fts.Services
             _career = career;
             _save = save;
             _season = season;
+
+            // Difficulty (task 5.7b): scale the board's confidence reactivity in this service's config
+            // BEFORE building the models that read it — Easy = patient, Hard = demanding. The sacking
+            // thresholds and the per-evaluation cap are left untouched, so a warning season still always
+            // precedes a sacking (task 5.6). Applied once here; the thresholds read elsewhere stay valid.
+            DifficultyModel.ApplyBoardPatience(_config, DifficultyModel.Resolve(_career.Difficulty, _config));
+
             _progressor = new CoachCareerProgressor(_config);
             _board = new BoardModel(_config);
             _jobs = new JobMarket(_config);

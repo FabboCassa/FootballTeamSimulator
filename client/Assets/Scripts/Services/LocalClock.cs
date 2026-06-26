@@ -5,6 +5,7 @@ using Fts.Services.Persistence;
 using Sim.Core.Career;
 using Sim.Core.Config;
 using Sim.Core.Development;
+using Sim.Core.Difficulty;
 using Sim.Core.Domain;
 using Sim.Core.Market;
 using Sim.Core.Match;
@@ -125,7 +126,11 @@ namespace Fts.Services
                 ? new Dictionary<int, IReadOnlyList<MatchRule>> { [_career.UserClubId] = userRules }
                 : null;
 
-            List<MatchOutcome> outcomes = _progressor.AdvanceDay(_career.Leagues, _career.Season, _career.Seed, plans, tactics, rules);
+            // Difficulty (task 5.7b): the user's AI opponents field a competence-scaled XI (the user's
+            // own club is excluded). null/Hard = best XI; Easy/Normal field genuinely weaker sides.
+            DifficultyContext difficulty = BuildDifficultyContext();
+
+            List<MatchOutcome> outcomes = _progressor.AdvanceDay(_career.Leagues, _career.Season, _career.Seed, plans, tactics, rules, difficulty);
 
             bool userMatchPlayed = false;
             foreach (MatchOutcome outcome in outcomes)
@@ -134,7 +139,7 @@ namespace Fts.Services
                 {
                     _matchLog.LastMatch = outcome;
                     // Captures the kickoff condition snapshot BEFORE EvolveCondition runs below.
-                    _matchContext.Current = BuildUserMatchContext(outcome.Fixture, famAtKickoff, userRules);
+                    _matchContext.Current = BuildUserMatchContext(outcome.Fixture, famAtKickoff, userRules, difficulty);
                     // Credit the starting XI's minutes toward the next development week (4.4).
                     RecordUserMatchStarts();
                     userMatchPlayed = true;
@@ -149,7 +154,7 @@ namespace Fts.Services
             // Evolve the whole world's condition for the day just played: starters
             // drain, benched players take the morale/form step, idle clubs recover.
             // Runs after the snapshot capture so the user-match re-sim stays consistent.
-            _progressor.EvolveCondition(_career.Leagues, _career.Season, outcomes, _career.Seed, plans);
+            _progressor.EvolveCondition(_career.Leagues, _career.Season, outcomes, _career.Seed, plans, difficulty);
 
             // Familiarity accrues once per user match actually played with a tactic.
             if (userMatchPlayed && _career.UserTactic != null)
@@ -344,14 +349,17 @@ namespace Fts.Services
         /// so the watch screen can re-simulate from any minute and the unchanged
         /// re-sim reproduces the committed result (task 3.4).
         /// </summary>
-        private UserMatchContext BuildUserMatchContext(Fixture fixture, int famAtKickoff, List<MatchRule> userRules)
+        private UserMatchContext BuildUserMatchContext(Fixture fixture, int famAtKickoff, List<MatchRule> userRules, DifficultyContext difficulty)
         {
             bool userIsHome = fixture.HomeClubId == _career.UserClubId;
             Club userClub = _career.FindClub(_career.UserClubId);
             Club opponent = _career.FindClub(userIsHome ? fixture.AwayClubId : fixture.HomeClubId);
 
             Lineup userLineup = ResolveUserLineup(userClub);
-            Lineup oppLineup = LineupSelector.BestEleven(opponent);
+            // Resolve the opponent's XI EXACTLY as the season sim did (difficulty-degraded under
+            // Easy/Normal, best XI under Hard) so the watched-match re-sim reproduces the committed
+            // result (task 3.4 + 5.7b). The user club is excluded by the context's HumanClubId.
+            Lineup oppLineup = SeasonProgressor.ResolveAiLineup(opponent, _career.Seed, fixture.Id, difficulty);
 
             MatchTactics matchTactics = null;
             if (_career.UserTactic != null)
@@ -432,6 +440,17 @@ namespace Fts.Services
                 return lineup;
 
             return LineupSelector.BestEleven(club);
+        }
+
+        /// <summary>
+        /// The match difficulty slice (task 5.7b): the AI lineup competence for the chosen difficulty,
+        /// stamped with the user's club id so his own XI is never degraded. Hard resolves to competence
+        /// 100 (best XI = the pre-5.7 AI); Easy/Normal field weaker opponent sides.
+        /// </summary>
+        private DifficultyContext BuildDifficultyContext()
+        {
+            DifficultySettings settings = DifficultyModel.Resolve(_career.Difficulty, _config);
+            return DifficultyModel.MatchContext(_career.UserClubId, settings);
         }
 
         private int GetFamiliarity(TacticPlan tactic) =>

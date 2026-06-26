@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Sim.Core.Condition;
 using Sim.Core.Config;
+using Sim.Core.Difficulty;
 using Sim.Core.Domain;
 using Sim.Core.Match;
 using Sim.Core.Random;
@@ -24,6 +25,11 @@ namespace Sim.Core.Career
     {
         /// <summary>Golden-ratio odd constant, decorrelates per-fixture seeds.</summary>
         private const ulong FixtureSeedMix = 0x9E3779B97F4A7C15UL;
+
+        /// <summary>Odd constants giving the AI lineup RNG (task 5.7) its own stream, independent of
+        /// the match RNG — so degrading an AI XI never perturbs the seeded match draw.</summary>
+        private const ulong LineupSeedMix = 0xD1B54A32D192ED03UL;
+        private const ulong LineupClubMix = 0xCBF29CE484222325UL;
 
         private readonly MatchEngine _engine;
         private readonly ConditionProgressor _conditionProgressor;
@@ -52,9 +58,10 @@ namespace Sim.Core.Career
             ulong worldSeed,
             IReadOnlyDictionary<int, LineupPlan>? lineupPlans = null,
             IReadOnlyDictionary<int, TacticContext>? tactics = null,
-            IReadOnlyDictionary<int, IReadOnlyList<MatchRule>>? rules = null)
+            IReadOnlyDictionary<int, IReadOnlyList<MatchRule>>? rules = null,
+            DifficultyContext? difficulty = null)
         {
-            return AdvanceDay(new[] { league }, season, worldSeed, lineupPlans, tactics, rules);
+            return AdvanceDay(new[] { league }, season, worldSeed, lineupPlans, tactics, rules, difficulty);
         }
 
         /// <summary>
@@ -72,7 +79,8 @@ namespace Sim.Core.Career
             ulong worldSeed,
             IReadOnlyDictionary<int, LineupPlan>? lineupPlans = null,
             IReadOnlyDictionary<int, TacticContext>? tactics = null,
-            IReadOnlyDictionary<int, IReadOnlyList<MatchRule>>? rules = null)
+            IReadOnlyDictionary<int, IReadOnlyList<MatchRule>>? rules = null,
+            DifficultyContext? difficulty = null)
         {
             season.CurrentDay++;
 
@@ -82,7 +90,7 @@ namespace Sim.Core.Career
                 if (fixture.Played || fixture.Day > season.CurrentDay)
                     continue;
 
-                outcomes.Add(Simulate(leagues, season, fixture, worldSeed, lineupPlans, tactics, rules));
+                outcomes.Add(Simulate(leagues, season, fixture, worldSeed, lineupPlans, tactics, rules, difficulty));
             }
 
             return outcomes;
@@ -101,7 +109,8 @@ namespace Sim.Core.Career
             Season season,
             IReadOnlyList<MatchOutcome> dayOutcomes,
             ulong worldSeed,
-            IReadOnlyDictionary<int, LineupPlan>? lineupPlans = null)
+            IReadOnlyDictionary<int, LineupPlan>? lineupPlans = null,
+            DifficultyContext? difficulty = null)
         {
             var played = new Dictionary<int, ConditionProgressor.Participation>();
             foreach (MatchOutcome outcome in dayOutcomes)
@@ -112,10 +121,12 @@ namespace Sim.Core.Career
 
                 if (home != null)
                     played[fixture.HomeClubId] = new ConditionProgressor.Participation(
-                        StarterIds(ResolveLineup(home, lineupPlans)), ResultFor(fixture, asHome: true));
+                        StarterIds(ResolveLineup(home, lineupPlans, difficulty, worldSeed, fixture.Id)),
+                        ResultFor(fixture, asHome: true));
                 if (away != null)
                     played[fixture.AwayClubId] = new ConditionProgressor.Participation(
-                        StarterIds(ResolveLineup(away, lineupPlans)), ResultFor(fixture, asHome: false));
+                        StarterIds(ResolveLineup(away, lineupPlans, difficulty, worldSeed, fixture.Id)),
+                        ResultFor(fixture, asHome: false));
             }
 
             _conditionProgressor.Evolve(leagues, played, worldSeed, season.CurrentDay);
@@ -142,7 +153,8 @@ namespace Sim.Core.Career
             ulong worldSeed,
             IReadOnlyDictionary<int, LineupPlan>? lineupPlans,
             IReadOnlyDictionary<int, TacticContext>? tactics,
-            IReadOnlyDictionary<int, IReadOnlyList<MatchRule>>? rules)
+            IReadOnlyDictionary<int, IReadOnlyList<MatchRule>>? rules,
+            DifficultyContext? difficulty)
         {
             Club home = FindClub(leagues, fixture.HomeClubId)
                 ?? throw new InvalidOperationException($"Fixture {fixture.Id}: home club {fixture.HomeClubId} not in world.");
@@ -151,8 +163,8 @@ namespace Sim.Core.Career
 
             Pcg32 rng = FixtureRng(worldSeed, fixture.Id);
             MatchTactics? matchTactics = BuildTactics(fixture, tactics);
-            Lineup homeLineup = ResolveLineup(home, lineupPlans);
-            Lineup awayLineup = ResolveLineup(away, lineupPlans);
+            Lineup homeLineup = ResolveLineup(home, lineupPlans, difficulty, worldSeed, fixture.Id);
+            Lineup awayLineup = ResolveLineup(away, lineupPlans, difficulty, worldSeed, fixture.Id);
 
             IReadOnlyList<MatchRule>? homeRules = RulesFor(rules, fixture.HomeClubId);
             IReadOnlyList<MatchRule>? awayRules = RulesFor(rules, fixture.AwayClubId);
@@ -284,7 +296,12 @@ namespace Sim.Core.Career
             }
         }
 
-        private static Lineup ResolveLineup(Club club, IReadOnlyDictionary<int, LineupPlan>? lineupPlans)
+        private static Lineup ResolveLineup(
+            Club club,
+            IReadOnlyDictionary<int, LineupPlan>? lineupPlans,
+            DifficultyContext? difficulty,
+            ulong worldSeed,
+            int fixtureId)
         {
             if (lineupPlans != null
                 && lineupPlans.TryGetValue(club.Id, out LineupPlan? plan)
@@ -293,7 +310,38 @@ namespace Sim.Core.Career
                 return lineup!;
             }
 
+            return ResolveAiLineup(club, worldSeed, fixtureId, difficulty);
+        }
+
+        /// <summary>
+        /// Resolves an AI club's lineup for a fixture EXACTLY as <see cref="AdvanceDay(IReadOnlyList{League}, Season, ulong, IReadOnlyDictionary{int, LineupPlan}?, IReadOnlyDictionary{int, TacticContext}?, IReadOnlyDictionary{int, IReadOnlyList{MatchRule}}?, DifficultyContext?)"/>
+        /// does: under difficulty (task 5.7), an AI club below full competence fields a weaker (real)
+        /// XI via the dedicated per-fixture lineup RNG; the human club, a fully-competent AI, and the
+        /// null/legacy path all field the best XI (byte-identical to the pre-5.7 engine). Public so a
+        /// host can reproduce the very same opponent XI the season used — e.g. the watched user match
+        /// (task 3.4), whose re-sim must reproduce the committed result.
+        /// </summary>
+        public static Lineup ResolveAiLineup(Club club, ulong worldSeed, int fixtureId, DifficultyContext? difficulty)
+        {
+            if (difficulty.HasValue)
+            {
+                DifficultyContext d = difficulty.Value;
+                if (club.Id != d.HumanClubId && d.AiLineupCompetence < 100)
+                {
+                    Pcg32 lineupRng = LineupRng(worldSeed, fixtureId, club.Id);
+                    return LineupSelector.CompetentEleven(
+                        club, LineupSelector.DefaultFormation, d.AiLineupCompetence, d.AiLineupMaxSlips, lineupRng);
+                }
+            }
+
             return LineupSelector.BestEleven(club);
         }
+
+        /// <summary>An independent per-(fixture, club) RNG for AI lineup selection — decorrelated from
+        /// the match RNG so a degraded XI never alters the seeded match draw.</summary>
+        private static Pcg32 LineupRng(ulong worldSeed, int fixtureId, int clubId) =>
+            new Pcg32(
+                worldSeed ^ ((ulong)(uint)fixtureId * LineupSeedMix) ^ ((ulong)(uint)clubId * LineupClubMix),
+                0xA17EUL);
     }
 }
