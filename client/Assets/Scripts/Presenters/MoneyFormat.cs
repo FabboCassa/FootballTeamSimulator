@@ -8,30 +8,11 @@ namespace Fts.Presenters
     /// </summary>
     public static class MoneyFormat
     {
-        /// <summary>Short form of a currency amount, e.g. 40_390_000 → "€40.4M", 625_000 → "€625k".</summary>
-        public static string Short(long amount)
-        {
-            if (amount < 0) amount = 0;
-
-            if (amount >= 1_000_000_000)
-            {
-                long b = amount / 1_000_000_000;
-                long tenths = (amount % 1_000_000_000) / 100_000_000;
-                return tenths == 0 ? $"€{b}B" : $"€{b}.{tenths}B";
-            }
-
-            if (amount >= 1_000_000)
-            {
-                long m = amount / 1_000_000;
-                long tenths = (amount % 1_000_000) / 100_000;
-                // No decimal above 100M (tidy) or when it would be ".0".
-                return (m >= 100 || tenths == 0) ? $"€{m}M" : $"€{m}.{tenths}M";
-            }
-
-            if (amount >= 1_000)
-                return $"€{amount / 1_000}k";
-
-            return $"€{amount}";
-        }
+        /// <summary>
+        /// Short form of a currency amount, e.g. 40_390_000 → "€40.4M". Delegates to the
+        /// Services-layer <see cref="Fts.Services.Money"/> so the format has a single source of
+        /// truth (task 6.2) — this facade keeps the existing Presenters call sites unchanged.
+        /// </summary>
+        public static string Short(long amount) => Fts.Services.Money.Short(amount);
     }
 }

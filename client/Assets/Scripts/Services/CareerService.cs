@@ -23,6 +23,7 @@ namespace Fts.Services
         private readonly CareerState _career;
         private readonly ISaveRepository _save;
         private readonly SeasonService _season;
+        private readonly InboxService _inbox;
         private readonly BalanceConfig _config = new BalanceConfig();
         private readonly CoachCareerProgressor _progressor;
         private readonly BoardModel _board;
@@ -30,11 +31,12 @@ namespace Fts.Services
 
         private CareerSeasonReport _lastReport;
 
-        public CareerService(CareerState career, ISaveRepository save, SeasonService season)
+        public CareerService(CareerState career, ISaveRepository save, SeasonService season, InboxService inbox)
         {
             _career = career;
             _save = save;
             _season = season;
+            _inbox = inbox;
 
             // Difficulty (task 5.7b): scale the board's confidence reactivity in this service's config
             // BEFORE building the models that read it — Easy = patient, Hard = demanding. The sacking
@@ -98,6 +100,7 @@ namespace Fts.Services
                 _season.AwardPrize();
                 _lastReport = _progressor.EvolveSeasonEnd(_career.Leagues, _career.Season, _career.UserClubId);
                 _career.SeasonEvaluated = true;
+                PostSeasonInbox(_lastReport);
                 _save.Save(_career);
             }
             else
@@ -134,6 +137,31 @@ namespace Fts.Services
         }
 
         // ------------------------------------------------------------------ internals
+
+        /// <summary>
+        /// Posts the season-end board verdict to the Inbox (task 6.2): the outcome vs the objective,
+        /// a sacked/warned alert when applicable, and a heads-up if job offers arrived. Called once,
+        /// on the first (mutating) evaluation, so a reload doesn't re-post.
+        /// </summary>
+        private void PostSeasonInbox(CareerSeasonReport report)
+        {
+            string outcomeKey = report.UserOutcome == SeasonOutcome.Overachieved ? "inbox.season_over"
+                : report.UserOutcome == SeasonOutcome.Underachieved ? "inbox.season_under"
+                : "inbox.season_met";
+
+            _inbox.Post(InboxCategory.Board, outcomeKey,
+                _career.Season.Year.ToString(),
+                report.UserFinishPosition.ToString(),
+                report.UserExpectedPosition.ToString());
+
+            if (report.UserSacked)
+                _inbox.Post(InboxCategory.Board, "inbox.sacked");
+            else if (report.UserWarned)
+                _inbox.Post(InboxCategory.Board, "inbox.warned");
+
+            if (report.UserOffers != null && report.UserOffers.Count > 0)
+                _inbox.Post(InboxCategory.Board, "inbox.job_offers", report.UserOffers.Count.ToString());
+        }
 
         private CareerSeasonReport BuildReadonlyReport()
         {

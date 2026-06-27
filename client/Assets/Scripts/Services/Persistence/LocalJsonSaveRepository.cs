@@ -16,7 +16,7 @@ namespace Fts.Services.Persistence
     /// </summary>
     public sealed class LocalJsonSaveRepository : ISaveRepository
     {
-        private const int CurrentSaveVersion = 13;
+        private const int CurrentSaveVersion = 15;
         private const string FileName = "career.sav";
 
         private static string SavePath => Path.Combine(Application.persistentDataPath, FileName);
@@ -269,6 +269,26 @@ namespace Fts.Services.Persistence
             {
                 state.SaveVersion = 13;
                 Debug.Log("[Save] Migrated save v12 -> v13 (difficulty added; defaults to Normal).");
+            }
+
+            // v13 -> v14 (task 6.2): Inbox notifications hub. The message list is additive — an
+            // upgraded save simply starts with an empty inbox (no retroactive notifications), so
+            // there is nothing to regenerate; just guarantee the list is non-null.
+            if (state.SaveVersion < 14)
+            {
+                state.Inbox ??= new System.Collections.Generic.List<InboxMessage>();
+                state.SaveVersion = 14;
+                Debug.Log("[Save] Migrated save v13 -> v14 (inbox notifications added).");
+            }
+
+            // v14 -> v15 (task 6.2): onboarding. Mark an existing save as already onboarded so a
+            // returning player isn't shown the first-run tutorial; a brand-new career starts false
+            // (field default) and sees it.
+            if (state.SaveVersion < 15)
+            {
+                state.OnboardingDone = true;
+                state.SaveVersion = 15;
+                Debug.Log("[Save] Migrated save v14 -> v15 (onboarding flag; existing saves marked done).");
             }
         }
 

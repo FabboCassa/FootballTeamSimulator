@@ -78,7 +78,7 @@ namespace Fts.Services
             if (userClub != null)
                 userClub.Coach.IsHuman = true;
 
-            return new CareerState
+            var career = new CareerState
             {
                 Seed = seed,
                 Leagues = leagues,
@@ -87,6 +87,22 @@ namespace Fts.Services
                 CreatedUtc = DateTime.UtcNow.ToString("u"),
                 Season = BuildFirstSeason(seed, leagues)
             };
+
+            // Seed a welcome notification (task 6.2) so the Inbox isn't empty on a fresh career and
+            // the new player gets a first nudge (set your lineup, play your first match). Stored as a
+            // key + club-name arg, so it renders in whichever language is active.
+            career.Inbox.Add(new InboxMessage
+            {
+                Id = 1,
+                Category = InboxCategory.System,
+                Key = "inbox.welcome",
+                Args = new List<string> { userClub?.Name ?? string.Empty },
+                Year = career.Season.Year,
+                Day = career.Season.CurrentDay,
+                Read = false
+            });
+
+            return career;
         }
 
         private static Club FindClub(List<League> leagues, int clubId)

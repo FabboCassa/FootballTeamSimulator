@@ -10,6 +10,7 @@ namespace Fts.Views
         public event Action AdvanceDayClicked;
         public event Action NextMatchClicked;
         public event Action EndSeasonClicked;
+        public event Action InboxClicked;
         public event Action SquadClicked;
         public event Action TacticsClicked;
         public event Action TrainingClicked;
@@ -28,6 +29,7 @@ namespace Fts.Views
         private readonly Button _advanceDayButton;
         private readonly Button _nextMatchButton;
         private readonly Button _endSeasonButton;
+        private readonly Button _inboxButton;
         private readonly VisualElement _crestSlot;
         private readonly VisualElement _accentBar;
 
@@ -66,6 +68,8 @@ namespace Fts.Views
             Root.Add(_nextMatchButton);
             _endSeasonButton = UiKit.MenuButton(tr("hub.end_season"), () => EndSeasonClicked?.Invoke());
             Root.Add(_endSeasonButton);
+            _inboxButton = UiKit.MenuButton(tr("hub.inbox"), () => InboxClicked?.Invoke());
+            Root.Add(_inboxButton);
             Root.Add(UiKit.MenuButton(tr("hub.squad"), () => SquadClicked?.Invoke()));
             Root.Add(UiKit.MenuButton(tr("hub.tactics"), () => TacticsClicked?.Invoke()));
             Root.Add(UiKit.MenuButton(tr("hub.training"), () => TrainingClicked?.Invoke()));
@@ -95,6 +99,9 @@ namespace Fts.Views
         }
 
         public void SetStatus(string status) => _statusLabel.text = status;
+
+        /// <summary>Sets the Inbox button label (the presenter adds the unread badge when there are unread messages).</summary>
+        public void SetInbox(string label) => _inboxButton.text = label;
 
         /// <summary>Season over: calendar buttons make way for End Season.</summary>
         public void SetSeasonComplete(bool complete)

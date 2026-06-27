@@ -33,6 +33,7 @@ namespace Fts.Presenters
         private readonly ISaveRepository _saveRepository;
         private readonly ILocalizationService _loc;
         private readonly ScoutingService _scouting;
+        private readonly OverlayHost _overlay;
         private readonly MarketView _view;
         private readonly TransferBalance _cfg = new BalanceConfig().Transfer;
 
@@ -51,7 +52,8 @@ namespace Fts.Presenters
             MarketTarget target,
             ISaveRepository saveRepository,
             ILocalizationService loc,
-            ScoutingService scouting)
+            ScoutingService scouting,
+            OverlayHost overlay)
         {
             _navigator = navigator;
             _career = career;
@@ -60,6 +62,7 @@ namespace Fts.Presenters
             _saveRepository = saveRepository;
             _loc = loc;
             _scouting = scouting;
+            _overlay = overlay;
             _view = new MarketView(loc.Tr);
         }
 
@@ -169,9 +172,18 @@ namespace Fts.Presenters
             IncomingOffer offer = _career.IncomingOffers[index];
             Player player = _career.FindPlayer(offer.PlayerId);
             Club buyer = _career.FindClub(offer.FromClubId);
-            if (player != null && buyer != null)
-                _market.ExecuteUserSale(player, buyer, offer.Fee);
-            Refresh();
+            if (player == null || buyer == null) return;
+
+            // Confirm before the one-tap sale (task 6.2) — it moves a player and changes the budget.
+            Dialogs.Confirm(_overlay, _loc,
+                "dialog.accept_offer.title", "dialog.accept_offer.message", "dialog.accept_offer.confirm",
+                () =>
+                {
+                    if (_market.ExecuteUserSale(player, buyer, offer.Fee))
+                        Dialogs.Toast(_overlay, _loc, "market.toast.sold", player.FullName);
+                    Refresh();
+                },
+                player.FullName, buyer.Name, MoneyFormat.Short(offer.Fee));
         }
 
         private void OnOfferReject(int index)

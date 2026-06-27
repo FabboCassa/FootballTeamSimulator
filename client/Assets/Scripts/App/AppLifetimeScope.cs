@@ -24,6 +24,7 @@ namespace Fts.App
 
             builder.Register<IMessageBroker, MessageBroker>(Lifetime.Singleton);
             builder.Register<ScreenNavigator>(Lifetime.Singleton);
+            builder.Register<OverlayHost>(Lifetime.Singleton);
             builder.Register<ISaveRepository, LocalJsonSaveRepository>(Lifetime.Singleton);
             builder.Register<CareerFactory>(Lifetime.Singleton);
             builder.Register<ILocalizationService, LocalizationService>(Lifetime.Singleton);

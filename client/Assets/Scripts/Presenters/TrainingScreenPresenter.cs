@@ -25,6 +25,7 @@ namespace Fts.Presenters
         private readonly CareerState _career;
         private readonly ISaveRepository _saveRepository;
         private readonly ILocalizationService _loc;
+        private readonly OverlayHost _overlay;
         private readonly TrainingView _view;
 
         private Club _club;
@@ -36,12 +37,14 @@ namespace Fts.Presenters
             ScreenNavigator navigator,
             CareerState career,
             ISaveRepository saveRepository,
-            ILocalizationService loc)
+            ILocalizationService loc,
+            OverlayHost overlay)
         {
             _navigator = navigator;
             _career = career;
             _saveRepository = saveRepository;
             _loc = loc;
+            _overlay = overlay;
             _view = new TrainingView(loc.Tr);
         }
 
@@ -91,6 +94,7 @@ namespace Fts.Presenters
             _career.UserTraining = Clone(_working);
             _saveRepository.Save(_career);
             _view.SetStatus(_loc.Tr("training.status.saved"));
+            Dialogs.Toast(_overlay, _loc, "common.saved");
         }
 
         private void OnBack() => _navigator.Pop();

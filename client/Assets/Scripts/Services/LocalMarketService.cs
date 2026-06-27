@@ -28,15 +28,17 @@ namespace Fts.Services
 
         private readonly CareerState _career;
         private readonly ISaveRepository _saveRepository;
+        private readonly InboxService _inbox;
         private readonly BalanceConfig _config = new BalanceConfig();
         private readonly TransferBalance _t;
         private readonly TransferMarket _market;
         private readonly FinanceProgressor _finance;
 
-        public LocalMarketService(CareerState career, ISaveRepository saveRepository)
+        public LocalMarketService(CareerState career, ISaveRepository saveRepository, InboxService inbox)
         {
             _career = career;
             _saveRepository = saveRepository;
+            _inbox = inbox;
             _t = _config.Transfer;
             _market = new TransferMarket(_config);
             _finance = new FinanceProgressor(_config);
@@ -115,6 +117,10 @@ namespace Fts.Services
 
             _career.TransferNews.AddRange(records);
             Debug.Log($"[Market] Season {_career.Season.Year} window {windowIndex}: {records.Count} AI transfers.");
+
+            // Notify the user a window has resolved (task 6.2). The detail is in the Market News tab;
+            // this is the headline that surfaces it in the Inbox + Hub badge.
+            _inbox.Post(InboxCategory.Market, "inbox.market_window", records.Count.ToString());
         }
 
         /// <summary>The matchday at/after which the mid-season window opens (half the season length).</summary>
@@ -168,6 +174,7 @@ namespace Fts.Services
             player.Contract.SeasonsRemaining = _t.SignedContractSeasons;
 
             RecordDeal(player, seller, userClub, fee);
+            _inbox.Post(InboxCategory.Transfer, "inbox.transfer_in", player.FullName, seller.Name, Money.Short(fee));
             _saveRepository.Save(_career);
             return true;
         }
@@ -197,6 +204,7 @@ namespace Fts.Services
 
             RemoveListing(player.Id);
             RecordDeal(player, userClub, buyer, fee);
+            _inbox.Post(InboxCategory.Transfer, "inbox.transfer_out", player.FullName, buyer.Name, Money.Short(fee));
             _saveRepository.Save(_career);
             return true;
         }
@@ -280,6 +288,8 @@ namespace Fts.Services
                         FromClubName = buyer.Name,
                         Fee = fee
                     });
+                    // Surface the bid in the Inbox (task 6.2): the user acts on it in the Market Sell tab.
+                    _inbox.Post(InboxCategory.Market, "inbox.offer", buyer.Name, Money.Short(fee), player.FullName);
                     existing++;
                     changed = true;
                 }

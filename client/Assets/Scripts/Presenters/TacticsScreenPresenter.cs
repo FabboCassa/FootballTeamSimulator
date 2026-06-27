@@ -24,6 +24,7 @@ namespace Fts.Presenters
         private readonly CareerState _career;
         private readonly ISaveRepository _saveRepository;
         private readonly ILocalizationService _loc;
+        private readonly OverlayHost _overlay;
         private readonly TacticsView _view;
         private readonly TacticsBalance _tacticsConfig = new BalanceConfig().Tactics;
 
@@ -36,12 +37,14 @@ namespace Fts.Presenters
             ScreenNavigator navigator,
             CareerState career,
             ISaveRepository saveRepository,
-            ILocalizationService loc)
+            ILocalizationService loc,
+            OverlayHost overlay)
         {
             _navigator = navigator;
             _career = career;
             _saveRepository = saveRepository;
             _loc = loc;
+            _overlay = overlay;
             _view = new TacticsView(loc.Tr);
         }
 
@@ -122,6 +125,7 @@ namespace Fts.Presenters
             _view.SetStatus(_loc.Tr(formationChanged
                 ? "tactics.status.formation_changed"
                 : "tactics.status.saved"));
+            Dialogs.Toast(_overlay, _loc, "common.saved");
         }
 
         private void OnBack() => _navigator.Pop();

@@ -29,6 +29,7 @@ namespace Fts.Services
         private readonly UserMatchContextHolder _matchContext;
         private readonly LocalMarketService _market;
         private readonly ScoutingService _scouting;
+        private readonly InboxService _inbox;
         // Condition is live (task 4.2): matches are simulated condition-aware and the
         // whole world's form/morale/fitness evolves each day via EvolveCondition below.
         // applyMatchFatigue also fades each side within the match (by avg stamina) with
@@ -70,7 +71,8 @@ namespace Fts.Services
             UserMatchLog matchLog,
             UserMatchContextHolder matchContext,
             LocalMarketService market,
-            ScoutingService scouting)
+            ScoutingService scouting,
+            InboxService inbox)
         {
             _career = career;
             _saveRepository = saveRepository;
@@ -79,6 +81,7 @@ namespace Fts.Services
             _matchContext = matchContext;
             _market = market;
             _scouting = scouting;
+            _inbox = inbox;
         }
 
         public int CurrentDay => _career.Season.CurrentDay;
@@ -142,6 +145,8 @@ namespace Fts.Services
                     _matchContext.Current = BuildUserMatchContext(outcome.Fixture, famAtKickoff, userRules, difficulty);
                     // Credit the starting XI's minutes toward the next development week (4.4).
                     RecordUserMatchStarts();
+                    // Inbox notification of the user's result (task 6.2).
+                    PostUserMatchInbox(outcome.Fixture);
                     userMatchPlayed = true;
                 }
             }
@@ -491,6 +496,25 @@ namespace Fts.Services
                     $"[Match] {home} {f.HomeGoals}-{f.AwayGoals} {away} | user XI: {(customLineup ? "custom" : "auto")} | " +
                     $"scorers: {(scorers.Length > 0 ? scorers.ToString() : "none")}");
             }
+        }
+
+        /// <summary>
+        /// Posts the user's match result to the Inbox (task 6.2). The template is chosen from the
+        /// user's perspective (win/draw/loss) while the args always read home-to-away so the
+        /// scoreline is correct whichever side the user played.
+        /// </summary>
+        private void PostUserMatchInbox(Fixture f)
+        {
+            bool userHome = f.HomeClubId == _career.UserClubId;
+            int userGoals = userHome ? f.HomeGoals : f.AwayGoals;
+            int oppGoals = userHome ? f.AwayGoals : f.HomeGoals;
+
+            string key = userGoals > oppGoals ? "inbox.match_win"
+                : userGoals < oppGoals ? "inbox.match_loss"
+                : "inbox.match_draw";
+
+            _inbox.Post(InboxCategory.Match, key,
+                ClubName(f.HomeClubId), f.HomeGoals.ToString(), f.AwayGoals.ToString(), ClubName(f.AwayClubId));
         }
 
         private string ClubName(int clubId) => _career.FindClub(clubId)?.Name ?? $"Club {clubId}";

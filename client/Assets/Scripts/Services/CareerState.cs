@@ -56,7 +56,13 @@ namespace Fts.Services
         /// v13 (task 5.7b): single-player difficulty — the chosen Difficulty (Easy/Normal/Hard) rides
         /// here. It's a fixed-for-the-save setting; an old save defaults to Normal (the field initializer
         /// supplies it when the key is absent), so the migration only bumps the version.
-        public int SaveVersion { get; set; } = 13;
+        /// v14 (task 6.2): Inbox notifications hub — a persisted list of InboxMessage with read/unread
+        /// state, generated from events (transfers, market windows, match results, board). Additive
+        /// (old saves load with an empty inbox, nothing to regenerate); guarantee the list is non-null.
+        /// v15 (task 6.2): onboarding — OnboardingDone flag (the guided first-run tutorial shows once
+        /// per career while false). Additive; the migration marks existing saves done so a veteran
+        /// player isn't shown the tutorial, while a fresh career starts false and sees it.
+        public int SaveVersion { get; set; } = 15;
 
         /// <summary>Seed used to generate the world (kept for debugging/replays).</summary>
         public ulong Seed { get; set; }
@@ -218,6 +224,22 @@ namespace Fts.Services
         /// the life of the career.
         /// </summary>
         public List<CareerHistoryEntry> CareerHistory { get; set; } = new List<CareerHistoryEntry>();
+
+        /// <summary>
+        /// The Inbox notifications hub (task 6.2): persisted messages with read/unread state, oldest
+        /// first, posted from events (completed transfers, market windows, match results, board
+        /// outcomes) by <see cref="InboxService"/>. Each message stores a localization key + args so
+        /// it re-renders in the active language. Bounded (the service caps the list), so it stays small.
+        /// Persists across seasons — it's the player's running record — so it isn't cleared at rollover.
+        /// </summary>
+        public List<InboxMessage> Inbox { get; set; } = new List<InboxMessage>();
+
+        /// <summary>
+        /// Whether the guided first-run tutorial (task 6.2) has been shown for this career. Starts
+        /// false on a new career → the Hub runs the onboarding overlay once, then sets this true and
+        /// saves. Existing saves are migrated to true so a returning player never sees the tutorial.
+        /// </summary>
+        public bool OnboardingDone { get; set; }
 
         /// <summary>Write-only adapter for v2 saves, which stored a single "League".</summary>
         [JsonProperty("League")]

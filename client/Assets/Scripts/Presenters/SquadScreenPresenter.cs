@@ -24,6 +24,7 @@ namespace Fts.Presenters
         private readonly ISaveRepository _saveRepository;
         private readonly ILocalizationService _loc;
         private readonly PlayerProfileTarget _profileTarget;
+        private readonly OverlayHost _overlay;
         private readonly SquadView _view;
 
         private Club _club;
@@ -37,13 +38,15 @@ namespace Fts.Presenters
             CareerState career,
             ISaveRepository saveRepository,
             ILocalizationService loc,
-            PlayerProfileTarget profileTarget)
+            PlayerProfileTarget profileTarget,
+            OverlayHost overlay)
         {
             _navigator = navigator;
             _career = career;
             _saveRepository = saveRepository;
             _loc = loc;
             _profileTarget = profileTarget;
+            _overlay = overlay;
             _view = new SquadView(loc.Tr);
         }
 
@@ -121,6 +124,7 @@ namespace Fts.Presenters
             _career.UserLineup = Clone(_working);
             _saveRepository.Save(_career);
             _view.SetStatus(_loc.Tr("squad.status.saved"));
+            Dialogs.Toast(_overlay, _loc, "common.saved");
         }
 
         private void OnBack() => _navigator.Pop();

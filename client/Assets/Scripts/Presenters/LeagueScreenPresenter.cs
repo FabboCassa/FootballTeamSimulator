@@ -174,6 +174,10 @@ namespace Fts.Presenters
                 });
             }
 
+            // Empty state (task 6.2): early in the season nobody has scored yet.
+            if (rows.Count == 0)
+                rows.Add(new ScorerRowVm { Label = _loc.Tr("league.no_scorers"), IsUser = false });
+
             _view.SetScorers(rows);
         }
 

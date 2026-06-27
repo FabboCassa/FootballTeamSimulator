@@ -26,6 +26,7 @@ namespace Fts.Presenters
         private readonly LocalMarketService _market;
         private readonly MarketTarget _target;
         private readonly ILocalizationService _loc;
+        private readonly OverlayHost _overlay;
         private readonly NegotiationView _view;
         private readonly TransferBalance _cfg = new BalanceConfig().Transfer;
 
@@ -57,13 +58,15 @@ namespace Fts.Presenters
             CareerState career,
             LocalMarketService market,
             MarketTarget target,
-            ILocalizationService loc)
+            ILocalizationService loc,
+            OverlayHost overlay)
         {
             _navigator = navigator;
             _career = career;
             _market = market;
             _target = target;
             _loc = loc;
+            _overlay = overlay;
             _view = new NegotiationView(loc.Tr);
         }
 
@@ -239,6 +242,7 @@ namespace Fts.Presenters
             {
                 _dealDone = true;
                 _view.SetStatus(_loc.Tr("negotiation.status.bought", _player.FullName, MoneyFormat.Short(fee)));
+                Dialogs.Toast(_overlay, _loc, "market.toast.bought", _player.FullName);
             }
             else
             {
@@ -292,6 +296,7 @@ namespace Fts.Presenters
             {
                 _dealDone = true;
                 _view.SetStatus(_loc.Tr("negotiation.status.sold", _player.FullName, MoneyFormat.Short(fee)));
+                Dialogs.Toast(_overlay, _loc, "market.toast.sold", _player.FullName);
             }
             else
             {

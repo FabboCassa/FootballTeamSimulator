@@ -92,6 +92,7 @@ namespace Fts.App
                 builder.Register<UserMatchContextHolder>(Lifetime.Singleton);
                 builder.Register<PlayerProfileTarget>(Lifetime.Singleton);
                 builder.Register<MarketTarget>(Lifetime.Singleton);
+                builder.Register<InboxService>(Lifetime.Singleton);
                 builder.Register<SeasonService>(Lifetime.Singleton);
                 builder.Register<CareerService>(Lifetime.Singleton);
                 builder.Register<LocalMarketService>(Lifetime.Singleton);
