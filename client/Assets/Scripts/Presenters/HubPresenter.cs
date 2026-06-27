@@ -24,6 +24,7 @@ namespace Fts.Presenters
         private readonly CareerState _career;
         private readonly SeasonService _seasonService;
         private readonly ILocalizationService _loc;
+        private readonly ClubIdentityService _identity;
         private readonly HubView _view;
         private IDisposable _dayAdvancedSubscription;
         private bool _userMatchSeen;
@@ -37,7 +38,8 @@ namespace Fts.Presenters
             IMessageBroker broker,
             CareerState career,
             SeasonService seasonService,
-            ILocalizationService loc)
+            ILocalizationService loc,
+            ClubIdentityService identity)
         {
             _navigator = navigator;
             _session = session;
@@ -46,10 +48,18 @@ namespace Fts.Presenters
             _career = career;
             _seasonService = seasonService;
             _loc = loc;
+            _identity = identity;
 
             _view = new HubView(loc.Tr);
             var club = career.GetUserClub();
             _view.SetClubName(loc.Tr("hub.career_label", club.Name, career.GetUserLeague().Name));
+
+            // Per-club generated identity (task 6.1): crest + primary-colour tint.
+            ClubVisual v = _identity.UserVisual();
+            _view.SetCrest(new CrestRenderer(
+                96f, v.Shape, v.Pattern, v.Primary, v.Secondary, v.Accent, v.Emblem,
+                UiKit.Background, club.ShortName));
+            _view.SetAccent(v.Primary);
         }
 
         public void Enter()

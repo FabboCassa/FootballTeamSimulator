@@ -24,6 +24,7 @@ namespace Sim.Core.Config
         public FinanceBalance Finance { get; set; } = new FinanceBalance();
         public CareerBalance Career { get; set; } = new CareerBalance();
         public DifficultyBalance Difficulty { get; set; } = new DifficultyBalance();
+        public IdentityBalance Identity { get; set; } = new IdentityBalance();
     }
 
     /// <summary>
@@ -881,5 +882,70 @@ namespace Sim.Core.Config
 
         /// <summary>Initial reputation seeded for an AI coach is derived from his club's stature; this is the floor so even minnow coaches have a little standing.</summary>
         public int SeedReputationFloor { get; set; } = 20;
+    }
+
+    /// <summary>
+    /// Tunables for the club-identity / art layer (task 6.1, the art pass). A club's colours
+    /// and crest are generated deterministically from (clubId, worldSeed) by
+    /// <see cref="Identity.ClubIdentityGenerator"/> — there is no stored art, so this section
+    /// shapes how the generated palettes look (vividness, harmony schemes, metallic accents)
+    /// and the two readability guarantees that keep an auto-generated kit legible.
+    ///
+    /// All values are data (no magic numbers in code). Saturation/value channels are on the
+    /// [0, 255] HSV scale; colours are packed 0xRRGGBB; the weight arrays are relative picking
+    /// weights. Opt-in by being called: nothing in the match engine reads this, so golden
+    /// masters and replays are unaffected.
+    /// </summary>
+    public sealed class IdentityBalance
+    {
+        // --- Primary (dominant) colour: vivid, mid-to-bright ---
+        /// <summary>Minimum saturation (0-255) of a club's primary colour — kept high so team colours read as bold, not washed out.</summary>
+        public int PrimarySaturationMin { get; set; } = 170;
+        /// <summary>Maximum saturation (0-255) of a club's primary colour.</summary>
+        public int PrimarySaturationMax { get; set; } = 255;
+        /// <summary>Minimum value/brightness (0-255) of a club's primary colour — avoids near-black primaries.</summary>
+        public int PrimaryValueMin { get; set; } = 150;
+        /// <summary>Maximum value/brightness (0-255) of a club's primary colour.</summary>
+        public int PrimaryValueMax { get; set; } = 235;
+
+        // --- Secondary (contrast) colour when it is a hue (not a neutral) ---
+        /// <summary>Minimum saturation (0-255) of a hued secondary colour.</summary>
+        public int SecondarySaturationMin { get; set; } = 150;
+        /// <summary>Maximum saturation (0-255) of a hued secondary colour.</summary>
+        public int SecondarySaturationMax { get; set; } = 255;
+        /// <summary>Minimum value/brightness (0-255) of a hued secondary colour.</summary>
+        public int SecondaryValueMin { get; set; } = 140;
+        /// <summary>Maximum value/brightness (0-255) of a hued secondary colour.</summary>
+        public int SecondaryValueMax { get; set; } = 235;
+
+        // --- Harmony scheme: how the secondary hue relates to the primary ---
+        /// <summary>Hue offset (degrees) for an analogous secondary (a neighbour on the colour wheel).</summary>
+        public int AnalogousHueOffset { get; set; } = 30;
+        /// <summary>Hue offset (degrees) for a triadic secondary.</summary>
+        public int TriadicHueOffset { get; set; } = 120;
+        /// <summary>Hue offset (degrees) for a complementary (opposite) secondary.</summary>
+        public int ComplementaryHueOffset { get; set; } = 180;
+        /// <summary>Relative picking weights for the secondary scheme, indexed: {Complementary, Analogous+, Analogous−, Triadic, NeutralContrast}. NeutralContrast pairs the vivid primary with a light/dark neutral (the classic colour-vs-white/black kit).</summary>
+        public int[] SchemeWeights { get; set; } = { 30, 16, 16, 18, 20 };
+
+        // --- Neutrals & metallic accents (packed 0xRRGGBB) ---
+        /// <summary>The light neutral (off-white) used as a contrast secondary / legible text on dark primaries.</summary>
+        public int NeutralLight { get; set; } = 0xF5F5F5;
+        /// <summary>The dark neutral (near-black) used as a contrast secondary / legible text on light primaries.</summary>
+        public int NeutralDark { get; set; } = 0x1A1A1A;
+        /// <summary>Metallic / highlight accent palette (crest trim, flourishes): gold, silver, off-white, near-black. One is picked per club.</summary>
+        public int[] AccentColors { get; set; } = { 0xD4AF37, 0xC0C0C0, 0xF5F5F5, 0x1A1A1A };
+
+        // --- Readability guarantees ("challenge, not chaos") ---
+        /// <summary>Luminance (0-255) at/above which a primary is treated as "light" ⇒ its legible neutral is the dark one (and below ⇒ the light one).</summary>
+        public int ContrastLuminanceThreshold { get; set; } = 140;
+        /// <summary>Minimum colour distance (sum of |ΔR|+|ΔG|+|ΔB|, 0-765) required between the two crest fills; if a generated secondary is closer than this it is replaced by the contrast neutral, so a two-tone crest never collapses into one colour.</summary>
+        public int MinFillColorDistance { get; set; } = 120;
+
+        // --- Crest geometry: relative picking weights ---
+        /// <summary>Relative weights for the crest outer shape, indexed by <see cref="Identity.CrestShape"/>: {Shield, Circle, Diamond, RoundedSquare}.</summary>
+        public int[] ShapeWeights { get; set; } = { 40, 30, 12, 18 };
+        /// <summary>Relative weights for the crest fill pattern, indexed by <see cref="Identity.CrestPattern"/>: {Solid, VerticalHalves, HorizontalHalves, DiagonalSash, VerticalStripes, Hoops, Quarters}.</summary>
+        public int[] PatternWeights { get; set; } = { 22, 16, 12, 16, 14, 12, 8 };
     }
 }

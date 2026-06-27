@@ -96,6 +96,7 @@ namespace Fts.App
                 builder.Register<CareerService>(Lifetime.Singleton);
                 builder.Register<LocalMarketService>(Lifetime.Singleton);
                 builder.Register<ScoutingService>(Lifetime.Singleton);
+                builder.Register<ClubIdentityService>(Lifetime.Singleton);
             });
             _gameScope.name = "GameScope";
 

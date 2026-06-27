@@ -1,4 +1,5 @@
 using System;
+using UnityEngine;
 using UnityEngine.UIElements;
 
 namespace Fts.Views
@@ -27,11 +28,29 @@ namespace Fts.Views
         private readonly Button _advanceDayButton;
         private readonly Button _nextMatchButton;
         private readonly Button _endSeasonButton;
+        private readonly VisualElement _crestSlot;
+        private readonly VisualElement _accentBar;
 
         public HubView(Func<string, string> tr)
         {
             Root = UiKit.Screen(UiKit.HubBlue);
+
+            // Club crest (filled by the presenter from the generated identity).
+            _crestSlot = new VisualElement();
+            _crestSlot.style.alignItems = Align.Center;
+            _crestSlot.style.justifyContent = Justify.Center;
+            _crestSlot.style.marginBottom = UiKit.SpaceSm;
+            Root.Add(_crestSlot);
+
             Root.Add(UiKit.Title(tr("hub.title")));
+
+            // Per-club accent underline, tinted by the presenter.
+            _accentBar = new VisualElement();
+            _accentBar.style.width = 160;
+            _accentBar.style.height = 4;
+            _accentBar.style.marginBottom = UiKit.SpaceMd;
+            UiKit.Round(_accentBar, 2);
+            Root.Add(_accentBar);
 
             _clubLabel = UiKit.Subtitle(string.Empty);
             Root.Add(_clubLabel);
@@ -60,6 +79,20 @@ namespace Fts.Views
         }
 
         public void SetClubName(string clubName) => _clubLabel.text = clubName;
+
+        /// <summary>Shows the user club's crest (a CrestRenderer built by the presenter).</summary>
+        public void SetCrest(VisualElement crest)
+        {
+            _crestSlot.Clear();
+            if (crest != null) _crestSlot.Add(crest);
+        }
+
+        /// <summary>Tints the hub with the club's primary colour (accent underline + club name).</summary>
+        public void SetAccent(Color primary)
+        {
+            _accentBar.style.backgroundColor = primary;
+            _clubLabel.style.color = primary;
+        }
 
         public void SetStatus(string status) => _statusLabel.text = status;
 
