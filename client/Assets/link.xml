@@ -1,0 +1,27 @@
+<!--
+  IL2CPP managed-stripping preserve list (Roadmap 6.3).
+
+  The WebGL build uses IL2CPP with managed stripping (Low). The save system
+  serializes CareerState with Newtonsoft.Json via REFLECTION, so the linker
+  cannot see which types/members are actually used and may strip the very
+  fields and constructors the (de)serializer needs — which would silently
+  break save/load only in the stripped player, never in the Editor.
+
+  Preserving these assemblies whole keeps save/load (and the deterministic
+  Sim.Core domain it serializes) intact. They are small relative to the engine,
+  so the build-size impact is negligible.
+-->
+<linker>
+  <!-- JSON (de)serializer reached purely by reflection. -->
+  <assembly fullname="Newtonsoft.Json" preserve="all" />
+
+  <!-- All serialized game-domain types (Leagues, Clubs, Players, Season, etc.). -->
+  <assembly fullname="Sim.Core" preserve="all" />
+
+  <!-- Shared DTOs. -->
+  <assembly fullname="Fts.Contracts" preserve="all" />
+
+  <!-- Client-side serialized state: CareerState, InboxMessage, CareerHistoryEntry,
+       TransferListing/IncomingOffer and the rest of the save graph live here. -->
+  <assembly fullname="FTS.Services" preserve="all" />
+</linker>

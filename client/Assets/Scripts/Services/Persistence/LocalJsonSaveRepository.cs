@@ -40,6 +40,9 @@ namespace Fts.Services.Persistence
                 File.Delete(SavePath);
             File.Move(tempPath, SavePath);
 
+            // On WebGL the move only touches the in-memory FS; commit it to IndexedDB.
+            WebGLSaveSync.Flush();
+
             Debug.Log($"[Save] Saved career (state hash 0x{Fnv1a(json):X8}).");
         }
 
@@ -84,7 +87,11 @@ namespace Fts.Services.Persistence
         public void Delete()
         {
             if (HasSave)
+            {
                 File.Delete(SavePath);
+                // Commit the deletion to IndexedDB on WebGL.
+                WebGLSaveSync.Flush();
+            }
         }
 
         private static void Migrate(CareerState state)

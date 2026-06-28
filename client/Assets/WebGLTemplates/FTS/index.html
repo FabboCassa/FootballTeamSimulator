@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en-us">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0, user-scalable=no, shrink-to-fit=yes">
+  <title>{{{ PRODUCT_NAME }}}</title>
+  <style>
+    /* ===== Football Team Simulator — cartoon loading theme (Roadmap 6.3) ===== */
+    :root {
+      --bg:       #141C30;
+      --surface:  #1E2A44;
+      --accent:   #27C281;
+      --accentdk: #1C9B66;
+      --amber:    #F2B33D;
+      --text:     #F4F7FB;
+    }
+    html, body { margin: 0; padding: 0; height: 100%; background: var(--bg); }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      color: var(--text);
+      overflow: hidden;
+    }
+    #unity-container { position: absolute; inset: 0; }
+    #unity-canvas { width: 100%; height: 100%; display: block; background: var(--bg); }
+
+    /* Loading overlay sits on top of the canvas until the player is ready. */
+    #fts-loader {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      background:
+        radial-gradient(circle at 50% 38%, rgba(39,194,129,0.18), rgba(20,28,48,0) 60%),
+        var(--bg);
+      transition: opacity 0.4s ease;
+      z-index: 10;
+    }
+    #fts-loader.hidden { opacity: 0; pointer-events: none; }
+
+    .fts-crest {
+      width: 120px; height: 132px; margin-bottom: 28px;
+      position: relative;
+      filter: drop-shadow(0 8px 18px rgba(0,0,0,0.45));
+    }
+    /* Cartoon shield built from CSS so the loader needs zero image assets. */
+    .fts-crest svg { width: 100%; height: 100%; }
+
+    .fts-title {
+      font-size: 30px; font-weight: 800; letter-spacing: 0.5px;
+      margin: 0 0 6px; text-align: center;
+    }
+    .fts-title .accent { color: var(--accent); }
+    .fts-sub { font-size: 14px; opacity: 0.65; margin: 0 0 34px; }
+
+    .fts-track {
+      width: min(420px, 70vw); height: 14px;
+      background: var(--surface);
+      border-radius: 999px; overflow: hidden;
+      box-shadow: inset 0 1px 3px rgba(0,0,0,0.5);
+    }
+    .fts-fill {
+      width: 0%; height: 100%;
+      background: linear-gradient(90deg, var(--accentdk), var(--accent));
+      border-radius: 999px;
+      transition: width 0.2s ease;
+    }
+    .fts-percent { margin-top: 14px; font-size: 13px; opacity: 0.8; font-variant-numeric: tabular-nums; }
+
+    #fts-warning {
+      position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%);
+      max-width: 80vw; padding: 10px 16px; border-radius: 10px;
+      background: var(--amber); color: #2A1C00; font-size: 13px;
+      display: none; z-index: 20;
+    }
+  </style>
+</head>
+<body>
+  <div id="unity-container">
+    <canvas id="unity-canvas" tabindex="-1"></canvas>
+
+    <div id="fts-loader">
+      <div class="fts-crest" aria-hidden="true">
+        <svg viewBox="0 0 100 110" xmlns="http://www.w3.org/2000/svg">
+          <path d="M50 4 L92 18 V52 C92 82 72 98 50 106 C28 98 8 82 8 52 V18 Z"
+                fill="#1E2A44" stroke="#27C281" stroke-width="5" stroke-linejoin="round"/>
+          <path d="M50 12 L84 23 V52 C84 76 68 90 50 97 V12 Z" fill="#27C281" opacity="0.22"/>
+          <circle cx="50" cy="50" r="20" fill="none" stroke="#F4F7FB" stroke-width="3"/>
+          <path d="M50 36 L56 47 L50 54 L44 47 Z" fill="#F4F7FB"/>
+          <path d="M50 54 L57 60 L54 69 L46 69 L43 60 Z" fill="none" stroke="#F4F7FB" stroke-width="2.5"/>
+        </svg>
+      </div>
+
+      <h1 class="fts-title">Football <span class="accent">Team</span> Simulator</h1>
+      <p class="fts-sub">Loading your career…</p>
+
+      <div class="fts-track"><div class="fts-fill" id="fts-fill"></div></div>
+      <div class="fts-percent" id="fts-percent">0%</div>
+    </div>
+
+    <div id="fts-warning"></div>
+  </div>
+
+  <script>
+    var container = document.querySelector("#unity-container");
+    var canvas = document.querySelector("#unity-canvas");
+    var loader = document.querySelector("#fts-loader");
+    var fill = document.querySelector("#fts-fill");
+    var percent = document.querySelector("#fts-percent");
+    var warningBanner = document.querySelector("#fts-warning");
+
+    function unityShowBanner(msg, type) {
+      warningBanner.innerHTML = msg;
+      warningBanner.style.display = "block";
+      if (type === "error") {
+        warningBanner.style.background = "#E5484D";
+        warningBanner.style.color = "#fff";
+      } else if (type === "warning") {
+        // auto-hide non-fatal warnings after a few seconds
+        setTimeout(function () { warningBanner.style.display = "none"; }, 5000);
+      }
+    }
+
+    var buildUrl = "Build";
+    var loaderUrl = buildUrl + "/{{{ LOADER_FILENAME }}}";
+    var config = {
+      dataUrl: buildUrl + "/{{{ DATA_FILENAME }}}",
+      frameworkUrl: buildUrl + "/{{{ FRAMEWORK_FILENAME }}}",
+      codeUrl: buildUrl + "/{{{ CODE_FILENAME }}}",
+#if MEMORY_FILENAME
+      memoryUrl: buildUrl + "/{{{ MEMORY_FILENAME }}}",
+#endif
+#if SYMBOLS_FILENAME
+      symbolsUrl: buildUrl + "/{{{ SYMBOLS_FILENAME }}}",
+#endif
+      streamingAssetsUrl: "StreamingAssets",
+      companyName: {{{ JSON.stringify(COMPANY_NAME) }}},
+      productName: {{{ JSON.stringify(PRODUCT_NAME) }}},
+      productVersion: {{{ JSON.stringify(PRODUCT_VERSION) }}},
+      showBanner: unityShowBanner,
+    };
+
+    // Mobile devices: hint a device-pixel-ratio that keeps the UI crisp without
+    // overdrawing on high-DPI phones (battery/perf — Roadmap 6.4 territory, cheap here).
+    if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+      var meta = document.createElement("meta");
+      meta.name = "viewport";
+      meta.content = "width=device-width, height=device-height, initial-scale=1.0, user-scalable=no, shrink-to-fit=yes";
+      document.getElementsByTagName("head")[0].appendChild(meta);
+      config.devicePixelRatio = 1;
+    }
+
+    var script = document.createElement("script");
+    script.src = loaderUrl;
+    script.onload = function () {
+      createUnityInstance(canvas, config, function (progress) {
+        var pct = Math.round(100 * progress);
+        fill.style.width = pct + "%";
+        percent.textContent = pct + "%";
+      }).then(function (unityInstance) {
+        loader.classList.add("hidden");
+        setTimeout(function () { loader.style.display = "none"; }, 450);
+      }).catch(function (message) {
+        unityShowBanner(message, "error");
+      });
+    };
+    document.body.appendChild(script);
+  </script>
+</body>
+</html>

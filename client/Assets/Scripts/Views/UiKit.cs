@@ -69,17 +69,32 @@ namespace Fts.Views
 
         // ---------------------------------------------------------------- containers
 
-        /// <summary>Full-screen centered column container, themed background.</summary>
+        /// <summary>
+        /// Full-screen centered column container, themed background. Backed by a vertical
+        /// <see cref="ScrollView"/> so a screen taller than the viewport scrolls instead of
+        /// clipping its top/bottom (Roadmap 6.3 — WebGL/small windows). The content container
+        /// keeps flexGrow + centred justification, so a SHORT screen still sits centred while a
+        /// TALL one grows past the viewport and becomes scrollable. ScrollView derives from
+        /// VisualElement and .Add() targets its content container, so existing call sites
+        /// (Root = UiKit.Screen(...); Root.Add(...)) are unchanged.
+        /// </summary>
         public static VisualElement Screen(Color background)
         {
-            var e = new VisualElement();
-            e.style.flexGrow = 1f;
-            e.style.alignItems = Align.Center;
-            e.style.justifyContent = Justify.Center;
-            e.style.backgroundColor = background;
-            e.style.paddingLeft = SpaceMd;
-            e.style.paddingRight = SpaceMd;
-            return e;
+            var scroll = new ScrollView(ScrollViewMode.Vertical);
+            scroll.style.flexGrow = 1f;
+            scroll.style.backgroundColor = background;
+            scroll.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
+            scroll.verticalScrollerVisibility = ScrollerVisibility.Auto;
+
+            VisualElement content = scroll.contentContainer;
+            content.style.flexGrow = 1f;
+            content.style.alignItems = Align.Center;
+            content.style.justifyContent = Justify.Center;
+            content.style.paddingLeft = SpaceMd;
+            content.style.paddingRight = SpaceMd;
+            content.style.paddingTop = SpaceLg;
+            content.style.paddingBottom = SpaceLg;
+            return scroll;
         }
 
         /// <summary>A rounded surface card with a hairline border.</summary>
