@@ -62,24 +62,36 @@ namespace Fts.Views
             _statusLabel.style.maxWidth = 420;
             Root.Add(_statusLabel);
 
+            // Responsive menu (task 6.4): the buttons live in a wrapping flex row so they
+            // form a multi-column grid on a wide landscape/PC viewport and collapse to a
+            // single comfortable thumb-column in portrait — no orientation branching needed.
+            var menu = new VisualElement();
+            menu.style.flexDirection = FlexDirection.Row;
+            menu.style.flexWrap = Wrap.Wrap;
+            menu.style.justifyContent = Justify.Center;
+            menu.style.alignItems = Align.Center;
+            menu.style.width = Length.Percent(100);
+            menu.style.maxWidth = 960;
+            Root.Add(menu);
+
             _advanceDayButton = UiKit.MenuButton(tr("hub.advance_day"), () => AdvanceDayClicked?.Invoke());
-            Root.Add(_advanceDayButton);
+            menu.Add(_advanceDayButton);
             _nextMatchButton = UiKit.MenuButton(tr("hub.next_match"), () => NextMatchClicked?.Invoke());
-            Root.Add(_nextMatchButton);
+            menu.Add(_nextMatchButton);
             _endSeasonButton = UiKit.MenuButton(tr("hub.end_season"), () => EndSeasonClicked?.Invoke());
-            Root.Add(_endSeasonButton);
+            menu.Add(_endSeasonButton);
             _inboxButton = UiKit.MenuButton(tr("hub.inbox"), () => InboxClicked?.Invoke());
-            Root.Add(_inboxButton);
-            Root.Add(UiKit.MenuButton(tr("hub.squad"), () => SquadClicked?.Invoke()));
-            Root.Add(UiKit.MenuButton(tr("hub.tactics"), () => TacticsClicked?.Invoke()));
-            Root.Add(UiKit.MenuButton(tr("hub.training"), () => TrainingClicked?.Invoke()));
-            Root.Add(UiKit.MenuButton(tr("hub.support"), () => SupportClicked?.Invoke()));
-            Root.Add(UiKit.MenuButton(tr("hub.market"), () => MarketClicked?.Invoke()));
-            Root.Add(UiKit.MenuButton(tr("hub.scouting"), () => ScoutingClicked?.Invoke()));
-            Root.Add(UiKit.MenuButton(tr("hub.club"), () => ClubClicked?.Invoke()));
-            Root.Add(UiKit.MenuButton(tr("hub.career"), () => CareerClicked?.Invoke()));
-            Root.Add(UiKit.MenuButton(tr("hub.league"), () => LeagueClicked?.Invoke()));
-            Root.Add(UiKit.MenuButton(tr("hub.exit_career"), () => ExitCareerClicked?.Invoke()));
+            menu.Add(_inboxButton);
+            menu.Add(UiKit.MenuButton(tr("hub.squad"), () => SquadClicked?.Invoke()));
+            menu.Add(UiKit.MenuButton(tr("hub.tactics"), () => TacticsClicked?.Invoke()));
+            menu.Add(UiKit.MenuButton(tr("hub.training"), () => TrainingClicked?.Invoke()));
+            menu.Add(UiKit.MenuButton(tr("hub.support"), () => SupportClicked?.Invoke()));
+            menu.Add(UiKit.MenuButton(tr("hub.market"), () => MarketClicked?.Invoke()));
+            menu.Add(UiKit.MenuButton(tr("hub.scouting"), () => ScoutingClicked?.Invoke()));
+            menu.Add(UiKit.MenuButton(tr("hub.club"), () => ClubClicked?.Invoke()));
+            menu.Add(UiKit.MenuButton(tr("hub.career"), () => CareerClicked?.Invoke()));
+            menu.Add(UiKit.MenuButton(tr("hub.league"), () => LeagueClicked?.Invoke()));
+            menu.Add(UiKit.MenuButton(tr("hub.exit_career"), () => ExitCareerClicked?.Invoke()));
         }
 
         public void SetClubName(string clubName) => _clubLabel.text = clubName;

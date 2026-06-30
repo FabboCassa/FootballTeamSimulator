@@ -32,6 +32,9 @@ namespace Fts.App
                    .WithParameter<LifetimeScope>(this);
 
             builder.RegisterEntryPoint<AppEntryPoint>();
+            // Mobile foundation (task 6.4): device safe-area insets + adaptive frame rate.
+            builder.RegisterEntryPoint<SafeAreaController>();
+            builder.RegisterEntryPoint<FrameRateController>();
 
             // The navigator's default parent scope for Screen scopes is the App scope.
             builder.RegisterBuildCallback(container =>

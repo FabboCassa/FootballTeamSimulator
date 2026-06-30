@@ -1,7 +1,8 @@
 <!--
-  IL2CPP managed-stripping preserve list (Roadmap 6.3).
+  IL2CPP managed-stripping preserve list (Roadmap 6.3 / 6.4).
 
-  The WebGL build uses IL2CPP with managed stripping (Low). The save system
+  The WebGL, Android and iOS builds all use IL2CPP with managed stripping (Low).
+  This file is global, so the same preservation applies to every platform. The save system
   serializes CareerState with Newtonsoft.Json via REFLECTION, so the linker
   cannot see which types/members are actually used and may strip the very
   fields and constructors the (de)serializer needs — which would silently

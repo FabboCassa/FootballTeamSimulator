@@ -67,6 +67,14 @@ namespace Fts.Views
         public const int FontBody = 18;
         public const int FontSmall = 14;
 
+        /// <summary>
+        /// Minimum comfortable touch-target edge in UI points (Roadmap 6.4). ~48dp is the
+        /// Android/iOS guideline; interactive rows/buttons should be at least this tall.
+        /// MenuButton/PrimaryButton already exceed it (54). Use <see cref="EnsureTapTarget"/>
+        /// on any custom tappable element.
+        /// </summary>
+        public const int MinTouchPx = 48;
+
         // ---------------------------------------------------------------- containers
 
         /// <summary>
@@ -254,6 +262,12 @@ namespace Fts.Views
         }
 
         // ---------------------------------------------------------------- style helpers
+
+        /// <summary>Guarantees a tappable element is at least <see cref="MinTouchPx"/> tall (Roadmap 6.4).</summary>
+        public static void EnsureTapTarget(VisualElement e)
+        {
+            e.style.minHeight = MinTouchPx;
+        }
 
         /// <summary>Sets all four corner radii.</summary>
         public static void Round(VisualElement e, float radius)
