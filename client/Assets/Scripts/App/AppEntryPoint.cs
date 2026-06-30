@@ -42,8 +42,10 @@ namespace Fts.App
 
         public void Tick()
         {
-            // KeyCode.Escape is also the Android hardware back button.
-            if (Input.GetKeyDown(KeyCode.Escape))
+            // KeyCode.Escape is also the Android hardware back button. While a modal overlay
+            // (confirm dialog / onboarding) is open it handles Esc itself (task 6.5) — don't also
+            // pop the screen behind it, which would orphan the dialog.
+            if (Input.GetKeyDown(KeyCode.Escape) && !_overlay.IsModalOpen)
                 _navigator.Back();
         }
 

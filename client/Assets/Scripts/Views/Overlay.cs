@@ -68,6 +68,26 @@ namespace Fts.Views
 
             card.Add(buttons);
             backdrop.Add(card);
+
+            // Desktop keyboard niceties (task 6.5): Enter confirms, Esc cancels. The backdrop is made
+            // focusable and the confirm button is focused once attached, so the bubbling key events land
+            // here. (The OverlayHost flags the dialog as modal, so the global Esc-back is suppressed and
+            // doesn't fight this handler.)
+            backdrop.focusable = true;
+            backdrop.RegisterCallback<KeyDownEvent>(e =>
+            {
+                if (e.keyCode == KeyCode.Escape)
+                {
+                    onCancel?.Invoke();
+                    e.StopPropagation();
+                }
+                else if (e.keyCode == KeyCode.Return || e.keyCode == KeyCode.KeypadEnter)
+                {
+                    onConfirm?.Invoke();
+                    e.StopPropagation();
+                }
+            });
+            backdrop.RegisterCallback<AttachToPanelEvent>(_ => confirm.schedule.Execute(() => confirm.Focus()));
             return backdrop;
         }
 

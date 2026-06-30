@@ -35,6 +35,7 @@ namespace Fts.Presenters
         private readonly ISaveRepository _saveRepository;
         private readonly HubView _view;
         private IDisposable _dayAdvancedSubscription;
+        private IDisposable _shortcutSubscription;
         private bool _userMatchSeen;
 
         public VisualElement View => _view.Root;
@@ -93,6 +94,9 @@ namespace Fts.Presenters
             _view.LeagueClicked += OnLeague;
             _view.ExitCareerClicked += OnExitCareer;
             _dayAdvancedSubscription = _broker.Subscribe<DayAdvancedMessage>(OnDayAdvanced);
+            // Desktop keyboard shortcuts (task 6.5): the DesktopController only publishes these while
+            // the Hub is the top screen with no modal open, so acting on them here is always safe.
+            _shortcutSubscription = _broker.Subscribe<HubShortcutMessage>(OnShortcut);
             RefreshStatus();
             MaybeShowOnboarding();
         }
@@ -115,6 +119,8 @@ namespace Fts.Presenters
             _view.ExitCareerClicked -= OnExitCareer;
             _dayAdvancedSubscription?.Dispose();
             _dayAdvancedSubscription = null;
+            _shortcutSubscription?.Dispose();
+            _shortcutSubscription = null;
         }
 
         public void Reveal() => RefreshStatus();
@@ -219,6 +225,26 @@ namespace Fts.Presenters
         {
             _career.OnboardingDone = true;
             _saveRepository.Save(_career);
+        }
+
+        /// <summary>Routes a desktop hotkey (task 6.5) to the matching Hub action.</summary>
+        private void OnShortcut(HubShortcutMessage message)
+        {
+            switch (message.Action)
+            {
+                case HubShortcut.AdvanceDay: OnAdvanceDay(); break;
+                case HubShortcut.NextMatch: OnNextMatch(); break;
+                case HubShortcut.Inbox: OnInbox(); break;
+                case HubShortcut.Squad: OnSquad(); break;
+                case HubShortcut.Tactics: OnTactics(); break;
+                case HubShortcut.Training: OnTraining(); break;
+                case HubShortcut.Support: OnSupport(); break;
+                case HubShortcut.Market: OnMarket(); break;
+                case HubShortcut.Scouting: OnScouting(); break;
+                case HubShortcut.Club: OnClub(); break;
+                case HubShortcut.Career: OnCareer(); break;
+                case HubShortcut.League: OnLeague(); break;
+            }
         }
 
         private void OnInbox() => _navigator.Push<InboxScreenPresenter>();

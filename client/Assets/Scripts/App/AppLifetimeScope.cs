@@ -35,6 +35,8 @@ namespace Fts.App
             // Mobile foundation (task 6.4): device safe-area insets + adaptive frame rate.
             builder.RegisterEntryPoint<SafeAreaController>();
             builder.RegisterEntryPoint<FrameRateController>();
+            // Desktop niceties (task 6.5): fullscreen toggle, run-in-background, Hub hotkeys.
+            builder.RegisterEntryPoint<DesktopController>();
 
             // The navigator's default parent scope for Screen scopes is the App scope.
             builder.RegisterBuildCallback(container =>
