@@ -1,0 +1,322 @@
+/* ============================================================================
+   Football Team Simulator — design system stylesheet (Roadmap task 6.6).
+
+   Design tokens (colours, spacing, radii, type scale) live here as USS custom
+   properties on .fts-root; component classes (.fts-*) style the code-built
+   views. UiKit.Attach() loads this sheet from Resources onto the UIDocument
+   root once at startup — views stay C# (ARCHITECTURE §5.3) and assign these
+   classes instead of inline styles (the hybrid decided with the user).
+
+   Reference look: Football Manager, heavily simplified; navy + emerald
+   palette (NOT purple), cartoon-friendly rounded shapes.
+   ========================================================================= */
+
+.fts-root {
+    --fts-bg: #141C30;
+    --fts-surface: #1E2A44;
+    --fts-surface-alt: #2A3A5C;
+    --fts-surface-hover: #33466E;
+    --fts-border: #3A4D74;
+
+    --fts-accent: #27C281;
+    --fts-accent-dark: #1C9B66;
+    --fts-amber: #F2B33D;
+
+    --fts-text: #F4F7FB;
+    --fts-text-muted: rgba(244, 247, 251, 0.62);
+    --fts-on-accent: #0C2419;
+
+    --fts-positive: #6FCF6B;
+    --fts-warning: #E6C75A;
+    --fts-danger: #E0675C;
+}
+
+/* ----------------------------------------------------- element defaults
+   Type selectors so even plain `new Button()` / `new Label()` in the older
+   code-built views pick up the theme (the 6.6c readability pass) — no more
+   default light-gray buttons or near-black labels on the navy background.
+   Classed components (.fts-*) and inline styles still win on specificity. */
+
+Label {
+    color: var(--fts-text);
+}
+
+Button {
+    background-color: var(--fts-surface-alt);
+    color: var(--fts-text);
+    -unity-font-style: bold;
+    border-width: 1px;
+    border-color: var(--fts-border);
+    border-radius: 10px;
+    padding: 4px 10px;
+    transition-property: background-color;
+    transition-duration: 0.08s;
+}
+
+Button:hover { background-color: var(--fts-surface-hover); }
+Button:active { background-color: var(--fts-border); }
+
+Button:disabled {
+    background-color: var(--fts-surface);
+    color: var(--fts-text-muted);
+}
+
+.unity-base-text-field__input {
+    background-color: var(--fts-surface-alt);
+    color: var(--fts-text);
+    border-color: var(--fts-border);
+    border-radius: 8px;
+}
+
+/* ------------------------------------------------------------- typography */
+
+.fts-title {
+    font-size: 40px;
+    -unity-font-style: bold;
+    color: var(--fts-text);
+    margin-bottom: 24px;
+    -unity-text-align: middle-center;
+}
+
+.fts-header {
+    font-size: 26px;
+    -unity-font-style: bold;
+    color: var(--fts-text);
+    margin-bottom: 8px;
+}
+
+.fts-subtitle {
+    font-size: 18px;
+    color: var(--fts-text-muted);
+    margin-bottom: 16px;
+    -unity-text-align: middle-center;
+}
+
+.fts-caption {
+    font-size: 14px;
+    color: var(--fts-text-muted);
+}
+
+/* ------------------------------------------------------------- containers */
+
+.fts-card {
+    background-color: var(--fts-surface);
+    padding: 16px;
+    margin-top: 8px;
+    margin-bottom: 8px;
+    border-radius: 14px;
+    border-width: 1px;
+    border-color: var(--fts-border);
+}
+
+.fts-row {
+    flex-direction: row;
+    align-items: center;
+}
+
+.fts-divider {
+    height: 1px;
+    margin-top: 8px;
+    margin-bottom: 8px;
+    background-color: var(--fts-border);
+}
+
+/* ---------------------------------------------------------------- buttons */
+
+.fts-btn {
+    height: 54px;
+    font-size: 18px;
+    -unity-font-style: bold;
+    border-width: 0;
+    border-radius: 14px;
+    margin-top: 5px;
+    margin-bottom: 5px;
+    transition-property: background-color;
+    transition-duration: 0.08s;
+}
+
+.fts-btn--menu {
+    width: 320px;
+    color: var(--fts-text);
+    background-color: var(--fts-surface-alt);
+    border-width: 1px;
+    border-color: var(--fts-border);
+}
+
+.fts-btn--menu:hover { background-color: var(--fts-surface-hover); }
+.fts-btn--menu:active { background-color: var(--fts-border); }
+
+.fts-btn--primary {
+    color: var(--fts-on-accent);
+    background-color: var(--fts-accent);
+    padding-left: 24px;
+    padding-right: 24px;
+}
+
+.fts-btn--primary:hover { background-color: #2ED494; }
+.fts-btn--primary:active { background-color: var(--fts-accent-dark); }
+
+.fts-pill {
+    font-size: 14px;
+    -unity-font-style: bold;
+    padding: 2px 8px;
+    border-radius: 8px;
+    -unity-text-align: middle-center;
+}
+
+.fts-page {
+    flex-grow: 1;
+    align-items: center;
+    padding: 16px 16px 8px 16px;
+}
+
+/* ------------------------------------------------------------- app shell */
+
+.fts-shell {
+    flex-grow: 1;
+    background-color: var(--fts-bg);
+}
+
+.fts-topbar {
+    flex-direction: row;
+    align-items: center;
+    min-height: 64px;
+    padding: 6px 12px;
+    background-color: var(--fts-surface);
+    border-bottom-width: 2px;
+    border-bottom-color: var(--fts-border);
+}
+
+.fts-topbar__club {
+    font-size: 20px;
+    -unity-font-style: bold;
+    color: var(--fts-text);
+}
+
+.fts-topbar__sub {
+    font-size: 13px;
+    color: var(--fts-text-muted);
+}
+
+.fts-topbar__continue {
+    height: 46px;
+    margin-left: 8px;
+}
+
+.fts-iconbtn {
+    width: 46px;
+    height: 46px;
+    border-width: 0;
+    border-radius: 12px;
+    background-color: var(--fts-surface-alt);
+    margin-left: 4px;
+    margin-right: 4px;
+    align-items: center;
+    justify-content: center;
+    transition-property: background-color;
+    transition-duration: 0.08s;
+}
+
+.fts-iconbtn:hover { background-color: var(--fts-surface-hover); }
+.fts-iconbtn:active { background-color: var(--fts-border); }
+
+.fts-body {
+    flex-direction: row;
+    flex-grow: 1;
+}
+
+.fts-content {
+    flex-grow: 1;
+}
+
+/* --- sidebar (landscape / desktop) --- */
+
+.fts-sidebar {
+    width: 200px;
+    background-color: var(--fts-surface);
+    border-right-width: 2px;
+    border-right-color: var(--fts-border);
+    padding-top: 6px;
+    padding-bottom: 6px;
+}
+
+.fts-sidebar--compact {
+    width: 64px;
+}
+
+.fts-navitem {
+    flex-direction: row;
+    align-items: center;
+    min-height: 46px;
+    margin: 2px 6px;
+    padding-left: 10px;
+    padding-right: 10px;
+    border-width: 0;
+    border-radius: 12px;
+    background-color: rgba(0, 0, 0, 0);
+    transition-property: background-color;
+    transition-duration: 0.08s;
+}
+
+.fts-navitem:hover { background-color: var(--fts-surface-hover); }
+.fts-navitem--active { background-color: var(--fts-surface-alt); }
+
+.fts-navitem__label {
+    font-size: 15px;
+    -unity-font-style: bold;
+    color: var(--fts-text);
+    margin-left: 10px;
+    flex-grow: 1;
+    -unity-text-align: middle-left;
+}
+
+.fts-sidebar--compact .fts-navitem__label { display: none; }
+
+.fts-navitem__badge {
+    min-width: 20px;
+    height: 20px;
+    padding-left: 5px;
+    padding-right: 5px;
+    border-radius: 10px;
+    background-color: var(--fts-amber);
+    color: var(--fts-bg);
+    font-size: 12px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+}
+
+/* --- bottom tab bar (portrait / phone) --- */
+
+.fts-bottombar {
+    flex-direction: row;
+    background-color: var(--fts-surface);
+    border-top-width: 2px;
+    border-top-color: var(--fts-border);
+    min-height: 60px;
+}
+
+.fts-tab {
+    flex-grow: 1;
+    align-items: center;
+    justify-content: center;
+    border-width: 0;
+    border-radius: 0;
+    background-color: rgba(0, 0, 0, 0);
+    padding-top: 6px;
+    padding-bottom: 4px;
+}
+
+.fts-tab:active { background-color: var(--fts-surface-hover); }
+.fts-tab--active { background-color: var(--fts-surface-alt); }
+
+.fts-tab__label {
+    font-size: 11px;
+    color: var(--fts-text-muted);
+    margin-top: 2px;
+    -unity-text-align: middle-center;
+}
+
+.fts-tab--active .fts-tab__label {
+    color: var(--fts-text);
+    -unity-font-style: bold;
+}

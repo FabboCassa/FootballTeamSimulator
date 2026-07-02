@@ -25,11 +25,8 @@ namespace Fts.App
             Debug.Log(_summary);
         }
 
-        // On-screen output so the hash is readable in a player build
-        // without hunting for the log file.
-        private void OnGUI()
-        {
-            GUI.Label(new Rect(10, 10, Screen.width - 20, 60), _summary);
-        }
+        // Task 6.6: the on-screen OnGUI label is gone — it drew on top of the new app
+        // chrome (top bar). 1.6 was verified on every platform long ago; the hash still
+        // goes to the log (readable via the player log file / logcat / browser console).
     }
 }

@@ -12,10 +12,11 @@ using UnityEngine.UIElements;
 namespace Fts.Presenters
 {
     /// <summary>
-    /// Squad screen (task 2.4): roster overview + lineup picker.
-    /// Works on a copy of the saved plan; Save persists it (used by the sim
-    /// from the next match day). Duplicates are impossible by construction:
-    /// assigning a player who is already in the XI swaps the two slots.
+    /// Squad screen (task 2.4, given a visual pitch in 6.7): the XI is shown as tokens on a
+    /// top-down pitch and the rest of the squad on a bench list. Drag a player onto a slot
+    /// (from the pitch or the bench) to place/swap him, or tap to pick then tap a target
+    /// (fallback). Works on a copy of the saved plan; Save persists it. Duplicates are
+    /// impossible by construction: <see cref="AssignToSlot"/> always swaps.
     /// </summary>
     public sealed class SquadScreenPresenter : IScreenPresenter
     {
@@ -25,10 +26,12 @@ namespace Fts.Presenters
         private readonly ILocalizationService _loc;
         private readonly PlayerProfileTarget _profileTarget;
         private readonly OverlayHost _overlay;
+        private readonly ClubIdentityService _identity;
         private readonly SquadView _view;
 
         private Club _club;
         private LineupPlan _working;
+        private int _selectedPlayerId = -1;
         private int _selectedSlot = -1;
 
         public VisualElement View => _view.Root;
@@ -39,7 +42,8 @@ namespace Fts.Presenters
             ISaveRepository saveRepository,
             ILocalizationService loc,
             PlayerProfileTarget profileTarget,
-            OverlayHost overlay)
+            OverlayHost overlay,
+            ClubIdentityService identity)
         {
             _navigator = navigator;
             _career = career;
@@ -47,74 +51,106 @@ namespace Fts.Presenters
             _loc = loc;
             _profileTarget = profileTarget;
             _overlay = overlay;
+            _identity = identity;
             _view = new SquadView(loc.Tr);
         }
 
         public void Enter()
         {
-            _view.SlotClicked += OnSlotClicked;
-            _view.PlayerClicked += OnPlayerClicked;
+            _view.SlotTapped += OnSlotTapped;
+            _view.BenchTapped += OnBenchTapped;
+            _view.AssignRequested += OnAssignRequested;
+            _view.ProfileClicked += OnProfile;
             _view.AutoClicked += OnAuto;
             _view.SaveClicked += OnSave;
             _view.BackClicked += OnBack;
 
             _club = _career.GetUserClub();
             _working = Clone(_career.UserLineup) ?? LineupPlan.From(LineupSelector.BestEleven(_club, UserFormation()));
+            _selectedPlayerId = -1;
+            _selectedSlot = -1;
             _view.SetHeader(_loc.Tr("squad.header", _club.Name, _club.Squad.Players.Count));
-            _view.SetStatus(_career.UserLineup == null
-                ? _loc.Tr("squad.status.no_saved")
-                : string.Empty);
+            _view.SetStatus(_career.UserLineup == null ? _loc.Tr("squad.status.no_saved") : string.Empty);
             Refresh();
         }
 
         public void Exit()
         {
-            _view.SlotClicked -= OnSlotClicked;
-            _view.PlayerClicked -= OnPlayerClicked;
+            _view.SlotTapped -= OnSlotTapped;
+            _view.BenchTapped -= OnBenchTapped;
+            _view.AssignRequested -= OnAssignRequested;
+            _view.ProfileClicked -= OnProfile;
             _view.AutoClicked -= OnAuto;
             _view.SaveClicked -= OnSave;
             _view.BackClicked -= OnBack;
         }
 
-        private void OnSlotClicked(int index)
+        // ------------------------------------------------------------- gestures
+
+        private void OnSlotTapped(int index)
         {
-            // Tapping the selected slot again deselects it, returning to "browse" mode
-            // where a roster tap opens the player's profile.
-            _selectedSlot = _selectedSlot == index ? -1 : index;
+            if (_selectedPlayerId < 0)
+            {
+                _selectedSlot = index;
+                _selectedPlayerId = _working.Slots[index].PlayerId;
+            }
+            else if (_selectedSlot == index)
+            {
+                ClearSelection();
+                return;
+            }
+            else
+            {
+                AssignToSlot(index, _selectedPlayerId);
+                ClearSelection();
+                return;
+            }
+
             _view.SetStatus(string.Empty);
             Refresh();
         }
 
-        private void OnPlayerClicked(int playerId)
+        private void OnBenchTapped(int playerId)
         {
-            // No slot selected → the tap is a request to view the player's profile
-            // (task 4.6). With a slot selected the tap assigns him to the lineup.
-            if (_selectedSlot < 0)
+            if (_selectedPlayerId < 0 || (_selectedSlot < 0 && _selectedPlayerId != playerId))
             {
-                _profileTarget.PlayerId = playerId;
-                _navigator.Push<PlayerProfileScreenPresenter>();
+                // Nothing picked, or a different bench player picked → pick this one.
+                _selectedSlot = -1;
+                _selectedPlayerId = playerId;
+            }
+            else if (_selectedPlayerId == playerId)
+            {
+                ClearSelection();
+                return;
+            }
+            else
+            {
+                // A slot was picked → drop this bench player into it.
+                AssignToSlot(_selectedSlot, playerId);
+                ClearSelection();
                 return;
             }
 
-            int currentIndex = SlotIndexOf(playerId);
-            if (currentIndex == _selectedSlot)
-                return;
-
-            if (currentIndex >= 0)
-            {
-                // Already in the XI: swap the two slots' players.
-                _working.Slots[currentIndex].PlayerId = _working.Slots[_selectedSlot].PlayerId;
-            }
-
-            _working.Slots[_selectedSlot].PlayerId = playerId;
             _view.SetStatus(string.Empty);
             Refresh();
+        }
+
+        private void OnAssignRequested(int slot, int playerId)
+        {
+            AssignToSlot(slot, playerId);
+            ClearSelection();
+        }
+
+        private void OnProfile(int playerId)
+        {
+            _profileTarget.PlayerId = playerId;
+            _navigator.Push<PlayerProfileScreenPresenter>();
         }
 
         private void OnAuto()
         {
             _working = LineupPlan.From(LineupSelector.BestEleven(_club, UserFormation()));
-            _selectedSlot = -1;
+            ClearSelection();
             _view.SetStatus(_loc.Tr("squad.status.auto"));
             Refresh();
         }
@@ -129,101 +165,141 @@ namespace Fts.Presenters
 
         private void OnBack() => _navigator.Pop();
 
+        /// <summary>Assigns <paramref name="playerId"/> to <paramref name="slotIndex"/>, swapping
+        /// if he is already in the XI so the lineup can never hold a duplicate.</summary>
+        private void AssignToSlot(int slotIndex, int playerId)
+        {
+            if (slotIndex < 0 || slotIndex >= _working.Slots.Count)
+                return;
+
+            int currentIndex = SlotIndexOf(playerId);
+            if (currentIndex == slotIndex)
+                return;
+
+            if (currentIndex >= 0)
+                _working.Slots[currentIndex].PlayerId = _working.Slots[slotIndex].PlayerId;
+
+            _working.Slots[slotIndex].PlayerId = playerId;
+            _view.SetStatus(string.Empty);
+        }
+
+        private void ClearSelection()
+        {
+            _selectedPlayerId = -1;
+            _selectedSlot = -1;
+            Refresh();
+        }
+
+        // ------------------------------------------------------------- rendering
+
         private void Refresh()
         {
-            var slots = new List<LineupSlotVm>(_working.Slots.Count);
+            ClubVisual visual = _identity.UserVisual();
+            var roles = new List<PositionRole>(_working.Slots.Count);
+            foreach (LineupPlanSlot s in _working.Slots)
+                roles.Add(s.Role);
+
+            var tokens = new List<PitchTokenVm>(_working.Slots.Count);
             for (int i = 0; i < _working.Slots.Count; i++)
             {
                 LineupPlanSlot slot = _working.Slots[i];
                 Player player = FindPlayer(slot.PlayerId);
-                string name = player != null ? player.FullName : $"Player {slot.PlayerId}";
-                int rating = player != null ? PlayerRating.OverallFor(player, slot.Role) : 0;
-
-                var vm = new LineupSlotVm
+                (float x, float y) = FormationLayout.Normalized(roles, i);
+                var vm = new PitchTokenVm
                 {
-                    Index = i,
-                    Label = $"{RoleAbbr(slot.Role)}  {name}  ({rating})",
-                    Selected = i == _selectedSlot
+                    SlotIndex = i,
+                    PlayerId = slot.PlayerId,
+                    X = x,
+                    Y = y,
+                    Badge = player != null ? PlayerRating.OverallFor(player, slot.Role).ToString() : "–",
+                    Name = player != null ? LastName(player.FullName) : RoleAbbr(slot.Role),
+                    Fill = visual.Primary,
+                    Text = visual.Emblem,
+                    Selected = i == _selectedSlot,
+                    Fitness = player != null ? ConditionDisplay.Build(player.Condition, _loc.Tr).Fitness : -1
                 };
-                ApplyCondition(vm, player);
-                slots.Add(vm);
+                tokens.Add(vm);
             }
 
             var inLineup = new HashSet<int>();
             foreach (LineupPlanSlot slot in _working.Slots)
                 inLineup.Add(slot.PlayerId);
 
-            var roster = new List<Player>(_club.Squad.Players);
-            roster.Sort((a, b) =>
+            var bench = new List<Player>();
+            foreach (Player p in _club.Squad.Players)
+                if (!inLineup.Contains(p.Id))
+                    bench.Add(p);
+            bench.Sort((a, b) =>
             {
                 if (a.Role != b.Role) return ((int)a.Role).CompareTo((int)b.Role);
                 int byRating = PlayerRating.Overall(b).CompareTo(PlayerRating.Overall(a));
                 return byRating != 0 ? byRating : a.Id.CompareTo(b.Id);
             });
 
-            var rows = new List<RosterRowVm>(roster.Count);
-            foreach (Player player in roster)
+            var rows = new List<BenchRowVm>(bench.Count);
+            foreach (Player player in bench)
             {
-                var vm = new RosterRowVm
+                ConditionDisplay d = ConditionDisplay.Build(player.Condition, _loc.Tr);
+                rows.Add(new BenchRowVm
                 {
                     PlayerId = player.Id,
-                    Label = _loc.Tr("squad.row",
-                        RoleAbbr(player.Role), player.FullName, player.Age, PlayerRating.Overall(player),
-                        MoneyFormat.Short(player.MarketValue)),
-                    InLineup = inLineup.Contains(player.Id)
-                };
-                ApplyCondition(vm, player);
-                rows.Add(vm);
+                    Role = RoleAbbr(player.Role),
+                    Name = player.FullName,
+                    Age = player.Age,
+                    Rating = PlayerRating.Overall(player),
+                    FormArrow = d.FormArrow,
+                    MoraleFace = d.MoraleFace,
+                    Fitness = d.Fitness,
+                    Tooltip = d.Tooltip,
+                    Selected = _selectedSlot < 0 && _selectedPlayerId == player.Id
+                });
             }
 
-            _view.SetSlots(slots);
-            _view.SetRoster(rows);
+            _view.SetTokens(tokens);
+            _view.SetBench(rows);
+            _view.SetSelection(BuildSelection());
+        }
+
+        private SelectionVm BuildSelection()
+        {
+            if (_selectedPlayerId < 0)
+                return null;
+
+            Player player = FindPlayer(_selectedPlayerId);
+            if (player == null)
+                return null;
+
+            PositionRole role = _selectedSlot >= 0 ? _working.Slots[_selectedSlot].Role : player.Role;
+            int ovr = PlayerRating.OverallFor(player, role);
+            return new SelectionVm
+            {
+                PlayerId = _selectedPlayerId,
+                Text = _loc.Tr("squad.selected", player.FullName, RoleAbbr(role), ovr)
+            };
         }
 
         private int SlotIndexOf(int playerId)
         {
             for (int i = 0; i < _working.Slots.Count; i++)
-            {
                 if (_working.Slots[i].PlayerId == playerId)
                     return i;
-            }
-
             return -1;
         }
 
         private Player FindPlayer(int playerId)
         {
             foreach (Player player in _club.Squad.Players)
-            {
                 if (player.Id == playerId)
                     return player;
-            }
-
             return null;
         }
 
-        private void ApplyCondition(LineupSlotVm vm, Player player)
+        private static string LastName(string fullName)
         {
-            if (player == null)
-                return;
-
-            ConditionDisplay d = ConditionDisplay.Build(player.Condition, _loc.Tr);
-            vm.FormArrow = d.FormArrow;
-            vm.MoraleFace = d.MoraleFace;
-            vm.Fitness = d.Fitness;
-            vm.Tooltip = d.Tooltip;
-        }
-
-        private void ApplyCondition(RosterRowVm vm, Player player)
-        {
-            if (player == null)
-                return;
-
-            ConditionDisplay d = ConditionDisplay.Build(player.Condition, _loc.Tr);
-            vm.FormArrow = d.FormArrow;
-            vm.MoraleFace = d.MoraleFace;
-            vm.Fitness = d.Fitness;
-            vm.Tooltip = d.Tooltip;
+            if (string.IsNullOrEmpty(fullName))
+                return string.Empty;
+            int space = fullName.LastIndexOf(' ');
+            return space >= 0 && space < fullName.Length - 1 ? fullName.Substring(space + 1) : fullName;
         }
 
         private static LineupPlan Clone(LineupPlan plan)
@@ -237,7 +313,6 @@ namespace Fts.Presenters
             return copy;
         }
 
-        /// <summary>The user's chosen shape (set on the Tactics screen); 4-3-3 until one is picked.</summary>
         private Formation UserFormation() => _career.UserTactic?.Formation ?? Formation.F433;
 
         private string RoleAbbr(PositionRole role) =>

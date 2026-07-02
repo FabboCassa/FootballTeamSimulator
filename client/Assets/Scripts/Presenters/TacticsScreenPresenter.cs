@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Fts.Services;
 using Fts.Services.Localization;
 using Fts.Services.Navigation;
@@ -25,6 +26,7 @@ namespace Fts.Presenters
         private readonly ISaveRepository _saveRepository;
         private readonly ILocalizationService _loc;
         private readonly OverlayHost _overlay;
+        private readonly ClubIdentityService _identity;
         private readonly TacticsView _view;
         private readonly TacticsBalance _tacticsConfig = new BalanceConfig().Tactics;
 
@@ -38,13 +40,15 @@ namespace Fts.Presenters
             CareerState career,
             ISaveRepository saveRepository,
             ILocalizationService loc,
-            OverlayHost overlay)
+            OverlayHost overlay,
+            ClubIdentityService identity)
         {
             _navigator = navigator;
             _career = career;
             _saveRepository = saveRepository;
             _loc = loc;
             _overlay = overlay;
+            _identity = identity;
             _view = new TacticsView(loc.Tr);
         }
 
@@ -142,6 +146,10 @@ namespace Fts.Presenters
             _view.SetWidth(_loc.Tr("tactics.label.width",
                 _loc.Tr("tactics.width." + _working.Width.ToString().ToLowerInvariant())));
             _view.SetFamiliarity(_loc.Tr("tactics.familiarity", FamiliarityPercent(_working)));
+
+            // Live shape preview: our best XI in the chosen formation (task 6.7).
+            Lineup xi = LineupSelector.BestEleven(_club, _working.Formation);
+            _view.SetShape(BuildShapeTokens(xi, _identity.UserVisual()));
         }
 
         private int FamiliarityPercent(TacticPlan tactic)
@@ -157,6 +165,7 @@ namespace Fts.Presenters
             if (next == null)
             {
                 _view.SetOpponent(_loc.Tr("tactics.opponent_none"));
+                _view.SetOpponentShape(null, false);
                 return;
             }
 
@@ -168,6 +177,50 @@ namespace Fts.Presenters
             int ovr = opponent != null ? SquadStrength(opponent) : 0;
 
             _view.SetOpponent(_loc.Tr("tactics.opponent_line", name, venue, ovr));
+
+            // Their likely best XI, shown mirrored (attacking the other way). Their exact
+            // instructions stay unknown (the text line already says so); this is shape only.
+            if (opponent != null)
+                _view.SetOpponentShape(BuildShapeTokens(LineupSelector.BestEleven(opponent), _identity.Visual(opponentId)), true);
+            else
+                _view.SetOpponentShape(null, false);
+        }
+
+        /// <summary>Read-only pitch tokens for a resolved XI: role/OVR discs in the club's colours.</summary>
+        private List<PitchTokenVm> BuildShapeTokens(Lineup lineup, ClubVisual visual)
+        {
+            var roles = new List<PositionRole>(lineup.Slots.Count);
+            foreach (LineupSlot s in lineup.Slots)
+                roles.Add(s.Role);
+
+            var tokens = new List<PitchTokenVm>(lineup.Slots.Count);
+            for (int i = 0; i < lineup.Slots.Count; i++)
+            {
+                LineupSlot slot = lineup.Slots[i];
+                (float x, float y) = FormationLayout.Normalized(roles, i);
+                tokens.Add(new PitchTokenVm
+                {
+                    SlotIndex = -1,
+                    PlayerId = -1,
+                    X = x,
+                    Y = y,
+                    Badge = PlayerRating.OverallFor(slot.Player, slot.Role).ToString(),
+                    Name = LastName(slot.Player.FullName),
+                    Fill = visual.Primary,
+                    Text = visual.Emblem,
+                    Fitness = -1
+                });
+            }
+
+            return tokens;
+        }
+
+        private static string LastName(string fullName)
+        {
+            if (string.IsNullOrEmpty(fullName))
+                return string.Empty;
+            int space = fullName.LastIndexOf(' ');
+            return space >= 0 && space < fullName.Length - 1 ? fullName.Substring(space + 1) : fullName;
         }
 
         private Fixture NextUserFixture()

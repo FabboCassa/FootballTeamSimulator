@@ -37,8 +37,8 @@ namespace Fts.Views
     /// Shows the full 10-attribute breakdown, live condition with the 4.2 "why" lines,
     /// role/age/overall/potential and season goals. Dumb view — every value and every
     /// string is computed by the presenter; this only lays things out and paints bars.
-    /// Market value is shown (task 5.1); scouted ranges, contract and appearances/ratings
-    /// land with their systems (5.4/5.6).
+    /// Market value is intentionally NOT shown here (task 6.7 feedback: money lives only on
+    /// the Market screen); scouted ranges, contract and appearances/ratings land with 5.4/5.6.
     /// </summary>
     public sealed class PlayerProfileView
     {
@@ -53,7 +53,6 @@ namespace Fts.Views
         private readonly Label _name;
         private readonly Label _subline;
         private readonly Label _potential;
-        private readonly Label _value;
         private readonly Label _seasonGoals;
         private readonly VisualElement _conditionSection;
         private readonly VisualElement _conditionBlock;
@@ -81,14 +80,8 @@ namespace Fts.Views
             _potential = new Label(string.Empty);
             _potential.style.color = SectionColor;
             _potential.style.fontSize = 13;
-            _potential.style.marginBottom = 2;
+            _potential.style.marginBottom = 10;
             Root.Add(_potential);
-
-            _value = new Label(string.Empty);
-            _value.style.color = SectionColor;
-            _value.style.fontSize = 14;
-            _value.style.marginBottom = 10;
-            Root.Add(_value);
 
             var body = new ScrollView();
             body.style.flexGrow = 1f;
@@ -129,8 +122,6 @@ namespace Fts.Views
             _subline.text = subline;
             _potential.text = potential;
         }
-
-        public void SetValue(string text) => _value.text = text;
 
         public void SetSeasonGoals(string text) => _seasonGoals.text = text;
 

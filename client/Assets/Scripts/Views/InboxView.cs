@@ -60,6 +60,7 @@ namespace Fts.Views
             var bar = new VisualElement();
             bar.style.flexDirection = FlexDirection.Row;
             bar.style.alignItems = Align.Center;
+            bar.style.flexWrap = Wrap.Wrap; // task 6.6: chips wrap on narrow phones instead of overflowing
             bar.style.marginBottom = 6;
 
             _filterButton = ChipButton(string.Empty, () => FilterClicked?.Invoke());
@@ -73,7 +74,10 @@ namespace Fts.Views
             bar.Add(ChipButton(tr("inbox.clear"), () => ClearClicked?.Invoke()));
             Root.Add(bar);
 
-            _list = new ScrollView();
+            // Task 6.6: vertical-only — the 6.4 device test showed a horizontal scrollbar when
+            // a row's fixed parts (dot + tag + stamp) pushed past a narrow viewport.
+            _list = new ScrollView(ScrollViewMode.Vertical);
+            _list.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
             _list.style.flexGrow = 1f;
             Root.Add(_list);
 
@@ -142,6 +146,8 @@ namespace Fts.Views
 
                 var text = new Label(vm.Text);
                 text.style.flexGrow = 1f;
+                text.style.flexShrink = 1f;
+                text.style.minWidth = 0; // lets the label shrink + wrap instead of widening the row
                 text.style.marginLeft = 8;
                 text.style.fontSize = 14;
                 text.style.whiteSpace = WhiteSpace.Normal;

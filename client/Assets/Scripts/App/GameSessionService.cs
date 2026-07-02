@@ -98,6 +98,7 @@ namespace Fts.App
                 builder.Register<LocalMarketService>(Lifetime.Singleton);
                 builder.Register<ScoutingService>(Lifetime.Singleton);
                 builder.Register<ClubIdentityService>(Lifetime.Singleton);
+                builder.Register<ShellController>(Lifetime.Singleton); // task 6.6 app chrome
             });
             _gameScope.name = "GameScope";
 
@@ -107,6 +108,12 @@ namespace Fts.App
             _gameScope.Container.Resolve<LocalMarketService>().RunDueWindows();
 
             _navigator.SetActiveScope(_gameScope);
+
+            // Task 6.6: mount the persistent app chrome (top bar + nav) and re-root the
+            // navigator onto its content host BEFORE pushing the Hub, so every career screen
+            // renders inside the shell. Disposed with the Game scope, which restores the root.
+            _gameScope.Container.Resolve<ShellController>().Attach();
+
             _navigator.Push<HubPresenter>();
         }
     }

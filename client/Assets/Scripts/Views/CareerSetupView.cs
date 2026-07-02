@@ -32,8 +32,14 @@ namespace Fts.Views
         public CareerSetupView(Func<string, string> tr)
         {
             _tr = tr;
-            Root = UiKit.Screen(UiKit.HubBlue);
-            Root.Add(UiKit.Title(tr("career_setup.title")));
+            // Task 6.6: a top-anchored page with NO outer scroller — the club list below owns
+            // the scrolling. Fixes the 6.4 device bugs: double scrollbar (outer page + inner
+            // list) and the big empty gap above the vertically-centred content.
+            Root = UiKit.Page(UiKit.HubBlue);
+            var title = UiKit.Title(tr("career_setup.title"));
+            title.style.fontSize = UiKit.FontHeader;
+            title.style.marginBottom = UiKit.SpaceSm;
+            Root.Add(title);
 
             _leagueLabel = UiKit.Subtitle(string.Empty);
             Root.Add(_leagueLabel);
@@ -63,8 +69,11 @@ namespace Fts.Views
 
             Root.Add(UiKit.Subtitle(tr("career_setup.pick_club")));
 
-            _clubList = new ScrollView();
-            _clubList.style.maxHeight = new Length(38f, LengthUnit.Percent);
+            // The ONLY scroller on this screen: fills the remaining height between the header
+            // block above and the button row below (flexGrow), scrolls when the league is long.
+            _clubList = new ScrollView(ScrollViewMode.Vertical);
+            _clubList.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
+            _clubList.style.flexGrow = 1f;
             _clubList.style.width = 340;
             Root.Add(_clubList);
 
@@ -87,7 +96,7 @@ namespace Fts.Views
             {
                 bool selected = i == level;
                 _difficultyButtons[i].style.backgroundColor = selected
-                    ? new StyleColor(new Color(0.20f, 0.45f, 0.30f))
+                    ? new StyleColor(UiKit.AccentDark)
                     : new StyleColor(StyleKeyword.Null);
                 _difficultyButtons[i].style.unityFontStyleAndWeight = selected ? FontStyle.Bold : FontStyle.Normal;
             }

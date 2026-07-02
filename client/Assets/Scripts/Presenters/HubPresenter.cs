@@ -30,7 +30,6 @@ namespace Fts.Presenters
         private readonly SeasonService _seasonService;
         private readonly ILocalizationService _loc;
         private readonly ClubIdentityService _identity;
-        private readonly InboxService _inbox;
         private readonly OverlayHost _overlay;
         private readonly ISaveRepository _saveRepository;
         private readonly HubView _view;
@@ -49,7 +48,6 @@ namespace Fts.Presenters
             SeasonService seasonService,
             ILocalizationService loc,
             ClubIdentityService identity,
-            InboxService inbox,
             OverlayHost overlay,
             ISaveRepository saveRepository)
         {
@@ -61,7 +59,6 @@ namespace Fts.Presenters
             _seasonService = seasonService;
             _loc = loc;
             _identity = identity;
-            _inbox = inbox;
             _overlay = overlay;
             _saveRepository = saveRepository;
 
@@ -79,23 +76,11 @@ namespace Fts.Presenters
 
         public void Enter()
         {
-            _view.AdvanceDayClicked += OnAdvanceDay;
-            _view.NextMatchClicked += OnNextMatch;
             _view.EndSeasonClicked += OnEndSeason;
-            _view.InboxClicked += OnInbox;
-            _view.SquadClicked += OnSquad;
-            _view.TacticsClicked += OnTactics;
-            _view.TrainingClicked += OnTraining;
-            _view.SupportClicked += OnSupport;
-            _view.MarketClicked += OnMarket;
-            _view.ScoutingClicked += OnScouting;
-            _view.ClubClicked += OnClub;
-            _view.CareerClicked += OnCareer;
-            _view.LeagueClicked += OnLeague;
-            _view.ExitCareerClicked += OnExitCareer;
             _dayAdvancedSubscription = _broker.Subscribe<DayAdvancedMessage>(OnDayAdvanced);
-            // Desktop keyboard shortcuts (task 6.5): the DesktopController only publishes these while
-            // the Hub is the top screen with no modal open, so acting on them here is always safe.
+            // Hub actions arrive as HubShortcutMessage from two publishers that both guarantee
+            // the Hub is the top screen first: the 6.5 DesktopController (hotkeys, guarded) and
+            // the 6.6 ShellController (sidebar/Continue, pops back to the Hub before publishing).
             _shortcutSubscription = _broker.Subscribe<HubShortcutMessage>(OnShortcut);
             RefreshStatus();
             MaybeShowOnboarding();
@@ -103,20 +88,7 @@ namespace Fts.Presenters
 
         public void Exit()
         {
-            _view.AdvanceDayClicked -= OnAdvanceDay;
-            _view.NextMatchClicked -= OnNextMatch;
             _view.EndSeasonClicked -= OnEndSeason;
-            _view.InboxClicked -= OnInbox;
-            _view.SquadClicked -= OnSquad;
-            _view.TacticsClicked -= OnTactics;
-            _view.TrainingClicked -= OnTraining;
-            _view.SupportClicked -= OnSupport;
-            _view.MarketClicked -= OnMarket;
-            _view.ScoutingClicked -= OnScouting;
-            _view.ClubClicked -= OnClub;
-            _view.CareerClicked -= OnCareer;
-            _view.LeagueClicked -= OnLeague;
-            _view.ExitCareerClicked -= OnExitCareer;
             _dayAdvancedSubscription?.Dispose();
             _dayAdvancedSubscription = null;
             _shortcutSubscription?.Dispose();
@@ -197,10 +169,6 @@ namespace Fts.Presenters
 
             _view.SetSeasonComplete(_seasonService.IsSeasonComplete);
             _view.SetStatus(_loc.Tr("hub.status.day", _career.Season.Year, _career.Season.CurrentDay) + " " + next + last);
-
-            // Inbox badge: show the unread count when there is one (task 6.2).
-            int unread = _inbox.UnreadCount;
-            _view.SetInbox(unread > 0 ? _loc.Tr("hub.inbox_badge", unread) : _loc.Tr("hub.inbox"));
         }
 
         /// <summary>Runs the guided first-run tutorial once per career (task 6.2), then marks it done.</summary>
@@ -244,6 +212,8 @@ namespace Fts.Presenters
                 case HubShortcut.Club: OnClub(); break;
                 case HubShortcut.Career: OnCareer(); break;
                 case HubShortcut.League: OnLeague(); break;
+                case HubShortcut.EndSeason: OnEndSeason(); break;
+                case HubShortcut.ExitCareer: OnExitCareer(); break;
             }
         }
 

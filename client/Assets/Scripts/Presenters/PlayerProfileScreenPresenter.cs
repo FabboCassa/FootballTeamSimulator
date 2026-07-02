@@ -70,7 +70,6 @@ namespace Fts.Presenters
             if (player == null)
             {
                 _view.SetIdentity(_loc.Tr("profile.unknown_player"), string.Empty, string.Empty);
-                _view.SetValue(string.Empty);
                 _view.SetConditionVisible(false);
                 _view.SetCondition(new ProfileConditionVm());
                 _view.SetAttributes(new List<AttrRowVm>());
@@ -80,8 +79,7 @@ namespace Fts.Presenters
 
             bool owned = IsOwned(player.Id);
 
-            // Market value is the stored figure, re-priced on the weekly tick (task 5.1).
-            _view.SetValue(_loc.Tr("profile.market_value", MoneyFormat.Short(player.MarketValue)));
+            // Money lives only on the Market screen now (task 6.7 feedback) — no value line here.
             _view.SetSeasonGoals(_loc.Tr("profile.season_goals", SeasonGoals(player.Id)));
 
             if (owned)

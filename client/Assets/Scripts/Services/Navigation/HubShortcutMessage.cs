@@ -14,7 +14,11 @@ namespace Fts.Services.Navigation
         Scouting,
         Club,
         Career,
-        League
+        League,
+        // Task 6.6: also raised by the persistent shell (sidebar / Continue button), which
+        // pops back to the Hub first so HubPresenter can safely act on them from anywhere.
+        EndSeason,
+        ExitCareer
     }
 
     /// <summary>

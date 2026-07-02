@@ -26,7 +26,10 @@ namespace Fts.Services.Navigation
 
         public int StackDepth => _stack.Count;
 
-        /// <summary>Container element the screens are attached to (set once at startup).</summary>
+        /// <summary>The element screens are currently attached to (the shell content host while a career is active).</summary>
+        public VisualElement Root => _root;
+
+        /// <summary>Container element the screens are attached to (startup: UIDocument root; task 6.6: the ShellController re-roots it).</summary>
         public void SetRoot(VisualElement root) => _root = root;
 
         /// <summary>Parent scope for new Screen scopes: App scope, or Game scope while a career is active.</summary>
@@ -74,6 +77,15 @@ namespace Fts.Services.Navigation
         public void PopToRoot()
         {
             while (Pop()) { }
+        }
+
+        /// <summary>
+        /// Pops until the stack is at most <paramref name="depth"/> screens deep (task 6.6:
+        /// the shell pops back to the career Hub — NOT to the main menu — before navigating).
+        /// </summary>
+        public void PopAbove(int depth)
+        {
+            while (_stack.Count > depth && Pop()) { }
         }
 
         /// <summary>

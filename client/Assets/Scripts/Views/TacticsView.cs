@@ -30,6 +30,9 @@ namespace Fts.Views
         private readonly Label _familiarity;
         private readonly Label _opponent;
         private readonly Label _status;
+        private readonly PitchFormationView _shapePitch;
+        private readonly PitchFormationView _oppPitch;
+        private readonly VisualElement _oppPitchWrap;
 
         public TacticsView(Func<string, string> tr)
         {
@@ -58,6 +61,11 @@ namespace Fts.Views
             _formationButton = CycleButton(() => FormationCycleClicked?.Invoke());
             scroll.Add(_formationButton);
 
+            // Live shape preview: the user's best XI in the chosen formation (task 6.7).
+            scroll.Add(SectionLabel(tr("tactics.your_shape")));
+            _shapePitch = new PitchFormationView(mirror: false);
+            scroll.Add(PitchBox(_shapePitch, 240));
+
             scroll.Add(SectionLabel(tr("tactics.instructions_caption")));
             _mentalityButton = CycleButton(() => MentalityCycleClicked?.Invoke());
             scroll.Add(_mentalityButton);
@@ -80,6 +88,11 @@ namespace Fts.Views
             _opponent.style.fontSize = 14;
             _opponent.style.whiteSpace = WhiteSpace.Normal;
             scroll.Add(_opponent);
+
+            // Opponent shape preview (their likely best XI), hidden when there's no fixture.
+            _oppPitch = new PitchFormationView(mirror: true);
+            _oppPitchWrap = PitchBox(_oppPitch, 190);
+            scroll.Add(_oppPitchWrap);
 
             var footer = new VisualElement();
             footer.style.flexDirection = FlexDirection.Row;
@@ -104,6 +117,27 @@ namespace Fts.Views
         public void SetFamiliarity(string text) => _familiarity.text = text;
         public void SetOpponent(string text) => _opponent.text = text;
         public void SetStatus(string text) => _status.text = text;
+
+        /// <summary>Updates the live shape preview with the user's XI in the chosen formation.</summary>
+        public void SetShape(System.Collections.Generic.IReadOnlyList<PitchTokenVm> tokens) =>
+            _shapePitch.SetTokens(tokens);
+
+        /// <summary>Shows/hides + fills the opponent shape preview (task 6.7).</summary>
+        public void SetOpponentShape(System.Collections.Generic.IReadOnlyList<PitchTokenVm> tokens, bool known)
+        {
+            _oppPitchWrap.style.display = known ? DisplayStyle.Flex : DisplayStyle.None;
+            if (known)
+                _oppPitch.SetTokens(tokens);
+        }
+
+        private static VisualElement PitchBox(PitchFormationView pitch, float height)
+        {
+            var box = new VisualElement();
+            box.style.height = height;
+            box.style.marginBottom = 6;
+            box.Add(pitch);
+            return box;
+        }
 
         private static Label SectionLabel(string caption)
         {

@@ -31,6 +31,10 @@ namespace Fts.App
 
         public void Start()
         {
+            // Task 6.6: attach the USS design-system stylesheet to the UI root once —
+            // every code-built view below (screens, shell, overlays) picks up the .fts-* classes.
+            Fts.Views.UiKit.Attach(_uiDocument.rootVisualElement);
+
             _navigator.SetRoot(_uiDocument.rootVisualElement);
             _overlay.SetRoot(_uiDocument.rootVisualElement);
 
