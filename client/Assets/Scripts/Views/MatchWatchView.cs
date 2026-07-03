@@ -29,6 +29,8 @@ namespace Fts.Views
 
         private Label _score;
         private Label _clock;
+        private VisualElement _homeCrestSlot;
+        private VisualElement _awayCrestSlot;
         private readonly Label _toast;
         private Button _skip;
         private Button _pause;
@@ -90,12 +92,20 @@ namespace Fts.Views
             hud.style.paddingTop = 10;
             hud.style.paddingBottom = 10;
 
+            _homeCrestSlot = CrestSlot();
+            _homeCrestSlot.style.marginRight = 10;
+            hud.Add(_homeCrestSlot);
+
             _score = new Label(string.Empty);
             _score.style.fontSize = 24;
             _score.style.unityFontStyleAndWeight = FontStyle.Bold;
             _score.style.color = Color.white;
-            _score.style.marginRight = 20;
             hud.Add(_score);
+
+            _awayCrestSlot = CrestSlot();
+            _awayCrestSlot.style.marginLeft = 10;
+            _awayCrestSlot.style.marginRight = 20;
+            hud.Add(_awayCrestSlot);
 
             _clock = new Label("0'");
             _clock.style.fontSize = 20;
@@ -149,6 +159,25 @@ namespace Fts.Views
         public void SetScore(string score) => _score.text = score;
 
         public void SetClock(string clock) => _clock.text = clock;
+
+        /// <summary>Shows the two clubs' crests either side of the score (task 6.8).</summary>
+        public void SetCrests(VisualElement home, VisualElement away)
+        {
+            _homeCrestSlot.Clear();
+            if (home != null) _homeCrestSlot.Add(home);
+            _awayCrestSlot.Clear();
+            if (away != null) _awayCrestSlot.Add(away);
+        }
+
+        private static VisualElement CrestSlot()
+        {
+            var slot = new VisualElement();
+            slot.style.width = 32;
+            slot.style.height = 32;
+            slot.style.alignItems = Align.Center;
+            slot.style.justifyContent = Justify.Center;
+            return slot;
+        }
 
         /// <summary>Highlights the active speed button.</summary>
         public void SetActiveSpeed(float speed)

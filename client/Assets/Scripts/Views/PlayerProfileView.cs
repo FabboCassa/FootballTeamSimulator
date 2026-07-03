@@ -54,6 +54,7 @@ namespace Fts.Views
         private readonly Label _subline;
         private readonly Label _potential;
         private readonly Label _seasonGoals;
+        private readonly VisualElement _avatarSlot;
         private readonly VisualElement _conditionSection;
         private readonly VisualElement _conditionBlock;
         private readonly ScrollView _attrList;
@@ -62,30 +63,43 @@ namespace Fts.Views
         {
             Root = new VisualElement();
             Root.style.flexGrow = 1f;
-            Root.style.backgroundColor = UiKit.PanelGray;
-            Root.style.paddingTop = 12;
-            Root.style.paddingBottom = 12;
-            Root.style.paddingLeft = 16;
-            Root.style.paddingRight = 16;
+            Root.style.backgroundColor = UiKit.Background;
+            Root.style.paddingTop = UiKit.SpaceSm;
+            Root.style.paddingBottom = UiKit.SpaceSm;
+            Root.style.paddingLeft = UiKit.SpaceMd;
+            Root.style.paddingRight = UiKit.SpaceMd;
 
-            _name = UiKit.Title(string.Empty);
-            _name.style.fontSize = 28;
+            var col = UiKit.CenteredColumn(680f);
+            col.style.flexGrow = 1f;
+            Root.Add(col);
+
+            // Portrait placeholder (task 6.8), centred above the name.
+            _avatarSlot = new VisualElement();
+            _avatarSlot.style.alignItems = Align.Center;
+            _avatarSlot.style.justifyContent = Justify.Center;
+            _avatarSlot.style.marginBottom = 6;
+            col.Add(_avatarSlot);
+
+            _name = UiKit.Header(string.Empty);
+            _name.style.unityTextAlign = TextAnchor.MiddleCenter;
             _name.style.marginBottom = 2;
-            Root.Add(_name);
+            col.Add(_name);
 
             _subline = UiKit.Subtitle(string.Empty);
             _subline.style.marginBottom = 4;
-            Root.Add(_subline);
+            col.Add(_subline);
 
             _potential = new Label(string.Empty);
             _potential.style.color = SectionColor;
             _potential.style.fontSize = 13;
+            _potential.style.unityTextAlign = TextAnchor.MiddleCenter;
             _potential.style.marginBottom = 10;
-            Root.Add(_potential);
+            col.Add(_potential);
 
             var body = new ScrollView();
             body.style.flexGrow = 1f;
-            Root.Add(body);
+            body.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
+            col.Add(body);
 
             _conditionSection = new VisualElement();
             _conditionSection.Add(SectionLabel(tr("profile.condition_caption")));
@@ -113,7 +127,8 @@ namespace Fts.Views
             back.style.height = 44;
             back.style.fontSize = 16;
             footer.Add(back);
-            Root.Add(footer);
+            footer.style.flexShrink = 0f;
+            col.Add(footer);
         }
 
         public void SetIdentity(string name, string subline, string potential)
@@ -121,6 +136,13 @@ namespace Fts.Views
             _name.text = name;
             _subline.text = subline;
             _potential.text = potential;
+        }
+
+        /// <summary>Sets the player's portrait placeholder (a monogram avatar built by the presenter).</summary>
+        public void SetAvatar(VisualElement avatar)
+        {
+            _avatarSlot.Clear();
+            if (avatar != null) _avatarSlot.Add(avatar);
         }
 
         public void SetSeasonGoals(string text) => _seasonGoals.text = text;

@@ -29,56 +29,62 @@ namespace Fts.Views
         {
             Root = new VisualElement();
             Root.style.flexGrow = 1f;
-            Root.style.backgroundColor = UiKit.PanelGray;
-            Root.style.paddingTop = 12;
-            Root.style.paddingBottom = 12;
-            Root.style.paddingLeft = 16;
-            Root.style.paddingRight = 16;
+            Root.style.backgroundColor = UiKit.Background;
+            Root.style.paddingTop = UiKit.SpaceSm;
+            Root.style.paddingBottom = UiKit.SpaceSm;
+            Root.style.paddingLeft = UiKit.SpaceMd;
+            Root.style.paddingRight = UiKit.SpaceMd;
 
-            var title = UiKit.Title(tr("career.title"));
-            title.style.fontSize = 28;
-            title.style.marginBottom = 2;
-            Root.Add(title);
+            var col = UiKit.CenteredColumn(680f);
+            col.style.flexGrow = 1f;
+            Root.Add(col);
 
-            _header = UiKit.Subtitle(string.Empty);
-            _header.style.marginBottom = 8;
-            Root.Add(_header);
+            _header = UiKit.Header(string.Empty);
+            _header.style.unityTextAlign = TextAnchor.MiddleCenter;
+            _header.style.marginBottom = UiKit.SpaceSm;
+            col.Add(_header);
 
-            var panel = Panel();
+            var panel = UiKit.Card();
             _objective = PanelLine(panel);
-            _objective.style.fontSize = 15;
+            _objective.style.fontSize = 16;
+            _objective.style.unityFontStyleAndWeight = FontStyle.Bold;
+            _objective.style.marginBottom = 2;
             _position = PanelLine(panel);
             _reputation = PanelLine(panel);
-            Root.Add(panel);
+            col.Add(panel);
 
-            Root.Add(SectionLabel(tr("career.confidence_caption")));
-            _confidenceLabel = PanelLine(Root);
+            col.Add(SectionLabel(tr("career.confidence_caption")));
+            _confidenceLabel = PanelLine(col);
             var track = new VisualElement();
-            track.style.height = 14;
-            track.style.marginBottom = 8;
+            track.style.height = 16;
+            track.style.marginBottom = UiKit.SpaceSm;
             track.style.backgroundColor = new Color(1f, 1f, 1f, 0.12f);
+            UiKit.Round(track, UiKit.RadiusSm);
             _confidenceFill = new VisualElement();
-            _confidenceFill.style.height = 14;
+            _confidenceFill.style.height = 16;
             _confidenceFill.style.width = Length.Percent(50);
             _confidenceFill.style.backgroundColor = new Color(0.3f, 0.7f, 0.35f);
+            UiKit.Round(_confidenceFill, UiKit.RadiusSm);
             track.Add(_confidenceFill);
-            Root.Add(track);
+            col.Add(track);
 
-            Root.Add(SectionLabel(tr("career.history_caption")));
+            col.Add(SectionLabel(tr("career.history_caption")));
             _history = new ScrollView();
             _history.style.flexGrow = 1f;
-            Root.Add(_history);
+            _history.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
+            col.Add(_history);
 
             var footer = new VisualElement();
             footer.style.flexDirection = FlexDirection.Row;
             footer.style.justifyContent = Justify.Center;
-            footer.style.marginTop = 10;
+            footer.style.marginTop = UiKit.SpaceSm;
+            footer.style.flexShrink = 0f;
             var back = UiKit.MenuButton(tr("common.back"), () => BackClicked?.Invoke());
             back.style.width = 150;
             back.style.height = 44;
             back.style.fontSize = 16;
             footer.Add(back);
-            Root.Add(footer);
+            col.Add(footer);
         }
 
         public void SetHeader(string text) => _header.text = text;
@@ -114,18 +120,6 @@ namespace Fts.Views
                 label.style.backgroundColor = new Color(1f, 1f, 1f, 0.06f);
                 _history.Add(label);
             }
-        }
-
-        private static VisualElement Panel()
-        {
-            var panel = new VisualElement();
-            panel.style.backgroundColor = new Color(1f, 1f, 1f, 0.06f);
-            panel.style.paddingTop = 6;
-            panel.style.paddingBottom = 6;
-            panel.style.paddingLeft = 10;
-            panel.style.paddingRight = 10;
-            panel.style.marginBottom = 6;
-            return panel;
         }
 
         private static Label PanelLine(VisualElement parent)

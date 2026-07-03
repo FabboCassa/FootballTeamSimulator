@@ -19,6 +19,7 @@ namespace Fts.Presenters
         private readonly CareerState _career;
         private readonly SeasonService _seasonService;
         private readonly ILocalizationService _loc;
+        private readonly ClubIdentityService _identity;
         private readonly SeasonEndView _view;
 
         public VisualElement View => _view.Root;
@@ -27,12 +28,14 @@ namespace Fts.Presenters
             ScreenNavigator navigator,
             CareerState career,
             SeasonService seasonService,
-            ILocalizationService loc)
+            ILocalizationService loc,
+            ClubIdentityService identity)
         {
             _navigator = navigator;
             _career = career;
             _seasonService = seasonService;
             _loc = loc;
+            _identity = identity;
             _view = new SeasonEndView(loc.Tr);
         }
 
@@ -46,6 +49,9 @@ namespace Fts.Presenters
 
             _view.SetTitle(_loc.Tr("season_end.title", result.EndedYear));
             _view.SetChampion(_loc.Tr("season_end.champion", ClubName(result.ChampionClubId)));
+            _view.SetChampionCrest(Crests.Badge(
+                _identity.Visual(result.ChampionClubId), 36f,
+                _career.FindClub(result.ChampionClubId)?.ShortName ?? "?", UiKit.Background));
             _view.SetPromoted(_loc.Tr("season_end.promoted", JoinNames(result.PromotedClubIds)));
             _view.SetRelegated(_loc.Tr("season_end.relegated", JoinNames(result.RelegatedClubIds)));
         }

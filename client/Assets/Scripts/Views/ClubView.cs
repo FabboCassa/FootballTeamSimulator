@@ -42,52 +42,51 @@ namespace Fts.Views
         {
             Root = new VisualElement();
             Root.style.flexGrow = 1f;
-            Root.style.backgroundColor = UiKit.PanelGray;
-            Root.style.paddingTop = 12;
-            Root.style.paddingBottom = 12;
-            Root.style.paddingLeft = 16;
-            Root.style.paddingRight = 16;
+            Root.style.backgroundColor = UiKit.Background;
+            Root.style.paddingTop = UiKit.SpaceSm;
+            Root.style.paddingBottom = UiKit.SpaceSm;
+            Root.style.paddingLeft = UiKit.SpaceMd;
+            Root.style.paddingRight = UiKit.SpaceMd;
 
-            var title = UiKit.Title(tr("club.title"));
-            title.style.fontSize = 28;
-            title.style.marginBottom = 2;
-            Root.Add(title);
+            var col = UiKit.CenteredColumn(760f);
+            col.style.flexGrow = 1f;
+            Root.Add(col);
 
-            _header = UiKit.Subtitle(string.Empty);
-            _header.style.marginBottom = 8;
-            Root.Add(_header);
+            _header = UiKit.Header(string.Empty);
+            _header.style.unityTextAlign = TextAnchor.MiddleCenter;
+            _header.style.marginBottom = UiKit.SpaceSm;
+            col.Add(_header);
 
-            Root.Add(SectionLabel(tr("club.finances_caption")));
-            var panel = new VisualElement();
-            panel.style.backgroundColor = new Color(1f, 1f, 1f, 0.06f);
-            panel.style.paddingTop = 6;
-            panel.style.paddingBottom = 6;
-            panel.style.paddingLeft = 10;
-            panel.style.paddingRight = 10;
-            panel.style.marginBottom = 6;
+            col.Add(SectionLabel(tr("club.finances_caption")));
+            var panel = UiKit.Card();
             _balance = PanelLine(panel);
-            _balance.style.fontSize = 16;
+            _balance.style.fontSize = 18;
+            _balance.style.unityFontStyleAndWeight = FontStyle.Bold;
+            _balance.style.marginBottom = 2;
             _income = PanelLine(panel);
             _expense = PanelLine(panel);
             _net = PanelLine(panel);
-            Root.Add(panel);
+            col.Add(panel);
 
-            Root.Add(SectionLabel(tr("club.facilities_caption")));
+            col.Add(SectionLabel(tr("club.facilities_caption")));
             _facilities = new ScrollView();
             _facilities.style.flexGrow = 1f;
-            Root.Add(_facilities);
+            _facilities.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
+            col.Add(_facilities);
 
             var footer = new VisualElement();
             footer.style.flexDirection = FlexDirection.Row;
             footer.style.justifyContent = Justify.Center;
-            footer.style.marginTop = 10;
+            footer.style.marginTop = UiKit.SpaceSm;
+            footer.style.flexShrink = 0f;
             footer.Add(FooterButton(tr("common.back"), () => BackClicked?.Invoke()));
-            Root.Add(footer);
+            col.Add(footer);
 
-            _status = UiKit.Subtitle(string.Empty);
-            _status.style.marginTop = 4;
+            _status = UiKit.Caption(string.Empty);
+            _status.style.marginTop = UiKit.SpaceXs;
             _status.style.alignSelf = Align.Center;
-            Root.Add(_status);
+            _status.style.flexShrink = 0f;
+            col.Add(_status);
         }
 
         public void SetHeader(string text) => _header.text = text;
@@ -111,28 +110,37 @@ namespace Fts.Views
                 var row = new VisualElement();
                 row.style.flexDirection = FlexDirection.Row;
                 row.style.alignItems = Align.Center;
-                row.style.height = 52;
-                row.style.marginBottom = 3;
-                row.style.paddingLeft = 8;
-                row.style.paddingRight = 8;
-                row.style.backgroundColor = new Color(1f, 1f, 1f, 0.06f);
+                row.style.minHeight = 62;
+                row.style.marginBottom = 6;
+                row.style.paddingLeft = 12;
+                row.style.paddingRight = 12;
+                row.style.paddingTop = 8;
+                row.style.paddingBottom = 8;
+                row.style.backgroundColor = UiKit.Surface;
+                UiKit.Round(row, UiKit.RadiusSm);
 
                 var text = new VisualElement();
                 text.style.flexGrow = 1f;
+                text.style.flexShrink = 1f;
                 var name = new Label($"{vm.Name} · {vm.Tier}");
-                name.style.fontSize = 14;
-                name.style.color = Color.white;
+                name.style.fontSize = 15;
+                name.style.unityFontStyleAndWeight = FontStyle.Bold;
+                name.style.color = UiKit.TextPrimary;
+                name.style.marginBottom = 2;
                 text.Add(name);
                 var effect = new Label(vm.Effect);
                 effect.style.fontSize = 12;
-                effect.style.color = new Color(1f, 1f, 1f, 0.7f);
+                effect.style.color = UiKit.TextMuted;
+                effect.style.whiteSpace = WhiteSpace.Normal;
                 text.Add(effect);
                 row.Add(text);
 
                 var upgrade = new Button(() => UpgradeClicked?.Invoke(index)) { text = vm.ActionLabel };
                 upgrade.style.width = 150;
-                upgrade.style.height = 38;
+                upgrade.style.height = 40;
                 upgrade.style.fontSize = 13;
+                upgrade.style.flexShrink = 0f;
+                upgrade.style.marginLeft = UiKit.SpaceSm;
                 upgrade.SetEnabled(vm.CanUpgrade);
                 row.Add(upgrade);
 

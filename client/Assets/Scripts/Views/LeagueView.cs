@@ -11,18 +11,22 @@ namespace Fts.Views
         public string Club;
         public int Played, Wins, Draws, Losses, GoalsFor, GoalsAgainst, GoalDifference, Points;
         public bool IsUser;
+        public VisualElement Crest;   // small club crest (task 6.8); built by the presenter
     }
 
     public sealed class FixtureRowVm
     {
         public string Label;
         public bool IsUser;
+        public VisualElement HomeCrest; // task 6.8 (optional)
+        public VisualElement AwayCrest;
     }
 
     public sealed class ScorerRowVm
     {
         public string Label;
         public bool IsUser;
+        public VisualElement Crest;   // scorer's club crest (task 6.8)
     }
 
     /// <summary>
@@ -58,24 +62,27 @@ namespace Fts.Views
 
             Root = new VisualElement();
             Root.style.flexGrow = 1f;
-            Root.style.backgroundColor = UiKit.PanelGray;
-            Root.style.paddingTop = 12;
-            Root.style.paddingBottom = 12;
-            Root.style.paddingLeft = 16;
-            Root.style.paddingRight = 16;
+            Root.style.backgroundColor = UiKit.Background;
+            Root.style.paddingTop = UiKit.SpaceSm;
+            Root.style.paddingBottom = UiKit.SpaceSm;
+            Root.style.paddingLeft = UiKit.SpaceMd;
+            Root.style.paddingRight = UiKit.SpaceMd;
 
-            var title = UiKit.Title(tr("league.title"));
-            title.style.fontSize = 28;
-            title.style.marginBottom = 2;
-            Root.Add(title);
+            // Centred, capped-width column so the table doesn't sprawl and its stat columns stop
+            // hugging the far-right edge on wide viewports (6.9).
+            var col = UiKit.CenteredColumn(680f);
+            col.style.flexGrow = 1f;
+            Root.Add(col);
 
-            _leagueLabel = UiKit.Subtitle(string.Empty);
-            _leagueLabel.style.marginBottom = 8;
-            Root.Add(_leagueLabel);
+            _leagueLabel = UiKit.Header(string.Empty);
+            _leagueLabel.style.unityTextAlign = TextAnchor.MiddleCenter;
+            _leagueLabel.style.marginBottom = UiKit.SpaceSm;
+            col.Add(_leagueLabel);
 
             var tabRow = new VisualElement();
             tabRow.style.flexDirection = FlexDirection.Row;
             tabRow.style.justifyContent = Justify.Center;
+            tabRow.style.flexShrink = 0f;
             tabRow.style.marginBottom = 8;
             string[] tabKeys = { "league.tab.table", "league.tab.fixtures", "league.tab.scorers" };
             _tabs = new Button[tabKeys.Length];
@@ -88,7 +95,7 @@ namespace Fts.Views
                 _tabs[i].style.flexGrow = 1f;
                 tabRow.Add(_tabs[i]);
             }
-            Root.Add(tabRow);
+            col.Add(tabRow);
 
             // --- Table section ---
             var tableSection = new VisualElement();
@@ -136,14 +143,15 @@ namespace Fts.Views
 
             _sections = new[] { tableSection, fixturesSection, scorersSection };
             foreach (VisualElement section in _sections)
-                Root.Add(section);
+                col.Add(section);
 
             var back = UiKit.MenuButton(tr("common.back"), () => BackClicked?.Invoke());
             back.style.alignSelf = Align.Center;
             back.style.height = 44;
             back.style.width = 200;
             back.style.marginTop = 8;
-            Root.Add(back);
+            back.style.flexShrink = 0f;
+            col.Add(back);
 
             BuildTableHeader();
             ShowTab(0);
@@ -170,7 +178,7 @@ namespace Fts.Views
                     vm.Played.ToString(), vm.Wins.ToString(), vm.Draws.ToString(), vm.Losses.ToString(),
                     vm.GoalsFor.ToString(), vm.GoalsAgainst.ToString(), vm.GoalDifference.ToString(),
                     vm.Points.ToString(),
-                    Color.white);
+                    Color.white, vm.Crest);
                 if (vm.IsUser)
                     row.style.backgroundColor = UserRowColor;
                 _tableList.Add(row);
@@ -182,14 +190,21 @@ namespace Fts.Views
             _roundLabel.text = roundLabel;
             _fixtureList.Clear();
             foreach (FixtureRowVm vm in rows)
-                _fixtureList.Add(ListRow(vm.Label, vm.IsUser));
+                _fixtureList.Add(FixtureRow(vm));
         }
 
         public void SetScorers(IReadOnlyList<ScorerRowVm> rows)
         {
             _scorerList.Clear();
             foreach (ScorerRowVm vm in rows)
-                _scorerList.Add(ListRow(vm.Label, vm.IsUser));
+                _scorerList.Add(ListRow(vm.Label, vm.IsUser, vm.Crest));
+        }
+
+        /// <summary>Empty-state illustration for the scorers tab early in the season (task 6.8).</summary>
+        public void SetScorersEmpty(VisualElement emptyState)
+        {
+            _scorerList.Clear();
+            _scorerList.Add(emptyState);
         }
 
         private void BuildTableHeader()
@@ -199,19 +214,30 @@ namespace Fts.Views
                 _tr("league.col.pos"), _tr("league.col.club"),
                 _tr("league.col.p"), _tr("league.col.w"), _tr("league.col.d"), _tr("league.col.l"),
                 _tr("league.col.gf"), _tr("league.col.ga"), _tr("league.col.gd"), _tr("league.col.pts"),
-                HeaderColor));
+                HeaderColor, null));
         }
 
         private static VisualElement TableRow(
             string pos, string club, string p, string w, string d, string l,
-            string gf, string ga, string gd, string pts, Color textColor)
+            string gf, string ga, string gd, string pts, Color textColor, VisualElement crest)
         {
             var row = new VisualElement();
             row.style.flexDirection = FlexDirection.Row;
-            row.style.height = 24;
+            row.style.height = 26;
             row.style.alignItems = Align.Center;
 
             row.Add(Cell(pos, 30, textColor));
+
+            // Fixed-width crest slot keeps every column aligned (header passes null → empty slot).
+            var crestSlot = new VisualElement();
+            crestSlot.style.width = 24;
+            crestSlot.style.height = 20;
+            crestSlot.style.marginRight = 4;
+            crestSlot.style.alignItems = Align.Center;
+            crestSlot.style.justifyContent = Justify.Center;
+            if (crest != null) crestSlot.Add(crest);
+            row.Add(crestSlot);
+
             var clubCell = Cell(club, 0, textColor);
             clubCell.style.flexGrow = 1f;
             clubCell.style.unityTextAlign = TextAnchor.MiddleLeft;
@@ -238,16 +264,68 @@ namespace Fts.Views
             return label;
         }
 
-        private static VisualElement ListRow(string text, bool isUser)
+        /// <summary>A list row with an optional leading crest (scorers).</summary>
+        private static VisualElement ListRow(string text, bool isUser, VisualElement crest)
         {
+            var row = new VisualElement();
+            row.style.flexDirection = FlexDirection.Row;
+            row.style.alignItems = Align.Center;
+            row.style.height = 26;
+            if (isUser)
+                row.style.backgroundColor = UserRowColor;
+
+            var slot = new VisualElement();
+            slot.style.width = 24;
+            slot.style.height = 20;
+            slot.style.marginRight = 6;
+            slot.style.alignItems = Align.Center;
+            slot.style.justifyContent = Justify.Center;
+            if (crest != null) slot.Add(crest);
+            row.Add(slot);
+
             var label = new Label(text);
             label.style.fontSize = 13;
             label.style.color = Color.white;
-            label.style.height = 24;
+            label.style.flexGrow = 1f;
             label.style.unityTextAlign = TextAnchor.MiddleLeft;
-            if (isUser)
-                label.style.backgroundColor = UserRowColor;
-            return label;
+            row.Add(label);
+            return row;
+        }
+
+        /// <summary>A fixture row: home crest · result/vs text · away crest (task 6.8).</summary>
+        private static VisualElement FixtureRow(FixtureRowVm vm)
+        {
+            var row = new VisualElement();
+            row.style.flexDirection = FlexDirection.Row;
+            row.style.alignItems = Align.Center;
+            row.style.height = 26;
+            if (vm.IsUser)
+                row.style.backgroundColor = UserRowColor;
+
+            row.Add(CrestSlot(vm.HomeCrest));
+
+            var label = new Label(vm.Label);
+            label.style.fontSize = 13;
+            label.style.color = Color.white;
+            label.style.flexGrow = 1f;
+            label.style.unityTextAlign = TextAnchor.MiddleLeft;
+            label.style.marginLeft = 2;
+            label.style.marginRight = 2;
+            row.Add(label);
+
+            row.Add(CrestSlot(vm.AwayCrest));
+            return row;
+        }
+
+        private static VisualElement CrestSlot(VisualElement crest)
+        {
+            var slot = new VisualElement();
+            slot.style.width = 22;
+            slot.style.height = 20;
+            slot.style.alignItems = Align.Center;
+            slot.style.justifyContent = Justify.Center;
+            if (crest != null) slot.Add(crest);
+            return slot;
         }
     }
 }

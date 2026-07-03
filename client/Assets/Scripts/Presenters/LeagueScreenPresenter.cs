@@ -19,6 +19,7 @@ namespace Fts.Presenters
         private readonly ScreenNavigator _navigator;
         private readonly CareerState _career;
         private readonly ILocalizationService _loc;
+        private readonly ClubIdentityService _identity;
         private readonly LeagueView _view;
 
         private int _selectedRound = 1;
@@ -26,11 +27,13 @@ namespace Fts.Presenters
 
         public VisualElement View => _view.Root;
 
-        public LeagueScreenPresenter(ScreenNavigator navigator, CareerState career, ILocalizationService loc)
+        public LeagueScreenPresenter(
+            ScreenNavigator navigator, CareerState career, ILocalizationService loc, ClubIdentityService identity)
         {
             _navigator = navigator;
             _career = career;
             _loc = loc;
+            _identity = identity;
             _view = new LeagueView(loc.Tr);
         }
 
@@ -110,7 +113,8 @@ namespace Fts.Presenters
                     GoalsAgainst = row.GoalsAgainst,
                     GoalDifference = row.GoalDifference,
                     Points = row.Points,
-                    IsUser = row.ClubId == _career.UserClubId
+                    IsUser = row.ClubId == _career.UserClubId,
+                    Crest = Crest(row.ClubId, 18f)
                 });
             }
 
@@ -138,7 +142,9 @@ namespace Fts.Presenters
                     Label = f.Played
                         ? _loc.Tr("league.fixture.result", home, f.HomeGoals, f.AwayGoals, away)
                         : _loc.Tr("league.fixture.vs", home, away),
-                    IsUser = f.Involves(_career.UserClubId)
+                    IsUser = f.Involves(_career.UserClubId),
+                    HomeCrest = Crest(f.HomeClubId, 18f),
+                    AwayCrest = Crest(f.AwayClubId, 18f)
                 });
             }
 
@@ -170,15 +176,27 @@ namespace Fts.Presenters
                 rows.Add(new ScorerRowVm
                 {
                     Label = _loc.Tr("league.scorer_row", i + 1, player, ClubName(tally.ClubId), tally.Goals),
-                    IsUser = tally.ClubId == _career.UserClubId
+                    IsUser = tally.ClubId == _career.UserClubId,
+                    Crest = Crest(tally.ClubId, 18f)
                 });
             }
 
-            // Empty state (task 6.2): early in the season nobody has scored yet.
+            // Empty-state illustration (task 6.8) when nobody has scored yet early in the season.
             if (rows.Count == 0)
-                rows.Add(new ScorerRowVm { Label = _loc.Tr("league.no_scorers"), IsUser = false });
+            {
+                _view.SetScorersEmpty(EmptyState.Build("league", _loc.Tr("league.no_scorers")));
+                return;
+            }
 
             _view.SetScorers(rows);
+        }
+
+        /// <summary>A small club crest for a table/fixture/scorer row (task 6.8).</summary>
+        private VisualElement Crest(int clubId, float size)
+        {
+            Club club = _career.FindClub(clubId);
+            string initials = club?.ShortName ?? "?";
+            return Crests.Badge(_identity.Visual(clubId), size, initials, UiKit.Surface);
         }
 
         private int DefaultRound()

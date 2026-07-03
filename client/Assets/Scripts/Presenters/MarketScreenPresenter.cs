@@ -34,6 +34,7 @@ namespace Fts.Presenters
         private readonly ILocalizationService _loc;
         private readonly ScoutingService _scouting;
         private readonly OverlayHost _overlay;
+        private readonly ClubIdentityService _identity;
         private readonly MarketView _view;
         private readonly TransferBalance _cfg = new BalanceConfig().Transfer;
 
@@ -53,7 +54,8 @@ namespace Fts.Presenters
             ISaveRepository saveRepository,
             ILocalizationService loc,
             ScoutingService scouting,
-            OverlayHost overlay)
+            OverlayHost overlay,
+            ClubIdentityService identity)
         {
             _navigator = navigator;
             _career = career;
@@ -63,6 +65,7 @@ namespace Fts.Presenters
             _loc = loc;
             _scouting = scouting;
             _overlay = overlay;
+            _identity = identity;
             _view = new MarketView(loc.Tr);
         }
 
@@ -250,7 +253,7 @@ namespace Fts.Presenters
 
             if (rows.Count == 0)
             {
-                _view.AddInfoLine(_loc.Tr("market.buy_empty"));
+                _view.AddEmptyState("scouting", _loc.Tr("market.buy_empty"));
                 return;
             }
 
@@ -271,14 +274,18 @@ namespace Fts.Presenters
                 _view.AddPlayerRow(new MarketRowVm
                 {
                     PlayerId = p.Id,
-                    Primary = _loc.Tr("market.buy_row", p.FullName, club.Name),
-                    Sub = ScoutedSub(p),
+                    Name = _loc.Tr("market.buy_row", p.FullName, club.Name),
+                    RoleAbbr = RoleName(p.Role),
+                    RoleGroup = RoleFormat.Group(p.Role),
+                    Age = p.Age.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    Ovr = ScoutedOvr(p),
                     Value = MoneyFormat.Short(_market.ValueOf(p, club.Id)),
                     Tag = shortlisted ? _loc.Tr("market.tag.shortlisted") : string.Empty,
                     ActionAText = shortlisted ? "★" : "☆",
                     ActionAHighlighted = shortlisted,
                     ActionBText = _loc.Tr("market.buy"),
-                    ActionBEnabled = window.IsOpen && sa.CanSell(p, _cfg)
+                    ActionBEnabled = window.IsOpen && sa.CanSell(p, _cfg),
+                    Avatar = Avatar(p, club.Id)
                 });
                 shown++;
             }
@@ -309,21 +316,25 @@ namespace Fts.Presenters
                 _view.AddPlayerRow(new MarketRowVm
                 {
                     PlayerId = p.Id,
-                    Primary = p.FullName,
-                    Sub = _loc.Tr("market.player_sub", RoleName(p.Role), p.Age, PlayerRating.Overall(p)),
+                    Name = p.FullName,
+                    RoleAbbr = RoleName(p.Role),
+                    RoleGroup = RoleFormat.Group(p.Role),
+                    Age = p.Age.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    Ovr = PlayerRating.Overall(p).ToString(System.Globalization.CultureInfo.InvariantCulture),
                     Value = MoneyFormat.Short(_market.ValueOf(p, userClub.Id)),
                     Tag = listed ? _loc.Tr("market.tag.listed", MoneyFormat.Short(ask)) : string.Empty,
                     ActionAText = listed ? _loc.Tr("market.unlist") : _loc.Tr("market.list"),
                     ActionAHighlighted = listed,
                     ActionBText = _loc.Tr("market.sell_to"),
-                    ActionBEnabled = window.IsOpen && canSell
+                    ActionBEnabled = window.IsOpen && canSell,
+                    Avatar = Avatar(p, userClub.Id)
                 });
             }
 
             _view.AddSectionLabel(_loc.Tr("market.incoming_offers"));
             if (_career.IncomingOffers.Count == 0)
             {
-                _view.AddInfoLine(_loc.Tr("market.no_offers"));
+                _view.AddEmptyState("inbox", _loc.Tr("market.no_offers"));
                 return;
             }
 
@@ -380,7 +391,7 @@ namespace Fts.Presenters
         {
             if (_career.TransferNews.Count == 0)
             {
-                _view.AddInfoLine(_loc.Tr("market.no_news"));
+                _view.AddEmptyState("market", _loc.Tr("market.no_news"));
                 return;
             }
 
@@ -478,18 +489,18 @@ namespace Fts.Presenters
         }
 
         /// <summary>
-        /// The Buy-row sub line: role · age · scouted overall. The overall is a range that narrows
-        /// with scouting knowledge (task 5.4b), shown as the exact number only once fully scouted —
-        /// so the user buys on what his scouts actually know.
+        /// The Buy-row scouted overall (task 5.4b): a range that narrows with scouting knowledge,
+        /// shown as the exact number only once fully scouted — so the user buys on what his scouts
+        /// actually know.
         /// </summary>
-        private string ScoutedSub(Player p)
+        private string ScoutedOvr(Player p)
         {
             int knowledge = _scouting.KnowledgeOf(p.Id);
             if (knowledge >= _scouting.MaxKnowledge)
-                return _loc.Tr("market.player_sub", RoleName(p.Role), p.Age, PlayerRating.Overall(p));
+                return PlayerRating.Overall(p).ToString(System.Globalization.CultureInfo.InvariantCulture);
 
             ScoutedRange ovr = _scouting.Report(p).Overall;
-            return _loc.Tr("market.player_sub_range", RoleName(p.Role), p.Age, ovr.Min, ovr.Max);
+            return _loc.Tr("scouting.ovr_range", ovr.Min, ovr.Max);
         }
 
         private string RoleFilterText() =>
@@ -503,5 +514,9 @@ namespace Fts.Presenters
 
         private string RoleName(PositionRole role) =>
             _loc.Tr("role." + role.ToString().ToLowerInvariant());
+
+        /// <summary>A player portrait placeholder in his club's kit colours (task 6.8).</summary>
+        private VisualElement Avatar(Player p, int clubId) =>
+            Crests.Avatar(_identity.Visual(clubId), 34f, p.FullName);
     }
 }

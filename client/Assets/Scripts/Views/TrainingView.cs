@@ -38,50 +38,52 @@ namespace Fts.Views
         {
             Root = new VisualElement();
             Root.style.flexGrow = 1f;
-            Root.style.backgroundColor = UiKit.PanelGray;
-            Root.style.paddingTop = 12;
-            Root.style.paddingBottom = 12;
-            Root.style.paddingLeft = 16;
-            Root.style.paddingRight = 16;
+            Root.style.backgroundColor = UiKit.Background;
+            Root.style.paddingTop = UiKit.SpaceSm;
+            Root.style.paddingBottom = UiKit.SpaceSm;
+            Root.style.paddingLeft = UiKit.SpaceMd;
+            Root.style.paddingRight = UiKit.SpaceMd;
 
-            var title = UiKit.Title(tr("training.title"));
-            title.style.fontSize = 28;
-            title.style.marginBottom = 2;
-            Root.Add(title);
+            var col = UiKit.CenteredColumn(680f);
+            col.style.flexGrow = 1f;
+            Root.Add(col);
 
-            _header = UiKit.Subtitle(string.Empty);
-            _header.style.marginBottom = 8;
-            Root.Add(_header);
+            _header = UiKit.Header(string.Empty);
+            _header.style.unityTextAlign = TextAnchor.MiddleCenter;
+            _header.style.marginBottom = UiKit.SpaceSm;
+            col.Add(_header);
 
-            Root.Add(SectionLabel(tr("training.team_caption")));
+            col.Add(SectionLabel(tr("training.team_caption")));
             _teamFocusButton = CycleButton(() => TeamFocusCycleClicked?.Invoke());
-            Root.Add(_teamFocusButton);
+            col.Add(_teamFocusButton);
 
             _teamHint = new Label(string.Empty);
-            _teamHint.style.color = new Color(1f, 1f, 1f, 0.7f);
+            _teamHint.style.color = UiKit.TextMuted;
             _teamHint.style.fontSize = 13;
             _teamHint.style.whiteSpace = WhiteSpace.Normal;
-            _teamHint.style.maxWidth = 420;
-            _teamHint.style.marginBottom = 6;
-            Root.Add(_teamHint);
+            _teamHint.style.marginBottom = UiKit.SpaceSm;
+            col.Add(_teamHint);
 
-            Root.Add(SectionLabel(tr("training.roster_caption")));
+            col.Add(SectionLabel(tr("training.roster_caption")));
             _rosterList = new ScrollView();
             _rosterList.style.flexGrow = 1f;
-            Root.Add(_rosterList);
+            _rosterList.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
+            col.Add(_rosterList);
 
             var footer = new VisualElement();
             footer.style.flexDirection = FlexDirection.Row;
             footer.style.justifyContent = Justify.Center;
-            footer.style.marginTop = 10;
+            footer.style.marginTop = UiKit.SpaceSm;
+            footer.style.flexShrink = 0f;
             footer.Add(FooterButton(tr("training.save"), () => SaveClicked?.Invoke()));
             footer.Add(FooterButton(tr("common.back"), () => BackClicked?.Invoke()));
-            Root.Add(footer);
+            col.Add(footer);
 
-            _status = UiKit.Subtitle(string.Empty);
-            _status.style.marginTop = 4;
+            _status = UiKit.Caption(string.Empty);
+            _status.style.marginTop = UiKit.SpaceXs;
             _status.style.alignSelf = Align.Center;
-            Root.Add(_status);
+            _status.style.flexShrink = 0f;
+            col.Add(_status);
         }
 
         public void SetHeader(string text) => _header.text = text;
@@ -99,10 +101,12 @@ namespace Fts.Views
                 var row = new VisualElement();
                 row.style.flexDirection = FlexDirection.Row;
                 row.style.alignItems = Align.Center;
-                row.style.height = 36;
-                row.style.marginBottom = 2;
-                row.style.paddingLeft = 8;
-                row.style.backgroundColor = new Color(1f, 1f, 1f, 0.06f);
+                row.style.height = 44;
+                row.style.marginBottom = 4;
+                row.style.paddingLeft = 10;
+                row.style.paddingRight = 6;
+                row.style.backgroundColor = UiKit.Surface;
+                UiKit.Round(row, UiKit.RadiusSm);
 
                 var name = new Label(vm.Label);
                 name.style.flexGrow = 1f;
@@ -112,9 +116,9 @@ namespace Fts.Views
 
                 var focusButton = new Button(() => IndividualFocusCycleClicked?.Invoke(playerId)) { text = vm.FocusLabel };
                 focusButton.style.width = 150;
-                focusButton.style.height = 30;
+                focusButton.style.height = 32;
                 focusButton.style.fontSize = 13;
-                focusButton.style.marginRight = 6;
+                focusButton.style.flexShrink = 0f;
                 row.Add(focusButton);
 
                 _rosterList.Add(row);
@@ -134,11 +138,11 @@ namespace Fts.Views
         private static Button CycleButton(Action onClick)
         {
             var button = new Button(onClick);
-            button.style.height = 40;
+            button.style.height = 42;
             button.style.fontSize = 15;
             button.style.unityTextAlign = TextAnchor.MiddleLeft;
             button.style.marginBottom = 4;
-            button.style.maxWidth = 420;
+            button.style.width = Length.Percent(100);
             return button;
         }
 

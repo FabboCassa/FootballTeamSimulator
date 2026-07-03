@@ -8,14 +8,18 @@ namespace Fts.Views
     public sealed class MarketRowVm
     {
         public int PlayerId;
-        public string Primary;
-        public string Sub;
-        public string Value;
-        public string Tag;            // optional badge, e.g. "LISTED €5M" or "shortlisted"
+        public string Name;           // "player — club" (buy) or "player" (sell) — its own cell
+        public string RoleAbbr;       // localized role abbreviation (coloured cell)
+        public int RoleGroup;         // 0 GK · 1 def · 2 mid · 3 att (cell colour)
+        public string Age;            // its own cell
+        public string Ovr;            // scouted/exact overall — its own cell
+        public string Value;          // its own cell
+        public string Tag;            // optional badge, e.g. "LISTED €5M" or "shortlisted" (muted after name)
         public string ActionAText;    // shortlist toggle (Buy) / List toggle (Sell)
         public bool ActionAHighlighted;
         public string ActionBText;    // Buy / Sell
         public bool ActionBEnabled;
+        public VisualElement Avatar;  // player portrait placeholder in club kit colours (task 6.8)
     }
 
     /// <summary>A selectable club when the user is choosing whom to sell a player to.</summary>
@@ -72,68 +76,77 @@ namespace Fts.Views
         {
             Root = new VisualElement();
             Root.style.flexGrow = 1f;
-            Root.style.backgroundColor = UiKit.PanelGray;
-            Root.style.paddingTop = 12;
-            Root.style.paddingBottom = 12;
-            Root.style.paddingLeft = 16;
-            Root.style.paddingRight = 16;
+            Root.style.backgroundColor = UiKit.Background;
+            Root.style.paddingTop = UiKit.SpaceSm;
+            Root.style.paddingBottom = UiKit.SpaceSm;
+            Root.style.paddingLeft = UiKit.SpaceMd;
+            Root.style.paddingRight = UiKit.SpaceMd;
 
-            var title = UiKit.Title(tr("market.title"));
-            title.style.fontSize = 28;
-            title.style.marginBottom = 2;
-            Root.Add(title);
+            // Centred, capped-width column so the market reads like the rest of the app (6.9).
+            var col = UiKit.CenteredColumn(760f);
+            col.style.flexGrow = 1f;
+            Root.Add(col);
+
+            // Header block that never shrinks — this is what kept the filter chips from being
+            // squeezed up into the tab row / first list row on short viewports (6.9 overlap bug).
+            var header = new VisualElement();
+            header.style.flexShrink = 0f;
+            col.Add(header);
 
             _budget = new Label(string.Empty);
-            _budget.style.fontSize = 16;
+            _budget.style.fontSize = 18;
             _budget.style.unityFontStyleAndWeight = FontStyle.Bold;
-            _budget.style.color = Color.white;
+            _budget.style.color = UiKit.TextPrimary;
             _budget.style.marginBottom = 2;
-            Root.Add(_budget);
+            header.Add(_budget);
 
             _window = new Label(string.Empty);
             _window.style.fontSize = 13;
             _window.style.whiteSpace = WhiteSpace.Normal;
-            _window.style.maxWidth = 460;
-            _window.style.marginBottom = 6;
-            Root.Add(_window);
+            _window.style.marginBottom = UiKit.SpaceSm;
+            header.Add(_window);
 
             var tabs = new VisualElement();
             tabs.style.flexDirection = FlexDirection.Row;
-            tabs.style.marginBottom = 6;
+            tabs.style.flexShrink = 0f;
+            tabs.style.marginBottom = UiKit.SpaceSm;
             _tabBuy = Tab(tr("market.tab.buy"), () => TabSelected?.Invoke(0));
             _tabSell = Tab(tr("market.tab.sell"), () => TabSelected?.Invoke(1));
             _tabNews = Tab(tr("market.tab.news"), () => TabSelected?.Invoke(2));
             tabs.Add(_tabBuy);
             tabs.Add(_tabSell);
             tabs.Add(_tabNews);
-            Root.Add(tabs);
+            header.Add(tabs);
 
             _filterBar = new VisualElement();
             _filterBar.style.flexDirection = FlexDirection.Row;
             _filterBar.style.flexWrap = Wrap.Wrap;
-            _filterBar.style.marginBottom = 4;
+            _filterBar.style.flexShrink = 0f;
+            _filterBar.style.marginBottom = UiKit.SpaceSm;
             _roleFilter = Chip(() => RoleFilterClicked?.Invoke());
             _sort = Chip(() => SortClicked?.Invoke());
             _shortlistOnly = Chip(() => ShortlistOnlyClicked?.Invoke());
             _filterBar.Add(_roleFilter);
             _filterBar.Add(_sort);
             _filterBar.Add(_shortlistOnly);
-            Root.Add(_filterBar);
+            header.Add(_filterBar);
 
             _content = new ScrollView();
             _content.style.flexGrow = 1f;
-            Root.Add(_content);
+            _content.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
+            col.Add(_content);
 
             var footer = new VisualElement();
             footer.style.flexDirection = FlexDirection.Row;
             footer.style.justifyContent = Justify.Center;
-            footer.style.marginTop = 6;
+            footer.style.flexShrink = 0f;
+            footer.style.marginTop = UiKit.SpaceSm;
             var back = UiKit.MenuButton(tr("common.back"), () => BackClicked?.Invoke());
             back.style.width = 160;
             back.style.height = 44;
             back.style.fontSize = 16;
+            col.Add(footer);
             footer.Add(back);
-            Root.Add(footer);
         }
 
         public void SetBudget(string text) => _budget.text = text;
@@ -173,6 +186,12 @@ namespace Fts.Views
             _content.Add(label);
         }
 
+        /// <summary>An empty-state illustration for a tab with nothing to show (task 6.8).</summary>
+        public void AddEmptyState(string iconId, string message)
+        {
+            _content.Add(EmptyState.Build(iconId, message));
+        }
+
         public void AddInfoLine(string text)
         {
             var label = new Label(text);
@@ -188,44 +207,46 @@ namespace Fts.Views
         {
             int playerId = vm.PlayerId;
 
-            var row = new VisualElement();
-            row.style.flexDirection = FlexDirection.Row;
-            row.style.alignItems = Align.Center;
-            row.style.marginBottom = 3;
-            row.style.paddingLeft = 8;
-            row.style.paddingRight = 6;
-            row.style.paddingTop = 4;
-            row.style.paddingBottom = 4;
-            row.style.backgroundColor = new Color(1f, 1f, 1f, 0.06f);
+            VisualElement row = PlayerRowKit.Row();
 
-            var info = new VisualElement();
-            info.style.flexGrow = 1f;
+            if (vm.Avatar != null)
+            {
+                vm.Avatar.style.marginRight = 5;
+                row.Add(vm.Avatar);
+            }
 
-            var primary = new Label(vm.Primary);
-            primary.style.fontSize = 14;
-            primary.style.color = Color.white;
-            info.Add(primary);
-
-            string subText = vm.Sub;
+            // Name cell (grows), with the optional LISTED/shortlisted tag muted after the name.
+            VisualElement nameCell = PlayerRowKit.Cell(0, grow: true);
+            nameCell.style.justifyContent = Justify.FlexStart;
+            var name = new Label(vm.Name);
+            name.style.fontSize = 13;
+            name.style.unityFontStyleAndWeight = FontStyle.Bold;
+            name.style.color = UiKit.TextPrimary;
+            name.style.flexShrink = 1f;
+            name.style.whiteSpace = WhiteSpace.NoWrap;
+            name.style.overflow = Overflow.Hidden;
+            name.style.textOverflow = TextOverflow.Ellipsis;
+            nameCell.Add(name);
             if (!string.IsNullOrEmpty(vm.Tag))
-                subText = string.IsNullOrEmpty(subText) ? vm.Tag : subText + "   " + vm.Tag;
-            var sub = new Label(subText);
-            sub.style.fontSize = 11;
-            sub.style.color = new Color(1f, 1f, 1f, 0.6f);
-            info.Add(sub);
-            row.Add(info);
+            {
+                var tag = new Label(vm.Tag);
+                tag.style.fontSize = 11;
+                tag.style.color = UiKit.Amber;
+                tag.style.marginLeft = 8;
+                tag.style.flexShrink = 0f;
+                nameCell.Add(tag);
+            }
+            row.Add(nameCell);
 
-            var value = new Label(vm.Value);
-            value.style.fontSize = 13;
-            value.style.color = new Color(0.7f, 0.9f, 0.7f, 1f);
-            value.style.minWidth = 70;
-            value.style.unityTextAlign = TextAnchor.MiddleRight;
-            value.style.marginRight = 8;
-            row.Add(value);
+            row.Add(PlayerRowKit.RoleChip(vm.RoleAbbr, vm.RoleGroup));
+            row.Add(PlayerRowKit.TextCell(vm.Age, 42f, TextAnchor.MiddleCenter));
+            row.Add(PlayerRowKit.TextCell(vm.Ovr, 92f, TextAnchor.MiddleCenter));
+            row.Add(PlayerRowKit.TextCell(vm.Value, 86f, TextAnchor.MiddleRight, bold: true, color: UiKit.Positive));
 
             if (!string.IsNullOrEmpty(vm.ActionAText))
             {
                 var a = SmallButton(vm.ActionAText, () => RowActionA?.Invoke(playerId));
+                a.style.height = PlayerRowKit.RowHeight;
                 if (vm.ActionAHighlighted)
                     a.style.backgroundColor = new Color(0.30f, 0.45f, 0.70f, 0.9f);
                 row.Add(a);
@@ -234,6 +255,7 @@ namespace Fts.Views
             if (!string.IsNullOrEmpty(vm.ActionBText))
             {
                 var b = SmallButton(vm.ActionBText, () => RowActionB?.Invoke(playerId));
+                b.style.height = PlayerRowKit.RowHeight;
                 b.SetEnabled(vm.ActionBEnabled);
                 row.Add(b);
             }

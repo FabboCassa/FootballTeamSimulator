@@ -27,8 +27,9 @@ namespace Fts.Presenters
     {
         private const int MaxSubstitutions = 5;
 
-        private static readonly Color UserColor = new Color(0.30f, 0.78f, 0.80f);
-        private static readonly Color OpponentColor = new Color(0.86f, 0.32f, 0.28f);
+        // Minimum kit-colour separation (Unity RGB, 0..~1.73) so the two sides read apart on the
+        // pitch; below this the away side falls back to its secondary/accent (task 6.8 clash guard).
+        private const float MinKitColorDistance = 0.42f;
 
         private readonly ScreenNavigator _navigator;
         private readonly CareerState _career;
@@ -36,6 +37,7 @@ namespace Fts.Presenters
         private readonly UserMatchContextHolder _contextHolder;
         private readonly ISaveRepository _saveRepository;
         private readonly ILocalizationService _loc;
+        private readonly ClubIdentityService _identity;
         private readonly MatchWatchView _view;
         private readonly InMatchPanel _panel;
         // Condition-aware + within-match fatigue, matching the headless advance (task 4.2);
@@ -80,7 +82,8 @@ namespace Fts.Presenters
             UserMatchLog matchLog,
             UserMatchContextHolder contextHolder,
             ISaveRepository saveRepository,
-            ILocalizationService loc)
+            ILocalizationService loc,
+            ClubIdentityService identity)
         {
             _navigator = navigator;
             _career = career;
@@ -88,6 +91,7 @@ namespace Fts.Presenters
             _contextHolder = contextHolder;
             _saveRepository = saveRepository;
             _loc = loc;
+            _identity = identity;
             _view = new MatchWatchView(loc.Tr);
             _panel = new InMatchPanel(loc.Tr);
         }
@@ -103,9 +107,18 @@ namespace Fts.Presenters
             _plan = _context.Plan;
             InitInterventionState();
 
-            bool userIsHome = _context.UserIsHome;
-            _homeColor = userIsHome ? UserColor : OpponentColor;
-            _awayColor = userIsHome ? OpponentColor : UserColor;
+            // Kit colours from the club identities (task 6.8), with a clash guard so two
+            // similarly-coloured clubs still read apart on the pitch.
+            int homeId = _context.Fixture.HomeClubId;
+            int awayId = _context.Fixture.AwayClubId;
+            ClubVisual homeVis = _identity.Visual(homeId);
+            ClubVisual awayVis = _identity.Visual(awayId);
+            _homeColor = homeVis.Primary;
+            _awayColor = PickAwayColor(homeVis.Primary, awayVis);
+
+            _view.SetCrests(
+                Crests.Badge(homeVis, 30f, ClubShort(homeId), UiKit.Background),
+                Crests.Badge(awayVis, 30f, ClubShort(awayId), UiKit.Background));
 
             _view.Root.Add(_panel.Root); // overlay on top of the HUD/pitch/controls
             _panel.SetVisible(false);
@@ -554,6 +567,25 @@ namespace Fts.Presenters
         private string RoleAbbr(PositionRole role) => _loc.Tr("role." + role.ToString().ToLowerInvariant());
 
         private string ClubName(int clubId) => _career.FindClub(clubId)?.Name ?? $"Club {clubId}";
+
+        private string ClubShort(int clubId) => _career.FindClub(clubId)?.ShortName ?? "?";
+
+        /// <summary>
+        /// The away side's on-pitch colour (task 6.8): its primary, unless that's too close to the
+        /// home primary — then its secondary, then its accent, so the two teams never blur together.
+        /// </summary>
+        private static Color PickAwayColor(Color home, ClubVisual away)
+        {
+            if (ColorDistance(home, away.Primary) >= MinKitColorDistance) return away.Primary;
+            if (ColorDistance(home, away.Secondary) >= MinKitColorDistance) return away.Secondary;
+            return away.Accent;
+        }
+
+        private static float ColorDistance(Color a, Color b)
+        {
+            float dr = a.r - b.r, dg = a.g - b.g, db = a.b - b.b;
+            return Mathf.Sqrt(dr * dr + dg * dg + db * db);
+        }
 
         private string PlayerName(int clubId, int playerId)
         {

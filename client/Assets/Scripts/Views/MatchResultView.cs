@@ -27,6 +27,8 @@ namespace Fts.Views
 
         private readonly Label _score;
         private readonly Label _subtitle;
+        private readonly VisualElement _homeCrestSlot;
+        private readonly VisualElement _awayCrestSlot;
         private readonly ScrollView _events;
 
         public MatchResultView(Func<string, string> tr)
@@ -36,9 +38,26 @@ namespace Fts.Views
             var title = UiKit.Subtitle(tr("match.title"));
             Root.Add(title);
 
+            // Scoreboard: home crest · score · away crest (task 6.8).
+            var scoreboard = new VisualElement();
+            scoreboard.style.flexDirection = FlexDirection.Row;
+            scoreboard.style.alignItems = Align.Center;
+            scoreboard.style.justifyContent = Justify.Center;
+            scoreboard.style.marginBottom = UiKit.SpaceSm;
+
+            _homeCrestSlot = CrestSlot();
+            _homeCrestSlot.style.marginRight = UiKit.SpaceMd;
+            scoreboard.Add(_homeCrestSlot);
+
             _score = UiKit.Title(string.Empty);
             _score.style.fontSize = 32;
-            Root.Add(_score);
+            _score.style.marginBottom = 0;
+            scoreboard.Add(_score);
+
+            _awayCrestSlot = CrestSlot();
+            _awayCrestSlot.style.marginLeft = UiKit.SpaceMd;
+            scoreboard.Add(_awayCrestSlot);
+            Root.Add(scoreboard);
 
             _subtitle = UiKit.Subtitle(string.Empty);
             Root.Add(_subtitle);
@@ -57,6 +76,25 @@ namespace Fts.Views
         public void SetScore(string score) => _score.text = score;
 
         public void SetSubtitle(string subtitle) => _subtitle.text = subtitle;
+
+        /// <summary>Shows the two clubs' crests either side of the scoreline (task 6.8).</summary>
+        public void SetCrests(VisualElement home, VisualElement away)
+        {
+            _homeCrestSlot.Clear();
+            if (home != null) _homeCrestSlot.Add(home);
+            _awayCrestSlot.Clear();
+            if (away != null) _awayCrestSlot.Add(away);
+        }
+
+        private static VisualElement CrestSlot()
+        {
+            var slot = new VisualElement();
+            slot.style.width = 44;
+            slot.style.height = 44;
+            slot.style.alignItems = Align.Center;
+            slot.style.justifyContent = Justify.Center;
+            return slot;
+        }
 
         public void SetEvents(IReadOnlyList<MatchEventRowVm> rows)
         {

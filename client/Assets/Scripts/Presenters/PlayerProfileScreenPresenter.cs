@@ -32,6 +32,7 @@ namespace Fts.Presenters
         private readonly ILocalizationService _loc;
         private readonly PlayerProfileTarget _target;
         private readonly ScoutingService _scouting;
+        private readonly ClubIdentityService _identity;
         private readonly PlayerProfileView _view;
 
         public VisualElement View => _view.Root;
@@ -41,13 +42,15 @@ namespace Fts.Presenters
             CareerState career,
             ILocalizationService loc,
             PlayerProfileTarget target,
-            ScoutingService scouting)
+            ScoutingService scouting,
+            ClubIdentityService identity)
         {
             _navigator = navigator;
             _career = career;
             _loc = loc;
             _target = target;
             _scouting = scouting;
+            _identity = identity;
             _view = new PlayerProfileView(loc.Tr);
         }
 
@@ -69,6 +72,7 @@ namespace Fts.Presenters
             Player player = _career.FindPlayer(_target.PlayerId);
             if (player == null)
             {
+                _view.SetAvatar(null);
                 _view.SetIdentity(_loc.Tr("profile.unknown_player"), string.Empty, string.Empty);
                 _view.SetConditionVisible(false);
                 _view.SetCondition(new ProfileConditionVm());
@@ -78,6 +82,13 @@ namespace Fts.Presenters
             }
 
             bool owned = IsOwned(player.Id);
+
+            // Portrait placeholder in his club's kit colours (task 6.8).
+            int clubId = ClubIdOf(player.Id);
+            if (clubId >= 0)
+                _view.SetAvatar(Crests.Avatar(_identity.Visual(clubId), 72f, player.FullName));
+            else
+                _view.SetAvatar(null);
 
             // Money lives only on the Market screen now (task 6.7 feedback) — no value line here.
             _view.SetSeasonGoals(_loc.Tr("profile.season_goals", SeasonGoals(player.Id)));
@@ -190,5 +201,16 @@ namespace Fts.Presenters
 
         private string RoleName(PositionRole role) =>
             _loc.Tr("role." + role.ToString().ToLowerInvariant());
+
+        /// <summary>The id of the club that holds this player, or -1 if he's a free agent / not found.</summary>
+        private int ClubIdOf(int playerId)
+        {
+            foreach (League league in _career.Leagues)
+                foreach (Club club in league.Clubs)
+                    foreach (Player p in club.Squad.Players)
+                        if (p.Id == playerId)
+                            return club.Id;
+            return -1;
+        }
     }
 }

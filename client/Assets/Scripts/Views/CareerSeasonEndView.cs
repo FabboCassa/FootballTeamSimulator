@@ -11,6 +11,7 @@ namespace Fts.Views
         public int ClubId;
         public string Text;        // "Club X · Div 1 · stature 70"
         public string ActionLabel; // "Accept"
+        public VisualElement Crest; // offering club's crest (task 6.8)
     }
 
     /// <summary>
@@ -123,6 +124,12 @@ namespace Fts.Views
                 row.style.paddingLeft = 8;
                 row.style.paddingRight = 8;
                 row.style.backgroundColor = new Color(1f, 1f, 1f, 0.06f);
+
+                if (vm.Crest != null)
+                {
+                    vm.Crest.style.marginRight = 8;
+                    row.Add(vm.Crest);
+                }
 
                 var label = new Label(vm.Text);
                 label.style.flexGrow = 1f;

@@ -21,6 +21,7 @@ namespace Fts.Presenters
         private readonly CareerState _career;
         private readonly CareerService _service;
         private readonly ILocalizationService _loc;
+        private readonly ClubIdentityService _identity;
         private readonly CareerSeasonEndView _view;
 
         private CareerSeasonReport _report;
@@ -31,12 +32,14 @@ namespace Fts.Presenters
             ScreenNavigator navigator,
             CareerState career,
             CareerService service,
-            ILocalizationService loc)
+            ILocalizationService loc,
+            ClubIdentityService identity)
         {
             _navigator = navigator;
             _career = career;
             _service = service;
             _loc = loc;
+            _identity = identity;
             _view = new CareerSeasonEndView(loc.Tr);
         }
 
@@ -74,7 +77,9 @@ namespace Fts.Presenters
                 {
                     ClubId = offer.ClubId,
                     Text = _loc.Tr("careerend.offer", offer.ClubName, offer.Division, offer.RequiredReputation),
-                    ActionLabel = _loc.Tr("careerend.accept")
+                    ActionLabel = _loc.Tr("careerend.accept"),
+                    Crest = Crests.Badge(_identity.Visual(offer.ClubId), 32f,
+                        _career.FindClub(offer.ClubId)?.ShortName ?? "?", UiKit.Surface)
                 });
             }
             _view.SetOffers(rows);

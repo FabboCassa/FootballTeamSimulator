@@ -9,7 +9,11 @@ namespace Fts.Views
     public sealed class ScoutingRowVm
     {
         public int PlayerId;
-        public string Label;          // name — club (role · age · OVR range)
+        public string Name;           // "player — club" (its own cell)
+        public string RoleAbbr;       // localized role abbreviation (coloured cell)
+        public int RoleGroup;         // 0 GK · 1 def · 2 mid · 3 att (cell colour)
+        public string Age;            // its own cell
+        public string OvrText;        // scouted OVR / range (its own cell)
         public int KnowledgePercent;  // 0..100
         public string KnowledgeText;  // e.g. "62%" or "fully scouted"
         public bool Watching;
@@ -44,46 +48,49 @@ namespace Fts.Views
         {
             Root = new VisualElement();
             Root.style.flexGrow = 1f;
-            Root.style.backgroundColor = UiKit.PanelGray;
-            Root.style.paddingTop = 12;
-            Root.style.paddingBottom = 12;
-            Root.style.paddingLeft = 16;
-            Root.style.paddingRight = 16;
+            Root.style.backgroundColor = UiKit.Background;
+            Root.style.paddingTop = UiKit.SpaceSm;
+            Root.style.paddingBottom = UiKit.SpaceSm;
+            Root.style.paddingLeft = UiKit.SpaceMd;
+            Root.style.paddingRight = UiKit.SpaceMd;
 
-            var title = UiKit.Title(tr("scouting.title"));
-            title.style.fontSize = 28;
-            title.style.marginBottom = 2;
-            Root.Add(title);
+            var col = UiKit.CenteredColumn(760f);
+            col.style.flexGrow = 1f;
+            Root.Add(col);
 
-            _header = UiKit.Subtitle(string.Empty);
-            _header.style.marginBottom = 4;
-            Root.Add(_header);
+            _header = UiKit.Header(string.Empty);
+            _header.style.unityTextAlign = TextAnchor.MiddleCenter;
+            _header.style.marginBottom = UiKit.SpaceXs;
+            col.Add(_header);
 
             var help = new Label(tr("scouting.help"));
-            help.style.color = new Color(1f, 1f, 1f, 0.7f);
+            help.style.color = UiKit.TextMuted;
             help.style.fontSize = 13;
             help.style.whiteSpace = WhiteSpace.Normal;
-            help.style.maxWidth = 440;
-            help.style.marginBottom = 6;
-            Root.Add(help);
+            help.style.unityTextAlign = TextAnchor.MiddleCenter;
+            help.style.marginBottom = UiKit.SpaceSm;
+            col.Add(help);
 
             var filterBar = new VisualElement();
             filterBar.style.flexDirection = FlexDirection.Row;
-            filterBar.style.marginBottom = 4;
+            filterBar.style.flexShrink = 0f;
+            filterBar.style.marginBottom = UiKit.SpaceXs;
             _roleFilterButton = ChipButton(string.Empty, () => RoleFilterClicked?.Invoke());
             filterBar.Add(_roleFilterButton);
-            Root.Add(filterBar);
+            col.Add(filterBar);
 
             _list = new ScrollView();
             _list.style.flexGrow = 1f;
-            Root.Add(_list);
+            _list.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
+            col.Add(_list);
 
             var footer = new VisualElement();
             footer.style.flexDirection = FlexDirection.Row;
             footer.style.justifyContent = Justify.Center;
-            footer.style.marginTop = 6;
+            footer.style.flexShrink = 0f;
+            footer.style.marginTop = UiKit.SpaceSm;
             footer.Add(FooterButton(tr("common.back"), () => BackClicked?.Invoke()));
-            Root.Add(footer);
+            col.Add(footer);
         }
 
         public void SetHeader(string text) => _header.text = text;
@@ -96,38 +103,36 @@ namespace Fts.Views
             {
                 int playerId = vm.PlayerId;
 
-                var row = new VisualElement();
-                row.style.flexDirection = FlexDirection.Row;
-                row.style.alignItems = Align.Center;
-                row.style.height = 40;
-                row.style.marginBottom = 2;
-                row.style.paddingLeft = 8;
-                row.style.paddingRight = 8;
-                row.style.backgroundColor = vm.Watching
-                    ? new Color(0.30f, 0.45f, 0.70f, 0.45f)
-                    : new Color(1f, 1f, 1f, 0.06f);
+                VisualElement row = PlayerRowKit.Row();
                 row.RegisterCallback<ClickEvent>(_ => PlayerSelected?.Invoke(playerId));
 
-                var name = new Label(vm.Label);
-                name.style.flexGrow = 1f;
-                name.style.fontSize = 13;
-                name.style.unityTextAlign = TextAnchor.MiddleLeft;
-                row.Add(name);
+                // Distinct cell rectangles: name · coloured role · age · OVR · knowledge · action.
+                row.Add(PlayerRowKit.TextCell(vm.Name, 0, TextAnchor.MiddleLeft, grow: true, bold: true));
+                row.Add(PlayerRowKit.RoleChip(vm.RoleAbbr, vm.RoleGroup));
+                row.Add(PlayerRowKit.TextCell(vm.Age, 46f, TextAnchor.MiddleCenter));
+                row.Add(PlayerRowKit.TextCell(vm.OvrText, 96f, TextAnchor.MiddleCenter));
 
-                row.Add(KnowledgeBar(vm.KnowledgePercent));
-
+                VisualElement knowCell = PlayerRowKit.Cell(168f);
+                knowCell.style.justifyContent = Justify.FlexStart;
+                VisualElement bar = KnowledgeBar(vm.KnowledgePercent);
+                bar.style.marginRight = 8;
+                knowCell.Add(bar);
                 var pct = new Label(vm.KnowledgeText);
-                pct.style.width = 92;
-                pct.style.fontSize = 12;
-                pct.style.unityTextAlign = TextAnchor.MiddleRight;
-                pct.style.marginRight = 8;
-                pct.style.color = new Color(1f, 1f, 1f, 0.8f);
-                row.Add(pct);
+                pct.style.fontSize = 11;
+                pct.style.color = UiKit.TextMuted;
+                pct.style.whiteSpace = WhiteSpace.NoWrap;
+                pct.style.overflow = Overflow.Hidden;
+                pct.style.textOverflow = TextOverflow.Ellipsis;
+                knowCell.Add(pct);
+                row.Add(knowCell);
 
                 var toggle = new Button(() => WatchToggleClicked?.Invoke(playerId)) { text = vm.ToggleText };
-                toggle.style.width = 72;
-                toggle.style.height = 30;
-                toggle.style.fontSize = 12;
+                toggle.style.width = 88;
+                toggle.style.height = PlayerRowKit.RowHeight;
+                toggle.style.fontSize = 13;
+                toggle.style.marginLeft = 0;
+                toggle.style.marginRight = 0;
+                toggle.style.flexShrink = 0f;
                 toggle.SetEnabled(vm.ToggleEnabled);
                 // Don't let the toggle click bubble up to the row (which opens the profile).
                 toggle.RegisterCallback<ClickEvent>(e => e.StopPropagation());
@@ -142,9 +147,9 @@ namespace Fts.Views
             int clamped = percent < 0 ? 0 : (percent > 100 ? 100 : percent);
 
             var track = new VisualElement();
-            track.style.width = 60;
+            track.style.width = 54;
             track.style.height = 8;
-            track.style.marginRight = 8;
+            track.style.flexShrink = 0f;
             track.style.backgroundColor = BarTrackColor;
             track.style.borderTopLeftRadius = 3;
             track.style.borderTopRightRadius = 3;

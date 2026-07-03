@@ -244,6 +244,7 @@ namespace Fts.Presenters
                 {
                     PlayerId = player.Id,
                     Role = RoleAbbr(player.Role),
+                    RoleGroup = RoleFormat.Group(player.Role),
                     Name = player.FullName,
                     Age = player.Age,
                     Rating = PlayerRating.Overall(player),

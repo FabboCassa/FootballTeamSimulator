@@ -152,8 +152,11 @@ namespace Fts.Presenters
             return new ScoutingRowVm
             {
                 PlayerId = e.Player.Id,
-                Label = _loc.Tr("scouting.row", e.Player.FullName, e.ClubName,
-                    RoleName(e.Player.Role), e.Player.Age, ovr),
+                Name = $"{e.Player.FullName} — {e.ClubName}",
+                RoleAbbr = RoleName(e.Player.Role),
+                RoleGroup = RoleFormat.Group(e.Player.Role),
+                Age = e.Player.Age.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                OvrText = ovr,
                 KnowledgePercent = pct,
                 KnowledgeText = knowledgeText,
                 Watching = e.Watching,

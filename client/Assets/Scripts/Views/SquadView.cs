@@ -12,6 +12,7 @@ namespace Fts.Views
     {
         public int PlayerId;
         public string Role;
+        public int RoleGroup;   // 0 GK · 1 def · 2 mid · 3 att → reparto colour
         public string Name;
         public int Age;
         public int Rating;
@@ -234,7 +235,7 @@ namespace Fts.Views
             role.style.width = 34;
             role.style.fontSize = 11;
             role.style.unityFontStyleAndWeight = FontStyle.Bold;
-            role.style.color = UiKit.Accent;
+            role.style.color = PlayerRowKit.RoleColor(vm.RoleGroup); // reparto colour (task 6.9)
             role.style.unityTextAlign = TextAnchor.MiddleLeft;
             row.Add(role);
 

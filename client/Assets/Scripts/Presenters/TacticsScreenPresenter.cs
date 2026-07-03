@@ -66,7 +66,6 @@ namespace Fts.Presenters
             _working = Clone(_career.UserTactic) ?? TacticPlan.Neutral();
             _view.SetHeader(_loc.Tr("tactics.header", _club.Name));
             _view.SetStatus(string.Empty);
-            ShowOpponent();
             Refresh();
         }
 
@@ -159,33 +158,6 @@ namespace Fts.Presenters
             return level * 100 / max;
         }
 
-        private void ShowOpponent()
-        {
-            Fixture next = NextUserFixture();
-            if (next == null)
-            {
-                _view.SetOpponent(_loc.Tr("tactics.opponent_none"));
-                _view.SetOpponentShape(null, false);
-                return;
-            }
-
-            bool home = next.HomeClubId == _career.UserClubId;
-            int opponentId = home ? next.AwayClubId : next.HomeClubId;
-            Club opponent = _career.FindClub(opponentId);
-            string name = opponent?.Name ?? $"Club {opponentId}";
-            string venue = _loc.Tr(home ? "hub.home_short" : "hub.away_short");
-            int ovr = opponent != null ? SquadStrength(opponent) : 0;
-
-            _view.SetOpponent(_loc.Tr("tactics.opponent_line", name, venue, ovr));
-
-            // Their likely best XI, shown mirrored (attacking the other way). Their exact
-            // instructions stay unknown (the text line already says so); this is shape only.
-            if (opponent != null)
-                _view.SetOpponentShape(BuildShapeTokens(LineupSelector.BestEleven(opponent), _identity.Visual(opponentId)), true);
-            else
-                _view.SetOpponentShape(null, false);
-        }
-
         /// <summary>Read-only pitch tokens for a resolved XI: role/OVR discs in the club's colours.</summary>
         private List<PitchTokenVm> BuildShapeTokens(Lineup lineup, ClubVisual visual)
         {
@@ -221,30 +193,6 @@ namespace Fts.Presenters
                 return string.Empty;
             int space = fullName.LastIndexOf(' ');
             return space >= 0 && space < fullName.Length - 1 ? fullName.Substring(space + 1) : fullName;
-        }
-
-        private Fixture NextUserFixture()
-        {
-            Fixture next = null;
-            foreach (Fixture f in _career.Season.Fixtures)
-            {
-                if (f.Played || !f.Involves(_career.UserClubId))
-                    continue;
-                if (next == null || f.Day < next.Day)
-                    next = f;
-            }
-
-            return next;
-        }
-
-        /// <summary>Average overall of the opponent's best eleven — a coarse strength readout.</summary>
-        private static int SquadStrength(Club club)
-        {
-            Lineup eleven = LineupSelector.BestEleven(club);
-            int sum = 0;
-            foreach (LineupSlot slot in eleven.Slots)
-                sum += PlayerRating.OverallFor(slot.Player, slot.Role);
-            return eleven.Slots.Count > 0 ? sum / eleven.Slots.Count : 0;
         }
 
         private string FormationName(Formation formation) =>

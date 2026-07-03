@@ -119,7 +119,9 @@ namespace Fts.Presenters
                 rows.Add(new SupportRowVm
                 {
                     PlayerId = p.Id,
-                    Label = $"{p.FullName} ({RoleName(p.Role)})",
+                    Name = p.FullName,
+                    RoleAbbr = RoleName(p.Role),
+                    RoleGroup = RoleFormat.Group(p.Role),
                     FormArrow = cd.FormArrow,
                     MoraleFace = cd.MoraleFace,
                     Fitness = cd.Fitness,

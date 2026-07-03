@@ -134,6 +134,20 @@ namespace Fts.Views
             return e;
         }
 
+        /// <summary>
+        /// A centred, capped-width content column (task 6.9) so pushed screens don't sprawl
+        /// edge-to-edge on wide desktop viewports — content stays readable and every screen
+        /// lines up the same way. Add a screen's body into this and add this into the page/scroll.
+        /// </summary>
+        public static VisualElement CenteredColumn(float maxWidth = 720f)
+        {
+            var e = new VisualElement();
+            e.style.width = Length.Percent(100);
+            e.style.maxWidth = maxWidth;
+            e.style.alignSelf = Align.Center;
+            return e;
+        }
+
         /// <summary>A rounded surface card with a hairline border.</summary>
         public static VisualElement Card()
         {

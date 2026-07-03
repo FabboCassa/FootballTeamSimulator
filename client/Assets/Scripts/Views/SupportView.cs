@@ -9,7 +9,9 @@ namespace Fts.Views
     public sealed class SupportRowVm
     {
         public int PlayerId;
-        public string Label;
+        public string Name;        // player name (its own cell)
+        public string RoleAbbr;    // localized role abbreviation (coloured cell)
+        public int RoleGroup;      // 0 GK · 1 def · 2 mid · 3 att (cell colour)
         public string FormArrow;
         public string MoraleFace;
         public int Fitness;
@@ -51,55 +53,61 @@ namespace Fts.Views
         {
             Root = new VisualElement();
             Root.style.flexGrow = 1f;
-            Root.style.backgroundColor = UiKit.PanelGray;
-            Root.style.paddingTop = 12;
-            Root.style.paddingBottom = 12;
-            Root.style.paddingLeft = 16;
-            Root.style.paddingRight = 16;
+            Root.style.backgroundColor = UiKit.Background;
+            Root.style.paddingTop = UiKit.SpaceSm;
+            Root.style.paddingBottom = UiKit.SpaceSm;
+            Root.style.paddingLeft = UiKit.SpaceMd;
+            Root.style.paddingRight = UiKit.SpaceMd;
 
-            var title = UiKit.Title(tr("support.title"));
-            title.style.fontSize = 28;
-            title.style.marginBottom = 2;
-            Root.Add(title);
+            var col = UiKit.CenteredColumn(680f);
+            col.style.flexGrow = 1f;
+            Root.Add(col);
 
-            _header = UiKit.Subtitle(string.Empty);
-            _header.style.marginBottom = 4;
-            Root.Add(_header);
+            _header = UiKit.Header(string.Empty);
+            _header.style.unityTextAlign = TextAnchor.MiddleCenter;
+            _header.style.marginBottom = UiKit.SpaceXs;
+            col.Add(_header);
 
             _help = new Label(tr("support.help"));
-            _help.style.color = new Color(1f, 1f, 1f, 0.7f);
+            _help.style.color = UiKit.TextMuted;
             _help.style.fontSize = 13;
             _help.style.whiteSpace = WhiteSpace.Normal;
-            _help.style.maxWidth = 440;
-            _help.style.marginBottom = 6;
-            Root.Add(_help);
+            _help.style.unityTextAlign = TextAnchor.MiddleCenter;
+            _help.style.marginBottom = UiKit.SpaceSm;
+            col.Add(_help);
 
-            Root.Add(SectionLabel(tr("support.roster_caption")));
+            col.Add(SectionLabel(tr("support.roster_caption")));
             _rosterList = new ScrollView();
             _rosterList.style.flexGrow = 1f;
-            Root.Add(_rosterList);
+            _rosterList.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
+            col.Add(_rosterList);
 
             _selectedCaption = SectionLabel(string.Empty);
-            Root.Add(_selectedCaption);
+            _selectedCaption.style.flexShrink = 0f;
+            col.Add(_selectedCaption);
 
             _actionRow = new VisualElement();
             _actionRow.style.flexDirection = FlexDirection.Row;
             _actionRow.style.flexWrap = Wrap.Wrap;
-            Root.Add(_actionRow);
+            _actionRow.style.justifyContent = Justify.Center;
+            _actionRow.style.flexShrink = 0f;
+            col.Add(_actionRow);
 
-            _status = UiKit.Subtitle(string.Empty);
-            _status.style.marginTop = 6;
+            _status = UiKit.Caption(string.Empty);
+            _status.style.marginTop = UiKit.SpaceSm;
             _status.style.whiteSpace = WhiteSpace.Normal;
-            _status.style.maxWidth = 440;
+            _status.style.unityTextAlign = TextAnchor.MiddleCenter;
             _status.style.alignSelf = Align.Center;
-            Root.Add(_status);
+            _status.style.flexShrink = 0f;
+            col.Add(_status);
 
             var footer = new VisualElement();
             footer.style.flexDirection = FlexDirection.Row;
             footer.style.justifyContent = Justify.Center;
-            footer.style.marginTop = 6;
+            footer.style.marginTop = UiKit.SpaceSm;
+            footer.style.flexShrink = 0f;
             footer.Add(FooterButton(tr("common.back"), () => BackClicked?.Invoke()));
-            Root.Add(footer);
+            col.Add(footer);
         }
 
         public void SetHeader(string text) => _header.text = text;
@@ -113,26 +121,20 @@ namespace Fts.Views
             {
                 int playerId = vm.PlayerId;
 
-                var row = new VisualElement();
-                row.style.flexDirection = FlexDirection.Row;
-                row.style.alignItems = Align.Center;
-                row.style.height = 36;
-                row.style.marginBottom = 2;
-                row.style.paddingLeft = 8;
-                row.style.paddingRight = 8;
-                row.style.backgroundColor = vm.Selected
-                    ? new Color(0.30f, 0.45f, 0.70f, 0.55f)
-                    : new Color(1f, 1f, 1f, 0.06f);
+                VisualElement row = PlayerRowKit.Row();
                 row.tooltip = vm.Tooltip ?? string.Empty;
                 row.RegisterCallback<ClickEvent>(_ => PlayerSelected?.Invoke(playerId));
 
-                var name = new Label(vm.Label);
-                name.style.flexGrow = 1f;
-                name.style.fontSize = 13;
-                name.style.unityTextAlign = TextAnchor.MiddleLeft;
-                row.Add(name);
+                // Name (its own cell, tinted when selected) · coloured role cell · condition cell.
+                VisualElement nameCell = PlayerRowKit.TextCell(vm.Name, 0, TextAnchor.MiddleLeft, grow: true, bold: true);
+                PlayerRowKit.SetSelected(nameCell, vm.Selected);
+                row.Add(nameCell);
 
-                ConditionStrip.Append(row, vm.FormArrow, vm.MoraleFace, vm.Fitness);
+                row.Add(PlayerRowKit.RoleChip(vm.RoleAbbr, vm.RoleGroup));
+
+                VisualElement condCell = PlayerRowKit.Cell(128f);
+                ConditionStrip.Append(condCell, vm.FormArrow, vm.MoraleFace, vm.Fitness);
+                row.Add(condCell);
 
                 _rosterList.Add(row);
             }
