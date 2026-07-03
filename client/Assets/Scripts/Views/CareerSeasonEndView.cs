@@ -35,59 +35,82 @@ namespace Fts.Views
 
         public CareerSeasonEndView(Func<string, string> tr)
         {
+            // Task 6.9: aligned with the shell look — themed navy background, a centred capped-width
+            // column, a section Header instead of the old giant Title, and a Card for the summary block.
             Root = new VisualElement();
             Root.style.flexGrow = 1f;
-            Root.style.backgroundColor = UiKit.PanelGray;
-            Root.style.paddingTop = 12;
-            Root.style.paddingBottom = 12;
-            Root.style.paddingLeft = 16;
-            Root.style.paddingRight = 16;
+            Root.style.backgroundColor = UiKit.Background;
+            Root.style.paddingTop = UiKit.SpaceSm;
+            Root.style.paddingBottom = UiKit.SpaceSm;
+            Root.style.paddingLeft = UiKit.SpaceMd;
+            Root.style.paddingRight = UiKit.SpaceMd;
 
-            var title = UiKit.Title(tr("careerend.title"));
-            title.style.fontSize = 28;
-            Root.Add(title);
+            var col = UiKit.CenteredColumn(680f);
+            col.style.flexGrow = 1f;
+            Root.Add(col);
 
-            _summary = UiKit.Subtitle(string.Empty);
+            var header = UiKit.Header(tr("careerend.title"));
+            header.style.unityTextAlign = TextAnchor.MiddleCenter;
+            header.style.marginBottom = UiKit.SpaceSm;
+            col.Add(header);
+
+            var panel = UiKit.Card();
+            _summary = new Label(string.Empty);
+            _summary.style.fontSize = 14;
+            _summary.style.color = Color.white;
             _summary.style.whiteSpace = WhiteSpace.Normal;
-            Root.Add(_summary);
+            _summary.style.marginBottom = 4;
+            panel.Add(_summary);
 
-            _standing = UiKit.Subtitle(string.Empty);
-            _standing.style.fontSize = 15;
-            Root.Add(_standing);
+            _standing = new Label(string.Empty);
+            _standing.style.fontSize = 13;
+            _standing.style.color = new Color(1f, 1f, 1f, 0.85f);
+            _standing.style.whiteSpace = WhiteSpace.Normal;
+            panel.Add(_standing);
+            col.Add(panel);
 
             _banner = new Label(string.Empty);
-            _banner.style.fontSize = 16;
+            _banner.style.fontSize = 15;
             _banner.style.unityFontStyleAndWeight = FontStyle.Bold;
             _banner.style.color = Color.white;
             _banner.style.whiteSpace = WhiteSpace.Normal;
             _banner.style.marginTop = 6;
             _banner.style.marginBottom = 8;
-            _banner.style.paddingTop = 6;
-            _banner.style.paddingBottom = 6;
-            _banner.style.paddingLeft = 10;
-            _banner.style.paddingRight = 10;
-            Root.Add(_banner);
+            _banner.style.paddingTop = 8;
+            _banner.style.paddingBottom = 8;
+            _banner.style.paddingLeft = 12;
+            _banner.style.paddingRight = 12;
+            UiKit.Round(_banner, UiKit.RadiusSm);
+            col.Add(_banner);
 
-            var offersCaption = new Label(tr("careerend.offers_caption"));
-            offersCaption.style.color = new Color(1f, 1f, 1f, 0.7f);
-            offersCaption.style.fontSize = 13;
-            offersCaption.style.marginBottom = 4;
-            Root.Add(offersCaption);
+            col.Add(SectionLabel(tr("careerend.offers_caption")));
 
             _offers = new ScrollView();
             _offers.style.flexGrow = 1f;
-            Root.Add(_offers);
+            _offers.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
+            col.Add(_offers);
 
             var footer = new VisualElement();
             footer.style.flexDirection = FlexDirection.Row;
             footer.style.justifyContent = Justify.Center;
-            footer.style.marginTop = 10;
+            footer.style.marginTop = UiKit.SpaceSm;
+            footer.style.flexShrink = 0f;
             _stayButton = UiKit.MenuButton(tr("careerend.stay"), () => StayClicked?.Invoke());
             _stayButton.style.width = 220;
             _stayButton.style.height = 48;
             _stayButton.style.fontSize = 17;
             footer.Add(_stayButton);
-            Root.Add(footer);
+            col.Add(footer);
+        }
+
+        private static Label SectionLabel(string caption)
+        {
+            var label = new Label(caption);
+            label.style.color = new Color(1f, 1f, 1f, 0.7f);
+            label.style.fontSize = 13;
+            label.style.marginTop = 8;
+            label.style.marginBottom = 4;
+            return label;
         }
 
         public void SetSummary(string text) => _summary.text = text;
@@ -119,11 +142,14 @@ namespace Fts.Views
                 var row = new VisualElement();
                 row.style.flexDirection = FlexDirection.Row;
                 row.style.alignItems = Align.Center;
-                row.style.height = 50;
-                row.style.marginBottom = 3;
-                row.style.paddingLeft = 8;
-                row.style.paddingRight = 8;
-                row.style.backgroundColor = new Color(1f, 1f, 1f, 0.06f);
+                row.style.minHeight = 52;
+                row.style.marginBottom = 4;
+                row.style.paddingTop = 6;
+                row.style.paddingBottom = 6;
+                row.style.paddingLeft = 10;
+                row.style.paddingRight = 10;
+                row.style.backgroundColor = UiKit.Surface;
+                UiKit.Round(row, UiKit.RadiusSm);
 
                 if (vm.Crest != null)
                 {
@@ -133,6 +159,8 @@ namespace Fts.Views
 
                 var label = new Label(vm.Text);
                 label.style.flexGrow = 1f;
+                label.style.flexShrink = 1f;
+                label.style.minWidth = 0;
                 label.style.fontSize = 14;
                 label.style.color = Color.white;
                 label.style.whiteSpace = WhiteSpace.Normal;
@@ -141,6 +169,7 @@ namespace Fts.Views
                 var accept = new Button(() => AcceptClicked?.Invoke(clubId)) { text = vm.ActionLabel };
                 accept.style.width = 130;
                 accept.style.height = 40;
+                accept.style.flexShrink = 0f;
                 accept.style.fontSize = 14;
                 row.Add(accept);
 

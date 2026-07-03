@@ -37,25 +37,31 @@ namespace Fts.Views
 
         public NegotiationView(Func<string, string> tr)
         {
+            // Task 6.9: shell-aligned — navy background, a centred capped-width column, a section
+            // Header instead of the old giant Title, and the shared UiKit.Card for the info box.
             Root = new VisualElement();
             Root.style.flexGrow = 1f;
-            Root.style.backgroundColor = UiKit.PanelGray;
-            Root.style.paddingTop = 14;
-            Root.style.paddingBottom = 14;
-            Root.style.paddingLeft = 18;
-            Root.style.paddingRight = 18;
+            Root.style.backgroundColor = UiKit.Background;
+            Root.style.paddingTop = UiKit.SpaceSm;
+            Root.style.paddingBottom = UiKit.SpaceSm;
+            Root.style.paddingLeft = UiKit.SpaceMd;
+            Root.style.paddingRight = UiKit.SpaceMd;
 
-            _title = UiKit.Title(tr("negotiation.title"));
-            _title.style.fontSize = 26;
+            var col = UiKit.CenteredColumn(560f);
+            col.style.flexGrow = 1f;
+            Root.Add(col);
+
+            _title = UiKit.Header(tr("negotiation.title"));
+            _title.style.unityTextAlign = TextAnchor.MiddleCenter;
             _title.style.marginBottom = 8;
-            Root.Add(_title);
+            col.Add(_title);
 
-            _infoBox = Card();
-            Root.Add(_infoBox);
+            _infoBox = UiKit.Card();
+            col.Add(_infoBox);
 
             _amountCaption = SectionLabel(tr("negotiation.your_amount"));
             _amountCaption.style.marginTop = 10;
-            Root.Add(_amountCaption);
+            col.Add(_amountCaption);
 
             var amountRow = new VisualElement();
             amountRow.style.flexDirection = FlexDirection.Row;
@@ -73,20 +79,20 @@ namespace Fts.Views
 
             _increment = StepButton("+", () => IncrementClicked?.Invoke());
             amountRow.Add(_increment);
-            Root.Add(amountRow);
+            col.Add(amountRow);
 
             _amountFormatted = new Label(string.Empty);
             _amountFormatted.style.fontSize = 15;
-            _amountFormatted.style.color = new Color(0.7f, 0.9f, 0.7f, 1f);
+            _amountFormatted.style.color = UiKit.Positive;
             _amountFormatted.style.marginTop = 2;
             _amountFormatted.style.marginBottom = 6;
-            Root.Add(_amountFormatted);
+            col.Add(_amountFormatted);
 
             _patience = new Label(string.Empty);
             _patience.style.fontSize = 12;
             _patience.style.color = new Color(1f, 1f, 1f, 0.6f);
             _patience.style.marginBottom = 6;
-            Root.Add(_patience);
+            col.Add(_patience);
 
             var actionRow = new VisualElement();
             actionRow.style.flexDirection = FlexDirection.Row;
@@ -96,24 +102,25 @@ namespace Fts.Views
             actionRow.Add(_primary);
             _secondary = ActionButton(() => SecondaryClicked?.Invoke());
             actionRow.Add(_secondary);
-            Root.Add(actionRow);
+            col.Add(actionRow);
 
             _status = UiKit.Subtitle(string.Empty);
             _status.style.whiteSpace = WhiteSpace.Normal;
-            _status.style.maxWidth = 460;
+            _status.style.unityTextAlign = TextAnchor.MiddleLeft;
             _status.style.marginTop = 2;
-            Root.Add(_status);
+            col.Add(_status);
 
             var footer = new VisualElement();
             footer.style.flexDirection = FlexDirection.Row;
             footer.style.justifyContent = Justify.Center;
             footer.style.marginTop = 6;
+            footer.style.flexShrink = 0f;
             var back = UiKit.MenuButton(tr("common.back"), () => BackClicked?.Invoke());
             back.style.width = 160;
             back.style.height = 44;
             back.style.fontSize = 16;
             footer.Add(back);
-            Root.Add(footer);
+            col.Add(footer);
         }
 
         public void SetTitle(string text) => _title.text = text;
@@ -171,17 +178,6 @@ namespace Fts.Views
                     return 1_000_000_000_000L;
             }
             return value;
-        }
-
-        private static VisualElement Card()
-        {
-            var box = new VisualElement();
-            box.style.backgroundColor = new Color(1f, 1f, 1f, 0.06f);
-            box.style.paddingTop = 8;
-            box.style.paddingBottom = 8;
-            box.style.paddingLeft = 10;
-            box.style.paddingRight = 10;
-            return box;
         }
 
         private static Label SectionLabel(string caption)

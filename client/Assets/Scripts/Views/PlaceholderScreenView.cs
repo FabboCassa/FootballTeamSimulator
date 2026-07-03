@@ -12,8 +12,9 @@ namespace Fts.Views
 
         public PlaceholderScreenView(string title, Func<string, string> tr)
         {
-            Root = UiKit.Screen(UiKit.PanelGray);
-            Root.Add(UiKit.Title(title));
+            // Task 6.9: navy background + a section Header (the shell top bar gives context).
+            Root = UiKit.Screen(UiKit.Background);
+            Root.Add(UiKit.Header(title));
             Root.Add(UiKit.Subtitle(tr("placeholder.note")));
             Root.Add(UiKit.MenuButton(tr("common.back"), () => BackClicked?.Invoke()));
         }

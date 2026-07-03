@@ -39,28 +39,34 @@ namespace Fts.Views
 
         public InboxView(Func<string, string> tr)
         {
+            // Task 6.9: shell-aligned — navy background, a centred capped-width column, and a section
+            // Header instead of the old giant Title (the shell top bar already gives context).
             Root = new VisualElement();
             Root.style.flexGrow = 1f;
-            Root.style.backgroundColor = UiKit.PanelGray;
-            Root.style.paddingTop = 12;
-            Root.style.paddingBottom = 12;
-            Root.style.paddingLeft = 16;
-            Root.style.paddingRight = 16;
+            Root.style.backgroundColor = UiKit.Background;
+            Root.style.paddingTop = UiKit.SpaceSm;
+            Root.style.paddingBottom = UiKit.SpaceSm;
+            Root.style.paddingLeft = UiKit.SpaceMd;
+            Root.style.paddingRight = UiKit.SpaceMd;
 
-            var title = UiKit.Title(tr("inbox.title"));
-            title.style.fontSize = 28;
-            title.style.marginBottom = 2;
-            Root.Add(title);
+            var col = UiKit.CenteredColumn(720f);
+            col.style.flexGrow = 1f;
+            Root.Add(col);
+
+            var header = UiKit.Header(tr("inbox.title"));
+            header.style.unityTextAlign = TextAnchor.MiddleCenter;
+            col.Add(header);
 
             _header = UiKit.Subtitle(string.Empty);
             _header.style.marginBottom = 6;
-            Root.Add(_header);
+            col.Add(_header);
 
             // Action bar: filter chip on the left, mark-all-read + clear on the right.
             var bar = new VisualElement();
             bar.style.flexDirection = FlexDirection.Row;
             bar.style.alignItems = Align.Center;
             bar.style.flexWrap = Wrap.Wrap; // task 6.6: chips wrap on narrow phones instead of overflowing
+            bar.style.flexShrink = 0f;
             bar.style.marginBottom = 6;
 
             _filterButton = ChipButton(string.Empty, () => FilterClicked?.Invoke());
@@ -72,14 +78,14 @@ namespace Fts.Views
 
             bar.Add(ChipButton(tr("inbox.mark_all_read"), () => MarkAllReadClicked?.Invoke()));
             bar.Add(ChipButton(tr("inbox.clear"), () => ClearClicked?.Invoke()));
-            Root.Add(bar);
+            col.Add(bar);
 
             // Task 6.6: vertical-only — the 6.4 device test showed a horizontal scrollbar when
             // a row's fixed parts (dot + tag + stamp) pushed past a narrow viewport.
             _list = new ScrollView(ScrollViewMode.Vertical);
             _list.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
             _list.style.flexGrow = 1f;
-            Root.Add(_list);
+            col.Add(_list);
 
             _empty = new Label(string.Empty);
             _empty.style.color = new Color(1f, 1f, 1f, 0.7f);
@@ -88,14 +94,15 @@ namespace Fts.Views
             _empty.style.unityTextAlign = TextAnchor.MiddleCenter;
             _empty.style.marginTop = 24;
             _empty.style.display = DisplayStyle.None;
-            Root.Add(_empty);
+            col.Add(_empty);
 
             var footer = new VisualElement();
             footer.style.flexDirection = FlexDirection.Row;
             footer.style.justifyContent = Justify.Center;
             footer.style.marginTop = 6;
+            footer.style.flexShrink = 0f;
             footer.Add(FooterButton(tr("common.back"), () => BackClicked?.Invoke()));
-            Root.Add(footer);
+            col.Add(footer);
         }
 
         public void SetHeader(string text) => _header.text = text;
