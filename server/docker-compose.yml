@@ -31,6 +31,29 @@ services:
       timeout: 3s
       retries: 10
 
+  api:
+    build:
+      # Context is the repo root so the shared Sim.Core / Contracts projects are in scope.
+      context: ..
+      dockerfile: server/Api/Dockerfile
+    container_name: fts-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_URLS: "http://+:8080"
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=fts;Username=fts;Password=fts_dev_password"
+      ConnectionStrings__Redis: "redis:6379"
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
 volumes:
   fts-pgdata:
   fts-redisdata:

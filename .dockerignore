@@ -1,0 +1,11 @@
+# Keep the Docker build context small and reproducible. The API build only needs
+# shared/ and server/ sources — never build artefacts, the Unity client, or git state.
+**/bin/
+**/obj/
+**/.vs/
+.git/
+.github/
+client/
+tools/
+**/*.user
+**/builds/
