@@ -421,5 +421,18 @@
   "dialog.accept_offer.message": "Cedere {0} al {1} per {2}?",
   "dialog.accept_offer.confirm": "Cedi",
   "market.toast.bought": "Preso {0}",
-  "market.toast.sold": "Ceduto {0}"
+  "market.toast.sold": "Ceduto {0}",
+  "hub.opponent_report": "Studia avversario",
+  "opponent.title": "Prossimo avversario: {0} ({1}, giornata {2})",
+  "opponent.home": "in casa",
+  "opponent.away": "in trasferta",
+  "opponent.strength": "Forza rosa (media miglior XI): {0}",
+  "opponent.formation": "Modulo probabile: {0}",
+  "opponent.tactic": "Tattica: {0}",
+  "opponent.tactic_neutral": "Bilanciata (default IA)",
+  "opponent.form_caption": "Forma recente",
+  "opponent.no_form": "Nessuna partita giocata.",
+  "opponent.shape_caption": "XI e modulo probabili",
+  "opponent.roster_caption": "Rosa — tocca un giocatore per il dettaglio osservato",
+  "opponent.none": "Nessuna partita in arrivo — la stagione è finita."
 }

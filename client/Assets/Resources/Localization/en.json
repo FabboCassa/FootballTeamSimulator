@@ -421,5 +421,18 @@
   "dialog.accept_offer.message": "Sell {0} to {1} for {2}?",
   "dialog.accept_offer.confirm": "Sell",
   "market.toast.bought": "Signed {0}",
-  "market.toast.sold": "Sold {0}"
+  "market.toast.sold": "Sold {0}",
+  "hub.opponent_report": "Scout Opponent",
+  "opponent.title": "Next opponent: {0} ({1}, round {2})",
+  "opponent.home": "home",
+  "opponent.away": "away",
+  "opponent.strength": "Squad strength (best XI avg): {0}",
+  "opponent.formation": "Likely formation: {0}",
+  "opponent.tactic": "Tactic: {0}",
+  "opponent.tactic_neutral": "Balanced (AI default)",
+  "opponent.form_caption": "Recent form",
+  "opponent.no_form": "No matches played yet.",
+  "opponent.shape_caption": "Likely XI & shape",
+  "opponent.roster_caption": "Squad — tap a player for scouted detail",
+  "opponent.none": "No upcoming match — the season is complete."
 }

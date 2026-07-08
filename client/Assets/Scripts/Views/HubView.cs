@@ -13,12 +13,14 @@ namespace Fts.Views
     public sealed class HubView
     {
         public event Action EndSeasonClicked;
+        public event Action OpponentReportClicked;
 
         public VisualElement Root { get; }
 
         private readonly Label _clubLabel;
         private readonly Label _statusLabel;
         private readonly Button _endSeasonButton;
+        private readonly Button _opponentReportButton;
         private readonly VisualElement _crestSlot;
         private readonly VisualElement _accentBar;
 
@@ -54,6 +56,14 @@ namespace Fts.Views
             _statusLabel.style.whiteSpace = WhiteSpace.Normal;
             _statusLabel.style.marginBottom = 0;
             card.Add(_statusLabel);
+
+            // A read-only pre-match scouting report on the next opponent (task 6.11). Shown on the
+            // status card while there's an upcoming match; opens a dedicated intel screen.
+            _opponentReportButton = UiKit.MenuButton(tr("hub.opponent_report"), () => OpponentReportClicked?.Invoke());
+            _opponentReportButton.style.width = Length.Percent(100);
+            _opponentReportButton.style.marginTop = UiKit.SpaceMd;
+            _opponentReportButton.style.marginBottom = 0;
+            card.Add(_opponentReportButton);
             Root.Add(card);
 
             _endSeasonButton = UiKit.PrimaryButton(tr("hub.end_season"), () => EndSeasonClicked?.Invoke());
@@ -80,5 +90,9 @@ namespace Fts.Views
         /// <summary>Season over: shows the End Season call-to-action.</summary>
         public void SetSeasonComplete(bool complete) =>
             _endSeasonButton.style.display = complete ? DisplayStyle.Flex : DisplayStyle.None;
+
+        /// <summary>Shows the opponent-report button only while there's an upcoming match (task 6.11).</summary>
+        public void SetOpponentReportVisible(bool visible) =>
+            _opponentReportButton.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
     }
 }

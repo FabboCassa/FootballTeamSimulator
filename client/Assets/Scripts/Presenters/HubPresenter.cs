@@ -77,6 +77,7 @@ namespace Fts.Presenters
         public void Enter()
         {
             _view.EndSeasonClicked += OnEndSeason;
+            _view.OpponentReportClicked += OnOpponentReport;
             _dayAdvancedSubscription = _broker.Subscribe<DayAdvancedMessage>(OnDayAdvanced);
             // Hub actions arrive as HubShortcutMessage from two publishers that both guarantee
             // the Hub is the top screen first: the 6.5 DesktopController (hotkeys, guarded) and
@@ -89,6 +90,7 @@ namespace Fts.Presenters
         public void Exit()
         {
             _view.EndSeasonClicked -= OnEndSeason;
+            _view.OpponentReportClicked -= OnOpponentReport;
             _dayAdvancedSubscription?.Dispose();
             _dayAdvancedSubscription = null;
             _shortcutSubscription?.Dispose();
@@ -168,8 +170,11 @@ namespace Fts.Presenters
             }
 
             _view.SetSeasonComplete(_seasonService.IsSeasonComplete);
+            _view.SetOpponentReportVisible(nextFixture != null);
             _view.SetStatus(_loc.Tr("hub.status.day", _career.Season.Year, _career.Season.CurrentDay) + " " + next + last);
         }
+
+        private void OnOpponentReport() => _navigator.Push<OpponentReportScreenPresenter>();
 
         /// <summary>Runs the guided first-run tutorial once per career (task 6.2), then marks it done.</summary>
         private void MaybeShowOnboarding()
