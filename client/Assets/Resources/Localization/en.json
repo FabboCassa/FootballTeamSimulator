@@ -54,7 +54,7 @@
   "squad.status.saved": "Lineup saved — used from the next match day.",
   "squad.bench_caption": "Bench",
   "squad.profile": "Profile",
-  "squad.pitch_hint": "Drag a player onto a slot, or tap to pick then tap a target.",
+  "squad.pitch_hint": "Drag a player onto a team-mate to swap, or onto open pitch to move him — his role follows where he stands.",
   "squad.selected": "{0} — {1} ({2})",
   "condition.tooltip.fitness": "Fitness {0}% — {1}",
   "condition.tooltip.form": "Form — {0}",

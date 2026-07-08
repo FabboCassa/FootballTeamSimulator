@@ -54,7 +54,7 @@
   "squad.status.saved": "Formazione salvata — usata dal prossimo giorno di partita.",
   "squad.bench_caption": "Panchina",
   "squad.profile": "Profilo",
-  "squad.pitch_hint": "Trascina un giocatore su uno slot, oppure tocca per selezionarlo e poi tocca la destinazione.",
+  "squad.pitch_hint": "Trascina un giocatore su un compagno per scambiarli, o sul campo libero per spostarlo — il ruolo segue dove si posiziona.",
   "squad.selected": "{0} — {1} ({2})",
   "condition.tooltip.fitness": "Condizione {0}% — {1}",
   "condition.tooltip.form": "Forma — {0}",

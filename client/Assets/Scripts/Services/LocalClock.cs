@@ -34,7 +34,10 @@ namespace Fts.Services
         // whole world's form/morale/fitness evolves each day via EvolveCondition below.
         // applyMatchFatigue also fades each side within the match (by avg stamina) with
         // a half-time recovery, so the fresher/better-conditioned side gains late.
-        private readonly SeasonProgressor _progressor = new SeasonProgressor(applyCondition: true, applyMatchFatigue: true);
+        // applyPositioning (task 6.10): the user's custom on-pitch shape tilts his side's
+        // ratings. AI clubs field clean best-XI presets (no custom positions) → identity, so
+        // their matches stay byte-identical; only the user's shape is affected.
+        private readonly SeasonProgressor _progressor = new SeasonProgressor(applyCondition: true, applyMatchFatigue: true, applyPositioning: true);
         private readonly TacticsBalance _tacticsConfig = new BalanceConfig().Tactics;
         // Development & ageing is live (task 4.4, superseding the 4.3 training-only tick):
         // every week the WHOLE world develops AND ages — the user club follows its chosen

@@ -111,6 +111,49 @@ namespace Fts.Views
             return slot;
         }
 
+        /// <summary>
+        /// The nearest token belonging to a DIFFERENT player, within
+        /// <paramref name="radiusFactor"/>×token diameter of the point — a swap target
+        /// (task 6.10). Returns its slot index, or -1 when the drop is on open turf
+        /// (so the owner can reposition the dragged player instead of swapping).
+        /// </summary>
+        public int NearestOtherToken(Vector2 panelPosition, int excludePlayerId, float radiusFactor)
+        {
+            float best = _tokenD * radiusFactor;
+            int slot = -1;
+            foreach (PitchToken t in _tokens)
+            {
+                if (t.SlotIndex < 0 || t.PlayerId == excludePlayerId)
+                    continue;
+                Rect wb = t.Element.worldBound;
+                var center = new Vector2(wb.center.x, wb.y + _tokenD * 0.5f);
+                float d = Vector2.Distance(panelPosition, center);
+                if (d < best) { best = d; slot = t.SlotIndex; }
+            }
+
+            return slot;
+        }
+
+        /// <summary>
+        /// Maps a panel-space point to normalized pitch coords (the inverse of the token
+        /// layout), for free positioning (task 6.10). X runs own-goal→attacked-goal (before
+        /// the mirror is undone), Y touchline→touchline, both clamped to [0,1]. onPitch is
+        /// false when the point falls well outside the letterboxed pitch.
+        /// </summary>
+        public (bool onPitch, float x, float y) ToNormalized(Vector2 panelPosition)
+        {
+            Rect wb = worldBound;
+            Rect fit = PitchGraphics.FitRect(wb.width, wb.height);
+            float lx = panelPosition.x - wb.x;
+            float ly = panelPosition.y - wb.y;
+            float fx = fit.width > 0f ? (lx - fit.x) / fit.width : 0.5f;
+            float fy = fit.height > 0f ? (ly - fit.y) / fit.height : 0.5f;
+
+            bool onPitch = fx >= -0.05f && fx <= 1.05f && fy >= -0.05f && fy <= 1.05f;
+            float nx = _mirror ? 1f - fx : fx;
+            return (onPitch, Mathf.Clamp01(nx), Mathf.Clamp01(fy));
+        }
+
         private void OnPaint(MeshGenerationContext mgc)
         {
             Rect r = contentRect;

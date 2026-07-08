@@ -4,6 +4,7 @@ using Fts.Services.Localization;
 using Fts.Services.Navigation;
 using Fts.Services.Persistence;
 using Fts.Views;
+using Sim.Core.Config;
 using Sim.Core.Domain;
 using Sim.Core.Match;
 using Sim.Core.Tactics;
@@ -28,6 +29,8 @@ namespace Fts.Presenters
         private readonly OverlayHost _overlay;
         private readonly ClubIdentityService _identity;
         private readonly SquadView _view;
+        // Zone-role bands + tilt config for free positioning (task 6.10); default balance.
+        private readonly PositioningBalance _positioning = new BalanceConfig().Positioning;
 
         private Club _club;
         private LineupPlan _working;
@@ -60,6 +63,7 @@ namespace Fts.Presenters
             _view.SlotTapped += OnSlotTapped;
             _view.BenchTapped += OnBenchTapped;
             _view.AssignRequested += OnAssignRequested;
+            _view.RepositionRequested += OnReposition;
             _view.ProfileClicked += OnProfile;
             _view.AutoClicked += OnAuto;
             _view.SaveClicked += OnSave;
@@ -79,6 +83,7 @@ namespace Fts.Presenters
             _view.SlotTapped -= OnSlotTapped;
             _view.BenchTapped -= OnBenchTapped;
             _view.AssignRequested -= OnAssignRequested;
+            _view.RepositionRequested -= OnReposition;
             _view.ProfileClicked -= OnProfile;
             _view.AutoClicked -= OnAuto;
             _view.SaveClicked -= OnSave;
@@ -139,6 +144,63 @@ namespace Fts.Presenters
         {
             AssignToSlot(slot, playerId);
             ClearSelection();
+        }
+
+        /// <summary>
+        /// Free positioning (task 6.10): a player dropped on open turf is moved to that spot,
+        /// and the ROLE he plays is re-resolved from the zone (a fullback dragged high on the
+        /// flank becomes a winger; the keeper is never moved). To keep one nudge a light tilt,
+        /// every other outfield slot is pinned to its formation anchor first, so the team's
+        /// shape tilt averages over the whole XI rather than swinging on a single player.
+        /// </summary>
+        private void OnReposition(int playerId, float x, float y)
+        {
+            int slot = SlotIndexOf(playerId);
+            if (slot < 0)
+                return; // only players already in the XI can be repositioned
+
+            LineupPlanSlot target = _working.Slots[slot];
+            if (target.Role == PositionRole.Goalkeeper)
+                return; // the keeper stays in goal
+
+            EnsureOutfieldAnchors();
+
+            int xp = ToPermille(x);
+            int yp = ToPermille(y);
+            target.PosXPermille = xp;
+            target.PosYPermille = yp;
+            target.Role = ZoneRole.Resolve(target.Role, new SlotPosition(xp, yp), _positioning);
+
+            ClearSelection(); // re-renders at the new spot with the new role badge
+        }
+
+        /// <summary>
+        /// Pins every outfield slot without a custom position to its formation anchor, so a
+        /// single repositioned player carries only ~1/10 of the team's shape tilt (matching the
+        /// Sim.Core intent that positions are stored for all outfield slots, or none).
+        /// </summary>
+        private void EnsureOutfieldAnchors()
+        {
+            var roles = new List<PositionRole>(_working.Slots.Count);
+            foreach (LineupPlanSlot s in _working.Slots)
+                roles.Add(s.Role);
+
+            for (int i = 0; i < _working.Slots.Count; i++)
+            {
+                LineupPlanSlot s = _working.Slots[i];
+                if (s.Role == PositionRole.Goalkeeper) continue;
+                if (s.PosXPermille.HasValue && s.PosYPermille.HasValue) continue;
+
+                (float ax, float ay) = FormationLayout.Normalized(roles, i);
+                s.PosXPermille = ToPermille(ax);
+                s.PosYPermille = ToPermille(ay);
+            }
+        }
+
+        private static int ToPermille(float normalized)
+        {
+            int v = (int)(normalized * 1000f + 0.5f);
+            return v < 0 ? 0 : (v > 1000 ? 1000 : v);
         }
 
         private void OnProfile(int playerId)
@@ -204,7 +266,16 @@ namespace Fts.Presenters
             {
                 LineupPlanSlot slot = _working.Slots[i];
                 Player player = FindPlayer(slot.PlayerId);
-                (float x, float y) = FormationLayout.Normalized(roles, i);
+                float x, y;
+                if (slot.PosXPermille.HasValue && slot.PosYPermille.HasValue)
+                {
+                    x = slot.PosXPermille.Value / 1000f;
+                    y = slot.PosYPermille.Value / 1000f;
+                }
+                else
+                {
+                    (x, y) = FormationLayout.Normalized(roles, i);
+                }
                 var vm = new PitchTokenVm
                 {
                     SlotIndex = i,
@@ -310,7 +381,13 @@ namespace Fts.Presenters
 
             var copy = new LineupPlan { ClubId = plan.ClubId };
             foreach (LineupPlanSlot slot in plan.Slots)
-                copy.Slots.Add(new LineupPlanSlot { Role = slot.Role, PlayerId = slot.PlayerId });
+                copy.Slots.Add(new LineupPlanSlot
+                {
+                    Role = slot.Role,
+                    PlayerId = slot.PlayerId,
+                    PosXPermille = slot.PosXPermille,
+                    PosYPermille = slot.PosYPermille
+                });
             return copy;
         }
 

@@ -44,7 +44,8 @@ namespace Fts.Views
 
         public event Action<int> SlotTapped;        // lineup slot index
         public event Action<int> BenchTapped;       // player id
-        public event Action<int, int> AssignRequested; // (slot index, player id) — from any drag/drop
+        public event Action<int, int> AssignRequested; // (slot index, player id) — dropped onto another token (swap)
+        public event Action<int, float, float> RepositionRequested; // (player id, normX, normY) — dropped on open turf (task 6.10)
         public event Action<int> ProfileClicked;    // player id
         public event Action AutoClicked;
         public event Action SaveClicked;
@@ -321,9 +322,19 @@ namespace Fts.Views
 
                 if (_dragging)
                 {
-                    int slot = _pitch.HitTestSlot(evt.position);
-                    if (slot >= 0)
-                        AssignRequested?.Invoke(slot, _dragPlayerId);
+                    // Dropped onto another player's token → swap; dropped on open turf →
+                    // reposition the dragged player (free positioning, task 6.10).
+                    int swapSlot = _pitch.NearestOtherToken(evt.position, _dragPlayerId, 0.9f);
+                    if (swapSlot >= 0)
+                    {
+                        AssignRequested?.Invoke(swapSlot, _dragPlayerId);
+                    }
+                    else
+                    {
+                        (bool onPitch, float nx, float ny) = _pitch.ToNormalized(evt.position);
+                        if (onPitch)
+                            RepositionRequested?.Invoke(_dragPlayerId, nx, ny);
+                    }
                 }
                 else
                 {

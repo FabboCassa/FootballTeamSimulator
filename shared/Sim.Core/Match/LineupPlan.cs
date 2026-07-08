@@ -9,6 +9,17 @@ namespace Sim.Core.Match
     {
         public PositionRole Role { get; set; }
         public int PlayerId { get; set; }
+
+        /// <summary>
+        /// Optional serialized custom position for free positioning (task 6.10), in
+        /// permille (see <see cref="SlotPosition"/>). Both null (the default) = no custom
+        /// position → no positional tilt, byte-identical to the pre-6.10 plan. The host
+        /// (client) resolves <see cref="Role"/> from these via <see cref="Tactics.ZoneRole"/>
+        /// when the user drops the token, so the plan already carries the resolved role.
+        /// Stored as two nullable ints to keep the save trivially (de)serializable.
+        /// </summary>
+        public int? PosXPermille { get; set; }
+        public int? PosYPermille { get; set; }
     }
 
     /// <summary>
@@ -26,7 +37,15 @@ namespace Sim.Core.Match
         {
             var plan = new LineupPlan { ClubId = lineup.ClubId };
             foreach (LineupSlot slot in lineup.Slots)
-                plan.Slots.Add(new LineupPlanSlot { Role = slot.Role, PlayerId = slot.Player.Id });
+            {
+                var planSlot = new LineupPlanSlot { Role = slot.Role, PlayerId = slot.Player.Id };
+                if (slot.Position != null)
+                {
+                    planSlot.PosXPermille = slot.Position.Value.XPermille;
+                    planSlot.PosYPermille = slot.Position.Value.YPermille;
+                }
+                plan.Slots.Add(planSlot);
+            }
             return plan;
         }
 
@@ -42,7 +61,10 @@ namespace Sim.Core.Match
                     throw new InvalidOperationException(
                         $"Lineup plan for club {ClubId}: player {slot.PlayerId} is not in club {club.Id}'s squad.");
 
-                lineup.Slots.Add(new LineupSlot { Role = slot.Role, Player = player });
+                var lineupSlot = new LineupSlot { Role = slot.Role, Player = player };
+                if (slot.PosXPermille != null && slot.PosYPermille != null)
+                    lineupSlot.Position = new SlotPosition(slot.PosXPermille.Value, slot.PosYPermille.Value);
+                lineup.Slots.Add(lineupSlot);
             }
 
             lineup.Validate();

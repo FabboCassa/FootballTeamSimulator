@@ -31,8 +31,10 @@ namespace Sim.Core.Match
         private readonly MatchBalance _cfg;
         private readonly TacticsBalance _tactics;
         private readonly ConditionBalance _condition;
+        private readonly PositioningBalance _positioning;
         private readonly bool _applyCondition;
         private readonly bool _applyMatchFatigue;
+        private readonly bool _applyPositioning;
 
         /// <summary>
         /// <paramref name="applyCondition"/> opts the engine into the condition model
@@ -48,14 +50,22 @@ namespace Sim.Core.Match
         /// flag-off identity, and a neutral-condition squad with only this flag stays
         /// stamina-driven rather than condition-driven.
         /// </summary>
-        public MatchEngine(BalanceConfig? config = null, bool applyCondition = false, bool applyMatchFatigue = false)
+        ///
+        /// <paramref name="applyPositioning"/> opts into free positioning (task 6.10):
+        /// each side's ratings are nudged by <see cref="Tactics.PositionalTilt"/> from how
+        /// far its players sit from their role anchors. Separate flag (defaults false) so
+        /// it never touches the golden masters; and a lineup with no custom positions (or
+        /// sitting on a clean formation preset) is the identity even when the flag is on.
+        public MatchEngine(BalanceConfig? config = null, bool applyCondition = false, bool applyMatchFatigue = false, bool applyPositioning = false)
         {
             BalanceConfig cfg = config ?? new BalanceConfig();
             _cfg = cfg.Match;
             _tactics = cfg.Tactics;
             _condition = cfg.Condition;
+            _positioning = cfg.Positioning;
             _applyCondition = applyCondition;
             _applyMatchFatigue = applyMatchFatigue;
+            _applyPositioning = applyPositioning;
         }
 
         /// <summary>
@@ -252,6 +262,17 @@ namespace Sim.Core.Match
                 TacticModifiers.Multipliers am = TacticModifiers.Compute(ai, hi, input.Tactics.Away.Familiarity, _tactics);
                 homeRatings = homeRatings.WithMultipliers(hm.Attack, hm.Midfield, hm.Defense);
                 awayRatings = awayRatings.WithMultipliers(am.Attack, am.Midfield, am.Defense);
+            }
+
+            if (_applyPositioning)
+            {
+                // Free-positioning shape tilt (task 6.10). Identity for a clean preset /
+                // no custom positions, so this is byte-identical unless a lineup actually
+                // carries off-anchor positions. Consumes no RNG.
+                TacticModifiers.Multipliers ht = PositionalTilt.Compute(input.Home, _cfg, _positioning);
+                TacticModifiers.Multipliers at = PositionalTilt.Compute(input.Away, _cfg, _positioning);
+                homeRatings = homeRatings.WithMultipliers(ht.Attack, ht.Midfield, ht.Defense);
+                awayRatings = awayRatings.WithMultipliers(at.Attack, at.Midfield, at.Defense);
             }
 
             if (_applyMatchFatigue)

@@ -43,7 +43,11 @@ namespace Fts.Presenters
         // Condition-aware + within-match fatigue, matching the headless advance (task 4.2);
         // the re-sim restores each player's kickoff condition (see ResimWithKickoffCondition)
         // so it stays consistent with the committed result even though the live players have evolved.
-        private readonly MatchEngine _engine = new MatchEngine(applyCondition: true, applyMatchFatigue: true);
+        // applyPositioning (task 6.10): the re-sim must match the committed result, which was
+        // simulated with the user's custom shape tilt — so the watch engine opts in too. The
+        // kickoff plan carries the user lineup's per-slot positions (LineupPlan.Materialize),
+        // and the opponent has none (identity), so the unchanged re-sim reproduces the result.
+        private readonly MatchEngine _engine = new MatchEngine(applyCondition: true, applyMatchFatigue: true, applyPositioning: true);
         private readonly int _famMax = new BalanceConfig().Tactics.FamiliarityMax;
 
         private MatchRenderer _renderer;

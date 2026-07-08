@@ -41,12 +41,16 @@ namespace Sim.Core.Career
         /// byte-identical. <paramref name="applyMatchFatigue"/> additionally opts into
         /// within-match fatigue (4.2 refinement; separate flag, default off). Condition
         /// evolution across days is a separate host-driven step (<see cref="EvolveCondition"/>),
-        /// so results and evolution opt in independently.
+        /// so results and evolution opt in independently. <paramref name="applyPositioning"/>
+        /// opts into free positioning (task 6.10): a club fielding a lineup with custom
+        /// off-anchor positions gets the small shape tilt; AI clubs field clean presets
+        /// (best XI, no custom positions), so their matches stay byte-identical even with
+        /// the flag on — only the user's own custom shape is affected.
         /// </summary>
-        public SeasonProgressor(BalanceConfig? config = null, bool applyCondition = false, bool applyMatchFatigue = false)
+        public SeasonProgressor(BalanceConfig? config = null, bool applyCondition = false, bool applyMatchFatigue = false, bool applyPositioning = false)
         {
             BalanceConfig cfg = config ?? new BalanceConfig();
-            _engine = new MatchEngine(cfg, applyCondition, applyMatchFatigue);
+            _engine = new MatchEngine(cfg, applyCondition, applyMatchFatigue, applyPositioning);
             _conditionProgressor = new ConditionProgressor(cfg.Condition);
             _familiarityMax = cfg.Tactics.FamiliarityMax;
         }

@@ -25,6 +25,55 @@ namespace Sim.Core.Config
         public CareerBalance Career { get; set; } = new CareerBalance();
         public DifficultyBalance Difficulty { get; set; } = new DifficultyBalance();
         public IdentityBalance Identity { get; set; } = new IdentityBalance();
+        public PositioningBalance Positioning { get; set; } = new PositioningBalance();
+    }
+
+    /// <summary>
+    /// Tunables for free player positioning and zone-based roles (task 6.10). On the
+    /// visual pitch a player can be dragged anywhere, not just onto a fixed slot: where
+    /// he stands resolves the ROLE he plays (<see cref="Tactics.ZoneRole"/>) and adds a
+    /// small continuous TILT to the team shape (<see cref="Tactics.PositionalTilt"/>).
+    ///
+    /// Two parts:
+    ///   • Zone→role bands — X (line height, permille) picks CentreBack → DM → CM → AM →
+    ///     Striker, and standing wide (|Y-500| beyond the wide threshold) promotes the deep
+    ///     band to FullBack / the high bands to Winger. The boundaries are set so every
+    ///     formation preset anchor maps back to its own role (a clean preset is a fixed
+    ///     point → "reset on formation change" restores the exact preset roles).
+    ///   • Continuous tilt — the per-slot offset from the resolved-role anchor, averaged,
+    ///     scaled by the coefficients below and clamped to <see cref="MaxTiltPercent"/> so
+    ///     it is a light nudge (no "park everyone forward" exploit; proven in the harness).
+    ///
+    /// Opt-in on the engine (default off) and identity at a clean preset / with no custom
+    /// positions, so golden masters and replays are unaffected.
+    /// </summary>
+    public sealed class PositioningBalance
+    {
+        // --- Zone→role bands (X = line height in permille, own goal 0 → attacked goal 1000) ---
+        /// <summary>Below this X a player is in the deepest band (central → CentreBack, wide → FullBack).</summary>
+        public int DeepBandMaxXPermille { get; set; } = 260;
+        /// <summary>Below this X (and above the deep band) a central player is a DefensiveMidfielder.</summary>
+        public int DmBandMaxXPermille { get; set; } = 390;
+        /// <summary>Below this X a central player is a CentralMidfielder.</summary>
+        public int CmBandMaxXPermille { get; set; } = 490;
+        /// <summary>Below this X a central player is an AttackingMidfielder; at/above it a central player is a Striker.</summary>
+        public int AmBandMaxXPermille { get; set; } = 630;
+        /// <summary>A wide player at/above this X is a Winger; wide but below it is a wide midfielder (CentralMidfielder bucket).</summary>
+        public int WideForwardMinXPermille { get; set; } = 490;
+        /// <summary>|Y-500| beyond which a player counts as "wide" (touchline-hugging). 300 → Y &lt; 200 or &gt; 800.</summary>
+        public int WideZoneThresholdPermille { get; set; } = 300;
+
+        // --- Continuous tilt coefficients (percent per 100 permille of average offset; clamped) ---
+        /// <summary>Attack % gained per +100 permille of average line height above the role anchors.</summary>
+        public int HeightAttackPercentPer100 { get; set; } = 2;
+        /// <summary>Defense % lost per +100 permille of average line height above the role anchors (pushing up leaves gaps).</summary>
+        public int HeightDefensePercentPer100 { get; set; } = 2;
+        /// <summary>Attack % gained per +100 permille of average extra spread (wider than the role anchors → chance creation). Raised 1→3 (user, task 6.10a): at 1 the width effect was barely perceptible (+6 GF/400); at 3 a full positional widening (~+200‰) ≈ a full Width instruction (+6% attack).</summary>
+        public int SpreadAttackPercentPer100 { get; set; } = 3;
+        /// <summary>Midfield % lost per +100 permille of average extra spread (wider = less central control). Kept symmetric with SpreadAttack (like the Width instruction's +attack/−midfield trade-off), raised 1→3.</summary>
+        public int SpreadMidfieldPercentPer100 { get; set; } = 3;
+        /// <summary>Absolute cap (percent) on any single tilt component, so free positioning stays a light nudge.</summary>
+        public int MaxTiltPercent { get; set; } = 8;
     }
 
     /// <summary>

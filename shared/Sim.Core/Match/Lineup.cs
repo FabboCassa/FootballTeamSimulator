@@ -9,6 +9,15 @@ namespace Sim.Core.Match
     {
         public PositionRole Role { get; set; }
         public Player Player { get; set; } = null!;
+
+        /// <summary>
+        /// Optional custom on-pitch spot for free positioning (task 6.10). Null = the player
+        /// sits on his role's canonical anchor (no positional tilt). When set, the engine's
+        /// opt-in positioning applies a small shape tilt from the offset vs the role anchor;
+        /// the Role itself is the already-resolved zone role (see <see cref="Tactics.ZoneRole"/>).
+        /// Runtime-only (the serializable form lives on <see cref="LineupPlanSlot"/>).
+        /// </summary>
+        public SlotPosition? Position { get; set; }
     }
 
     /// <summary>A starting eleven. Players may be deployed out of their natural role (at a rating cost).</summary>
