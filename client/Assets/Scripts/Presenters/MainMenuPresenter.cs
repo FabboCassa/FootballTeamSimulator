@@ -35,6 +35,7 @@ namespace Fts.Presenters
         {
             _view.ContinueClicked += OnContinue;
             _view.NewCareerClicked += OnNewCareer;
+            _view.AccountClicked += OnAccount;
             _view.LanguageClicked += OnLanguage;
             Refresh();
         }
@@ -43,6 +44,7 @@ namespace Fts.Presenters
         {
             _view.ContinueClicked -= OnContinue;
             _view.NewCareerClicked -= OnNewCareer;
+            _view.AccountClicked -= OnAccount;
             _view.LanguageClicked -= OnLanguage;
         }
 
@@ -74,6 +76,8 @@ namespace Fts.Presenters
         }
 
         private void OnNewCareer() => _navigator.Push<CareerSetupPresenter>();
+
+        private void OnAccount() => _navigator.Push<LoginScreenPresenter>();
 
         private void OnLanguage()
         {

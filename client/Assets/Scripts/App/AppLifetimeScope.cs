@@ -2,6 +2,7 @@ using Fts.Services;
 using Fts.Services.Messaging;
 using Fts.Services.Localization;
 using Fts.Services.Navigation;
+using Fts.Services.Online;
 using Fts.Services.Persistence;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -28,6 +29,9 @@ namespace Fts.App
             builder.Register<ISaveRepository, LocalJsonSaveRepository>(Lifetime.Singleton);
             builder.Register<CareerFactory>(Lifetime.Singleton);
             builder.Register<ILocalizationService, LocalizationService>(Lifetime.Singleton);
+            // Online backend gateway (task 7.2): register/login + rotating token store. Offline-first —
+            // single player never needs it; only the online phases do.
+            builder.Register<ApiClient>(Lifetime.Singleton);
             builder.Register<IGameSessionService, GameSessionService>(Lifetime.Singleton)
                    .WithParameter<LifetimeScope>(this);
 

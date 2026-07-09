@@ -1,5 +1,8 @@
+using Fts.Application.Auth;
+using Fts.Infrastructure.Auth;
 using Fts.Infrastructure.Persistence;
 using Fts.Infrastructure.Redis;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -40,6 +43,40 @@ public static class DependencyInjection
             .AddDbContextCheck<FtsDbContext>("postgres", tags: new[] { ReadyTag })
             .AddCheck<RedisHealthCheck>("redis", tags: new[] { ReadyTag });
 
+        AddAuth(services, config);
+
         return services;
+    }
+
+    /// <summary>ASP.NET Core Identity (users/passwords) + the JWT/refresh-token services (Phase 7.2).
+    /// The Api adds the JwtBearer authentication middleware; here we own the stores and the use cases.</summary>
+    private static void AddAuth(IServiceCollection services, IConfiguration config)
+    {
+        // Bind JwtOptions from the "Jwt" section without taking a dependency on the config binder
+        // package (this is a plain class library) — parse the primitives by hand.
+        var jwt = config.GetSection(JwtOptions.SectionName);
+        services.Configure<JwtOptions>(o =>
+        {
+            o.Issuer = jwt["Issuer"] ?? o.Issuer;
+            o.Audience = jwt["Audience"] ?? o.Audience;
+            o.SigningKey = jwt["SigningKey"] ?? o.SigningKey;
+            if (int.TryParse(jwt["AccessTokenMinutes"], out var m)) o.AccessTokenMinutes = m;
+            if (int.TryParse(jwt["RefreshTokenDays"], out var d)) o.RefreshTokenDays = d;
+        });
+
+        services.AddIdentityCore<AppUser>(o =>
+            {
+                o.User.RequireUniqueEmail = true;
+                o.Password.RequiredLength = 8;
+                o.Password.RequireDigit = true;
+                o.Password.RequireLowercase = true;
+                o.Password.RequireUppercase = true;
+                o.Password.RequireNonAlphanumeric = false;
+            })
+            .AddRoles<IdentityRole<Guid>>()
+            .AddEntityFrameworkStores<FtsDbContext>();
+
+        services.AddScoped<JwtTokenService>();
+        services.AddScoped<IAuthService, AuthService>();
     }
 }

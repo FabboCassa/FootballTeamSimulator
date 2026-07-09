@@ -1,15 +1,19 @@
+using Fts.Infrastructure.Auth;
 using Fts.Infrastructure.Persistence.Entities;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace Fts.Infrastructure.Persistence;
 
 /// <summary>
-/// EF Core context for the FTS backend (PostgreSQL). Holds the world-scoped core schema
-/// (ARCHITECTURE §6.3). Auth (users/coach accounts) and the online tables
-/// (seasons/fixtures/match_reports/auctions/bids/transactions/rankings/notifications) land
-/// in later phases; the model is kept additive so those are new migrations, not rewrites.
+/// EF Core context for the FTS backend (PostgreSQL). Extends <see cref="IdentityDbContext{TUser,TRole,TKey}"/>
+/// so ASP.NET Core Identity owns the auth tables (added in Phase 7.2), on top of the world-scoped
+/// core schema (ARCHITECTURE §6.3). The remaining online tables
+/// (seasons/fixtures/match_reports/auctions/bids/transactions/rankings/notifications) land in later
+/// phases; the model is kept additive so those are new migrations, not rewrites.
 /// </summary>
-public sealed class FtsDbContext : DbContext
+public sealed class FtsDbContext : IdentityDbContext<AppUser, IdentityRole<Guid>, Guid>
 {
     public FtsDbContext(DbContextOptions<FtsDbContext> options) : base(options) { }
 
@@ -20,8 +24,12 @@ public sealed class FtsDbContext : DbContext
     public DbSet<Player> Players => Set<Player>();
     public DbSet<Transfer> Transfers => Set<Transfer>();
 
+    public DbSet<CoachProfile> CoachProfiles => Set<CoachProfile>();
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+
     protected override void OnModelCreating(ModelBuilder b)
     {
+        // IdentityDbContext.OnModelCreating configures the Identity tables — call it first.
         base.OnModelCreating(b);
 
         b.Entity<World>(e =>
@@ -112,6 +120,44 @@ public sealed class FtsDbContext : DbContext
                 .HasForeignKey(x => x.PlayerId)
                 .OnDelete(DeleteBehavior.Cascade);
             e.HasIndex(x => new { x.WorldId, x.SeasonYear, x.Day });
+        });
+
+        // --- Auth (Phase 7.2) ---------------------------------------------------------------
+
+        // Friendlier snake_case names for the Identity tables (the base type maps them to
+        // AspNetUsers/AspNetRoles/... by default). "users" matches ARCHITECTURE §6.3.
+        b.Entity<AppUser>(e => e.ToTable("users"));
+        b.Entity<IdentityRole<Guid>>(e => e.ToTable("roles"));
+        b.Entity<IdentityUserRole<Guid>>(e => e.ToTable("user_roles"));
+        b.Entity<IdentityUserClaim<Guid>>(e => e.ToTable("user_claims"));
+        b.Entity<IdentityUserLogin<Guid>>(e => e.ToTable("user_logins"));
+        b.Entity<IdentityUserToken<Guid>>(e => e.ToTable("user_tokens"));
+        b.Entity<IdentityRoleClaim<Guid>>(e => e.ToTable("role_claims"));
+
+        b.Entity<CoachProfile>(e =>
+        {
+            e.ToTable("coach_profiles");
+            // Shared primary key with the user (1:1).
+            e.HasKey(x => x.UserId);
+            e.Property(x => x.DisplayName).HasMaxLength(60).IsRequired();
+            e.HasOne(x => x.User)
+                .WithOne(u => u.Profile)
+                .HasForeignKey<CoachProfile>(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(x => x.DisplayName);
+        });
+
+        b.Entity<RefreshToken>(e =>
+        {
+            e.ToTable("refresh_tokens");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.TokenHash).HasMaxLength(128).IsRequired();
+            e.HasOne(x => x.User)
+                .WithMany(u => u.RefreshTokens)
+                .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(x => x.TokenHash).IsUnique();
+            e.HasIndex(x => x.UserId);
         });
     }
 }

@@ -1,0 +1,74 @@
+using System.Security.Claims;
+using Fts.Application.Auth;
+
+namespace Fts.Api.Auth;
+
+/// <summary>
+/// The auth HTTP surface (Phase 7.2): register/login/refresh/logout + a protected /auth/me.
+/// Thin — each endpoint just binds the request, calls <see cref="IAuthService"/>, and maps the
+/// result to a status code. Login and refresh return a generic 401 so they never reveal which
+/// part of the credentials/token was wrong.
+/// </summary>
+public static class AuthEndpoints
+{
+    public static IEndpointRouteBuilder MapAuthEndpoints(this IEndpointRouteBuilder app)
+    {
+        var group = app.MapGroup("/auth");
+
+        group.MapPost("/register", async (RegisterRequest req, IAuthService auth, CancellationToken ct) =>
+        {
+            var result = await auth.RegisterAsync(req, ct);
+            return result.Success
+                ? Results.Ok(result.Value)
+                : MapError(result.Error, result.Message);
+        });
+
+        group.MapPost("/login", async (LoginRequest req, IAuthService auth, CancellationToken ct) =>
+        {
+            var result = await auth.LoginAsync(req, ct);
+            return result.Success
+                ? Results.Ok(result.Value)
+                : MapError(result.Error, result.Message);
+        });
+
+        group.MapPost("/refresh", async (RefreshRequest req, IAuthService auth, CancellationToken ct) =>
+        {
+            var result = await auth.RefreshAsync(req, ct);
+            return result.Success
+                ? Results.Ok(result.Value)
+                : MapError(result.Error, result.Message);
+        });
+
+        group.MapPost("/logout", async (RefreshRequest req, IAuthService auth, CancellationToken ct) =>
+        {
+            await auth.LogoutAsync(req, ct);
+            return Results.NoContent();
+        });
+
+        // Protected: the caller must present a valid access token; we read the account id from it.
+        group.MapGet("/me", async (ClaimsPrincipal user, IAuthService auth, CancellationToken ct) =>
+        {
+            var id = user.FindFirstValue(ClaimTypes.NameIdentifier)
+                     ?? user.FindFirstValue("sub");
+            if (!Guid.TryParse(id, out var userId))
+                return Results.Unauthorized();
+
+            var profile = await auth.GetProfileAsync(userId, ct);
+            return profile is null ? Results.Unauthorized() : Results.Ok(profile);
+        }).RequireAuthorization();
+
+        return app;
+    }
+
+    private static IResult MapError(AuthError error, string? message) => error switch
+    {
+        AuthError.EmailAlreadyInUse => Results.Conflict(new { error = "email_in_use", message }),
+        AuthError.WeakPassword => Results.BadRequest(new { error = "weak_password", message }),
+        AuthError.ValidationFailed => Results.BadRequest(new { error = "validation_failed", message }),
+        AuthError.InvalidCredentials => Results.Json(
+            new { error = "invalid_credentials", message }, statusCode: StatusCodes.Status401Unauthorized),
+        AuthError.InvalidRefreshToken => Results.Json(
+            new { error = "invalid_refresh_token", message }, statusCode: StatusCodes.Status401Unauthorized),
+        _ => Results.BadRequest(new { error = "auth_error", message }),
+    };
+}

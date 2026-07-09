@@ -13,6 +13,9 @@
     <PackageReference Include="NUnit" Version="4.*" />
     <PackageReference Include="NUnit3TestAdapter" Version="4.*" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.*" />
+    <!-- SQLite in-memory stands in for PostgreSQL in the auth integration tests (relational,
+         supports unique indexes/FKs) so they run without a live DB. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.*" />
   </ItemGroup>
 
   <ItemGroup>

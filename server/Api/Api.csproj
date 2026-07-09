@@ -13,6 +13,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- JWT bearer authentication middleware for the protected endpoints (Phase 7.2). -->
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.*" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Required on the EF Tools' startup project so `dotnet ef` can build the model. -->
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.*">
       <PrivateAssets>all</PrivateAssets>

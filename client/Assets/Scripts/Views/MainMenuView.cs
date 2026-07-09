@@ -13,6 +13,7 @@ namespace Fts.Views
     {
         public event Action ContinueClicked;
         public event Action NewCareerClicked;
+        public event Action AccountClicked;
         public event Action LanguageClicked;
 
         public VisualElement Root { get; }
@@ -22,6 +23,7 @@ namespace Fts.Views
         private readonly Label _subtitle;
         private readonly Button _continueButton;
         private readonly Button _newCareerButton;
+        private readonly Button _accountButton;
         private readonly Button _languageButton;
         private readonly Label _errorLabel;
 
@@ -39,6 +41,8 @@ namespace Fts.Views
             Root.Add(_continueButton);
             _newCareerButton = UiKit.MenuButton(string.Empty, () => NewCareerClicked?.Invoke());
             Root.Add(_newCareerButton);
+            _accountButton = UiKit.MenuButton(string.Empty, () => AccountClicked?.Invoke());
+            Root.Add(_accountButton);
             _languageButton = UiKit.MenuButton(string.Empty, () => LanguageClicked?.Invoke());
             Root.Add(_languageButton);
 
@@ -58,6 +62,7 @@ namespace Fts.Views
             _subtitle.text = _tr("mainmenu.subtitle");
             _continueButton.text = _tr("mainmenu.continue");
             _newCareerButton.text = _tr("mainmenu.new_career");
+            _accountButton.text = _tr("mainmenu.account");
         }
 
         public void SetLanguageLabel(string text) => _languageButton.text = text;

@@ -46,6 +46,8 @@ services:
       ASPNETCORE_URLS: "http://+:8080"
       ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=fts;Username=fts;Password=fts_dev_password"
       ConnectionStrings__Redis: "redis:6379"
+      # Dev signing key — replace with a real secret (min 32 bytes) before any non-local deploy.
+      Jwt__SigningKey: "fts_local_docker_signing_key_change_me_min_32_bytes"
     ports:
       - "8080:8080"
     healthcheck:

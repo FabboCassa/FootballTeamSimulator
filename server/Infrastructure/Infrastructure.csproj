@@ -15,6 +15,12 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.*" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.*" />
     <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="10.*" />
+    <!-- ASP.NET Core Identity EF stores (IdentityDbContext, UserManager, password hashing).
+         Transitively brings Identity.Core/Identity.Stores so this class library can use
+         UserManager<T> + AddIdentityCore without the full AspNetCore shared framework. -->
+    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.*" />
+    <!-- JWT creation (JwtSecurityTokenHandler + SigningCredentials) for the token service. -->
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.*" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.*" />
     <PackageReference Include="StackExchange.Redis" Version="2.*" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.*">
