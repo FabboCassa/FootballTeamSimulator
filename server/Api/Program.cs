@@ -1,5 +1,7 @@
 using System.Text;
 using Fts.Api.Auth;
+using Fts.Api.Simulation;
+using Fts.Application.Simulation;
 using Fts.Infrastructure;
 using Fts.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -34,6 +36,9 @@ builder.Services
     });
 builder.Services.AddAuthorization();
 
+// Match simulation runs the same Sim.Core as the client (Phase 7.3). Stateless + no I/O → singleton.
+builder.Services.AddSingleton<ISimulationService, SimulationService>();
+
 var app = builder.Build();
 
 app.UseAuthentication();
@@ -66,6 +71,14 @@ app.MapHealthChecks("/health/ready", new Microsoft.AspNetCore.Diagnostics.Health
 
 // Auth: /auth/register, /auth/login, /auth/refresh, /auth/logout, /auth/me (Phase 7.2).
 app.MapAuthEndpoints();
+
+// Internal match-simulation endpoints (Phase 7.3): dev-only — never mapped in Production, and
+// behind a config flag (default on outside prod) so a deployment can also switch them off.
+if (!app.Environment.IsProduction()
+    && app.Configuration.GetValue("Simulation:ExposeInternalEndpoints", true))
+{
+    app.MapSimulationEndpoints();
+}
 
 app.Run();
 

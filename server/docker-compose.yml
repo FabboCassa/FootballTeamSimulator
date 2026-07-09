@@ -43,6 +43,10 @@ services:
       redis:
         condition: service_healthy
     environment:
+      # Local dev stack → Development so the Phase 7.3 internal /internal/sim/* endpoints are
+      # exposed. A real deployment does not use this compose file and defaults to Production,
+      # where those endpoints stay off (verified: they 404 under Production).
+      ASPNETCORE_ENVIRONMENT: "Development"
       ASPNETCORE_URLS: "http://+:8080"
       ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=fts;Username=fts;Password=fts_dev_password"
       ConnectionStrings__Redis: "redis:6379"
