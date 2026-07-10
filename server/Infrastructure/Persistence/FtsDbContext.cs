@@ -1,4 +1,5 @@
 using Fts.Infrastructure.Auth;
+using Fts.Infrastructure.Notifications;
 using Fts.Infrastructure.Persistence.Entities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
@@ -26,6 +27,8 @@ public sealed class FtsDbContext : IdentityDbContext<AppUser, IdentityRole<Guid>
 
     public DbSet<CoachProfile> CoachProfiles => Set<CoachProfile>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+
+    public DbSet<DeviceRegistration> DeviceRegistrations => Set<DeviceRegistration>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -157,6 +160,23 @@ public sealed class FtsDbContext : IdentityDbContext<AppUser, IdentityRole<Guid>
                 .HasForeignKey(x => x.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
             e.HasIndex(x => x.TokenHash).IsUnique();
+            e.HasIndex(x => x.UserId);
+        });
+
+        // --- Notifications / device tokens (Phase 7.4) --------------------------------------
+
+        b.Entity<DeviceRegistration>(e =>
+        {
+            e.ToTable("device_registrations");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Token).HasMaxLength(512).IsRequired();
+            e.Property(x => x.Platform).HasConversion<int>();
+            e.HasOne(x => x.User)
+                .WithMany()
+                .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            // A device token is globally unique (one per app install) — the upsert key.
+            e.HasIndex(x => x.Token).IsUnique();
             e.HasIndex(x => x.UserId);
         });
     }

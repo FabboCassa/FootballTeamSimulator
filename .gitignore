@@ -1,3 +1,7 @@
+# ===== Secrets =====
+# Firebase service-account keys and any other server secrets — never commit these.
+server/secrets/
+
 # ===== .NET =====
 bin/
 obj/

@@ -1,9 +1,13 @@
 using System.Text;
 using Fts.Api.Auth;
+using Fts.Api.Jobs;
+using Fts.Api.Notifications;
 using Fts.Api.Simulation;
 using Fts.Application.Simulation;
 using Fts.Infrastructure;
+using Fts.Infrastructure.Jobs;
 using Fts.Infrastructure.Persistence;
+using Hangfire;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -11,8 +15,13 @@ using Sim.Core;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// EF Core (PostgreSQL) + Redis + readiness health checks + Identity/auth services (Phase 7.2).
-builder.Services.AddFtsInfrastructure(builder.Configuration);
+// Background jobs (Hangfire, Phase 7.4) need durable Postgres storage; the Testing environment runs
+// unit tests on SQLite with no live Postgres, so the scheduler is disabled there (the rest wires up).
+var backgroundJobsEnabled = !builder.Environment.IsEnvironment("Testing");
+
+// EF Core (PostgreSQL) + Redis + readiness health checks + Identity/auth services (Phase 7.2) +
+// notifications & Hangfire (Phase 7.4).
+builder.Services.AddFtsInfrastructure(builder.Configuration, backgroundJobsEnabled);
 
 // JWT bearer authentication — validation parameters mirror the JwtTokenService signing settings.
 var jwt = builder.Configuration.GetSection("Jwt");
@@ -72,12 +81,46 @@ app.MapHealthChecks("/health/ready", new Microsoft.AspNetCore.Diagnostics.Health
 // Auth: /auth/register, /auth/login, /auth/refresh, /auth/logout, /auth/me (Phase 7.2).
 app.MapAuthEndpoints();
 
+// Device registration for push notifications (Phase 7.4): a real, JWT-protected API. Always mapped.
+app.MapNotificationEndpoints();
+
 // Internal match-simulation endpoints (Phase 7.3): dev-only — never mapped in Production, and
 // behind a config flag (default on outside prod) so a deployment can also switch them off.
 if (!app.Environment.IsProduction()
     && app.Configuration.GetValue("Simulation:ExposeInternalEndpoints", true))
 {
     app.MapSimulationEndpoints();
+}
+
+// Background jobs (Phase 7.4): register the recurring heartbeat that proves the scheduler fires,
+// and expose the dev-only dashboard + job-enqueue diagnostics (gated like the sim endpoints).
+if (backgroundJobsEnabled)
+{
+    // Use the DI-resolved manager, NOT the static RecurringJob API: the static one reads
+    // JobStorage.Current, which the service-based Hangfire.NetCore setup does not populate at
+    // startup (it would throw "Current JobStorage instance has not been initialized yet").
+    using (var scope = app.Services.CreateScope())
+    {
+        scope.ServiceProvider.GetRequiredService<IRecurringJobManager>().AddOrUpdate<HeartbeatJob>(
+            HeartbeatJob.RecurringJobId,
+            j => j.ExecuteAsync(CancellationToken.None),
+            Cron.Minutely());
+    }
+
+    if (!app.Environment.IsProduction()
+        && app.Configuration.GetValue("Jobs:ExposeDashboard", true))
+    {
+        app.UseHangfireDashboard("/hangfire", new DashboardOptions
+        {
+            Authorization = new[] { new AllowAllDashboardAuthorizationFilter() }
+        });
+    }
+
+    if (!app.Environment.IsProduction()
+        && app.Configuration.GetValue("Jobs:ExposeTestEndpoint", true))
+    {
+        app.MapJobEndpoints();
+    }
 }
 
 app.Run();

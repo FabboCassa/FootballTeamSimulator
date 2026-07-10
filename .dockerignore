@@ -9,3 +9,5 @@ client/
 tools/
 **/*.user
 **/builds/
+# Secrets are mounted at runtime (see docker-compose) — never copy them into the build context.
+server/secrets/

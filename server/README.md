@@ -6,12 +6,15 @@ all running the same `Sim.Core` DLL as the client (server-authoritative, anti-ch
 ## Layout
 
 - `Api/` — thin host: `/health` (liveness + Sim.Core version), `/health/ready`
-  (PostgreSQL migrated + Redis reachable), and the `/auth/*` endpoints (7.2). Auto-applies EF
-  migrations on startup; JWT bearer authentication configured from the `Jwt` config section.
-- `Application/` — use-case contracts (`Auth/` DTOs + `IAuthService`).
+  (PostgreSQL migrated + Redis reachable), the `/auth/*` endpoints (7.2), the internal
+  `/internal/sim/*` dev endpoints (7.3), and the `/notifications/*` device API + dev-only
+  `/hangfire` dashboard and `/internal/jobs/*` diagnostics (7.4). Auto-applies EF migrations on
+  startup; JWT bearer authentication configured from the `Jwt` config section.
+- `Application/` — use-case contracts (`Auth/`, `Simulation/`, `Notifications/` DTOs + interfaces).
 - `Infrastructure/` — `FtsDbContext` (PostgreSQL + ASP.NET Core Identity), the core schema
-  entities, the `Auth/` implementation (Identity + JWT + rotating refresh tokens), Redis
-  multiplexer, health checks.
+  entities, the `Auth/` implementation (Identity + JWT + rotating refresh tokens), the
+  `Notifications/` device store + FCM sender, the `Jobs/` Hangfire jobs, Redis multiplexer,
+  health checks.
 - `docker-compose.yml` — PostgreSQL 17, Redis 8, and the API.
 
 ## Auth (7.2)
@@ -34,6 +37,36 @@ Password policy: ≥8 chars, upper + lower + digit (symbol optional). Access tok
 **`Jwt:SigningKey` is a dev placeholder** in `appsettings.json` / `docker-compose.yml` — override
 via the `Jwt__SigningKey` env var (min 32 bytes) in every real environment.
 
+## Notifications & background jobs (7.4)
+
+**Hangfire** schedules background/recurring work with durable **PostgreSQL** storage (its own
+`hangfire` schema, created on startup — reuses the DB, jobs survive restarts). A recurring
+`fts-heartbeat` job (once a minute) proves the scheduler fires; Phase 8's real jobs (kickoff match
+resolution, auction settlement, season rollover) join it. Disabled under the `Testing`
+environment (unit tests use SQLite, no live Postgres).
+
+**Push** goes through **Firebase Cloud Messaging** behind `INotificationService`. It is
+**config-gated**: with `Fcm:Enabled=false` (default) sends are logged + skipped, so the server
+builds and runs with no Firebase project. To go live, set `Fcm__Enabled=true` and provide a
+service-account key via `Fcm__CredentialsPath` (file) or `Fcm__CredentialsJson` (env/secret).
+Invalid/expired tokens FCM reports are pruned so the device table self-heals.
+
+| Method + path | Auth | Body / result |
+|---|---|---|
+| POST `/notifications/devices` | Bearer | `{ token, platform }` → `200` device dto (idempotent upsert per token) |
+| GET  `/notifications/devices` | Bearer | `200` the account's devices |
+| DELETE `/notifications/devices/{token}` | Bearer | `204` removed · `404` not found |
+
+Dev-only (never mapped in Production; also behind `Jobs:ExposeDashboard` / `Jobs:ExposeTestEndpoint`):
+
+| Path | What |
+|---|---|
+| GET `/hangfire` | Hangfire dashboard (permissive auth — dev only) |
+| POST `/internal/jobs/heartbeat` | enqueue an immediate heartbeat → `{ jobId }` |
+| POST `/internal/jobs/push/{userId}` | enqueue a push to an account through a job → `{ jobId }` |
+
+`platform` = `0` Android · `1` iOS · `2` Web.
+
 ## Core schema (7.1)
 
 `worlds → leagues → clubs → players`, plus `coaches` (nullable club, nullable owner user for
@@ -49,12 +82,15 @@ migration must be generated and committed **before** the next `docker compose up
 
 ```powershell
 # from server/ — needs the EF tool (once): dotnet tool install --global dotnet-ef
-dotnet ef migrations add InitialCreate -p Infrastructure -s Api   # 7.1 (once, if not done)
-dotnet ef migrations add AddAuth       -p Infrastructure -s Api   # 7.2 Identity + auth tables
+dotnet ef migrations add InitialCreate           -p Infrastructure -s Api   # 7.1 (once, if not done)
+dotnet ef migrations add AddAuth                 -p Infrastructure -s Api   # 7.2 Identity + auth tables
+dotnet ef migrations add AddDeviceRegistrations  -p Infrastructure -s Api   # 7.4 device_registrations
 ```
 
 Each scaffolds `Infrastructure/Migrations/*` (offline — no database needed). Commit those files.
-`AddAuth` is additive on top of `InitialCreate` (users/roles + coach_profiles + refresh_tokens).
+`AddAuth` is additive on top of `InitialCreate` (users/roles + coach_profiles + refresh_tokens);
+`AddDeviceRegistrations` is additive on top of that (the `device_registrations` table). Hangfire
+creates its own `hangfire` schema at runtime — no EF migration for it.
 
 ## Run
 
@@ -80,11 +116,26 @@ cd Api && dotnet run          # uses the localhost connection strings in appsett
 ## Tests
 
 ```powershell
-dotnet test Api.Tests/Api.Tests.csproj   # health endpoint + full auth flow
+dotnet test Api.Tests/Api.Tests.csproj   # health + auth flow + sim determinism + notifications/jobs
 ```
 
 Auth tests run the real HTTP pipeline against an in-memory SQLite DB (no PostgreSQL needed):
-register → login → `/auth/me` → refresh (rotation) → logout, plus the failure cases.
+register → login → `/auth/me` → refresh (rotation) → logout, plus the failure cases. The 7.4
+tests cover device registration (JWT-gated upsert/list/unregister), the FCM sender's
+skip-when-unconfigured behaviour, the heartbeat job, and that the dashboard/enqueue endpoints are
+absent under `Testing`.
+
+### Try a push by hand (dev)
+
+```powershell
+# register a device token for your account (get <accessToken> from /auth/login)
+curl -X POST http://localhost:8080/notifications/devices -H "Authorization: Bearer <accessToken>" `
+  -H "Content-Type: application/json" -d '{"token":"<fcm-device-token>","platform":0}'
+# enqueue a push through a background job (logs+skips unless Fcm__Enabled=true with credentials)
+curl -X POST http://localhost:8080/internal/jobs/push/<userId> -H "Content-Type: application/json" `
+  -d '{"title":"FTS","body":"Test push"}'
+# watch it run at http://localhost:8080/hangfire
+```
 
 ### Try the auth flow by hand
 

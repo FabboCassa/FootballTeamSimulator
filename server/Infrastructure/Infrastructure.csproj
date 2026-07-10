@@ -23,6 +23,16 @@
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.*" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.*" />
     <PackageReference Include="StackExchange.Redis" Version="2.*" />
+    <!-- Hangfire (Phase 7.4): background/recurring job scheduler with durable PostgreSQL storage
+         (reuses the existing DB in its own "hangfire" schema; jobs survive restarts). Hangfire.NetCore
+         gives AddHangfire/AddHangfireServer for the generic host; the dashboard middleware lives in
+         Api via Hangfire.AspNetCore. Pin 1.20.* of the PostgreSql provider — it targets Hangfire 1.8. -->
+    <PackageReference Include="Hangfire.Core" Version="1.8.*" />
+    <PackageReference Include="Hangfire.NetCore" Version="1.8.*" />
+    <PackageReference Include="Hangfire.PostgreSql" Version="1.20.*" />
+    <!-- FCM push (Phase 7.4). The sender is config-gated: with no credentials it logs+skips, so the
+         server builds and runs without a Firebase project. Brings Google.Apis.Auth (GoogleCredential). -->
+    <PackageReference Include="FirebaseAdmin" Version="3.*" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.*">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>

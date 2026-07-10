@@ -52,6 +52,15 @@ services:
       ConnectionStrings__Redis: "redis:6379"
       # Dev signing key — replace with a real secret (min 32 bytes) before any non-local deploy.
       Jwt__SigningKey: "fts_local_docker_signing_key_change_me_min_32_bytes"
+      # FCM (Phase 7.4) LIVE: the service-account key is mounted read-only from ./secrets (gitignored,
+      # never baked into the image). With Enabled=true + a valid key the sender initializes and pushes
+      # to registered device tokens; with no devices a send returns NoDevices. Hangfire reuses Postgres.
+      Fcm__Enabled: "true"
+      Fcm__ProjectId: "football-team-simulator"
+      Fcm__CredentialsPath: "/run/secrets/fcm.json"
+    volumes:
+      # Mount the Firebase service-account key at runtime (do NOT copy it into the image).
+      - ./secrets/fcm.json:/run/secrets/fcm.json:ro
     ports:
       - "8080:8080"
     healthcheck:

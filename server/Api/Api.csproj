@@ -15,6 +15,9 @@
   <ItemGroup>
     <!-- JWT bearer authentication middleware for the protected endpoints (Phase 7.2). -->
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.*" />
+    <!-- Hangfire dashboard middleware (UseHangfireDashboard) for the dev-only /hangfire UI (Phase 7.4).
+         The scheduler/storage/server themselves are configured in Infrastructure. -->
+    <PackageReference Include="Hangfire.AspNetCore" Version="1.8.*" />
   </ItemGroup>
 
   <ItemGroup>
