@@ -1,0 +1,96 @@
+namespace Fts.Application.Leagues;
+
+/// <summary>Request/response DTOs for the private-league lifecycle (Phase 8.1). Plain records so the
+/// Api layer binds them from JSON and the client mirrors them. <see cref="ILeagueService"/> lives here
+/// (Application); the implementation is in Infrastructure (needs EF + Sim.Core world generation).</summary>
+
+/// <summary>How a private league advances. 8.1 only stores the choice — the scheduled/real-time
+/// resolution logic lands in 8.3/8.4. The default 8.1 mode is <see cref="AllReady"/>.</summary>
+public enum LeagueMode
+{
+    /// <summary>"Advance when everyone is ready" — the friend-league default (chosen for 8.1).</summary>
+    AllReady = 0,
+    /// <summary>Fixed real-time schedule like the public ranked mode (logic in Phase 9).</summary>
+    RealTime = 1,
+}
+
+/// <summary>Where a private league is in its lifecycle. 8.1 leaves a freshly created league
+/// <see cref="Forming"/> (members join, clubs assigned at the 8.2 draft, season starts later).</summary>
+public enum LeagueStatus
+{
+    /// <summary>Accepting members via the invite code; the season has not started.</summary>
+    Forming = 0,
+    /// <summary>Season under way (set once the draft + first fixtures land, 8.2/8.3).</summary>
+    Active = 1,
+    /// <summary>Season finished (8.7).</summary>
+    Completed = 2,
+}
+
+/// <summary>Create a private league: a name, the number of clubs (2–20, mirroring real league sizes),
+/// and the advance mode. The server generates a fresh world (unique players) and makes the caller the
+/// first member.</summary>
+public sealed record CreateLeagueRequest(string Name, int Size, LeagueMode Mode);
+
+/// <summary>Join an existing private league by its invite code.</summary>
+public sealed record JoinLeagueRequest(string InviteCode);
+
+/// <summary>A member of a private league — an account, optionally already assigned a club (the club
+/// assignment is the 8.2 draft; null until then).</summary>
+public sealed record LeagueMemberDto(
+    Guid UserId,
+    string DisplayName,
+    int? ClubExternalId,
+    string? ClubName,
+    bool IsCreator,
+    bool IsReady);
+
+/// <summary>A player in the generated world, trimmed for the lobby squad view. <see cref="ExternalId"/>
+/// is the Sim.Core id (unique per world), so the test can assert no duplicates.</summary>
+public sealed record LeaguePlayerDto(int ExternalId, string Name, int Age, int Role, int Overall);
+
+/// <summary>A club in the generated world, with its squad (for the "everyone sees the same squads"
+/// lobby view).</summary>
+public sealed record LeagueClubDto(
+    int ExternalId,
+    string Name,
+    string ShortName,
+    int Strength,
+    IReadOnlyList<LeaguePlayerDto> Players);
+
+/// <summary>Lightweight league row for the "my leagues" list.</summary>
+public sealed record LeagueSummaryDto(
+    Guid Id,
+    string Name,
+    string InviteCode,
+    int Size,
+    int MemberCount,
+    LeagueStatus Status,
+    LeagueMode Mode,
+    bool IsCreator);
+
+/// <summary>Full league view: the summary + members + the generated clubs/squads.</summary>
+public sealed record LeagueDetailDto(
+    LeagueSummaryDto League,
+    IReadOnlyList<LeagueMemberDto> Members,
+    IReadOnlyList<LeagueClubDto> Clubs);
+
+/// <summary>Why a league use case failed — the Api maps these to HTTP status codes.</summary>
+public enum LeagueError
+{
+    None = 0,
+    ValidationFailed,
+    NotFound,
+    AlreadyMember,
+    LeagueFull,
+    NotJoinable,
+    Forbidden,
+}
+
+/// <summary>Result wrapper so the service never throws for expected failures. Exactly one of
+/// <see cref="Value"/> (on success) or <see cref="Error"/> (on failure) is meaningful.</summary>
+public sealed record LeagueResult<T>(bool Success, T? Value, LeagueError Error, string? Message)
+{
+    public static LeagueResult<T> Ok(T value) => new(true, value, LeagueError.None, null);
+    public static LeagueResult<T> Fail(LeagueError error, string? message = null) =>
+        new(false, default, error, message);
+}

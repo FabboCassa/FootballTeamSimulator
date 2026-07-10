@@ -132,6 +132,18 @@ namespace Fts.Services.Online
             return profile;
         }
 
+        /// <summary>Sends an authenticated request, refreshing the access token first if it's about to
+        /// expire (Phase 8.1b). Returns (status, body, wasNetworkError). If the caller isn't signed in
+        /// (no valid token) it comes back as status 401 with no network error, so callers can tell
+        /// "signed out" from "server unreachable". Never throws.</summary>
+        public async UniTask<(long status, string body, bool network)> SendAuthedAsync(
+            string method, string path, object body = null)
+        {
+            var token = await EnsureAccessTokenAsync();
+            if (token == null) return (401, null, false);
+            return await SendAsync(method, path, body, token);
+        }
+
         /// <summary>A valid (refreshed if needed) access token for authenticated calls, or null.</summary>
         public async UniTask<string> EnsureAccessTokenAsync()
         {

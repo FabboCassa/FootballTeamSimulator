@@ -32,6 +32,9 @@ namespace Fts.App
             // Online backend gateway (task 7.2): register/login + rotating token store. Offline-first —
             // single player never needs it; only the online phases do.
             builder.Register<ApiClient>(Lifetime.Singleton);
+            // Private-league gateway (task 8.1b): create/join/leave/list online friend leagues.
+            builder.Register<LeagueApiService>(Lifetime.Singleton);
+            builder.Register<LeagueSelection>(Lifetime.Singleton);
             builder.Register<IGameSessionService, GameSessionService>(Lifetime.Singleton)
                    .WithParameter<LifetimeScope>(this);
 

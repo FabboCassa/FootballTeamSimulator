@@ -1,6 +1,7 @@
 using Fts.Services;
 using Fts.Services.Localization;
 using Fts.Services.Navigation;
+using Fts.Services.Online;
 using Fts.Services.Persistence;
 using Fts.Views;
 using UnityEngine.UIElements;
@@ -14,6 +15,7 @@ namespace Fts.Presenters
         private readonly ISaveRepository _saveRepository;
         private readonly ScreenNavigator _navigator;
         private readonly ILocalizationService _loc;
+        private readonly ApiClient _api;
         private readonly MainMenuView _view;
 
         public VisualElement View => _view.Root;
@@ -22,12 +24,14 @@ namespace Fts.Presenters
             IGameSessionService session,
             ISaveRepository saveRepository,
             ScreenNavigator navigator,
-            ILocalizationService loc)
+            ILocalizationService loc,
+            ApiClient api)
         {
             _session = session;
             _saveRepository = saveRepository;
             _navigator = navigator;
             _loc = loc;
+            _api = api;
             _view = new MainMenuView(loc.Tr);
         }
 
@@ -36,6 +40,7 @@ namespace Fts.Presenters
             _view.ContinueClicked += OnContinue;
             _view.NewCareerClicked += OnNewCareer;
             _view.AccountClicked += OnAccount;
+            _view.OnlineLeaguesClicked += OnOnlineLeagues;
             _view.LanguageClicked += OnLanguage;
             Refresh();
         }
@@ -45,6 +50,7 @@ namespace Fts.Presenters
             _view.ContinueClicked -= OnContinue;
             _view.NewCareerClicked -= OnNewCareer;
             _view.AccountClicked -= OnAccount;
+            _view.OnlineLeaguesClicked -= OnOnlineLeagues;
             _view.LanguageClicked -= OnLanguage;
         }
 
@@ -78,6 +84,16 @@ namespace Fts.Presenters
         private void OnNewCareer() => _navigator.Push<CareerSetupPresenter>();
 
         private void OnAccount() => _navigator.Push<LoginScreenPresenter>();
+
+        // Online leagues need an account: signed in → the leagues list, otherwise the Account screen
+        // (sign in there, come back, and tap again).
+        private void OnOnlineLeagues()
+        {
+            if (_api.IsSignedIn)
+                _navigator.Push<LeagueListScreenPresenter>();
+            else
+                _navigator.Push<LoginScreenPresenter>();
+        }
 
         private void OnLanguage()
         {

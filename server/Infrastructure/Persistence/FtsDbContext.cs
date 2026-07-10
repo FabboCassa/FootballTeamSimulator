@@ -30,6 +30,9 @@ public sealed class FtsDbContext : IdentityDbContext<AppUser, IdentityRole<Guid>
 
     public DbSet<DeviceRegistration> DeviceRegistrations => Set<DeviceRegistration>();
 
+    public DbSet<PrivateLeague> PrivateLeagues => Set<PrivateLeague>();
+    public DbSet<LeagueMember> LeagueMembers => Set<LeagueMember>();
+
     protected override void OnModelCreating(ModelBuilder b)
     {
         // IdentityDbContext.OnModelCreating configures the Identity tables — call it first.
@@ -177,6 +180,46 @@ public sealed class FtsDbContext : IdentityDbContext<AppUser, IdentityRole<Guid>
                 .OnDelete(DeleteBehavior.Cascade);
             // A device token is globally unique (one per app install) — the upsert key.
             e.HasIndex(x => x.Token).IsUnique();
+            e.HasIndex(x => x.UserId);
+        });
+
+        // --- Private leagues / lobbies (Phase 8.1) ------------------------------------------
+
+        b.Entity<PrivateLeague>(e =>
+        {
+            e.ToTable("private_leagues");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Name).HasMaxLength(120).IsRequired();
+            e.Property(x => x.InviteCode).HasMaxLength(16).IsRequired();
+            e.Property(x => x.Mode).HasConversion<int>();
+            e.Property(x => x.Status).HasConversion<int>();
+            // Deleting the world removes its private league (and members) — the "last member
+            // leaves" path deletes the world and lets this cascade clean up the lobby.
+            e.HasOne(x => x.World)
+                .WithMany()
+                .HasForeignKey(x => x.WorldId)
+                .OnDelete(DeleteBehavior.Cascade);
+            // Invite codes are globally unique — the join lookup key.
+            e.HasIndex(x => x.InviteCode).IsUnique();
+            e.HasIndex(x => x.CreatorUserId);
+        });
+
+        b.Entity<LeagueMember>(e =>
+        {
+            e.ToTable("league_members");
+            e.HasKey(x => x.Id);
+            e.HasOne(x => x.PrivateLeague)
+                .WithMany(l => l.Members)
+                .HasForeignKey(x => x.PrivateLeagueId)
+                .OnDelete(DeleteBehavior.Cascade);
+            // The assigned club (8.2) — SetNull, not cascade, to avoid a second cascade path
+            // from worlds → clubs → members (portable across providers).
+            e.HasOne(x => x.Club)
+                .WithMany()
+                .HasForeignKey(x => x.ClubId)
+                .OnDelete(DeleteBehavior.SetNull);
+            // One membership per account per league.
+            e.HasIndex(x => new { x.PrivateLeagueId, x.UserId }).IsUnique();
             e.HasIndex(x => x.UserId);
         });
     }

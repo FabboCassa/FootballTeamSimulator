@@ -1,6 +1,8 @@
 using Fts.Application.Auth;
+using Fts.Application.Leagues;
 using Fts.Application.Notifications;
 using Fts.Infrastructure.Auth;
+using Fts.Infrastructure.Leagues;
 using Fts.Infrastructure.Jobs;
 using Fts.Infrastructure.Notifications;
 using Fts.Infrastructure.Persistence;
@@ -51,6 +53,10 @@ public static class DependencyInjection
         AddAuth(services, config);
         AddNotifications(services, config);
         AddBackgroundJobs(services, postgres, enableBackgroundJobs);
+
+        // Private-league lifecycle (Phase 8.1): create/join/leave/list, backed by the shared
+        // Sim.Core world generation. Scoped (it uses the request-scoped FtsDbContext).
+        services.AddScoped<ILeagueService, LeagueService>();
 
         return services;
     }

@@ -1,6 +1,7 @@
 using System.Text;
 using Fts.Api.Auth;
 using Fts.Api.Jobs;
+using Fts.Api.Leagues;
 using Fts.Api.Notifications;
 using Fts.Api.Simulation;
 using Fts.Application.Simulation;
@@ -83,6 +84,9 @@ app.MapAuthEndpoints();
 
 // Device registration for push notifications (Phase 7.4): a real, JWT-protected API. Always mapped.
 app.MapNotificationEndpoints();
+
+// Private-league lifecycle (Phase 8.1): create/join/leave/list, JWT-protected. Always mapped.
+app.MapLeagueEndpoints();
 
 // Internal match-simulation endpoints (Phase 7.3): dev-only — never mapped in Production, and
 // behind a config flag (default on outside prod) so a deployment can also switch them off.
