@@ -20,10 +20,13 @@ public enum LeagueStatus
 {
     /// <summary>Accepting members via the invite code; the season has not started.</summary>
     Forming = 0,
-    /// <summary>Season under way (set once the draft + first fixtures land, 8.2/8.3).</summary>
+    /// <summary>Season under way (set once the draft completes and, later, fixtures land, 8.3).</summary>
     Active = 1,
     /// <summary>Season finished (8.7).</summary>
     Completed = 2,
+    /// <summary>The snake draft is running: squads have been equalised, members are picking their
+    /// club (identity) in turn (8.2). Appended (=3, not inserted) so stored 0/1/2 values are unchanged.</summary>
+    Drafting = 3,
 }
 
 /// <summary>Create a private league: a name, the number of clubs (2–20, mirroring real league sizes),
@@ -33,6 +36,10 @@ public sealed record CreateLeagueRequest(string Name, int Size, LeagueMode Mode)
 
 /// <summary>Join an existing private league by its invite code.</summary>
 public sealed record JoinLeagueRequest(string InviteCode);
+
+/// <summary>Pick a club (by its Sim.Core <c>ExternalId</c>) during the snake draft. Only the member
+/// whose turn it is may pick, and only a club no one else has taken (8.2).</summary>
+public sealed record PickClubRequest(int ClubExternalId);
 
 /// <summary>A member of a private league — an account, optionally already assigned a club (the club
 /// assignment is the 8.2 draft; null until then).</summary>
@@ -49,13 +56,25 @@ public sealed record LeagueMemberDto(
 public sealed record LeaguePlayerDto(int ExternalId, string Name, int Age, int Role, int Overall);
 
 /// <summary>A club in the generated world, with its squad (for the "everyone sees the same squads"
-/// lobby view).</summary>
+/// lobby view). <see cref="TransferBudget"/> is 0 until the draft runs, then an equal figure for every
+/// club (8.2 "pari budget a tutti").</summary>
 public sealed record LeagueClubDto(
     int ExternalId,
     string Name,
     string ShortName,
     int Strength,
+    long TransferBudget,
     IReadOnlyList<LeaguePlayerDto> Players);
+
+/// <summary>Snapshot of the snake draft (8.2). While <see cref="InProgress"/>, the member whose turn it
+/// is (<see cref="CurrentPickUserId"/>) picks one of the unclaimed clubs; the client derives which clubs
+/// are still available from the members' assigned clubs. Once every member has a club the league flips to
+/// <see cref="LeagueStatus.Active"/> and <see cref="InProgress"/> is false.</summary>
+public sealed record DraftStateDto(
+    bool InProgress,
+    Guid? CurrentPickUserId,
+    int PicksMade,
+    int TotalPicks);
 
 /// <summary>Lightweight league row for the "my leagues" list.</summary>
 public sealed record LeagueSummaryDto(
@@ -68,11 +87,12 @@ public sealed record LeagueSummaryDto(
     LeagueMode Mode,
     bool IsCreator);
 
-/// <summary>Full league view: the summary + members + the generated clubs/squads.</summary>
+/// <summary>Full league view: the summary + members + the generated clubs/squads + the draft state.</summary>
 public sealed record LeagueDetailDto(
     LeagueSummaryDto League,
     IReadOnlyList<LeagueMemberDto> Members,
-    IReadOnlyList<LeagueClubDto> Clubs);
+    IReadOnlyList<LeagueClubDto> Clubs,
+    DraftStateDto Draft);
 
 /// <summary>Why a league use case failed — the Api maps these to HTTP status codes.</summary>
 public enum LeagueError
@@ -84,6 +104,15 @@ public enum LeagueError
     LeagueFull,
     NotJoinable,
     Forbidden,
+    /// <summary>The action is not valid in the league's current status (e.g. starting a draft that has
+    /// already started, or picking before the draft begins) — 8.2.</summary>
+    WrongPhase,
+    /// <summary>It is not this member's turn to pick in the snake draft — 8.2.</summary>
+    NotYourTurn,
+    /// <summary>The requested club does not exist in the world or has already been taken — 8.2.</summary>
+    ClubUnavailable,
+    /// <summary>The league has too few members to start the season (need at least two) — 8.2.</summary>
+    TooFewMembers,
 }
 
 /// <summary>Result wrapper so the service never throws for expected failures. Exactly one of

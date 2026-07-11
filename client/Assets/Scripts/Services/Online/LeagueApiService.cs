@@ -19,6 +19,9 @@ namespace Fts.Services.Online
 
         public bool IsSignedIn => _api.IsSignedIn;
 
+        /// <summary>The signed-in account's id (or null), so a draft screen can tell whose turn it is (8.2b).</summary>
+        public string CurrentUserId => _api.Profile?.UserId;
+
         public async UniTask<LeagueApiResult<LeagueDetailDto>> CreateAsync(string name, int size, LeagueMode mode)
         {
             if (!_api.IsSignedIn) return LeagueApiResult<LeagueDetailDto>.Fail(LeagueApiError.NotSignedIn);
@@ -55,6 +58,24 @@ namespace Fts.Services.Online
                 : LeagueApiResult<List<LeagueSummaryDto>>.Ok(list);
         }
 
+        /// <summary>Starts the season snake draft (creator only) — equalises squads + budgets and opens
+        /// the pick order (8.2b).</summary>
+        public async UniTask<LeagueApiResult<LeagueDetailDto>> StartDraftAsync(string leagueId)
+        {
+            if (!_api.IsSignedIn) return LeagueApiResult<LeagueDetailDto>.Fail(LeagueApiError.NotSignedIn);
+            var (status, text, network) = await _api.SendAuthedAsync("POST", "/leagues/" + leagueId + "/draft/start");
+            return ParseDetail(status, text, network);
+        }
+
+        /// <summary>Claims a club during the draft (only on your turn, only an unclaimed club) (8.2b).</summary>
+        public async UniTask<LeagueApiResult<LeagueDetailDto>> PickClubAsync(string leagueId, int clubExternalId)
+        {
+            if (!_api.IsSignedIn) return LeagueApiResult<LeagueDetailDto>.Fail(LeagueApiError.NotSignedIn);
+            var body = new PickClubBody { clubExternalId = clubExternalId };
+            var (status, text, network) = await _api.SendAuthedAsync("POST", "/leagues/" + leagueId + "/draft/pick", body);
+            return ParseDetail(status, text, network);
+        }
+
         public async UniTask<LeagueApiResult<bool>> LeaveAsync(string leagueId)
         {
             if (!_api.IsSignedIn) return LeagueApiResult<bool>.Fail(LeagueApiError.NotSignedIn);
@@ -87,9 +108,13 @@ namespace Fts.Services.Online
                 401 => LeagueApiError.NotSignedIn,
                 403 => LeagueApiError.Forbidden,
                 404 => LeagueApiError.NotFound,
-                400 => LeagueApiError.Validation,
+                400 => body != null && body.Contains("too_few_members") ? LeagueApiError.TooFewMembers
+                     : LeagueApiError.Validation,
                 409 => body != null && body.Contains("league_full") ? LeagueApiError.LeagueFull
                      : body != null && body.Contains("not_joinable") ? LeagueApiError.NotJoinable
+                     : body != null && body.Contains("wrong_phase") ? LeagueApiError.WrongPhase
+                     : body != null && body.Contains("not_your_turn") ? LeagueApiError.NotYourTurn
+                     : body != null && body.Contains("club_unavailable") ? LeagueApiError.ClubUnavailable
                      : LeagueApiError.AlreadyMember,
                 >= 500 => LeagueApiError.Server,
                 _ => LeagueApiError.Server,

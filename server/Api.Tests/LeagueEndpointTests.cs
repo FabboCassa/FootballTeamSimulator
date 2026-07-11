@@ -70,6 +70,37 @@ public class LeagueEndpointTests
         return await _client.SendAsync(req);
     }
 
+    /// <summary>Registers a fresh account and returns both its bearer token and its account id (so a draft
+    /// test can map "whose turn it is" back to the right token without relying on join-order timing).</summary>
+    private async Task<(string Token, Guid UserId)> RegisterAccount()
+    {
+        var resp = await _client.PostAsJsonAsync("/auth/register",
+            new RegisterRequest(UniqueEmail(), ValidPassword, "Mister"));
+        var auth = await resp.Content.ReadFromJsonAsync<AuthResponse>();
+        return (auth!.AccessToken, auth.Profile.UserId);
+    }
+
+    private async Task<HttpResponseMessage> StartDraft(string accessToken, Guid leagueId)
+    {
+        using var req = Authed(HttpMethod.Post, $"/leagues/{leagueId}/draft/start", accessToken);
+        return await _client.SendAsync(req);
+    }
+
+    private async Task<HttpResponseMessage> Pick(string accessToken, Guid leagueId, int clubExternalId)
+    {
+        using var req = Authed(HttpMethod.Post, $"/leagues/{leagueId}/draft/pick", accessToken,
+            new PickClubRequest(clubExternalId));
+        return await _client.SendAsync(req);
+    }
+
+    private async Task<LeagueDetailDto> GetDetail(string accessToken, Guid leagueId)
+    {
+        using var req = Authed(HttpMethod.Get, $"/leagues/{leagueId}", accessToken);
+        var resp = await _client.SendAsync(req);
+        Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        return (await resp.Content.ReadFromJsonAsync<LeagueDetailDto>())!;
+    }
+
     [Test]
     public async Task CreateLeague_WithoutToken_ReturnsUnauthorized()
     {
@@ -232,6 +263,185 @@ public class LeagueEndpointTests
         using var get = Authed(HttpMethod.Get, $"/leagues/{created.League.Id}", stranger);
         var resp = await _client.SendAsync(get);
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Forbidden));
+    }
+
+    // --- 8.2 draft ---------------------------------------------------------------------------------
+
+    /// <summary>THE 8.2 ✅: a 4-account league drafts into equal-strength, legal squads with an equal
+    /// budget and no duplicate players, then everyone snake-picks a distinct club in turn.</summary>
+    [Test]
+    public async Task Draft_GivesEqualStrengthLegalSquads_EqualBudget_NoDuplicates_ThenSnakePickAssignsClubs()
+    {
+        var (creatorTok, creatorId) = await RegisterAccount();
+        var created = await CreateLeague(creatorTok, size: 4);
+        var code = created.League.InviteCode;
+
+        var accounts = new List<(string Tok, Guid Id)> { (creatorTok, creatorId) };
+        for (int i = 0; i < 3; i++)
+        {
+            var acc = await RegisterAccount();
+            Assert.That((await Join(acc.Token, code)).StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            accounts.Add((acc.Token, acc.UserId));
+        }
+
+        // Start the draft (creator only): squads are equalised + budgets set, the pick order opens.
+        var startResp = await StartDraft(creatorTok, created.League.Id);
+        Assert.That(startResp.StatusCode, Is.EqualTo(HttpStatusCode.OK), "the creator starts the draft");
+        var afterStart = (await startResp.Content.ReadFromJsonAsync<LeagueDetailDto>())!;
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(afterStart.League.Status, Is.EqualTo(LeagueStatus.Drafting));
+            Assert.That(afterStart.Draft.InProgress, Is.True);
+            Assert.That(afterStart.Draft.TotalPicks, Is.EqualTo(4));
+            Assert.That(afterStart.Draft.PicksMade, Is.EqualTo(0));
+            // Legal squads: every club keeps the full 22-man template composition.
+            Assert.That(afterStart.Clubs.All(c => c.Players.Count == 22), Is.True,
+                "every club has a legal, full squad after equalisation");
+            // "Pari budget a tutti": one budget shared by all clubs.
+            var budgets = afterStart.Clubs.Select(c => c.TransferBudget).Distinct().ToList();
+            Assert.That(budgets, Has.Count.EqualTo(1), "all clubs share one starting budget");
+            Assert.That(budgets[0], Is.EqualTo(25_000_000L));
+        });
+
+        // "Rose di pari forza": the club-strength spread is tiny after equalisation.
+        var strengths = afterStart.Clubs.Select(c => c.Strength).OrderBy(x => x).ToList();
+        int spread = strengths[^1] - strengths[0];
+        TestContext.WriteLine($"[draft-equal] strengths=[{string.Join(",", strengths)}] spread={spread}");
+        Assert.That(spread, Is.LessThanOrEqualTo(2), "equalised squads are near-identical in strength");
+
+        // No duplicate players across the whole world (4 clubs × 22 = 88, none lost/duplicated).
+        var worldPlayerIds = afterStart.Clubs.SelectMany(c => c.Players.Select(p => p.ExternalId)).ToList();
+        Assert.That(worldPlayerIds, Is.Unique);
+        Assert.That(worldPlayerIds, Has.Count.EqualTo(88));
+
+        // Snake pick: each member on the clock claims the first still-available club, in turn.
+        var taken = new HashSet<int>();
+        for (int pickNo = 0; pickNo < 4; pickNo++)
+        {
+            var state = await GetDetail(creatorTok, created.League.Id);
+            Assert.That(state.Draft.InProgress, Is.True, "the draft is still running mid-picks");
+            Assert.That(state.Draft.CurrentPickUserId, Is.Not.Null, "someone is on the clock");
+
+            var picker = accounts.First(a => a.Id == state.Draft.CurrentPickUserId!.Value);
+            int clubExternalId = state.Clubs.First(c => !taken.Contains(c.ExternalId)).ExternalId;
+
+            var pickResp = await Pick(picker.Tok, created.League.Id, clubExternalId);
+            Assert.That(pickResp.StatusCode, Is.EqualTo(HttpStatusCode.OK), $"pick #{pickNo} succeeds on turn");
+            taken.Add(clubExternalId);
+        }
+
+        // Draft done → league Active, every member on a distinct club, squads still full + unique.
+        var final = await GetDetail(creatorTok, created.League.Id);
+        Assert.Multiple(() =>
+        {
+            Assert.That(final.League.Status, Is.EqualTo(LeagueStatus.Active));
+            Assert.That(final.Draft.InProgress, Is.False);
+            Assert.That(final.Draft.PicksMade, Is.EqualTo(4));
+            Assert.That(final.Members.All(m => m.ClubExternalId != null), Is.True, "everyone got a club");
+            Assert.That(final.Members.Select(m => m.ClubExternalId).ToList(), Is.Unique,
+                "no two members share a club");
+            Assert.That(final.Clubs.All(c => c.Players.Count == 22), Is.True);
+            Assert.That(final.Clubs.SelectMany(c => c.Players.Select(p => p.ExternalId)).ToList(), Is.Unique);
+        });
+    }
+
+    [Test]
+    public async Task StartDraft_ByNonCreator_ReturnsForbidden()
+    {
+        var (creatorTok, _) = await RegisterAccount();
+        var created = await CreateLeague(creatorTok, size: 4);
+        var joiner = await RegisterAccount();
+        Assert.That((await Join(joiner.Token, created.League.InviteCode)).StatusCode, Is.EqualTo(HttpStatusCode.OK));
+
+        var resp = await StartDraft(joiner.Token, created.League.Id);
+        Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Forbidden));
+    }
+
+    [Test]
+    public async Task StartDraft_WithOnlyOneMember_ReturnsBadRequest()
+    {
+        var (creatorTok, _) = await RegisterAccount();
+        var created = await CreateLeague(creatorTok, size: 4);
+
+        var resp = await StartDraft(creatorTok, created.League.Id);
+        Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest), "need at least two members");
+    }
+
+    [Test]
+    public async Task StartDraft_Twice_ReturnsConflict()
+    {
+        var (creatorTok, _) = await RegisterAccount();
+        var created = await CreateLeague(creatorTok, size: 4);
+        var joiner = await RegisterAccount();
+        await Join(joiner.Token, created.League.InviteCode);
+
+        Assert.That((await StartDraft(creatorTok, created.League.Id)).StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That((await StartDraft(creatorTok, created.League.Id)).StatusCode, Is.EqualTo(HttpStatusCode.Conflict),
+            "the draft has already started");
+    }
+
+    [Test]
+    public async Task Pick_OutOfTurn_ReturnsConflict()
+    {
+        var (creatorTok, creatorId) = await RegisterAccount();
+        var created = await CreateLeague(creatorTok, size: 4);
+        var accounts = new List<(string Tok, Guid Id)> { (creatorTok, creatorId) };
+        for (int i = 0; i < 2; i++)
+        {
+            var acc = await RegisterAccount();
+            await Join(acc.Token, created.League.InviteCode);
+            accounts.Add((acc.Token, acc.UserId));
+        }
+        await StartDraft(creatorTok, created.League.Id);
+
+        var state = await GetDetail(creatorTok, created.League.Id);
+        // Someone who is NOT on the clock tries to pick → 409 not_your_turn.
+        var offTurn = accounts.First(a => a.Id != state.Draft.CurrentPickUserId!.Value);
+        int anyClub = state.Clubs.First().ExternalId;
+        var resp = await Pick(offTurn.Tok, created.League.Id, anyClub);
+        Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
+    }
+
+    [Test]
+    public async Task Pick_ClubAlreadyTaken_ReturnsConflict()
+    {
+        var (creatorTok, creatorId) = await RegisterAccount();
+        var created = await CreateLeague(creatorTok, size: 4);
+        var accounts = new List<(string Tok, Guid Id)> { (creatorTok, creatorId) };
+        for (int i = 0; i < 2; i++)
+        {
+            var acc = await RegisterAccount();
+            await Join(acc.Token, created.League.InviteCode);
+            accounts.Add((acc.Token, acc.UserId));
+        }
+        await StartDraft(creatorTok, created.League.Id);
+
+        // First picker takes a club.
+        var s1 = await GetDetail(creatorTok, created.League.Id);
+        var p1 = accounts.First(a => a.Id == s1.Draft.CurrentPickUserId!.Value);
+        int takenClub = s1.Clubs.First().ExternalId;
+        Assert.That((await Pick(p1.Tok, created.League.Id, takenClub)).StatusCode, Is.EqualTo(HttpStatusCode.OK));
+
+        // The next picker tries the SAME club → 409 club_unavailable.
+        var s2 = await GetDetail(creatorTok, created.League.Id);
+        var p2 = accounts.First(a => a.Id == s2.Draft.CurrentPickUserId!.Value);
+        Assert.That((await Pick(p2.Tok, created.League.Id, takenClub)).StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
+    }
+
+    [Test]
+    public async Task Pick_NonexistentClub_ReturnsConflict()
+    {
+        var (creatorTok, creatorId) = await RegisterAccount();
+        var created = await CreateLeague(creatorTok, size: 4);
+        var joiner = await RegisterAccount();
+        await Join(joiner.Token, created.League.InviteCode);
+        await StartDraft(creatorTok, created.League.Id);
+
+        var state = await GetDetail(creatorTok, created.League.Id);
+        var picker = state.Draft.CurrentPickUserId!.Value == creatorId ? creatorTok : joiner.Token;
+        var resp = await Pick(picker, created.League.Id, clubExternalId: 999_999);
+        Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Conflict), "no such club → club_unavailable");
     }
 
     private async Task<List<LeagueSummaryDto>> ListMine(string accessToken)

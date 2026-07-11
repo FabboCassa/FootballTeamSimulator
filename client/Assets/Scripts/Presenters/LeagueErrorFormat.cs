@@ -16,6 +16,10 @@ namespace Fts.Presenters
             LeagueApiError.LeagueFull => "leagues.error.full",
             LeagueApiError.NotJoinable => "leagues.error.not_joinable",
             LeagueApiError.Forbidden => "leagues.error.forbidden",
+            LeagueApiError.WrongPhase => "leagues.error.wrong_phase",
+            LeagueApiError.NotYourTurn => "leagues.error.not_your_turn",
+            LeagueApiError.ClubUnavailable => "leagues.error.club_unavailable",
+            LeagueApiError.TooFewMembers => "leagues.error.too_few_members",
             _ => "leagues.error.server",
         };
     }

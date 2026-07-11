@@ -15,6 +15,19 @@ public interface ILeagueService
     Task<LeagueResult<LeagueDetailDto>> JoinAsync(
         Guid userId, JoinLeagueRequest request, CancellationToken ct = default);
 
+    /// <summary>Starts the season draft (8.2): only the creator, only while <see cref="LeagueStatus.Forming"/>
+    /// and with at least two members. Equalises every club's squad to the same strength and gives every club
+    /// the same transfer budget (online fairness — "pari budget a tutti"), then opens the snake pick so members
+    /// choose their club (identity) in turn. Moves the league to <see cref="LeagueStatus.Drafting"/>.</summary>
+    Task<LeagueResult<LeagueDetailDto>> StartDraftAsync(
+        Guid userId, Guid leagueId, CancellationToken ct = default);
+
+    /// <summary>Claims a club during the snake draft (8.2): valid only while <see cref="LeagueStatus.Drafting"/>,
+    /// only for the member whose turn it is, and only for a club no one else has taken. When the last member
+    /// picks, the league flips to <see cref="LeagueStatus.Active"/>.</summary>
+    Task<LeagueResult<LeagueDetailDto>> PickClubAsync(
+        Guid userId, Guid leagueId, PickClubRequest request, CancellationToken ct = default);
+
     /// <summary>Removes the caller's membership. If the creator leaves, the earliest remaining member
     /// inherits ownership; if the last member leaves, the league and its world are deleted.</summary>
     Task<LeagueResult<bool>> LeaveAsync(Guid userId, Guid leagueId, CancellationToken ct = default);

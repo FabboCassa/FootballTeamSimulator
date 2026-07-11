@@ -62,7 +62,19 @@ namespace Fts.Services.Online
         public string name;
         public string shortName;
         public int strength;
+        public long transferBudget; // 0 until the draft, then equal for every club (8.2)
         public List<LeaguePlayerDto> players = new List<LeaguePlayerDto>();
+    }
+
+    /// <summary>Mirrors the server's DraftStateDto (8.2). While <see cref="inProgress"/>, the member whose
+    /// turn it is (<see cref="currentPickUserId"/>) picks one of the still-unclaimed clubs.</summary>
+    [Serializable]
+    public sealed class DraftStateDto
+    {
+        public bool inProgress;
+        public string currentPickUserId;
+        public int picksMade;
+        public int totalPicks;
     }
 
     [Serializable]
@@ -71,10 +83,18 @@ namespace Fts.Services.Online
         public LeagueSummaryDto league;
         public List<LeagueMemberDto> members = new List<LeagueMemberDto>();
         public List<LeagueClubDto> clubs = new List<LeagueClubDto>();
+        public DraftStateDto draft;
     }
 
-    /// <summary>Mirrors the server enum (LeagueStatus): 0 Forming / 1 Active / 2 Completed.</summary>
-    public enum LeagueStatus { Forming = 0, Active = 1, Completed = 2 }
+    /// <summary>Body for POST /leagues/{id}/draft/pick (8.2).</summary>
+    [Serializable]
+    public sealed class PickClubBody
+    {
+        public int clubExternalId;
+    }
+
+    /// <summary>Mirrors the server enum (LeagueStatus): 0 Forming / 1 Active / 2 Completed / 3 Drafting.</summary>
+    public enum LeagueStatus { Forming = 0, Active = 1, Completed = 2, Drafting = 3 }
 
     /// <summary>Mirrors the server enum (LeagueMode): 0 AllReady / 1 RealTime.</summary>
     public enum LeagueMode { AllReady = 0, RealTime = 1 }
@@ -91,6 +111,10 @@ namespace Fts.Services.Online
         LeagueFull,    // 409 league_full
         NotJoinable,   // 409 not_joinable
         Forbidden,     // 403
+        WrongPhase,    // 409 wrong_phase (8.2 — draft already started / not running)
+        NotYourTurn,   // 409 not_your_turn (8.2)
+        ClubUnavailable, // 409 club_unavailable (8.2 — unknown or taken club)
+        TooFewMembers, // 400 too_few_members (8.2)
         Server,        // 5xx / unexpected
     }
 

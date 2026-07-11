@@ -22,6 +22,15 @@ public sealed class LeagueService : ILeagueService
     public const int MinSize = 2;
     public const int MaxSize = 20;
 
+    /// <summary>At least two clubs must be human-controlled to play a season (8.2). Any unclaimed clubs
+    /// (members &lt; size) stay AI-controlled.</summary>
+    public const int MinDraftMembers = 2;
+
+    // Equal starting economy for every club when the draft runs — "pari budget a tutti" (8.2). Online
+    // fairness: the market choices, not the starting kitty, decide the squads. First-pass tunable knobs.
+    public const long DraftTransferBudget = 25_000_000;
+    public const long DraftStartingBalance = 25_000_000;
+
     // Unambiguous alphabet (no I/L/O/0/1) so invite codes are easy to read out and type.
     private const string CodeAlphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
     private const int CodeLength = 6;
@@ -115,6 +124,94 @@ public sealed class LeagueService : ILeagueService
         return LeagueResult<LeagueDetailDto>.Ok(detail);
     }
 
+    public async Task<LeagueResult<LeagueDetailDto>> StartDraftAsync(
+        Guid userId, Guid leagueId, CancellationToken ct = default)
+    {
+        var league = await _db.PrivateLeagues.FirstOrDefaultAsync(l => l.Id == leagueId, ct);
+        if (league is null)
+            return LeagueResult<LeagueDetailDto>.Fail(LeagueError.NotFound, "League not found.");
+
+        var isMember = await _db.LeagueMembers.AnyAsync(
+            m => m.PrivateLeagueId == leagueId && m.UserId == userId, ct);
+        if (!isMember)
+            return LeagueResult<LeagueDetailDto>.Fail(LeagueError.Forbidden, "You are not a member of this league.");
+        if (league.CreatorUserId != userId)
+            return LeagueResult<LeagueDetailDto>.Fail(LeagueError.Forbidden, "Only the league owner can start the draft.");
+        if (league.Status != LeagueStatus.Forming)
+            return LeagueResult<LeagueDetailDto>.Fail(LeagueError.WrongPhase, "The draft has already started.");
+
+        var memberCount = await _db.LeagueMembers.CountAsync(m => m.PrivateLeagueId == leagueId, ct);
+        if (memberCount < MinDraftMembers)
+            return LeagueResult<LeagueDetailDto>.Fail(
+                LeagueError.TooFewMembers, $"At least {MinDraftMembers} members are needed to start the season.");
+
+        // Equalise every club's squad to the same strength (fair start) and give every club the same
+        // budget. Player ids are only re-parented — no player added/removed/duplicated.
+        var clubs = await _db.Clubs
+            .Where(c => c.WorldId == league.WorldId)
+            .Include(c => c.Players)
+            .ToListAsync(ct);
+        var players = clubs.SelectMany(c => c.Players).ToList();
+        SquadEqualizer.Equalize(clubs, players);
+        foreach (var club in clubs)
+        {
+            club.TransferBudget = DraftTransferBudget;
+            club.Balance = DraftStartingBalance;
+        }
+
+        league.Status = LeagueStatus.Drafting;
+        await _db.SaveChangesAsync(ct);
+
+        var detail = await BuildDetailAsync(league, userId, ct);
+        return LeagueResult<LeagueDetailDto>.Ok(detail);
+    }
+
+    public async Task<LeagueResult<LeagueDetailDto>> PickClubAsync(
+        Guid userId, Guid leagueId, PickClubRequest request, CancellationToken ct = default)
+    {
+        var league = await _db.PrivateLeagues.FirstOrDefaultAsync(l => l.Id == leagueId, ct);
+        if (league is null)
+            return LeagueResult<LeagueDetailDto>.Fail(LeagueError.NotFound, "League not found.");
+        if (league.Status != LeagueStatus.Drafting)
+            return LeagueResult<LeagueDetailDto>.Fail(LeagueError.WrongPhase, "The draft is not currently running.");
+
+        var members = await _db.LeagueMembers
+            .Where(m => m.PrivateLeagueId == leagueId)
+            .OrderBy(m => m.JoinedUtc).ThenBy(m => m.Id)
+            .ToListAsync(ct);
+
+        var me = members.FirstOrDefault(m => m.UserId == userId);
+        if (me is null)
+            return LeagueResult<LeagueDetailDto>.Fail(LeagueError.Forbidden, "You are not a member of this league.");
+
+        // Turn = the earliest-joined member who has not yet picked (one club per member → snake reversal is
+        // a no-op with single picks, but the turn is still strictly ordered).
+        var current = members.FirstOrDefault(m => m.ClubId is null);
+        if (current is null)
+            return LeagueResult<LeagueDetailDto>.Fail(LeagueError.WrongPhase, "The draft is already complete.");
+        if (current.UserId != userId)
+            return LeagueResult<LeagueDetailDto>.Fail(LeagueError.NotYourTurn, "It is not your turn to pick.");
+
+        var club = await _db.Clubs.FirstOrDefaultAsync(
+            c => c.WorldId == league.WorldId && c.ExternalId == request.ClubExternalId, ct);
+        if (club is null)
+            return LeagueResult<LeagueDetailDto>.Fail(LeagueError.ClubUnavailable, "No such club in this league.");
+
+        if (members.Any(m => m.ClubId == club.Id))
+            return LeagueResult<LeagueDetailDto>.Fail(LeagueError.ClubUnavailable, "That club has already been taken.");
+
+        me.ClubId = club.Id;
+
+        // Once every member holds a club the season is set — the league goes Active (fixtures land in 8.3).
+        if (members.All(m => m.ClubId is not null))
+            league.Status = LeagueStatus.Active;
+
+        await _db.SaveChangesAsync(ct);
+
+        var detail = await BuildDetailAsync(league, userId, ct);
+        return LeagueResult<LeagueDetailDto>.Ok(detail);
+    }
+
     public async Task<LeagueResult<bool>> LeaveAsync(Guid userId, Guid leagueId, CancellationToken ct = default)
     {
         var member = await _db.LeagueMembers.FirstOrDefaultAsync(
@@ -202,7 +299,7 @@ public sealed class LeagueService : ILeagueService
     {
         var members = await _db.LeagueMembers
             .Where(m => m.PrivateLeagueId == league.Id)
-            .OrderBy(m => m.JoinedUtc)
+            .OrderBy(m => m.JoinedUtc).ThenBy(m => m.Id)
             .ToListAsync(ct);
 
         var userIds = members.Select(m => m.UserId).Distinct().ToList();
@@ -236,6 +333,7 @@ public sealed class LeagueService : ILeagueService
                 Name: c.Name,
                 ShortName: c.ShortName,
                 Strength: c.Strength,
+                TransferBudget: c.TransferBudget,
                 Players: c.Players
                     .OrderBy(p => p.ExternalId)
                     .Select(p => new LeaguePlayerDto(
@@ -247,7 +345,14 @@ public sealed class LeagueService : ILeagueService
                     .ToList()))
             .ToList();
 
-        return new LeagueDetailDto(Summary(league, members.Count, callerId), memberDtos, clubDtos);
+        var picksMade = members.Count(m => m.ClubId is not null);
+        var inProgress = league.Status == LeagueStatus.Drafting;
+        Guid? currentPickUserId = inProgress
+            ? members.FirstOrDefault(m => m.ClubId is null)?.UserId
+            : null;
+        var draft = new DraftStateDto(inProgress, currentPickUserId, picksMade, members.Count);
+
+        return new LeagueDetailDto(Summary(league, members.Count, callerId), memberDtos, clubDtos, draft);
     }
 
     private static LeagueSummaryDto Summary(PrivateLeague l, int memberCount, Guid callerId) => new(

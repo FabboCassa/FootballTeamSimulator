@@ -49,6 +49,24 @@ public static class LeagueEndpoints
             return result.Success ? Results.Ok(result.Value) : MapError(result.Error, result.Message);
         });
 
+        // Start the season snake draft (creator only): equalise squads + budgets, open the pick order.
+        group.MapPost("/{id:guid}/draft/start", async (
+            Guid id, ClaimsPrincipal user, ILeagueService leagues, CancellationToken ct) =>
+        {
+            if (!TryGetUserId(user, out var userId)) return Results.Unauthorized();
+            var result = await leagues.StartDraftAsync(userId, id, ct);
+            return result.Success ? Results.Ok(result.Value) : MapError(result.Error, result.Message);
+        });
+
+        // Claim a club during the draft (only on your turn, only an unclaimed club).
+        group.MapPost("/{id:guid}/draft/pick", async (
+            Guid id, PickClubRequest req, ClaimsPrincipal user, ILeagueService leagues, CancellationToken ct) =>
+        {
+            if (!TryGetUserId(user, out var userId)) return Results.Unauthorized();
+            var result = await leagues.PickClubAsync(userId, id, req, ct);
+            return result.Success ? Results.Ok(result.Value) : MapError(result.Error, result.Message);
+        });
+
         // Leave (or disband if last member out).
         group.MapPost("/{id:guid}/leave", async (
             Guid id, ClaimsPrincipal user, ILeagueService leagues, CancellationToken ct) =>
@@ -74,6 +92,10 @@ public static class LeagueEndpoints
         LeagueError.AlreadyMember => Results.Conflict(new { error = "already_member", message }),
         LeagueError.LeagueFull => Results.Conflict(new { error = "league_full", message }),
         LeagueError.NotJoinable => Results.Conflict(new { error = "not_joinable", message }),
+        LeagueError.WrongPhase => Results.Conflict(new { error = "wrong_phase", message }),
+        LeagueError.NotYourTurn => Results.Conflict(new { error = "not_your_turn", message }),
+        LeagueError.ClubUnavailable => Results.Conflict(new { error = "club_unavailable", message }),
+        LeagueError.TooFewMembers => Results.BadRequest(new { error = "too_few_members", message }),
         LeagueError.Forbidden => Results.Json(
             new { error = "forbidden", message }, statusCode: StatusCodes.Status403Forbidden),
         _ => Results.BadRequest(new { error = "league_error", message }),

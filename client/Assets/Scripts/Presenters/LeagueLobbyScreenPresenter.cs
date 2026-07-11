@@ -28,6 +28,7 @@ namespace Fts.Presenters
         private readonly LeagueLobbyView _view;
 
         private bool _busy;
+        private string _leagueId;
 
         public VisualElement View => _view.Root;
 
@@ -45,6 +46,9 @@ namespace Fts.Presenters
         {
             _view.LeaveClicked += OnLeave;
             _view.BackClicked += OnBack;
+            _view.StartDraftClicked += OnStartDraft;
+            _view.RefreshClicked += OnRefresh;
+            _view.PickClicked += OnPick;
             LoadAsync(_selection.TakePreloaded()).Forget();
         }
 
@@ -52,6 +56,9 @@ namespace Fts.Presenters
         {
             _view.LeaveClicked -= OnLeave;
             _view.BackClicked -= OnBack;
+            _view.StartDraftClicked -= OnStartDraft;
+            _view.RefreshClicked -= OnRefresh;
+            _view.PickClicked -= OnPick;
         }
 
         public void Reveal() => LoadAsync(null).Forget();
@@ -86,6 +93,7 @@ namespace Fts.Presenters
 
         private void Render(LeagueDetailDto detail)
         {
+            _leagueId = detail.league.id;
             _view.SetHeader(detail.league.name);
             _view.SetInviteCode(detail.league.inviteCode);
 
@@ -99,6 +107,8 @@ namespace Fts.Presenters
             }
             _view.SetMembers(members);
 
+            RenderDraft(detail);
+
             var clubs = new List<LeagueLobbyView.ClubVm>(detail.clubs.Count);
             foreach (var c in detail.clubs)
             {
@@ -110,6 +120,146 @@ namespace Fts.Presenters
             }
             _view.SetClubs(clubs);
         }
+
+        /// <summary>Draws the draft card based on the league phase: a "Start draft" button for the owner
+        /// while forming, a live turn banner + a pick list on your turn while drafting, hidden once the
+        /// season is active (8.2b).</summary>
+        private void RenderDraft(LeagueDetailDto detail)
+        {
+            var status = (LeagueStatus)detail.league.status;
+
+            if (status == LeagueStatus.Forming)
+            {
+                _view.SetDraftVisible(true);
+                _view.SetDraftBanner(string.Empty, false);
+                _view.SetPickList(null);
+                _view.SetRefreshVisible(true);
+
+                bool enoughMembers = detail.members.Count >= 2;
+                if (detail.league.isCreator)
+                {
+                    _view.SetStartButton(visible: true, enabled: enoughMembers && !_busy);
+                    _view.SetStartHint(_loc.Tr("lobby.start_hint"), visible: !enoughMembers);
+                }
+                else
+                {
+                    _view.SetStartButton(false, false);
+                    _view.SetStartHint(_loc.Tr("lobby.waiting_owner"), true);
+                }
+                return;
+            }
+
+            if (status == LeagueStatus.Drafting)
+            {
+                _view.SetDraftVisible(true);
+                _view.SetStartButton(false, false);
+                _view.SetStartHint(string.Empty, false);
+                _view.SetRefreshVisible(true);
+
+                var draft = detail.draft;
+                int made = draft?.picksMade ?? 0;
+                int total = draft?.totalPicks ?? detail.members.Count;
+                string progress = _loc.Tr("lobby.draft_progress", made, total);
+
+                bool myTurn = draft != null && !string.IsNullOrEmpty(draft.currentPickUserId)
+                              && draft.currentPickUserId == _leagues.CurrentUserId;
+
+                if (myTurn)
+                {
+                    _view.SetDraftBanner(_loc.Tr("lobby.draft_your_turn") + "  " + progress, true);
+                    _view.SetPickList(BuildPickList(detail));
+                }
+                else
+                {
+                    string who = MemberName(detail, draft?.currentPickUserId);
+                    _view.SetDraftBanner(_loc.Tr("lobby.draft_turn", who) + "  " + progress, true);
+                    _view.SetPickList(null);
+                }
+                return;
+            }
+
+            // Active / Completed — the season has started; the draft card is no longer needed.
+            _view.SetDraftVisible(false);
+        }
+
+        private List<LeagueLobbyView.PickVm> BuildPickList(LeagueDetailDto detail)
+        {
+            var taken = new HashSet<int>();
+            foreach (var m in detail.members)
+                if (m.clubExternalId.HasValue) taken.Add(m.clubExternalId.Value);
+
+            var picks = new List<LeagueLobbyView.PickVm>();
+            foreach (var c in detail.clubs)
+            {
+                if (taken.Contains(c.externalId)) continue;
+                var label = _loc.Tr("lobby.pick_row", c.name, c.strength, MoneyFormat.Short(c.transferBudget));
+                picks.Add(new LeagueLobbyView.PickVm(c.externalId, label));
+            }
+            return picks;
+        }
+
+        private static string MemberName(LeagueDetailDto detail, string userId)
+        {
+            if (!string.IsNullOrEmpty(userId))
+                foreach (var m in detail.members)
+                    if (m.userId == userId) return m.displayName;
+            return "…";
+        }
+
+        private void OnStartDraft() => StartDraftAsync().Forget();
+
+        private async UniTaskVoid StartDraftAsync()
+        {
+            if (_busy || string.IsNullOrEmpty(_leagueId)) return;
+            _busy = true;
+            _view.SetBusy(true);
+            _view.ShowStatus(_loc.Tr("lobby.starting_draft"), isError: false);
+
+            var result = await _leagues.StartDraftAsync(_leagueId);
+
+            _busy = false;
+            _view.SetBusy(false);
+
+            if (result.Success)
+            {
+                _view.ClearStatus();
+                Render(result.Value);
+            }
+            else
+            {
+                _view.ShowStatus(_loc.Tr(LeagueErrorFormat.Key(result.Error)), isError: true);
+            }
+        }
+
+        private void OnPick(int clubExternalId) => PickAsync(clubExternalId).Forget();
+
+        private async UniTaskVoid PickAsync(int clubExternalId)
+        {
+            if (_busy || string.IsNullOrEmpty(_leagueId)) return;
+            _busy = true;
+            _view.SetBusy(true);
+            _view.ShowStatus(_loc.Tr("lobby.picking"), isError: false);
+
+            var result = await _leagues.PickClubAsync(_leagueId, clubExternalId);
+
+            _busy = false;
+            _view.SetBusy(false);
+
+            if (result.Success)
+            {
+                _view.ClearStatus();
+                Render(result.Value);
+            }
+            else
+            {
+                // A stale turn/club (someone else moved) → resync from the server, then show why.
+                var fresh = await _leagues.GetAsync(_leagueId);
+                if (fresh.Success) Render(fresh.Value);
+                _view.ShowStatus(_loc.Tr(LeagueErrorFormat.Key(result.Error)), isError: true);
+            }
+        }
+
+        private void OnRefresh() => LoadAsync(null).Forget();
 
         private static string RoleKey(int role) =>
             role >= 0 && role < RoleKeys.Length ? RoleKeys[role] : "role.centralmidfielder";

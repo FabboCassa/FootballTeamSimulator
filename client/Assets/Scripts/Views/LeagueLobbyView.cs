@@ -13,6 +13,9 @@ namespace Fts.Views
     {
         public event Action LeaveClicked;
         public event Action BackClicked;
+        public event Action StartDraftClicked;
+        public event Action RefreshClicked;
+        public event Action<int> PickClicked;
 
         public VisualElement Root { get; }
 
@@ -21,6 +24,13 @@ namespace Fts.Views
         private readonly Label _title;
         private readonly Label _inviteCaption;
         private readonly Label _inviteValue;
+        private readonly VisualElement _draftCard;
+        private readonly Label _draftCaption;
+        private readonly Label _draftBanner;
+        private readonly Button _startButton;
+        private readonly Label _startHint;
+        private readonly VisualElement _pickContainer;
+        private readonly Button _refreshButton;
         private readonly Label _membersCaption;
         private readonly VisualElement _membersContainer;
         private readonly Label _clubsCaption;
@@ -35,6 +45,14 @@ namespace Fts.Views
             public readonly string Header;
             public readonly IReadOnlyList<string> Players;
             public ClubVm(string header, IReadOnlyList<string> players) { Header = header; Players = players; }
+        }
+
+        /// <summary>A pickable club during the draft: the id to send + a preformatted label (8.2b).</summary>
+        public readonly struct PickVm
+        {
+            public readonly int ExternalId;
+            public readonly string Label;
+            public PickVm(int externalId, string label) { ExternalId = externalId; Label = label; }
         }
 
         public LeagueLobbyView(Func<string, string> tr)
@@ -55,6 +73,28 @@ namespace Fts.Views
             _inviteValue = UiKit.Title(string.Empty);
             _inviteValue.style.color = UiKit.Accent;
             inviteCard.Add(_inviteValue);
+
+            // --- draft (8.2b): shown while forming/drafting; hidden once the season is active ---
+            _draftCard = UiKit.Card();
+            _draftCard.style.marginTop = UiKit.SpaceMd;
+            col.Add(_draftCard);
+            _draftCaption = UiKit.Subtitle(string.Empty);
+            _draftCard.Add(_draftCaption);
+            _draftBanner = UiKit.Caption(string.Empty);
+            _draftBanner.style.whiteSpace = WhiteSpace.Normal;
+            _draftBanner.style.marginBottom = UiKit.SpaceXs;
+            _draftCard.Add(_draftBanner);
+            _startButton = UiKit.PrimaryButton(string.Empty, () => StartDraftClicked?.Invoke());
+            _draftCard.Add(_startButton);
+            _startHint = UiKit.Caption(string.Empty);
+            _startHint.style.whiteSpace = WhiteSpace.Normal;
+            _draftCard.Add(_startHint);
+            _pickContainer = new VisualElement();
+            _pickContainer.style.marginTop = UiKit.SpaceXs;
+            _draftCard.Add(_pickContainer);
+            _refreshButton = UiKit.MenuButton(string.Empty, () => RefreshClicked?.Invoke());
+            _refreshButton.style.marginTop = UiKit.SpaceXs;
+            _draftCard.Add(_refreshButton);
 
             _membersCaption = UiKit.Subtitle(string.Empty);
             _membersCaption.style.marginTop = UiKit.SpaceMd;
@@ -121,6 +161,56 @@ namespace Fts.Views
             }
         }
 
+        // --- draft (8.2b) -------------------------------------------------------------------------
+
+        public void SetDraftVisible(bool visible) =>
+            _draftCard.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+
+        public void SetDraftBanner(string text, bool visible)
+        {
+            _draftBanner.text = text;
+            _draftBanner.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+        }
+
+        public void SetStartButton(bool visible, bool enabled)
+        {
+            _startButton.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+            _startButton.SetEnabled(enabled);
+        }
+
+        public void SetStartHint(string text, bool visible)
+        {
+            _startHint.text = text;
+            _startHint.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+        }
+
+        public void SetRefreshVisible(bool visible) =>
+            _refreshButton.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+
+        public void SetPickList(IReadOnlyList<PickVm> picks)
+        {
+            _pickContainer.Clear();
+            if (picks == null) return;
+            foreach (var p in picks)
+            {
+                var row = new VisualElement();
+                row.style.flexDirection = FlexDirection.Row;
+                row.style.alignItems = Align.Center;
+                row.style.marginBottom = UiKit.SpaceXs;
+
+                var label = UiKit.Caption(p.Label);
+                label.style.flexGrow = 1;
+                label.style.whiteSpace = WhiteSpace.Normal;
+                row.Add(label);
+
+                int id = p.ExternalId;
+                var btn = new Button(() => PickClicked?.Invoke(id)) { text = _tr("lobby.pick_button") };
+                row.Add(btn);
+
+                _pickContainer.Add(row);
+            }
+        }
+
         public void ShowStatus(string message, bool isError)
         {
             _status.text = message;
@@ -130,11 +220,19 @@ namespace Fts.Views
 
         public void ClearStatus() => _status.style.display = DisplayStyle.None;
 
-        public void SetBusy(bool busy) => _leaveButton.SetEnabled(!busy);
+        public void SetBusy(bool busy)
+        {
+            _leaveButton.SetEnabled(!busy);
+            _startButton.SetEnabled(!busy);
+            _refreshButton.SetEnabled(!busy);
+        }
 
         public void UpdateTexts()
         {
             _inviteCaption.text = _tr("lobby.invite_code");
+            _draftCaption.text = _tr("lobby.draft_caption");
+            _startButton.text = _tr("lobby.start_draft");
+            _refreshButton.text = _tr("lobby.refresh");
             _membersCaption.text = _tr("lobby.members");
             _clubsCaption.text = _tr("lobby.clubs");
             _leaveButton.text = _tr("lobby.leave");
