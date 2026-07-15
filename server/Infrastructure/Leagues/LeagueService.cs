@@ -238,6 +238,7 @@ public sealed class LeagueService : ILeagueService
             // ordered deletes keep the teardown portable across PostgreSQL and the SQLite test provider).
             await _db.LeagueFixtures.Where(f => f.PrivateLeagueId == leagueId).ExecuteDeleteAsync(ct);
             await _db.LeagueLineups.Where(x => x.PrivateLeagueId == leagueId).ExecuteDeleteAsync(ct);
+            await _db.LeagueTrainings.Where(x => x.PrivateLeagueId == leagueId).ExecuteDeleteAsync(ct);
             await _db.Players.Where(p => p.WorldId == worldId).ExecuteDeleteAsync(ct);
             await _db.Coaches.Where(c => c.WorldId == worldId).ExecuteDeleteAsync(ct);
             await _db.Clubs.Where(c => c.WorldId == worldId).ExecuteDeleteAsync(ct);

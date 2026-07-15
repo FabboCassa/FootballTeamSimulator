@@ -87,6 +87,15 @@ public static class LeagueEndpoints
             return result.Success ? Results.Ok(result.Value) : MapError(result.Error, result.Message);
         });
 
+        // Submit (or replace) the caller's training plan for their club (Phase 8.4) — reused each week.
+        group.MapPost("/{id:guid}/training", async (
+            Guid id, SubmitTrainingRequest req, ClaimsPrincipal user, ILeagueSeasonService season, CancellationToken ct) =>
+        {
+            if (!TryGetUserId(user, out var userId)) return Results.Unauthorized();
+            var result = await season.SubmitTrainingAsync(userId, id, req, ct);
+            return result.Success ? Results.Ok(result.Value) : MapError(result.Error, result.Message);
+        });
+
         // Mark ready / not ready — when everyone is ready the next round resolves automatically.
         group.MapPost("/{id:guid}/ready", async (
             Guid id, SetReadyRequest req, ClaimsPrincipal user, ILeagueSeasonService season, CancellationToken ct) =>
@@ -111,6 +120,15 @@ public static class LeagueEndpoints
         {
             if (!TryGetUserId(user, out var userId)) return Results.Unauthorized();
             var result = await season.GetSeasonAsync(userId, id, ct);
+            return result.Success ? Results.Ok(result.Value) : MapError(result.Error, result.Message);
+        });
+
+        // The canonical whole-world state hash (condition + attributes) — client/server agreement (8.4 ✅).
+        group.MapGet("/{id:guid}/state-hash", async (
+            Guid id, ClaimsPrincipal user, ILeagueSeasonService season, CancellationToken ct) =>
+        {
+            if (!TryGetUserId(user, out var userId)) return Results.Unauthorized();
+            var result = await season.GetStateHashAsync(userId, id, ct);
             return result.Success ? Results.Ok(result.Value) : MapError(result.Error, result.Message);
         });
 

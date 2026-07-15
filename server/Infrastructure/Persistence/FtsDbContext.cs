@@ -34,6 +34,7 @@ public sealed class FtsDbContext : IdentityDbContext<AppUser, IdentityRole<Guid>
     public DbSet<LeagueMember> LeagueMembers => Set<LeagueMember>();
     public DbSet<LeagueFixture> LeagueFixtures => Set<LeagueFixture>();
     public DbSet<LeagueLineup> LeagueLineups => Set<LeagueLineup>();
+    public DbSet<LeagueTraining> LeagueTrainings => Set<LeagueTraining>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -103,6 +104,12 @@ public sealed class FtsDbContext : IdentityDbContext<AppUser, IdentityRole<Guid>
             e.Property(x => x.FirstName).HasMaxLength(60).IsRequired();
             e.Property(x => x.LastName).HasMaxLength(60).IsRequired();
             e.Property(x => x.AttributesJson).HasColumnType("jsonb").IsRequired();
+            // Server-authoritative condition (Phase 8.4). Column defaults backfill any pre-8.4 rows to
+            // a sensible neutral state (an existing world otherwise gets 0 fitness = broken); new rows
+            // carry the entity's seeded values (50/50/100).
+            e.Property(x => x.Form).HasDefaultValue(50);
+            e.Property(x => x.Morale).HasDefaultValue(50);
+            e.Property(x => x.Fitness).HasDefaultValue(100);
             e.HasOne(x => x.World)
                 .WithMany(w => w.Players)
                 .HasForeignKey(x => x.WorldId)
@@ -265,6 +272,28 @@ public sealed class FtsDbContext : IdentityDbContext<AppUser, IdentityRole<Guid>
                 .HasForeignKey(x => x.ClubId)
                 .OnDelete(DeleteBehavior.Restrict);
             // One live submission per club (upsert key), plus a lookup by member.
+            e.HasIndex(x => new { x.PrivateLeagueId, x.ClubId }).IsUnique();
+            e.HasIndex(x => new { x.PrivateLeagueId, x.UserId });
+        });
+
+        // --- Season: submitted training plans (Phase 8.4) -----------------------------------
+
+        b.Entity<LeagueTraining>(e =>
+        {
+            e.ToTable("league_trainings");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.TrainingJson).IsRequired();
+            e.HasOne(x => x.PrivateLeague)
+                .WithMany()
+                .HasForeignKey(x => x.PrivateLeagueId)
+                .OnDelete(DeleteBehavior.Cascade);
+            // Restrict (like league_lineups) — two club FKs already cascade from worlds; the disband
+            // teardown deletes league_trainings explicitly before clubs (portable Postgres/SQLite).
+            e.HasOne(x => x.Club)
+                .WithMany()
+                .HasForeignKey(x => x.ClubId)
+                .OnDelete(DeleteBehavior.Restrict);
+            // One live training plan per club (upsert key), plus a lookup by member.
             e.HasIndex(x => new { x.PrivateLeagueId, x.ClubId }).IsUnique();
             e.HasIndex(x => new { x.PrivateLeagueId, x.UserId });
         });

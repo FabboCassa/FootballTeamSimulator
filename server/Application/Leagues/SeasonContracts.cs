@@ -1,3 +1,4 @@
+using Sim.Core.Development;
 using Sim.Core.Match;
 using Sim.Core.Tactics;
 
@@ -19,6 +20,16 @@ public sealed record SubmitLineupRequest(LineupPlan Lineup, TacticPlan? Tactic, 
 /// <summary>Mark (or clear) the caller as ready to advance. When every member is ready the next round
 /// resolves automatically (the all-ready mode).</summary>
 public sealed record SetReadyRequest(bool Ready);
+
+/// <summary>Submit (or replace) the caller's training plan for their club (Phase 8.4). The
+/// server-authoritative weekly development tick reuses it each round-week; a club without a submission
+/// trains the AI default. The plan is the shared Sim.Core <see cref="TrainingPlan"/>.</summary>
+public sealed record SubmitTrainingRequest(TrainingPlan Training);
+
+/// <summary>A canonical hash of the whole world's mutable player state (condition + attributes) after the
+/// rounds played so far (Phase 8.4). The client re-runs the same deterministic Sim.Core progressors and
+/// compares its own hash to confirm client and server agree.</summary>
+public sealed record StateHashDto(string HashHex, int PlayerCount, int RoundsPlayed);
 
 /// <summary>One scheduled/played match in the season.</summary>
 public sealed record LeagueFixtureDto(

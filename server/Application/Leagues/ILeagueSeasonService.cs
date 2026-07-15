@@ -16,10 +16,22 @@ public interface ILeagueSeasonService
     Task<LeagueResult<SeasonStateDto>> SubmitLineupAsync(
         Guid userId, Guid leagueId, SubmitLineupRequest request, CancellationToken ct = default);
 
+    /// <summary>Stores (or replaces) the caller's training plan for their club (Phase 8.4). The
+    /// server-authoritative weekly development tick reuses it each round-week. Requires the season to be
+    /// Active and the caller to have a club.</summary>
+    Task<LeagueResult<SeasonStateDto>> SubmitTrainingAsync(
+        Guid userId, Guid leagueId, SubmitTrainingRequest request, CancellationToken ct = default);
+
     /// <summary>Marks the caller ready (or not). When every member is ready, the next unplayed round
     /// resolves automatically and all ready flags are cleared.</summary>
     Task<LeagueResult<LeagueSeasonDto>> SetReadyAsync(
         Guid userId, Guid leagueId, SetReadyRequest request, CancellationToken ct = default);
+
+    /// <summary>The canonical hash of the whole world's mutable player state (condition + attributes)
+    /// after the rounds played so far (Phase 8.4 ✅). Members only. Lets a client verify it agrees with
+    /// the server-authoritative state.</summary>
+    Task<LeagueResult<StateHashDto>> GetStateHashAsync(
+        Guid userId, Guid leagueId, CancellationToken ct = default);
 
     /// <summary>Forces the next unplayed round to resolve now (creator only), using each club's last
     /// submitted inputs or the best-XI fallback. Clears ready flags. The anti-stall / testing driver.</summary>

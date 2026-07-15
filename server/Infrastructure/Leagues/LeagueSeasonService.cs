@@ -4,10 +4,14 @@ using Fts.Application.Leagues;
 using Fts.Infrastructure.Persistence;
 using Fts.Infrastructure.Persistence.Entities;
 using Microsoft.EntityFrameworkCore;
+using Sim.Core.Career;
+using Sim.Core.Condition;
 using Sim.Core.Config;
+using Sim.Core.Development;
 using Sim.Core.Match;
 using Sim.Core.Tactics;
 using SimClub = Sim.Core.Domain.Club;
+using SimLeague = Sim.Core.Domain.League;
 
 namespace Fts.Infrastructure.Leagues;
 
@@ -91,6 +95,52 @@ public sealed class LeagueSeasonService : ILeagueSeasonService
             existing.LineupJson = lineupJson;
             existing.TacticJson = tacticJson;
             existing.PrematchPlanJson = planJson;
+            existing.UpdatedUtc = DateTime.UtcNow;
+        }
+
+        await _db.SaveChangesAsync(ct);
+
+        var state = await BuildSeasonStateAsync(league, userId, ct);
+        return LeagueResult<SeasonStateDto>.Ok(state);
+    }
+
+    public async Task<LeagueResult<SeasonStateDto>> SubmitTrainingAsync(
+        Guid userId, Guid leagueId, SubmitTrainingRequest request, CancellationToken ct = default)
+    {
+        var league = await _db.PrivateLeagues.FirstOrDefaultAsync(l => l.Id == leagueId, ct);
+        if (league is null)
+            return LeagueResult<SeasonStateDto>.Fail(LeagueError.NotFound, "League not found.");
+
+        var member = await _db.LeagueMembers.FirstOrDefaultAsync(
+            m => m.PrivateLeagueId == leagueId && m.UserId == userId, ct);
+        if (member is null)
+            return LeagueResult<SeasonStateDto>.Fail(LeagueError.Forbidden, "You are not a member of this league.");
+        if (league.Status != LeagueStatus.Active)
+            return LeagueResult<SeasonStateDto>.Fail(LeagueError.WrongPhase, "The season is not under way.");
+        if (member.ClubId is not { } clubId)
+            return LeagueResult<SeasonStateDto>.Fail(LeagueError.NotAssignedClub, "You have no club in this league.");
+        if (request.Training is null)
+            return LeagueResult<SeasonStateDto>.Fail(LeagueError.ValidationFailed, "A training plan is required.");
+
+        string trainingJson = JsonSerializer.Serialize(request.Training, PlanJson);
+
+        var existing = await _db.LeagueTrainings.FirstOrDefaultAsync(
+            x => x.PrivateLeagueId == leagueId && x.ClubId == clubId, ct);
+        if (existing is null)
+        {
+            _db.LeagueTrainings.Add(new LeagueTraining
+            {
+                Id = Guid.NewGuid(),
+                PrivateLeagueId = leagueId,
+                UserId = userId,
+                ClubId = clubId,
+                TrainingJson = trainingJson,
+                UpdatedUtc = DateTime.UtcNow,
+            });
+        }
+        else
+        {
+            existing.TrainingJson = trainingJson;
             existing.UpdatedUtc = DateTime.UtcNow;
         }
 
@@ -188,6 +238,47 @@ public sealed class LeagueSeasonService : ILeagueSeasonService
         return LeagueResult<string>.Ok(fixture.ReplayJson);
     }
 
+    public async Task<LeagueResult<StateHashDto>> GetStateHashAsync(
+        Guid userId, Guid leagueId, CancellationToken ct = default)
+    {
+        var league = await _db.PrivateLeagues.FirstOrDefaultAsync(l => l.Id == leagueId, ct);
+        if (league is null)
+            return LeagueResult<StateHashDto>.Fail(LeagueError.NotFound, "League not found.");
+
+        var isMember = await _db.LeagueMembers.AnyAsync(m => m.PrivateLeagueId == leagueId && m.UserId == userId, ct);
+        if (!isMember)
+            return LeagueResult<StateHashDto>.Fail(LeagueError.Forbidden, "You are not a member of this league.");
+
+        var clubs = await _db.Clubs
+            .Where(c => c.WorldId == league.WorldId)
+            .Include(c => c.Players)
+            .ToListAsync(ct);
+
+        SimLeague simWorld = WorldSquadReader.ToSimLeague(clubs);
+        ulong hash = Sim.Core.Domain.WorldStateHasher.Hash(new[] { simWorld });
+        int playerCount = clubs.Sum(c => c.Players.Count);
+        int roundsPlayed = await CountRoundsPlayedAsync(leagueId, ct);
+
+        return LeagueResult<StateHashDto>.Ok(new StateHashDto(
+            Sim.Core.Domain.WorldStateHasher.ToHex(hash), playerCount, roundsPlayed));
+    }
+
+    /// <summary>Number of fully-played rounds (a round counts only when all its fixtures are played).</summary>
+    private async Task<int> CountRoundsPlayedAsync(Guid leagueId, CancellationToken ct)
+    {
+        var fixtures = await _db.LeagueFixtures
+            .Where(f => f.PrivateLeagueId == leagueId)
+            .Select(f => new { f.Round, f.IsPlayed })
+            .ToListAsync(ct);
+        if (fixtures.Count == 0) return 0;
+
+        int totalRounds = fixtures.Max(f => f.Round);
+        int played = 0;
+        for (int r = 1; r <= totalRounds; r++)
+            if (fixtures.Where(f => f.Round == r).All(f => f.IsPlayed)) played++;
+        return played;
+    }
+
     // --- round resolution --------------------------------------------------------------------------
 
     /// <summary>Resolves the lowest round that still has unplayed fixtures. Returns the round number, or
@@ -219,6 +310,10 @@ public sealed class LeagueSeasonService : ILeagueSeasonService
         var lineups = await _db.LeagueLineups.Where(x => x.PrivateLeagueId == league.Id).ToListAsync(ct);
         var inputsByClub = lineups.ToDictionary(x => x.ClubId, DeserializeInputs);
 
+        // The clubs that played this round, keyed by their world-unique external id (= Sim.Core club id),
+        // with the kickoff XI + result — the input to the weekly condition tick.
+        var played = new Dictionary<int, ConditionProgressor.Participation>();
+
         var now = DateTime.UtcNow;
         foreach (var f in roundFixtures)
         {
@@ -227,8 +322,13 @@ public sealed class LeagueSeasonService : ILeagueSeasonService
             inputsByClub.TryGetValue(f.HomeClubId, out var homeInputs);
             inputsByClub.TryGetValue(f.AwayClubId, out var awayInputs);
 
-            ulong seed = MatchSeed(worldSeed, f.Round, entByGuid[f.HomeClubId].ExternalId, entByGuid[f.AwayClubId].ExternalId);
-            MatchReport report = MatchResolver.Resolve(home, away, homeInputs, awayInputs, seed, _config);
+            int homeExt = entByGuid[f.HomeClubId].ExternalId;
+            int awayExt = entByGuid[f.AwayClubId].ExternalId;
+            ulong seed = MatchSeed(worldSeed, f.Round, homeExt, awayExt);
+
+            // Resolve on the clubs' live condition (server-authoritative from 8.4).
+            MatchResolver.ResolveResult r = MatchResolver.Resolve(home, away, homeInputs, awayInputs, seed, _config);
+            MatchReport report = r.Report;
 
             f.HomeGoals = report.HomeGoals;
             f.AwayGoals = report.AwayGoals;
@@ -236,6 +336,37 @@ public sealed class LeagueSeasonService : ILeagueSeasonService
             f.MatchSeed = unchecked((long)seed);
             f.ResolvedUtc = now;
             f.ReplayJson = JsonSerializer.Serialize(report);
+
+            played[homeExt] = new ConditionProgressor.Participation(
+                r.HomeStarterIds, ResultFor(report.HomeGoals, report.AwayGoals));
+            played[awayExt] = new ConditionProgressor.Participation(
+                r.AwayStarterIds, ResultFor(report.AwayGoals, report.HomeGoals));
+        }
+
+        // The server-authoritative weekly tick: evolve the WHOLE world's condition + development for this
+        // round-week (1 resolved round = 1 week). It mutates the same reconstructed Sim.Core clubs used by
+        // the matches, driven by who played and by the submitted training plans; a client re-running the
+        // identical Sim.Core progressors derives the same state (the 8.4 ✅, verified via the state hash).
+        var simWorld = new SimLeague { Division = 1 };
+        foreach (SimClub sc in simByGuid.Values) simWorld.Clubs.Add(sc);
+
+        IReadOnlyDictionary<int, TrainingPlan> trainingPlans = await LoadTrainingPlansAsync(league.Id, entByGuid, ct);
+
+        OnlineSeasonTick.EvolveWeek(new[] { simWorld }, played, trainingPlans, unchecked((ulong)worldSeed), round, _config);
+
+        // Persist the evolved condition + attributes back onto every player.
+        foreach (var (guid, ent) in entByGuid)
+        {
+            var simByExternal = simByGuid[guid].Squad.Players.ToDictionary(p => p.Id);
+            foreach (Player entPlayer in ent.Players)
+            {
+                if (!simByExternal.TryGetValue(entPlayer.ExternalId, out var sp)) continue;
+                entPlayer.Form = sp.Condition.Form;
+                entPlayer.Morale = sp.Condition.Morale;
+                entPlayer.Fitness = sp.Condition.Fitness;
+                entPlayer.AttributesJson = WorldSquadReader.SerializeAttributes(sp.Attributes);
+                entPlayer.Overall = Sim.Core.Domain.PlayerRating.Overall(sp);
+            }
         }
 
         // A fresh matchday — everyone must ready up again for the next one.
@@ -244,6 +375,30 @@ public sealed class LeagueSeasonService : ILeagueSeasonService
         await _db.SaveChangesAsync(ct);
         return round;
     }
+
+    /// <summary>The submitted training plans keyed by club external id (Sim.Core club id); a club without
+    /// a submission is simply absent → the tick trains it the AI default.</summary>
+    private async Task<IReadOnlyDictionary<int, TrainingPlan>> LoadTrainingPlansAsync(
+        Guid leagueId, IReadOnlyDictionary<Guid, Club> entByGuid, CancellationToken ct)
+    {
+        var rows = await _db.LeagueTrainings.Where(x => x.PrivateLeagueId == leagueId).ToListAsync(ct);
+        var plans = new Dictionary<int, TrainingPlan>();
+        foreach (var row in rows)
+        {
+            if (!entByGuid.TryGetValue(row.ClubId, out var club)) continue;
+            TrainingPlan? plan = null;
+            try { plan = JsonSerializer.Deserialize<TrainingPlan>(row.TrainingJson, PlanJson); }
+            catch (JsonException) { }
+            if (plan != null) plans[club.ExternalId] = plan;
+        }
+        return plans;
+    }
+
+    /// <summary>A team's result from its own goals vs the goals conceded.</summary>
+    private static TeamResult ResultFor(int goalsFor, int goalsAgainst) =>
+        goalsFor > goalsAgainst ? TeamResult.Win
+        : goalsFor < goalsAgainst ? TeamResult.Loss
+        : TeamResult.Draw;
 
     private static MatchResolver.SideInputs DeserializeInputs(LeagueLineup x)
     {

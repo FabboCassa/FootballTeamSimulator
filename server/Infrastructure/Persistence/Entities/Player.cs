@@ -37,7 +37,23 @@ public sealed class Player
 
     /// <summary>
     /// The full <c>PlayerAttributes</c> (10 skills) serialised as JSON, stored in a jsonb
-    /// column. Condition/development are session-derived and re-simulated, not persisted here.
+    /// column. The attributes evolve with the server-authoritative development tick (Phase 8.4)
+    /// and are written back after every round-week.
     /// </summary>
     public string AttributesJson { get; set; } = "{}";
+
+    // --- Server-authoritative condition (Phase 8.4) -------------------------------------------
+    // Form/Morale/Fitness (each 0–100, mirroring Sim.Core.Domain.PlayerCondition) are now stored
+    // and evolved by the online season's weekly condition tick, so a private-league match resolves
+    // from the current condition instead of raw attributes. Seeded neutral (Form/Morale 50,
+    // Fitness 100) at world creation; the migration backfills existing rows via the column defaults.
+
+    /// <summary>Short-term performance trend, 0–100 (50 = neutral).</summary>
+    public int Form { get; set; } = 50;
+
+    /// <summary>Mental wellbeing, 0–100 (50 = neutral).</summary>
+    public int Morale { get; set; } = 50;
+
+    /// <summary>Physical freshness, 0–100 (100 = fully fit).</summary>
+    public int Fitness { get; set; } = 100;
 }
