@@ -32,6 +32,8 @@ public sealed class FtsDbContext : IdentityDbContext<AppUser, IdentityRole<Guid>
 
     public DbSet<PrivateLeague> PrivateLeagues => Set<PrivateLeague>();
     public DbSet<LeagueMember> LeagueMembers => Set<LeagueMember>();
+    public DbSet<LeagueFixture> LeagueFixtures => Set<LeagueFixture>();
+    public DbSet<LeagueLineup> LeagueLineups => Set<LeagueLineup>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -221,6 +223,50 @@ public sealed class FtsDbContext : IdentityDbContext<AppUser, IdentityRole<Guid>
             // One membership per account per league.
             e.HasIndex(x => new { x.PrivateLeagueId, x.UserId }).IsUnique();
             e.HasIndex(x => x.UserId);
+        });
+
+        // --- Season: fixtures & submitted inputs (Phase 8.3) --------------------------------
+
+        b.Entity<LeagueFixture>(e =>
+        {
+            e.ToTable("league_fixtures");
+            e.HasKey(x => x.Id);
+            // Cascade from the private league — disbanding a league removes its fixtures. The two
+            // club FKs are Restrict (NoAction): a single table with two cascade paths back to clubs
+            // (already cascaded from worlds) would create multiple cascade paths, which SQL Server /
+            // some providers reject; the "last member leaves" teardown deletes fixtures explicitly
+            // before clubs anyway (portable across PostgreSQL and the SQLite test provider).
+            e.HasOne(x => x.PrivateLeague)
+                .WithMany()
+                .HasForeignKey(x => x.PrivateLeagueId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.HomeClub)
+                .WithMany()
+                .HasForeignKey(x => x.HomeClubId)
+                .OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.AwayClub)
+                .WithMany()
+                .HasForeignKey(x => x.AwayClubId)
+                .OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(x => new { x.PrivateLeagueId, x.Round, x.MatchIndex });
+        });
+
+        b.Entity<LeagueLineup>(e =>
+        {
+            e.ToTable("league_lineups");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.LineupJson).IsRequired();
+            e.HasOne(x => x.PrivateLeague)
+                .WithMany()
+                .HasForeignKey(x => x.PrivateLeagueId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Club)
+                .WithMany()
+                .HasForeignKey(x => x.ClubId)
+                .OnDelete(DeleteBehavior.Restrict);
+            // One live submission per club (upsert key), plus a lookup by member.
+            e.HasIndex(x => new { x.PrivateLeagueId, x.ClubId }).IsUnique();
+            e.HasIndex(x => new { x.PrivateLeagueId, x.UserId });
         });
     }
 }

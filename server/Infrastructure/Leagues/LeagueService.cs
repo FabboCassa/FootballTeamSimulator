@@ -202,9 +202,14 @@ public sealed class LeagueService : ILeagueService
 
         me.ClubId = club.Id;
 
-        // Once every member holds a club the season is set — the league goes Active (fixtures land in 8.3).
+        // Once every member holds a club the season is set: the league goes Active and its double
+        // round-robin schedule is generated (8.3). Fixtures cover ALL world clubs — unclaimed clubs
+        // (members < size) play as AI. Deterministic from the world seed.
         if (members.All(m => m.ClubId is not null))
+        {
             league.Status = LeagueStatus.Active;
+            await GenerateSeasonFixturesAsync(league, ct);
+        }
 
         await _db.SaveChangesAsync(ct);
 
@@ -228,6 +233,11 @@ public sealed class LeagueService : ILeagueService
             // dependency order (children first) so the existing clubs→leagues RESTRICT FK can't
             // block a DB cascade — portable across PostgreSQL and the SQLite test provider.
             var worldId = league.WorldId;
+            // Season rows first: league_fixtures/league_lineups Restrict-reference clubs, so they must
+            // go before the clubs delete below (they also cascade from the private league, but explicit
+            // ordered deletes keep the teardown portable across PostgreSQL and the SQLite test provider).
+            await _db.LeagueFixtures.Where(f => f.PrivateLeagueId == leagueId).ExecuteDeleteAsync(ct);
+            await _db.LeagueLineups.Where(x => x.PrivateLeagueId == leagueId).ExecuteDeleteAsync(ct);
             await _db.Players.Where(p => p.WorldId == worldId).ExecuteDeleteAsync(ct);
             await _db.Coaches.Where(c => c.WorldId == worldId).ExecuteDeleteAsync(ct);
             await _db.Clubs.Where(c => c.WorldId == worldId).ExecuteDeleteAsync(ct);
@@ -294,6 +304,36 @@ public sealed class LeagueService : ILeagueService
     }
 
     // --- helpers -------------------------------------------------------------------------------
+
+    /// <summary>Generates the season's double round-robin over every club in the world (8.3), keyed to
+    /// the persisted club rows, and adds the fixtures to the change tracker (saved by the caller). The
+    /// schedule is deterministic from the world seed via <see cref="FixtureScheduler"/>.</summary>
+    private async Task GenerateSeasonFixturesAsync(PrivateLeague league, CancellationToken ct)
+    {
+        var clubs = await _db.Clubs
+            .Where(c => c.WorldId == league.WorldId)
+            .Select(c => new { c.Id, c.ExternalId })
+            .ToListAsync(ct);
+        long seed = await _db.Worlds.Where(w => w.Id == league.WorldId).Select(w => w.Seed).FirstAsync(ct);
+
+        var guidByExternal = clubs.ToDictionary(c => c.ExternalId, c => c.Id);
+        var externalIds = clubs.Select(c => c.ExternalId).ToList();
+
+        foreach (var s in FixtureScheduler.Build(externalIds, seed))
+        {
+            _db.LeagueFixtures.Add(new LeagueFixture
+            {
+                Id = Guid.NewGuid(),
+                PrivateLeagueId = league.Id,
+                Round = s.Round,
+                MatchIndex = s.MatchIndex,
+                Day = s.Day,
+                HomeClubId = guidByExternal[s.HomeExternalId],
+                AwayClubId = guidByExternal[s.AwayExternalId],
+                IsPlayed = false,
+            });
+        }
+    }
 
     private async Task<LeagueDetailDto> BuildDetailAsync(PrivateLeague league, Guid callerId, CancellationToken ct)
     {

@@ -76,6 +76,55 @@ public static class LeagueEndpoints
             return result.Success ? Results.NoContent() : MapError(result.Error, result.Message);
         });
 
+        // --- Season (Phase 8.3) --------------------------------------------------------------
+
+        // Submit (or replace) the caller's match inputs for their club (reused each matchday).
+        group.MapPost("/{id:guid}/lineup", async (
+            Guid id, SubmitLineupRequest req, ClaimsPrincipal user, ILeagueSeasonService season, CancellationToken ct) =>
+        {
+            if (!TryGetUserId(user, out var userId)) return Results.Unauthorized();
+            var result = await season.SubmitLineupAsync(userId, id, req, ct);
+            return result.Success ? Results.Ok(result.Value) : MapError(result.Error, result.Message);
+        });
+
+        // Mark ready / not ready — when everyone is ready the next round resolves automatically.
+        group.MapPost("/{id:guid}/ready", async (
+            Guid id, SetReadyRequest req, ClaimsPrincipal user, ILeagueSeasonService season, CancellationToken ct) =>
+        {
+            if (!TryGetUserId(user, out var userId)) return Results.Unauthorized();
+            var result = await season.SetReadyAsync(userId, id, req, ct);
+            return result.Success ? Results.Ok(result.Value) : MapError(result.Error, result.Message);
+        });
+
+        // Force the next round to resolve now (creator only) — AI/last-lineup fallback for anyone idle.
+        group.MapPost("/{id:guid}/advance", async (
+            Guid id, ClaimsPrincipal user, ILeagueSeasonService season, CancellationToken ct) =>
+        {
+            if (!TryGetUserId(user, out var userId)) return Results.Unauthorized();
+            var result = await season.AdvanceAsync(userId, id, ct);
+            return result.Success ? Results.Ok(result.Value) : MapError(result.Error, result.Message);
+        });
+
+        // The season view: state + fixtures + standings (members only).
+        group.MapGet("/{id:guid}/season", async (
+            Guid id, ClaimsPrincipal user, ILeagueSeasonService season, CancellationToken ct) =>
+        {
+            if (!TryGetUserId(user, out var userId)) return Results.Unauthorized();
+            var result = await season.GetSeasonAsync(userId, id, ct);
+            return result.Success ? Results.Ok(result.Value) : MapError(result.Error, result.Message);
+        });
+
+        // The full stored MatchReport for a played fixture (identical for every member) — replay download.
+        group.MapGet("/{id:guid}/fixtures/{fixtureId:guid}/replay", async (
+            Guid id, Guid fixtureId, ClaimsPrincipal user, ILeagueSeasonService season, CancellationToken ct) =>
+        {
+            if (!TryGetUserId(user, out var userId)) return Results.Unauthorized();
+            var result = await season.GetReplayAsync(userId, id, fixtureId, ct);
+            return result.Success
+                ? Results.Content(result.Value!, "application/json")
+                : MapError(result.Error, result.Message);
+        });
+
         return app;
     }
 
@@ -96,6 +145,10 @@ public static class LeagueEndpoints
         LeagueError.NotYourTurn => Results.Conflict(new { error = "not_your_turn", message }),
         LeagueError.ClubUnavailable => Results.Conflict(new { error = "club_unavailable", message }),
         LeagueError.TooFewMembers => Results.BadRequest(new { error = "too_few_members", message }),
+        LeagueError.NotAssignedClub => Results.Conflict(new { error = "not_assigned_club", message }),
+        LeagueError.NothingToResolve => Results.Conflict(new { error = "nothing_to_resolve", message }),
+        LeagueError.FixtureNotFound => Results.NotFound(new { error = "fixture_not_found", message }),
+        LeagueError.ReplayNotReady => Results.Conflict(new { error = "replay_not_ready", message }),
         LeagueError.Forbidden => Results.Json(
             new { error = "forbidden", message }, statusCode: StatusCodes.Status403Forbidden),
         _ => Results.BadRequest(new { error = "league_error", message }),

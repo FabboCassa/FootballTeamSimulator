@@ -1,0 +1,399 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using Fts.Application.Leagues;
+using Fts.Infrastructure.Persistence;
+using Fts.Infrastructure.Persistence.Entities;
+using Microsoft.EntityFrameworkCore;
+using Sim.Core.Config;
+using Sim.Core.Match;
+using Sim.Core.Tactics;
+using SimClub = Sim.Core.Domain.Club;
+
+namespace Fts.Infrastructure.Leagues;
+
+/// <summary>
+/// <see cref="ILeagueSeasonService"/> implementation (Phase 8.3): the "advance when all ready" season.
+/// Members submit their club's lineup/tactic/plan (stored and reused each matchday); the next round
+/// resolves when every member is ready (or the creator forces it), running the shared Sim.Core engine
+/// per fixture with a deterministic seed and a best-XI AI fallback for any club without a submission.
+/// The full <c>MatchReport</c> is stored on the fixture and served verbatim to every member so a replay
+/// renders identically for everyone. Resolution is synchronous here (a friend-league matchday is a
+/// handful of instant sims, and the all-ready trigger is a member action, not a clock); a Hangfire
+/// kickoff job wrapping this same resolution path is the RealTime-mode concern of 8.4.
+/// </summary>
+public sealed class LeagueSeasonService : ILeagueSeasonService
+{
+    private readonly FtsDbContext _db;
+    private readonly BalanceConfig _config = new();
+
+    public LeagueSeasonService(FtsDbContext db) => _db = db;
+
+    /// <summary>Options for the stored plan JSON: tolerant of string- or number-valued enums and of
+    /// property-name casing, so the round-trip is robust regardless of how the client serialised.</summary>
+    private static readonly JsonSerializerOptions PlanJson = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        Converters = { new JsonStringEnumConverter() },
+    };
+
+    // --- submit inputs -----------------------------------------------------------------------------
+
+    public async Task<LeagueResult<SeasonStateDto>> SubmitLineupAsync(
+        Guid userId, Guid leagueId, SubmitLineupRequest request, CancellationToken ct = default)
+    {
+        var league = await _db.PrivateLeagues.FirstOrDefaultAsync(l => l.Id == leagueId, ct);
+        if (league is null)
+            return LeagueResult<SeasonStateDto>.Fail(LeagueError.NotFound, "League not found.");
+
+        var member = await _db.LeagueMembers.FirstOrDefaultAsync(
+            m => m.PrivateLeagueId == leagueId && m.UserId == userId, ct);
+        if (member is null)
+            return LeagueResult<SeasonStateDto>.Fail(LeagueError.Forbidden, "You are not a member of this league.");
+        if (league.Status != LeagueStatus.Active)
+            return LeagueResult<SeasonStateDto>.Fail(LeagueError.WrongPhase, "The season is not under way.");
+        if (member.ClubId is not { } clubId)
+            return LeagueResult<SeasonStateDto>.Fail(LeagueError.NotAssignedClub, "You have no club in this league.");
+        if (request.Lineup is null)
+            return LeagueResult<SeasonStateDto>.Fail(LeagueError.ValidationFailed, "A lineup is required.");
+
+        var club = await _db.Clubs.Include(c => c.Players).FirstOrDefaultAsync(c => c.Id == clubId, ct);
+        if (club is null)
+            return LeagueResult<SeasonStateDto>.Fail(LeagueError.NotAssignedClub, "Your club no longer exists.");
+
+        SimClub sim = WorldSquadReader.ToSimClub(club);
+        if (!request.Lineup.TryMaterialize(sim, out _))
+            return LeagueResult<SeasonStateDto>.Fail(
+                LeagueError.ValidationFailed, "The lineup is not valid for your current squad.");
+
+        var existing = await _db.LeagueLineups.FirstOrDefaultAsync(
+            x => x.PrivateLeagueId == leagueId && x.ClubId == clubId, ct);
+
+        string lineupJson = JsonSerializer.Serialize(request.Lineup, PlanJson);
+        string? tacticJson = request.Tactic != null ? JsonSerializer.Serialize(request.Tactic, PlanJson) : null;
+        string? planJson = request.Plan != null ? JsonSerializer.Serialize(request.Plan, PlanJson) : null;
+
+        if (existing is null)
+        {
+            _db.LeagueLineups.Add(new LeagueLineup
+            {
+                Id = Guid.NewGuid(),
+                PrivateLeagueId = leagueId,
+                UserId = userId,
+                ClubId = clubId,
+                LineupJson = lineupJson,
+                TacticJson = tacticJson,
+                PrematchPlanJson = planJson,
+                UpdatedUtc = DateTime.UtcNow,
+            });
+        }
+        else
+        {
+            existing.LineupJson = lineupJson;
+            existing.TacticJson = tacticJson;
+            existing.PrematchPlanJson = planJson;
+            existing.UpdatedUtc = DateTime.UtcNow;
+        }
+
+        await _db.SaveChangesAsync(ct);
+
+        var state = await BuildSeasonStateAsync(league, userId, ct);
+        return LeagueResult<SeasonStateDto>.Ok(state);
+    }
+
+    // --- ready / advance ---------------------------------------------------------------------------
+
+    public async Task<LeagueResult<LeagueSeasonDto>> SetReadyAsync(
+        Guid userId, Guid leagueId, SetReadyRequest request, CancellationToken ct = default)
+    {
+        var league = await _db.PrivateLeagues.FirstOrDefaultAsync(l => l.Id == leagueId, ct);
+        if (league is null)
+            return LeagueResult<LeagueSeasonDto>.Fail(LeagueError.NotFound, "League not found.");
+
+        var members = await _db.LeagueMembers.Where(m => m.PrivateLeagueId == leagueId).ToListAsync(ct);
+        var me = members.FirstOrDefault(m => m.UserId == userId);
+        if (me is null)
+            return LeagueResult<LeagueSeasonDto>.Fail(LeagueError.Forbidden, "You are not a member of this league.");
+        if (league.Status != LeagueStatus.Active)
+            return LeagueResult<LeagueSeasonDto>.Fail(LeagueError.WrongPhase, "The season is not under way.");
+
+        me.IsReady = request.Ready;
+        await _db.SaveChangesAsync(ct);
+
+        // Everyone ready → resolve the next round (which also clears the ready flags).
+        if (members.All(m => m.IsReady))
+            await ResolveNextRoundAsync(league, members, ct);
+
+        var season = await BuildSeasonAsync(league, userId, ct);
+        return LeagueResult<LeagueSeasonDto>.Ok(season);
+    }
+
+    public async Task<LeagueResult<LeagueSeasonDto>> AdvanceAsync(
+        Guid userId, Guid leagueId, CancellationToken ct = default)
+    {
+        var league = await _db.PrivateLeagues.FirstOrDefaultAsync(l => l.Id == leagueId, ct);
+        if (league is null)
+            return LeagueResult<LeagueSeasonDto>.Fail(LeagueError.NotFound, "League not found.");
+
+        var members = await _db.LeagueMembers.Where(m => m.PrivateLeagueId == leagueId).ToListAsync(ct);
+        if (members.All(m => m.UserId != userId))
+            return LeagueResult<LeagueSeasonDto>.Fail(LeagueError.Forbidden, "You are not a member of this league.");
+        if (league.CreatorUserId != userId)
+            return LeagueResult<LeagueSeasonDto>.Fail(LeagueError.Forbidden, "Only the league owner can force an advance.");
+        if (league.Status != LeagueStatus.Active)
+            return LeagueResult<LeagueSeasonDto>.Fail(LeagueError.WrongPhase, "The season is not under way.");
+
+        int resolved = await ResolveNextRoundAsync(league, members, ct);
+        if (resolved < 0)
+            return LeagueResult<LeagueSeasonDto>.Fail(LeagueError.NothingToResolve, "The season is already complete.");
+
+        var season = await BuildSeasonAsync(league, userId, ct);
+        return LeagueResult<LeagueSeasonDto>.Ok(season);
+    }
+
+    // --- reads -------------------------------------------------------------------------------------
+
+    public async Task<LeagueResult<LeagueSeasonDto>> GetSeasonAsync(
+        Guid userId, Guid leagueId, CancellationToken ct = default)
+    {
+        var league = await _db.PrivateLeagues.FirstOrDefaultAsync(l => l.Id == leagueId, ct);
+        if (league is null)
+            return LeagueResult<LeagueSeasonDto>.Fail(LeagueError.NotFound, "League not found.");
+
+        var isMember = await _db.LeagueMembers.AnyAsync(m => m.PrivateLeagueId == leagueId && m.UserId == userId, ct);
+        if (!isMember)
+            return LeagueResult<LeagueSeasonDto>.Fail(LeagueError.Forbidden, "You are not a member of this league.");
+
+        var season = await BuildSeasonAsync(league, userId, ct);
+        return LeagueResult<LeagueSeasonDto>.Ok(season);
+    }
+
+    public async Task<LeagueResult<string>> GetReplayAsync(
+        Guid userId, Guid leagueId, Guid fixtureId, CancellationToken ct = default)
+    {
+        var league = await _db.PrivateLeagues.FirstOrDefaultAsync(l => l.Id == leagueId, ct);
+        if (league is null)
+            return LeagueResult<string>.Fail(LeagueError.NotFound, "League not found.");
+
+        var isMember = await _db.LeagueMembers.AnyAsync(m => m.PrivateLeagueId == leagueId && m.UserId == userId, ct);
+        if (!isMember)
+            return LeagueResult<string>.Fail(LeagueError.Forbidden, "You are not a member of this league.");
+
+        var fixture = await _db.LeagueFixtures.FirstOrDefaultAsync(
+            f => f.Id == fixtureId && f.PrivateLeagueId == leagueId, ct);
+        if (fixture is null)
+            return LeagueResult<string>.Fail(LeagueError.FixtureNotFound, "No such fixture in this league.");
+        if (!fixture.IsPlayed || string.IsNullOrEmpty(fixture.ReplayJson))
+            return LeagueResult<string>.Fail(LeagueError.ReplayNotReady, "This match has not been played yet.");
+
+        return LeagueResult<string>.Ok(fixture.ReplayJson);
+    }
+
+    // --- round resolution --------------------------------------------------------------------------
+
+    /// <summary>Resolves the lowest round that still has unplayed fixtures. Returns the round number, or
+    /// -1 if the season is already complete. Runs each fixture through the shared engine, stores the score
+    /// + full report, and clears every member's ready flag. Deterministic per (world seed, round, clubs).</summary>
+    private async Task<int> ResolveNextRoundAsync(
+        PrivateLeague league, List<LeagueMember> members, CancellationToken ct)
+    {
+        var fixtures = await _db.LeagueFixtures
+            .Where(f => f.PrivateLeagueId == league.Id)
+            .ToListAsync(ct);
+
+        var pending = fixtures.Where(f => !f.IsPlayed).ToList();
+        if (pending.Count == 0) return -1;
+
+        int round = pending.Min(f => f.Round);
+        var roundFixtures = pending.Where(f => f.Round == round).OrderBy(f => f.MatchIndex).ToList();
+
+        long worldSeed = await _db.Worlds.Where(w => w.Id == league.WorldId).Select(w => w.Seed).FirstAsync(ct);
+
+        // Reconstruct every club (squads) once and index the submitted inputs by club.
+        var clubs = await _db.Clubs
+            .Where(c => c.WorldId == league.WorldId)
+            .Include(c => c.Players)
+            .ToListAsync(ct);
+        var entByGuid = clubs.ToDictionary(c => c.Id);
+        var simByGuid = clubs.ToDictionary(c => c.Id, WorldSquadReader.ToSimClub);
+
+        var lineups = await _db.LeagueLineups.Where(x => x.PrivateLeagueId == league.Id).ToListAsync(ct);
+        var inputsByClub = lineups.ToDictionary(x => x.ClubId, DeserializeInputs);
+
+        var now = DateTime.UtcNow;
+        foreach (var f in roundFixtures)
+        {
+            SimClub home = simByGuid[f.HomeClubId];
+            SimClub away = simByGuid[f.AwayClubId];
+            inputsByClub.TryGetValue(f.HomeClubId, out var homeInputs);
+            inputsByClub.TryGetValue(f.AwayClubId, out var awayInputs);
+
+            ulong seed = MatchSeed(worldSeed, f.Round, entByGuid[f.HomeClubId].ExternalId, entByGuid[f.AwayClubId].ExternalId);
+            MatchReport report = MatchResolver.Resolve(home, away, homeInputs, awayInputs, seed, _config);
+
+            f.HomeGoals = report.HomeGoals;
+            f.AwayGoals = report.AwayGoals;
+            f.IsPlayed = true;
+            f.MatchSeed = unchecked((long)seed);
+            f.ResolvedUtc = now;
+            f.ReplayJson = JsonSerializer.Serialize(report);
+        }
+
+        // A fresh matchday — everyone must ready up again for the next one.
+        foreach (var m in members) m.IsReady = false;
+
+        await _db.SaveChangesAsync(ct);
+        return round;
+    }
+
+    private static MatchResolver.SideInputs DeserializeInputs(LeagueLineup x)
+    {
+        LineupPlan? lineup = null;
+        TacticPlan? tactic = null;
+        PrematchPlan? plan = null;
+        try { lineup = JsonSerializer.Deserialize<LineupPlan>(x.LineupJson, PlanJson); } catch (JsonException) { }
+        if (!string.IsNullOrEmpty(x.TacticJson))
+            try { tactic = JsonSerializer.Deserialize<TacticPlan>(x.TacticJson, PlanJson); } catch (JsonException) { }
+        if (!string.IsNullOrEmpty(x.PrematchPlanJson))
+            try { plan = JsonSerializer.Deserialize<PrematchPlan>(x.PrematchPlanJson, PlanJson); } catch (JsonException) { }
+        return new MatchResolver.SideInputs { Lineup = lineup, Tactic = tactic, Plan = plan };
+    }
+
+    /// <summary>Deterministic per-fixture seed from (world seed, round, home, away) via an FNV-style mix.</summary>
+    private static ulong MatchSeed(long worldSeed, int round, int homeExternalId, int awayExternalId)
+    {
+        unchecked
+        {
+            const ulong prime = 0x100000001B3UL;
+            ulong h = (ulong)worldSeed;
+            h = (h ^ (uint)round) * prime;
+            h = (h ^ (uint)homeExternalId) * prime;
+            h = (h ^ (uint)awayExternalId) * prime;
+            return h;
+        }
+    }
+
+    // --- season view helpers -----------------------------------------------------------------------
+
+    private async Task<LeagueSeasonDto> BuildSeasonAsync(PrivateLeague league, Guid callerId, CancellationToken ct)
+    {
+        var clubs = await _db.Clubs.Where(c => c.WorldId == league.WorldId).ToListAsync(ct);
+        var entByGuid = clubs.ToDictionary(c => c.Id);
+
+        var fixtures = await _db.LeagueFixtures
+            .Where(f => f.PrivateLeagueId == league.Id)
+            .OrderBy(f => f.Round).ThenBy(f => f.MatchIndex)
+            .ToListAsync(ct);
+
+        var fixtureDtos = fixtures.Select(f => new LeagueFixtureDto(
+            Id: f.Id,
+            Round: f.Round,
+            Day: f.Day,
+            HomeClubExternalId: entByGuid[f.HomeClubId].ExternalId,
+            HomeClubName: entByGuid[f.HomeClubId].Name,
+            AwayClubExternalId: entByGuid[f.AwayClubId].ExternalId,
+            AwayClubName: entByGuid[f.AwayClubId].Name,
+            Played: f.IsPlayed,
+            HomeGoals: f.HomeGoals,
+            AwayGoals: f.AwayGoals)).ToList();
+
+        var standings = ComputeStandings(clubs, fixtures);
+        var state = await BuildSeasonStateAsync(league, callerId, ct);
+
+        return new LeagueSeasonDto(state, fixtureDtos, standings);
+    }
+
+    private async Task<SeasonStateDto> BuildSeasonStateAsync(PrivateLeague league, Guid callerId, CancellationToken ct)
+    {
+        var members = await _db.LeagueMembers.Where(m => m.PrivateLeagueId == league.Id).ToListAsync(ct);
+        var me = members.FirstOrDefault(m => m.UserId == callerId);
+
+        var fixtures = await _db.LeagueFixtures
+            .Where(f => f.PrivateLeagueId == league.Id)
+            .Select(f => new { f.Round, f.IsPlayed })
+            .ToListAsync(ct);
+
+        bool started = fixtures.Count > 0;
+        int totalRounds = started ? fixtures.Max(f => f.Round) : 0;
+
+        // A round counts as played only when all of its fixtures are played.
+        int roundsPlayed = 0;
+        int? nextRound = null;
+        for (int r = 1; r <= totalRounds; r++)
+        {
+            bool allPlayed = fixtures.Where(f => f.Round == r).All(f => f.IsPlayed);
+            if (allPlayed) roundsPlayed++;
+            else if (nextRound is null) nextRound = r;
+        }
+        bool seasonComplete = started && fixtures.All(f => f.IsPlayed);
+
+        int? yourClubExternalId = null;
+        bool youSubmitted = false;
+        if (me?.ClubId is { } clubId)
+        {
+            yourClubExternalId = await _db.Clubs.Where(c => c.Id == clubId).Select(c => (int?)c.ExternalId).FirstOrDefaultAsync(ct);
+            youSubmitted = await _db.LeagueLineups.AnyAsync(x => x.PrivateLeagueId == league.Id && x.ClubId == clubId, ct);
+        }
+
+        return new SeasonStateDto(
+            Started: started,
+            TotalRounds: totalRounds,
+            RoundsPlayed: roundsPlayed,
+            NextRound: nextRound,
+            SeasonComplete: seasonComplete,
+            MembersTotal: members.Count,
+            MembersReady: members.Count(m => m.IsReady),
+            YouAreReady: me?.IsReady ?? false,
+            YourClubExternalId: yourClubExternalId,
+            YouSubmittedLineup: youSubmitted);
+    }
+
+    private IReadOnlyList<LeagueStandingDto> ComputeStandings(List<Club> clubs, List<LeagueFixture> fixtures)
+    {
+        int win = _config.Season.PointsForWin;
+        int draw = _config.Season.PointsForDraw;
+
+        var table = clubs.ToDictionary(
+            c => c.Id,
+            c => new Row { ExternalId = c.ExternalId, Name = c.Name });
+
+        foreach (var f in fixtures)
+        {
+            if (!f.IsPlayed) continue;
+            if (!table.TryGetValue(f.HomeClubId, out var home) || !table.TryGetValue(f.AwayClubId, out var away))
+                continue;
+
+            home.Played++; away.Played++;
+            home.GoalsFor += f.HomeGoals; home.GoalsAgainst += f.AwayGoals;
+            away.GoalsFor += f.AwayGoals; away.GoalsAgainst += f.HomeGoals;
+
+            if (f.HomeGoals > f.AwayGoals) { home.Won++; away.Lost++; home.Points += win; }
+            else if (f.HomeGoals < f.AwayGoals) { away.Won++; home.Lost++; away.Points += win; }
+            else { home.Drawn++; away.Drawn++; home.Points += draw; away.Points += draw; }
+        }
+
+        return table.Values
+            .OrderByDescending(r => r.Points)
+            .ThenByDescending(r => r.GoalsFor - r.GoalsAgainst)
+            .ThenByDescending(r => r.GoalsFor)
+            .ThenBy(r => r.Name, StringComparer.Ordinal)
+            .Select(r => new LeagueStandingDto(
+                ClubExternalId: r.ExternalId,
+                ClubName: r.Name,
+                Played: r.Played,
+                Won: r.Won,
+                Drawn: r.Drawn,
+                Lost: r.Lost,
+                GoalsFor: r.GoalsFor,
+                GoalsAgainst: r.GoalsAgainst,
+                GoalDifference: r.GoalsFor - r.GoalsAgainst,
+                Points: r.Points))
+            .ToList();
+    }
+
+    private sealed class Row
+    {
+        public int ExternalId;
+        public string Name = string.Empty;
+        public int Played, Won, Drawn, Lost, GoalsFor, GoalsAgainst, Points;
+    }
+}

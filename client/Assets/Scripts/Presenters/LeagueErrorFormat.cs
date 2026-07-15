@@ -20,6 +20,9 @@ namespace Fts.Presenters
             LeagueApiError.NotYourTurn => "leagues.error.not_your_turn",
             LeagueApiError.ClubUnavailable => "leagues.error.club_unavailable",
             LeagueApiError.TooFewMembers => "leagues.error.too_few_members",
+            LeagueApiError.NotAssignedClub => "leagues.error.not_assigned_club",
+            LeagueApiError.NothingToResolve => "leagues.error.nothing_to_resolve",
+            LeagueApiError.ReplayNotReady => "leagues.error.replay_not_ready",
             _ => "leagues.error.server",
         };
     }

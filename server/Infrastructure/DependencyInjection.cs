@@ -58,6 +58,10 @@ public static class DependencyInjection
         // Sim.Core world generation. Scoped (it uses the request-scoped FtsDbContext).
         services.AddScoped<ILeagueService, LeagueService>();
 
+        // Private-league season (Phase 8.3): submit inputs, ready/advance a round (all-ready mode),
+        // read schedule/standings + replay. Scoped (request-scoped FtsDbContext + the shared engine).
+        services.AddScoped<ILeagueSeasonService, LeagueSeasonService>();
+
         return services;
     }
 

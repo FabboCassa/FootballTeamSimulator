@@ -93,6 +93,73 @@ namespace Fts.Services.Online
         public int clubExternalId;
     }
 
+    // --- Season (Phase 8.3b) -------------------------------------------------------------------
+
+    /// <summary>Body for POST /leagues/{id}/ready.</summary>
+    [Serializable]
+    public sealed class SetReadyBody
+    {
+        public bool ready;
+    }
+
+    /// <summary>Mirrors the server's LeagueFixtureDto (8.3). <see cref="id"/> is the fixture Guid (for
+    /// the replay endpoint); club names/ids let the schedule render without extra lookups.</summary>
+    [Serializable]
+    public sealed class LeagueFixtureDto
+    {
+        public string id;
+        public int round;
+        public int day;
+        public int homeClubExternalId;
+        public string homeClubName;
+        public int awayClubExternalId;
+        public string awayClubName;
+        public bool played;
+        public int homeGoals;
+        public int awayGoals;
+    }
+
+    /// <summary>Mirrors the server's LeagueStandingDto (8.3) — a computed table row.</summary>
+    [Serializable]
+    public sealed class LeagueStandingDto
+    {
+        public int clubExternalId;
+        public string clubName;
+        public int played;
+        public int won;
+        public int drawn;
+        public int lost;
+        public int goalsFor;
+        public int goalsAgainst;
+        public int goalDifference;
+        public int points;
+    }
+
+    /// <summary>Mirrors the server's SeasonStateDto (8.3): where the season is + the caller's own state.</summary>
+    [Serializable]
+    public sealed class SeasonStateDto
+    {
+        public bool started;
+        public int totalRounds;
+        public int roundsPlayed;
+        public int? nextRound;
+        public bool seasonComplete;
+        public int membersTotal;
+        public int membersReady;
+        public bool youAreReady;
+        public int? yourClubExternalId;
+        public bool youSubmittedLineup;
+    }
+
+    /// <summary>Mirrors the server's LeagueSeasonDto (8.3): state + fixtures + standings.</summary>
+    [Serializable]
+    public sealed class LeagueSeasonDto
+    {
+        public SeasonStateDto season;
+        public List<LeagueFixtureDto> fixtures = new List<LeagueFixtureDto>();
+        public List<LeagueStandingDto> standings = new List<LeagueStandingDto>();
+    }
+
     /// <summary>Mirrors the server enum (LeagueStatus): 0 Forming / 1 Active / 2 Completed / 3 Drafting.</summary>
     public enum LeagueStatus { Forming = 0, Active = 1, Completed = 2, Drafting = 3 }
 
@@ -111,10 +178,13 @@ namespace Fts.Services.Online
         LeagueFull,    // 409 league_full
         NotJoinable,   // 409 not_joinable
         Forbidden,     // 403
-        WrongPhase,    // 409 wrong_phase (8.2 — draft already started / not running)
+        WrongPhase,    // 409 wrong_phase (8.2 — draft already started / not running; 8.3 — season not active)
         NotYourTurn,   // 409 not_your_turn (8.2)
         ClubUnavailable, // 409 club_unavailable (8.2 — unknown or taken club)
         TooFewMembers, // 400 too_few_members (8.2)
+        NotAssignedClub, // 409 not_assigned_club (8.3 — no club to submit for)
+        NothingToResolve, // 409 nothing_to_resolve (8.3 — season complete)
+        ReplayNotReady, // 409 replay_not_ready (8.3 — fixture not played yet)
         Server,        // 5xx / unexpected
     }
 

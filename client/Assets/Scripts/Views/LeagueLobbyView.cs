@@ -16,6 +16,7 @@ namespace Fts.Views
         public event Action StartDraftClicked;
         public event Action RefreshClicked;
         public event Action<int> PickClicked;
+        public event Action SeasonClicked;
 
         public VisualElement Root { get; }
 
@@ -31,6 +32,7 @@ namespace Fts.Views
         private readonly Label _startHint;
         private readonly VisualElement _pickContainer;
         private readonly Button _refreshButton;
+        private readonly Button _seasonButton;
         private readonly Label _membersCaption;
         private readonly VisualElement _membersContainer;
         private readonly Label _clubsCaption;
@@ -95,6 +97,12 @@ namespace Fts.Views
             _refreshButton = UiKit.MenuButton(string.Empty, () => RefreshClicked?.Invoke());
             _refreshButton.style.marginTop = UiKit.SpaceXs;
             _draftCard.Add(_refreshButton);
+
+            // Season (8.3b): opens the schedule/standings/advance screen once the league is active.
+            _seasonButton = UiKit.PrimaryButton(string.Empty, () => SeasonClicked?.Invoke());
+            _seasonButton.style.marginTop = UiKit.SpaceMd;
+            _seasonButton.style.display = DisplayStyle.None;
+            col.Add(_seasonButton);
 
             _membersCaption = UiKit.Subtitle(string.Empty);
             _membersCaption.style.marginTop = UiKit.SpaceMd;
@@ -187,6 +195,10 @@ namespace Fts.Views
         public void SetRefreshVisible(bool visible) =>
             _refreshButton.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
 
+        /// <summary>Shows the "open season" button once the league is active (8.3b).</summary>
+        public void SetSeasonButtonVisible(bool visible) =>
+            _seasonButton.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+
         public void SetPickList(IReadOnlyList<PickVm> picks)
         {
             _pickContainer.Clear();
@@ -235,6 +247,7 @@ namespace Fts.Views
             _refreshButton.text = _tr("lobby.refresh");
             _membersCaption.text = _tr("lobby.members");
             _clubsCaption.text = _tr("lobby.clubs");
+            _seasonButton.text = _tr("lobby.open_season");
             _leaveButton.text = _tr("lobby.leave");
             _backButton.text = _tr("common.back");
         }

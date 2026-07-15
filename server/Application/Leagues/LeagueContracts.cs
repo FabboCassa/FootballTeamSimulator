@@ -113,6 +113,14 @@ public enum LeagueError
     ClubUnavailable,
     /// <summary>The league has too few members to start the season (need at least two) — 8.2.</summary>
     TooFewMembers,
+    /// <summary>The caller has no club assigned in this league, so cannot submit inputs — 8.3.</summary>
+    NotAssignedClub,
+    /// <summary>There is no round left to resolve (the season is complete) — 8.3.</summary>
+    NothingToResolve,
+    /// <summary>No fixture with that id exists in this league — 8.3.</summary>
+    FixtureNotFound,
+    /// <summary>The fixture has not been played yet, so no replay is available — 8.3.</summary>
+    ReplayNotReady,
 }
 
 /// <summary>Result wrapper so the service never throws for expected failures. Exactly one of

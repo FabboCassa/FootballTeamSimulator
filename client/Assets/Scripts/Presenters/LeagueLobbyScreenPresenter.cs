@@ -49,6 +49,7 @@ namespace Fts.Presenters
             _view.StartDraftClicked += OnStartDraft;
             _view.RefreshClicked += OnRefresh;
             _view.PickClicked += OnPick;
+            _view.SeasonClicked += OnSeason;
             LoadAsync(_selection.TakePreloaded()).Forget();
         }
 
@@ -59,6 +60,7 @@ namespace Fts.Presenters
             _view.StartDraftClicked -= OnStartDraft;
             _view.RefreshClicked -= OnRefresh;
             _view.PickClicked -= OnPick;
+            _view.SeasonClicked -= OnSeason;
         }
 
         public void Reveal() => LoadAsync(null).Forget();
@@ -108,6 +110,7 @@ namespace Fts.Presenters
             _view.SetMembers(members);
 
             RenderDraft(detail);
+            _view.SetSeasonButtonVisible((LeagueStatus)detail.league.status == LeagueStatus.Active);
 
             var clubs = new List<LeagueLobbyView.ClubVm>(detail.clubs.Count);
             foreach (var c in detail.clubs)
@@ -180,6 +183,13 @@ namespace Fts.Presenters
 
             // Active / Completed — the season has started; the draft card is no longer needed.
             _view.SetDraftVisible(false);
+        }
+
+        private void OnSeason()
+        {
+            // The season screen reads the selected league id (already set for this lobby).
+            _selection.Select(_leagueId);
+            _navigator.Push<SeasonScreenPresenter>();
         }
 
         private List<LeagueLobbyView.PickVm> BuildPickList(LeagueDetailDto detail)
