@@ -17,6 +17,8 @@ namespace Fts.Views
         public event Action RefreshClicked;
         public event Action<int> PickClicked;
         public event Action SeasonClicked;
+        public event Action TrainingClicked;
+        public event Action AuctionsClicked;
 
         public VisualElement Root { get; }
 
@@ -33,6 +35,8 @@ namespace Fts.Views
         private readonly VisualElement _pickContainer;
         private readonly Button _refreshButton;
         private readonly Button _seasonButton;
+        private readonly Button _trainingButton;
+        private readonly Button _auctionButton;
         private readonly Label _membersCaption;
         private readonly VisualElement _membersContainer;
         private readonly Label _clubsCaption;
@@ -103,6 +107,18 @@ namespace Fts.Views
             _seasonButton.style.marginTop = UiKit.SpaceMd;
             _seasonButton.style.display = DisplayStyle.None;
             col.Add(_seasonButton);
+
+            // Training (8.4b): opens the online training editor for your drafted club once active.
+            _trainingButton = UiKit.MenuButton(string.Empty, () => TrainingClicked?.Invoke());
+            _trainingButton.style.marginTop = UiKit.SpaceXs;
+            _trainingButton.style.display = DisplayStyle.None;
+            col.Add(_trainingButton);
+
+            // Auctions (8.5b): opens the live free-agent auction screen once active.
+            _auctionButton = UiKit.MenuButton(string.Empty, () => AuctionsClicked?.Invoke());
+            _auctionButton.style.marginTop = UiKit.SpaceXs;
+            _auctionButton.style.display = DisplayStyle.None;
+            col.Add(_auctionButton);
 
             _membersCaption = UiKit.Subtitle(string.Empty);
             _membersCaption.style.marginTop = UiKit.SpaceMd;
@@ -199,6 +215,14 @@ namespace Fts.Views
         public void SetSeasonButtonVisible(bool visible) =>
             _seasonButton.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
 
+        /// <summary>Shows the "training" button once the league is active (8.4b).</summary>
+        public void SetTrainingButtonVisible(bool visible) =>
+            _trainingButton.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+
+        /// <summary>Shows the "auctions" button once the league is active (8.5b).</summary>
+        public void SetAuctionsButtonVisible(bool visible) =>
+            _auctionButton.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+
         public void SetPickList(IReadOnlyList<PickVm> picks)
         {
             _pickContainer.Clear();
@@ -248,6 +272,8 @@ namespace Fts.Views
             _membersCaption.text = _tr("lobby.members");
             _clubsCaption.text = _tr("lobby.clubs");
             _seasonButton.text = _tr("lobby.open_season");
+            _trainingButton.text = _tr("lobby.training");
+            _auctionButton.text = _tr("lobby.auctions");
             _leaveButton.text = _tr("lobby.leave");
             _backButton.text = _tr("common.back");
         }

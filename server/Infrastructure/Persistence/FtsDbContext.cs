@@ -36,6 +36,9 @@ public sealed class FtsDbContext : IdentityDbContext<AppUser, IdentityRole<Guid>
     public DbSet<LeagueLineup> LeagueLineups => Set<LeagueLineup>();
     public DbSet<LeagueTraining> LeagueTrainings => Set<LeagueTraining>();
 
+    public DbSet<Auction> Auctions => Set<Auction>();
+    public DbSet<Bid> Bids => Set<Bid>();
+
     protected override void OnModelCreating(ModelBuilder b)
     {
         // IdentityDbContext.OnModelCreating configures the Identity tables — call it first.
@@ -296,6 +299,44 @@ public sealed class FtsDbContext : IdentityDbContext<AppUser, IdentityRole<Guid>
             // One live training plan per club (upsert key), plus a lookup by member.
             e.HasIndex(x => new { x.PrivateLeagueId, x.ClubId }).IsUnique();
             e.HasIndex(x => new { x.PrivateLeagueId, x.UserId });
+        });
+
+        // --- Online auctions (Phase 8.5) ----------------------------------------------------
+
+        b.Entity<Auction>(e =>
+        {
+            e.ToTable("auctions");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Status).HasConversion<int>();
+            // Cascade from the private league — disbanding a league removes its lots.
+            e.HasOne(x => x.PrivateLeague)
+                .WithMany()
+                .HasForeignKey(x => x.PrivateLeagueId)
+                .OnDelete(DeleteBehavior.Cascade);
+            // Restrict on the player FK: players already cascade from worlds, so a second cascade path
+            // (auctions → private_leagues → worlds AND auctions → players → worlds) would be rejected by
+            // some providers. The disband teardown deletes auctions explicitly before players.
+            e.HasOne(x => x.Player)
+                .WithMany()
+                .HasForeignKey(x => x.PlayerId)
+                .OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(x => new { x.PrivateLeagueId, x.Status });
+            e.HasIndex(x => x.PlayerId);
+        });
+
+        b.Entity<Bid>(e =>
+        {
+            e.ToTable("bids");
+            e.HasKey(x => x.Id);
+            e.HasOne(x => x.Auction)
+                .WithMany(a => a.Bids)
+                .HasForeignKey(x => x.AuctionId)
+                .OnDelete(DeleteBehavior.Cascade);
+            // PrivateLeagueId/ClubId/UserId are plain denormalised columns (no relationship) — the
+            // league/club referential integrity is server-authoritative, and this keeps a single cascade
+            // path (bids → auctions → private_leagues), portable across PostgreSQL and the SQLite test provider.
+            e.HasIndex(x => x.AuctionId);
+            e.HasIndex(x => x.PrivateLeagueId);
         });
     }
 }

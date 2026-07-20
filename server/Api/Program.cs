@@ -1,9 +1,12 @@
 using System.Text;
+using Fts.Api.Auctions;
 using Fts.Api.Auth;
+using Fts.Api.Dev;
 using Fts.Api.Jobs;
 using Fts.Api.Leagues;
 using Fts.Api.Notifications;
 using Fts.Api.Simulation;
+using Fts.Application.Leagues;
 using Fts.Application.Simulation;
 using Fts.Infrastructure;
 using Fts.Infrastructure.Jobs;
@@ -24,6 +27,12 @@ var backgroundJobsEnabled = !builder.Environment.IsEnvironment("Testing");
 // notifications & Hangfire (Phase 7.4).
 builder.Services.AddFtsInfrastructure(builder.Configuration, backgroundJobsEnabled);
 
+// Online auctions (Phase 8.5): SignalR for live bid pushes + the real broadcaster (replaces the
+// Infrastructure no-op). The REST endpoints stay authoritative; this is the live push layer, reused for
+// live match control in 8.6.
+builder.Services.AddSignalR();
+builder.Services.AddScoped<IAuctionBroadcaster, SignalRAuctionBroadcaster>();
+
 // JWT bearer authentication — validation parameters mirror the JwtTokenService signing settings.
 var jwt = builder.Configuration.GetSection("Jwt");
 var signingKey = jwt["SigningKey"]
@@ -42,6 +51,20 @@ builder.Services
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey)),
             ValidateLifetime = true,
             ClockSkew = TimeSpan.FromSeconds(30),
+        };
+
+        // SignalR WebSockets can't send an Authorization header on the handshake, so the AuctionHub
+        // (Phase 8.5) passes the access token via the access_token query string — pull it for /hubs paths.
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"];
+                var path = context.HttpContext.Request.Path;
+                if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs"))
+                    context.Token = accessToken;
+                return Task.CompletedTask;
+            }
         };
     });
 builder.Services.AddAuthorization();
@@ -88,12 +111,26 @@ app.MapNotificationEndpoints();
 // Private-league lifecycle (Phase 8.1): create/join/leave/list, JWT-protected. Always mapped.
 app.MapLeagueEndpoints();
 
+// Online auctions (Phase 8.5): open/close a window, read lots, bid — JWT-protected. Plus the live
+// AuctionHub for real-time bid pushes. Always mapped.
+app.MapAuctionEndpoints();
+app.MapHub<AuctionHub>("/hubs/auction");
+
 // Internal match-simulation endpoints (Phase 7.3): dev-only — never mapped in Production, and
 // behind a config flag (default on outside prod) so a deployment can also switch them off.
 if (!app.Environment.IsProduction()
     && app.Configuration.GetValue("Simulation:ExposeInternalEndpoints", true))
 {
     app.MapSimulationEndpoints();
+}
+
+// Dev-only test-league seeding (dev tooling): spin up a ready online league (bots + draft) in one call
+// so online features can be tested without hand-creating accounts. Never mapped in Production, and behind
+// the Dev:ExposeSeedEndpoints flag. These endpoints are UNAUTHENTICATED — they must never reach prod.
+if (!app.Environment.IsProduction()
+    && app.Configuration.GetValue("Dev:ExposeSeedEndpoints", true))
+{
+    app.MapDevEndpoints();
 }
 
 // Background jobs (Phase 7.4): register the recurring heartbeat that proves the scheduler fires,

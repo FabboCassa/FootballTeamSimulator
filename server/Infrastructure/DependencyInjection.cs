@@ -13,6 +13,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using StackExchange.Redis;
 
 namespace Fts.Infrastructure;
@@ -62,6 +63,18 @@ public static class DependencyInjection
         // read schedule/standings + replay. Scoped (request-scoped FtsDbContext + the shared engine).
         services.AddScoped<ILeagueSeasonService, LeagueSeasonService>();
 
+        // Online auctions (Phase 8.5): authoritative bid/settlement engine over Postgres/EF. The
+        // broadcaster + scheduler are no-op DEFAULTS (TryAdd) — the Api replaces the broadcaster with the
+        // SignalR one, and AddBackgroundJobs (above) already registered the real Hangfire scheduler when
+        // jobs are enabled, so TryAdd here leaves that in place and only fills the gap when jobs are off.
+        services.AddScoped<IAuctionService, AuctionService>();
+        services.TryAddScoped<IAuctionBroadcaster, NoOpAuctionBroadcaster>();
+        services.TryAddScoped<IAuctionScheduler, NoOpAuctionScheduler>();
+
+        // Dev-only test-league seeding (dev tooling). Always registered (harmless); the Api maps the
+        // endpoints only outside Production and behind a config flag.
+        services.AddScoped<Fts.Application.Dev.IDevSeedService, Fts.Infrastructure.Dev.DevSeedService>();
+
         return services;
     }
 
@@ -103,6 +116,12 @@ public static class DependencyInjection
             .UsePostgreSqlStorage(o => o.UseNpgsqlConnection(postgres)));
 
         services.AddHangfireServer();
+
+        // Online-auction settlement (Phase 8.5): the DI-activated per-lot job + the real scheduler that
+        // enqueues it (replacing the no-op default). Only when jobs are enabled — the Hangfire client the
+        // scheduler uses does not exist otherwise, and the unit tests settle via the "close window" action.
+        services.AddScoped<AuctionSettlementJob>();
+        services.AddScoped<IAuctionScheduler, HangfireAuctionScheduler>();
     }
 
     /// <summary>ASP.NET Core Identity (users/passwords) + the JWT/refresh-token services (Phase 7.2).

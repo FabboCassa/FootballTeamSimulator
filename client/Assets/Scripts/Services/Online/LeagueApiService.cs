@@ -128,6 +128,36 @@ namespace Fts.Services.Online
                 : LeagueApiResult<SeasonStateDto>.Ok(dto);
         }
 
+        /// <summary>Submit (or replace) the caller's training plan for their league club (Phase 8.4b).
+        /// <paramref name="body"/> is the { training: { teamFocus, individualFocuses } } wrapper the
+        /// presenter builds from the Sim.Core <c>TrainingPlan</c>; on success the server returns the
+        /// updated season state. Requires the league Active and the caller to have a drafted club.</summary>
+        public async UniTask<LeagueApiResult<SeasonStateDto>> SubmitTrainingAsync(string leagueId, object body)
+        {
+            if (!_api.IsSignedIn) return LeagueApiResult<SeasonStateDto>.Fail(LeagueApiError.NotSignedIn);
+            var (status, text, network) = await _api.SendAuthedAsync("POST", "/leagues/" + leagueId + "/training", body);
+            if (!IsSuccess(status, network))
+                return LeagueApiResult<SeasonStateDto>.Fail(MapError(status, text, network));
+            var dto = TryParse<SeasonStateDto>(text);
+            return dto == null
+                ? LeagueApiResult<SeasonStateDto>.Fail(LeagueApiError.Server)
+                : LeagueApiResult<SeasonStateDto>.Ok(dto);
+        }
+
+        /// <summary>The server's canonical whole-world state hash (condition + attributes) — the 8.4 ✅
+        /// agreement value. Deterministic across reads and CHANGES after a round of play. Members only.</summary>
+        public async UniTask<LeagueApiResult<StateHashDto>> GetStateHashAsync(string leagueId)
+        {
+            if (!_api.IsSignedIn) return LeagueApiResult<StateHashDto>.Fail(LeagueApiError.NotSignedIn);
+            var (status, text, network) = await _api.SendAuthedAsync("GET", "/leagues/" + leagueId + "/state-hash");
+            if (!IsSuccess(status, network))
+                return LeagueApiResult<StateHashDto>.Fail(MapError(status, text, network));
+            var dto = TryParse<StateHashDto>(text);
+            return dto?.hashHex == null
+                ? LeagueApiResult<StateHashDto>.Fail(LeagueApiError.Server)
+                : LeagueApiResult<StateHashDto>.Ok(dto);
+        }
+
         /// <summary>The stored full MatchReport for a played fixture (served identically to every member),
         /// deserialized into the Sim.Core <see cref="MatchReport"/> so the caller renders the replay with
         /// the existing MatchRenderer. Fails if the report has no position stream (not renderable).</summary>
@@ -143,6 +173,89 @@ namespace Fts.Services.Online
             return report?.Positions == null
                 ? LeagueApiResult<MatchReport>.Fail(LeagueApiError.Server)
                 : LeagueApiResult<MatchReport>.Ok(report);
+        }
+
+        // ---------------------------------------------------------------- auctions (8.5b)
+
+        /// <summary>The current auction view: the window's lots + the caller's budget picture (members only).</summary>
+        public async UniTask<LeagueApiResult<AuctionsDto>> GetAuctionsAsync(string leagueId)
+        {
+            if (!_api.IsSignedIn) return LeagueApiResult<AuctionsDto>.Fail(LeagueApiError.NotSignedIn);
+            var (status, text, network) = await _api.SendAuthedAsync("GET", "/leagues/" + leagueId + "/auctions");
+            return ParseAuctions(status, text, network);
+        }
+
+        /// <summary>Opens the next auction window (creator only): a lot per free agent.</summary>
+        public async UniTask<LeagueApiResult<AuctionsDto>> OpenWindowAsync(string leagueId)
+        {
+            if (!_api.IsSignedIn) return LeagueApiResult<AuctionsDto>.Fail(LeagueApiError.NotSignedIn);
+            var (status, text, network) = await _api.SendAuthedAsync("POST", "/leagues/" + leagueId + "/auctions/open");
+            return ParseAuctions(status, text, network);
+        }
+
+        /// <summary>Closes the window now (creator only): settles every open lot immediately.</summary>
+        public async UniTask<LeagueApiResult<AuctionsDto>> CloseWindowAsync(string leagueId)
+        {
+            if (!_api.IsSignedIn) return LeagueApiResult<AuctionsDto>.Fail(LeagueApiError.NotSignedIn);
+            var (status, text, network) = await _api.SendAuthedAsync("POST", "/leagues/" + leagueId + "/auctions/close");
+            return ParseAuctions(status, text, network);
+        }
+
+        /// <summary>Places a bid on a lot. On success returns the updated lot + whether it outbid a
+        /// previous leader / extended the timer; on failure a mapped error (too low / over budget / closed).</summary>
+        public async UniTask<LeagueApiResult<BidResultDto>> PlaceBidAsync(string leagueId, string auctionId, long amount)
+        {
+            if (!_api.IsSignedIn) return LeagueApiResult<BidResultDto>.Fail(LeagueApiError.NotSignedIn);
+            var body = new PlaceBidBody { amount = amount };
+            var (status, text, network) = await _api.SendAuthedAsync(
+                "POST", "/leagues/" + leagueId + "/auctions/" + auctionId + "/bid", body);
+            if (!IsSuccess(status, network))
+                return LeagueApiResult<BidResultDto>.Fail(MapError(status, text, network));
+            var dto = TryParse<BidResultDto>(text);
+            return dto?.lot == null
+                ? LeagueApiResult<BidResultDto>.Fail(LeagueApiError.Server)
+                : LeagueApiResult<BidResultDto>.Ok(dto);
+        }
+
+        private static LeagueApiResult<AuctionsDto> ParseAuctions(long status, string text, bool network)
+        {
+            if (!IsSuccess(status, network))
+                return LeagueApiResult<AuctionsDto>.Fail(MapError(status, text, network));
+            var dto = TryParse<AuctionsDto>(text);
+            return dto?.lots == null
+                ? LeagueApiResult<AuctionsDto>.Fail(LeagueApiError.Server)
+                : LeagueApiResult<AuctionsDto>.Ok(dto);
+        }
+
+        // ---------------------------------------------------------------- dev tooling (gated by DevFlags)
+
+        /// <summary>Dev-only: seed a ready test league (the signed-in account as creator + bots, drafted to
+        /// Active) via the server's /internal/dev endpoint, so online features can be tested solo. Returns
+        /// the new league id to open its lobby.</summary>
+        public async UniTask<LeagueApiResult<DevSeedResultDto>> SeedTestLeagueAsync(int size, int bots)
+        {
+            if (!_api.IsSignedIn) return LeagueApiResult<DevSeedResultDto>.Fail(LeagueApiError.NotSignedIn);
+            var body = new DevSeedBody { size = size, bots = bots, toStatus = "Active", creatorUserId = _api.Profile?.UserId };
+            var (status, text, network) = await _api.SendAuthedAsync("POST", "/internal/dev/test-league", body);
+            if (!IsSuccess(status, network))
+                return LeagueApiResult<DevSeedResultDto>.Fail(MapError(status, text, network));
+            var dto = TryParse<DevSeedResultDto>(text);
+            return dto?.leagueId == null
+                ? LeagueApiResult<DevSeedResultDto>.Fail(LeagueApiError.Server)
+                : LeagueApiResult<DevSeedResultDto>.Ok(dto);
+        }
+
+        /// <summary>Dev-only: have the league's bot members place a round of legal bids on the open lots, so
+        /// a single human sees live outbidding.</summary>
+        public async UniTask<LeagueApiResult<bool>> BotBidAsync(string leagueId, int rounds)
+        {
+            if (!_api.IsSignedIn) return LeagueApiResult<bool>.Fail(LeagueApiError.NotSignedIn);
+            var body = new DevBotBidBody { rounds = rounds };
+            var (status, text, network) = await _api.SendAuthedAsync(
+                "POST", "/internal/dev/leagues/" + leagueId + "/auctions/botbid", body);
+            return IsSuccess(status, network)
+                ? LeagueApiResult<bool>.Ok(true)
+                : LeagueApiResult<bool>.Fail(MapError(status, text, network));
         }
 
         // ---------------------------------------------------------------- helpers
@@ -177,8 +290,11 @@ namespace Fts.Services.Online
             {
                 401 => LeagueApiError.NotSignedIn,
                 403 => LeagueApiError.Forbidden,
-                404 => LeagueApiError.NotFound,
+                404 => body != null && body.Contains("auction_not_found") ? LeagueApiError.AuctionNotFound
+                     : LeagueApiError.NotFound,
                 400 => body != null && body.Contains("too_few_members") ? LeagueApiError.TooFewMembers
+                     : body != null && body.Contains("bid_too_low") ? LeagueApiError.BidTooLow
+                     : body != null && body.Contains("insufficient_budget") ? LeagueApiError.InsufficientBudget
                      : LeagueApiError.Validation,
                 409 => body != null && body.Contains("league_full") ? LeagueApiError.LeagueFull
                      : body != null && body.Contains("not_joinable") ? LeagueApiError.NotJoinable
@@ -188,6 +304,9 @@ namespace Fts.Services.Online
                      : body != null && body.Contains("not_assigned_club") ? LeagueApiError.NotAssignedClub
                      : body != null && body.Contains("nothing_to_resolve") ? LeagueApiError.NothingToResolve
                      : body != null && body.Contains("replay_not_ready") ? LeagueApiError.ReplayNotReady
+                     : body != null && body.Contains("auction_closed") ? LeagueApiError.AuctionClosed
+                     : body != null && body.Contains("window_already_open") ? LeagueApiError.WindowAlreadyOpen
+                     : body != null && body.Contains("no_auctions_open") ? LeagueApiError.NoAuctionsOpen
                      : LeagueApiError.AlreadyMember,
                 >= 500 => LeagueApiError.Server,
                 _ => LeagueApiError.Server,

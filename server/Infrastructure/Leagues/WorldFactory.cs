@@ -124,6 +124,35 @@ public static class WorldFactory
             world.Clubs.Add(club);
         }
 
+        // Free-agent pool (Phase 8.5): unattached players (ClubId = null) the season-start / mid-season
+        // auctions run on. A distinct RNG sub-stream, so club generation — and every golden master — is
+        // byte-identical. They carry a high ExternalId range so they never collide with club players, and
+        // they are excluded from the draft/squad-equaliser (which only touch club players) and from the
+        // world-state hash / development tick (which reconstruct clubs, not clubless players).
+        foreach (SimPlayer p in FreeAgentFactory.Generate(seed, cfg))
+        {
+            var freeAgent = new EntPlayer
+            {
+                Id = Guid.NewGuid(),
+                WorldId = world.Id,
+                World = world,
+                ClubId = null,
+                Club = null,
+                ExternalId = p.Id,
+                FirstName = p.FirstName,
+                LastName = p.LastName,
+                Age = p.Age,
+                Role = (int)p.Role,
+                Overall = PlayerRating.Overall(p),
+                Potential = p.Development.Potential,
+                MarketValue = ValuationModel.Value(p, sim.Division, cfg),
+                WeeklyWage = p.Contract.WeeklyWage,
+                ContractSeasonsRemaining = p.Contract.SeasonsRemaining,
+                AttributesJson = SerializeAttributes(p.Attributes),
+            };
+            world.Players.Add(freeAgent);
+        }
+
         return world;
     }
 

@@ -51,6 +51,7 @@ namespace Fts.Presenters
             _view.ReadyToggleClicked += OnReadyToggle;
             _view.AdvanceClicked += OnAdvance;
             _view.RefreshClicked += OnRefresh;
+            _view.VerifyStateClicked += OnVerifyState;
             _view.FixtureClicked += OnFixture;
             _view.BackClicked += OnBack;
 
@@ -63,6 +64,7 @@ namespace Fts.Presenters
             _view.ReadyToggleClicked -= OnReadyToggle;
             _view.AdvanceClicked -= OnAdvance;
             _view.RefreshClicked -= OnRefresh;
+            _view.VerifyStateClicked -= OnVerifyState;
             _view.FixtureClicked -= OnFixture;
             _view.BackClicked -= OnBack;
         }
@@ -186,6 +188,23 @@ namespace Fts.Presenters
                 });
             }
             _view.SetFixtures(groups);
+
+            LoadStateHashAsync().Forget();
+        }
+
+        // --- state hash (8.4b) -------------------------------------------------------------------
+
+        private void OnVerifyState() => LoadStateHashAsync().Forget();
+
+        private async UniTaskVoid LoadStateHashAsync()
+        {
+            if (string.IsNullOrEmpty(_leagueId)) return;
+
+            var result = await _leagues.GetStateHashAsync(_leagueId);
+            _view.SetStateHash(result.Success
+                ? _loc.Tr("season.state_hash_value",
+                    result.Value.hashHex, result.Value.playerCount, result.Value.roundsPlayed)
+                : _loc.Tr("season.state_hash_unavailable"));
         }
 
         // --- actions -----------------------------------------------------------------------------

@@ -15,6 +15,7 @@ namespace Fts.Views
         public event Action JoinClicked;
         public event Action BackClicked;
         public event Action<string> LeagueSelected;
+        public event Action CreateTestLeagueClicked; // dev-only
 
         public VisualElement Root { get; }
 
@@ -30,6 +31,7 @@ namespace Fts.Views
         private readonly Label _emptyLabel;
         private readonly Label _status;
         private readonly Button _backButton;
+        private readonly Button _devSeedButton; // dev-only
 
         /// <summary>One row in the leagues list — the presenter supplies a preformatted label.</summary>
         public readonly struct LeagueRow
@@ -85,6 +87,12 @@ namespace Fts.Views
             _backButton.style.marginTop = UiKit.SpaceMd;
             col.Add(_backButton);
 
+            // Dev-only shortcut: seed a ready test league (hidden unless DevFlags.OnlineTestTools).
+            _devSeedButton = UiKit.MenuButton(string.Empty, () => CreateTestLeagueClicked?.Invoke());
+            _devSeedButton.style.marginTop = UiKit.SpaceXs;
+            _devSeedButton.style.display = DisplayStyle.None;
+            col.Add(_devSeedButton);
+
             UpdateTexts();
         }
 
@@ -114,10 +122,15 @@ namespace Fts.Views
 
         public void ClearStatus() => _status.style.display = DisplayStyle.None;
 
+        /// <summary>Shows the dev-only "seed test league" button (DevFlags-gated by the presenter).</summary>
+        public void SetDevToolsVisible(bool visible) =>
+            _devSeedButton.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+
         public void SetBusy(bool busy)
         {
             _createButton.SetEnabled(!busy);
             _joinButton.SetEnabled(!busy);
+            _devSeedButton.SetEnabled(!busy);
         }
 
         public void UpdateTexts()
@@ -129,6 +142,7 @@ namespace Fts.Views
             _myLeaguesCaption.text = _tr("leagues.mine_caption");
             _emptyLabel.text = _tr("leagues.none");
             _backButton.text = _tr("common.back");
+            _devSeedButton.text = _tr("leagues.dev_seed");
         }
     }
 }

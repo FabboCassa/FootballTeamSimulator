@@ -23,6 +23,12 @@ namespace Fts.Presenters
             LeagueApiError.NotAssignedClub => "leagues.error.not_assigned_club",
             LeagueApiError.NothingToResolve => "leagues.error.nothing_to_resolve",
             LeagueApiError.ReplayNotReady => "leagues.error.replay_not_ready",
+            LeagueApiError.AuctionNotFound => "leagues.error.auction_not_found",
+            LeagueApiError.AuctionClosed => "leagues.error.auction_closed",
+            LeagueApiError.BidTooLow => "leagues.error.bid_too_low",
+            LeagueApiError.InsufficientBudget => "leagues.error.insufficient_budget",
+            LeagueApiError.WindowAlreadyOpen => "leagues.error.window_already_open",
+            LeagueApiError.NoAuctionsOpen => "leagues.error.no_auctions_open",
             _ => "leagues.error.server",
         };
     }

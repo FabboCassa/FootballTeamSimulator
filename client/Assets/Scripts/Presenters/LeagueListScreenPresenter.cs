@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
+using Fts.Services;
 using Fts.Services.Localization;
 using Fts.Services.Navigation;
 using Fts.Services.Online;
@@ -41,6 +42,8 @@ namespace Fts.Presenters
             _view.JoinClicked += OnJoin;
             _view.BackClicked += OnBack;
             _view.LeagueSelected += OnLeagueSelected;
+            _view.CreateTestLeagueClicked += OnCreateTestLeague;
+            _view.SetDevToolsVisible(DevFlags.OnlineTestTools);
             LoadAsync().Forget();
         }
 
@@ -50,6 +53,7 @@ namespace Fts.Presenters
             _view.JoinClicked -= OnJoin;
             _view.BackClicked -= OnBack;
             _view.LeagueSelected -= OnLeagueSelected;
+            _view.CreateTestLeagueClicked -= OnCreateTestLeague;
         }
 
         public void Reveal() => LoadAsync().Forget();
@@ -87,6 +91,31 @@ namespace Fts.Presenters
         };
 
         private void OnCreate() => _navigator.Push<CreateLeagueScreenPresenter>();
+
+        // Dev-only: one call seeds a ready test league (you as creator + bots, drafted to Active) and
+        // drops you into its lobby — so online features can be tested without hand-creating accounts.
+        private void OnCreateTestLeague() => SeedTestLeagueAsync().Forget();
+
+        private async UniTaskVoid SeedTestLeagueAsync()
+        {
+            if (_busy) return;
+            _busy = true;
+            _view.SetBusy(true);
+            _view.ShowStatus(_loc.Tr("leagues.dev_seeding"), isError: false);
+
+            var result = await _leagues.SeedTestLeagueAsync(size: 4, bots: 4);
+
+            _busy = false;
+            _view.SetBusy(false);
+            if (!result.Success)
+            {
+                _view.ShowStatus(_loc.Tr(LeagueErrorFormat.Key(result.Error)), isError: true);
+                return;
+            }
+
+            _selection.Select(result.Value.leagueId);
+            _navigator.Push<LeagueLobbyScreenPresenter>();
+        }
 
         private void OnLeagueSelected(string id)
         {

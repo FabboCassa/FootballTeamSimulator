@@ -50,6 +50,8 @@ namespace Fts.Presenters
             _view.RefreshClicked += OnRefresh;
             _view.PickClicked += OnPick;
             _view.SeasonClicked += OnSeason;
+            _view.TrainingClicked += OnTraining;
+            _view.AuctionsClicked += OnAuctions;
             LoadAsync(_selection.TakePreloaded()).Forget();
         }
 
@@ -61,6 +63,8 @@ namespace Fts.Presenters
             _view.RefreshClicked -= OnRefresh;
             _view.PickClicked -= OnPick;
             _view.SeasonClicked -= OnSeason;
+            _view.TrainingClicked -= OnTraining;
+            _view.AuctionsClicked -= OnAuctions;
         }
 
         public void Reveal() => LoadAsync(null).Forget();
@@ -110,7 +114,10 @@ namespace Fts.Presenters
             _view.SetMembers(members);
 
             RenderDraft(detail);
-            _view.SetSeasonButtonVisible((LeagueStatus)detail.league.status == LeagueStatus.Active);
+            bool active = (LeagueStatus)detail.league.status == LeagueStatus.Active;
+            _view.SetSeasonButtonVisible(active);
+            _view.SetTrainingButtonVisible(active);
+            _view.SetAuctionsButtonVisible(active);
 
             var clubs = new List<LeagueLobbyView.ClubVm>(detail.clubs.Count);
             foreach (var c in detail.clubs)
@@ -190,6 +197,20 @@ namespace Fts.Presenters
             // The season screen reads the selected league id (already set for this lobby).
             _selection.Select(_leagueId);
             _navigator.Push<SeasonScreenPresenter>();
+        }
+
+        private void OnTraining()
+        {
+            // The online training screen reads the selected league id (already set for this lobby).
+            _selection.Select(_leagueId);
+            _navigator.Push<OnlineTrainingScreenPresenter>();
+        }
+
+        private void OnAuctions()
+        {
+            // The auction screen reads the selected league id (already set for this lobby).
+            _selection.Select(_leagueId);
+            _navigator.Push<OnlineAuctionScreenPresenter>();
         }
 
         private List<LeagueLobbyView.PickVm> BuildPickList(LeagueDetailDto detail)

@@ -152,7 +152,8 @@ public static class LeagueEndpoints
         return Guid.TryParse(id, out userId);
     }
 
-    private static IResult MapError(LeagueError error, string? message) => error switch
+    // Internal so the auction endpoints (8.5) share the same league-error → status mapping.
+    internal static IResult MapError(LeagueError error, string? message) => error switch
     {
         LeagueError.ValidationFailed => Results.BadRequest(new { error = "validation_failed", message }),
         LeagueError.NotFound => Results.NotFound(new { error = "not_found", message }),
@@ -167,8 +168,18 @@ public static class LeagueEndpoints
         LeagueError.NothingToResolve => Results.Conflict(new { error = "nothing_to_resolve", message }),
         LeagueError.FixtureNotFound => Results.NotFound(new { error = "fixture_not_found", message }),
         LeagueError.ReplayNotReady => Results.Conflict(new { error = "replay_not_ready", message }),
+        // Online auctions (8.5).
+        LeagueError.AuctionNotFound => Results.NotFound(new { error = "auction_not_found", message }),
+        LeagueError.AuctionClosed => Results.Conflict(new { error = "auction_closed", message }),
+        LeagueError.BidTooLow => Results.BadRequest(new { error = "bid_too_low", message }),
+        LeagueError.InsufficientBudget => Results.BadRequest(new { error = "insufficient_budget", message }),
+        LeagueError.WindowAlreadyOpen => Results.Conflict(new { error = "window_already_open", message }),
+        LeagueError.NoAuctionsOpen => Results.Conflict(new { error = "no_auctions_open", message }),
         LeagueError.Forbidden => Results.Json(
             new { error = "forbidden", message }, statusCode: StatusCodes.Status403Forbidden),
         _ => Results.BadRequest(new { error = "league_error", message }),
     };
+
+    // Internal so the auction endpoints (8.5) share the same token → user-id extraction.
+    internal static bool TryGetUserIdShared(ClaimsPrincipal user, out Guid userId) => TryGetUserId(user, out userId);
 }

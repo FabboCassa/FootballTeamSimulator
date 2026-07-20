@@ -1,0 +1,241 @@
+using Fts.Application.Auth;
+using Fts.Application.Dev;
+using Fts.Application.Leagues;
+using Fts.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
+
+namespace Fts.Infrastructure.Dev;
+
+/// <summary>
+/// Dev-only test-league seeding (dev tooling). Composes the real use cases — <see cref="IAuthService"/>
+/// (bot accounts), <see cref="ILeagueService"/> (create/join/draft), <see cref="ILeagueSeasonService"/>
+/// (ready), <see cref="IAuctionService"/> (bot bids) — plus a direct read of the shared
+/// <see cref="FtsDbContext"/> to find a league's bot members. Everything runs server-side by user id, so
+/// no tokens are needed to drive the flow; the bot access tokens are only returned for a caller's
+/// convenience. Never mapped in Production (the Api gates the endpoints).
+/// </summary>
+public sealed class DevSeedService : IDevSeedService
+{
+    private const string BotPassword = "BotPass1";
+    private const string BotDomain = "@dev.local";
+
+    private readonly IAuthService _auth;
+    private readonly ILeagueService _leagues;
+    private readonly ILeagueSeasonService _season;
+    private readonly IAuctionService _auctions;
+    private readonly FtsDbContext _db;
+
+    public DevSeedService(
+        IAuthService auth, ILeagueService leagues, ILeagueSeasonService season,
+        IAuctionService auctions, FtsDbContext db)
+    {
+        _auth = auth;
+        _leagues = leagues;
+        _season = season;
+        _auctions = auctions;
+        _db = db;
+    }
+
+    // --- seed ------------------------------------------------------------------------------------
+
+    public async Task<DevSeedResult> SeedTestLeagueAsync(DevSeedRequest request, CancellationToken ct = default)
+    {
+        int size = Clamp(request.Size, 2, 20);
+        int members = Clamp(request.Bots, 2, size);
+        string target = (request.ToStatus ?? "Active").Trim().ToLowerInvariant();
+
+        var roster = new List<Member>();
+
+        // Creator: the signed-in human (client dev button) or a deterministic bot.
+        if (request.CreatorUserId is Guid human)
+            roster.Add(new Member(human, null, null, true, false));
+        else
+        {
+            var b1 = await EnsureBotAsync(1, ct);
+            roster.Add(new Member(b1.Id, b1.Email, b1.Token, true, true));
+        }
+
+        // Fill the remaining seats with bots (indices continue after the creator bot, if any).
+        int nextBot = request.CreatorUserId is null ? 2 : 1;
+        while (roster.Count < members)
+        {
+            var b = await EnsureBotAsync(nextBot++, ct);
+            roster.Add(new Member(b.Id, b.Email, b.Token, false, true));
+        }
+
+        var creator = roster[0];
+        string code = System.Guid.NewGuid().ToString("N").Substring(0, 5).ToUpperInvariant();
+        var create = await _leagues.CreateAsync(
+            creator.Id, new CreateLeagueRequest($"Dev League {code}", size, LeagueMode.AllReady), ct);
+        if (!create.Success)
+            throw new InvalidOperationException($"Dev seed: create failed ({create.Error}).");
+
+        Guid leagueId = create.Value!.League.Id;
+        string inviteCode = create.Value.League.InviteCode;
+
+        // The others join by code.
+        for (int i = 1; i < roster.Count; i++)
+        {
+            var join = await _leagues.JoinAsync(roster[i].Id, new JoinLeagueRequest(inviteCode), ct);
+            if (!join.Success)
+                throw new InvalidOperationException($"Dev seed: join failed for member {i} ({join.Error}).");
+        }
+
+        if (target is "drafting" or "active")
+        {
+            var start = await _leagues.StartDraftAsync(creator.Id, leagueId, ct);
+            if (!start.Success)
+                throw new InvalidOperationException($"Dev seed: start draft failed ({start.Error}).");
+        }
+
+        if (target == "active")
+            await RunDraftAsync(creator.Id, leagueId, roster, size, ct);
+
+        // Final detail for the assigned clubs + reported status.
+        var detail = await _leagues.GetAsync(creator.Id, leagueId, ct);
+        var memberDtos = new List<DevSeedMemberDto>();
+        foreach (var m in roster)
+        {
+            int? clubExternalId = null;
+            if (detail.Success)
+                foreach (var dm in detail.Value!.Members)
+                    if (dm.UserId == m.Id) { clubExternalId = dm.ClubExternalId; break; }
+            memberDtos.Add(new DevSeedMemberDto(m.Id, m.Email ?? string.Empty, m.Token, clubExternalId, m.IsCreator, m.IsBot));
+        }
+
+        string status = detail.Success ? detail.Value!.League.Status.ToString() : target;
+        return new DevSeedResult(leagueId, inviteCode, status, memberDtos);
+    }
+
+    /// <summary>Drives the snake draft to completion: whoever's turn it is claims the first unclaimed club.</summary>
+    private async Task RunDraftAsync(Guid readerId, Guid leagueId, List<Member> roster, int size, CancellationToken ct)
+    {
+        for (int guard = 0; guard <= size; guard++)
+        {
+            var detail = await _leagues.GetAsync(readerId, leagueId, ct);
+            if (!detail.Success) return;
+            var draft = detail.Value!.Draft;
+            if (draft is null || !draft.InProgress) return;
+
+            Guid? pick = draft.CurrentPickUserId;
+            if (pick is null) return;
+            Guid pickUser = pick.Value;
+
+            var taken = new HashSet<int>();
+            foreach (var dm in detail.Value.Members)
+                if (dm.ClubExternalId is int cid) taken.Add(cid);
+
+            int? club = null;
+            foreach (var c in detail.Value.Clubs)
+                if (!taken.Contains(c.ExternalId)) { club = c.ExternalId; break; }
+            if (club is null) return;
+
+            var res = await _leagues.PickClubAsync(pickUser, leagueId, new PickClubRequest(club.Value), ct);
+            if (!res.Success)
+                throw new InvalidOperationException($"Dev seed: pick failed ({res.Error}).");
+        }
+    }
+
+    // --- bot autopilot ---------------------------------------------------------------------------
+
+    public async Task<DevBotBidResult> BotBidAsync(Guid leagueId, DevBotBidRequest request, CancellationToken ct = default)
+    {
+        var bots = await BotMembersAsync(leagueId, ct);
+        if (bots.Count == 0) return new DevBotBidResult(0);
+
+        int rounds = Clamp(request.Rounds, 1, 20);
+        int placed = 0;
+        for (int r = 0; r < rounds; r++)
+        {
+            var view = await _auctions.GetAuctionsAsync(bots[0].UserId, leagueId, ct);
+            if (!view.Success) break;
+
+            foreach (var lot in view.Value!.Lots)
+            {
+                if (lot.Status != AuctionStatus.Open) continue;
+                // A bot that isn't already the leader outbids the current high (minimum legal raise).
+                var bidder = bots.FirstOrDefault(b => lot.HighBidClubExternalId != b.ClubExternalId);
+                if (bidder is null) continue;
+
+                long min = lot.HighBid <= 0
+                    ? lot.StartPrice
+                    : lot.HighBid + System.Math.Max(25_000, lot.HighBid / 20);
+                var res = await _auctions.PlaceBidAsync(
+                    bidder.UserId, leagueId, lot.AuctionId, new PlaceBidRequest(min), ct);
+                if (res.Success) placed++;
+            }
+        }
+        return new DevBotBidResult(placed);
+    }
+
+    public async Task<DevBotReadyResult> BotReadyAsync(Guid leagueId, CancellationToken ct = default)
+    {
+        var bots = await BotMembersAsync(leagueId, ct);
+        int n = 0;
+        foreach (var b in bots)
+        {
+            var res = await _season.SetReadyAsync(b.UserId, leagueId, new SetReadyRequest(true), ct);
+            if (res.Success) n++;
+        }
+        return new DevBotReadyResult(n);
+    }
+
+    public async Task<DevResetResult> ResetAsync(int bots, CancellationToken ct = default)
+    {
+        int count = Clamp(bots, 1, 50);
+        int left = 0;
+        for (int n = 1; n <= count; n++)
+        {
+            var login = await _auth.LoginAsync(new LoginRequest(BotEmail(n), BotPassword), ct);
+            if (!login.Success) continue;
+            Guid botId = login.Value!.Profile.UserId;
+
+            var mine = await _leagues.ListMineAsync(botId, ct);
+            foreach (var l in mine)
+            {
+                var res = await _leagues.LeaveAsync(botId, l.Id, ct);
+                if (res.Success) left++;
+            }
+        }
+        return new DevResetResult(left, count);
+    }
+
+    // --- helpers ---------------------------------------------------------------------------------
+
+    /// <summary>The league's bot members (email under the dev domain) that hold a club, with the club's
+    /// external id — read straight from the DB (dev tooling), so no membership token is needed.</summary>
+    private async Task<List<BotMember>> BotMembersAsync(Guid leagueId, CancellationToken ct)
+    {
+        var rows = await (
+            from m in _db.LeagueMembers
+            join c in _db.Clubs on m.ClubId equals (Guid?)c.Id
+            join u in _db.Users on m.UserId equals u.Id
+            where m.PrivateLeagueId == leagueId && m.ClubId != null && u.Email!.EndsWith(BotDomain)
+            select new { m.UserId, c.ExternalId }).ToListAsync(ct);
+
+        var list = new List<BotMember>(rows.Count);
+        foreach (var r in rows) list.Add(new BotMember(r.UserId, r.ExternalId));
+        return list;
+    }
+
+    private async Task<(Guid Id, string Email, string Token)> EnsureBotAsync(int n, CancellationToken ct)
+    {
+        string email = BotEmail(n);
+        var reg = await _auth.RegisterAsync(new RegisterRequest(email, BotPassword, $"Bot {n}"), ct);
+        if (reg.Success) return (reg.Value!.Profile.UserId, email, reg.Value.AccessToken);
+
+        var login = await _auth.LoginAsync(new LoginRequest(email, BotPassword), ct);
+        if (login.Success) return (login.Value!.Profile.UserId, email, login.Value.AccessToken);
+
+        throw new InvalidOperationException($"Dev seed: could not create/login {email} ({reg.Error}/{login.Error}).");
+    }
+
+    private static string BotEmail(int n) => $"bot{n}{BotDomain}";
+
+    private static int Clamp(int v, int lo, int hi) => v < lo ? lo : v > hi ? hi : v;
+
+    private readonly record struct Member(Guid Id, string? Email, string? Token, bool IsCreator, bool IsBot);
+
+    // Reference type so FirstOrDefault can return null (a "no eligible bot" sentinel) in BotBidAsync.
+    private sealed record BotMember(Guid UserId, int ClubExternalId);
+}

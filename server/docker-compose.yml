@@ -58,6 +58,9 @@ services:
       Fcm__Enabled: "true"
       Fcm__ProjectId: "football-team-simulator"
       Fcm__CredentialsPath: "/run/secrets/fcm.json"
+      # Dev-only online-league seeding endpoints (/internal/dev/*). On for the local stack; never mapped
+      # under Production. Set to "false" to switch them off even here.
+      Dev__ExposeSeedEndpoints: "true"
     volumes:
       # Mount the Firebase service-account key at runtime (do NOT copy it into the image).
       - ./secrets/fcm.json:/run/secrets/fcm.json:ro

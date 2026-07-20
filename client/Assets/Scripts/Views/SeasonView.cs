@@ -43,6 +43,7 @@ namespace Fts.Views
         public event Action AdvanceClicked;
         public event Action RefreshClicked;
         public event Action EditLineupClicked;
+        public event Action VerifyStateClicked;
         public event Action<string> FixtureClicked; // fixture id (played only)
         public event Action BackClicked;
 
@@ -56,6 +57,9 @@ namespace Fts.Views
         private readonly Button _advanceButton;
         private readonly Button _editButton;
         private readonly Button _refreshButton;
+        private readonly Label _stateHashCaption;
+        private readonly Label _stateHashValue;
+        private readonly Button _verifyButton;
         private readonly Label _standingsCaption;
         private readonly VisualElement _standings;
         private readonly Label _scheduleCaption;
@@ -95,6 +99,22 @@ namespace Fts.Views
             _refreshButton = UiKit.MenuButton(string.Empty, () => RefreshClicked?.Invoke());
             _refreshButton.style.marginLeft = UiKit.SpaceXs;
             actions.Add(_refreshButton);
+
+            // State-hash agreement panel (8.4b): the server's canonical whole-world hash. It CHANGES
+            // after a round of play (condition + development evolved) — the client↔server ✅.
+            var hashCard = UiKit.Card();
+            hashCard.style.marginTop = UiKit.SpaceMd;
+            col.Add(hashCard);
+            _stateHashCaption = UiKit.Caption(string.Empty);
+            _stateHashCaption.style.color = UiKit.TextMuted;
+            hashCard.Add(_stateHashCaption);
+            _stateHashValue = UiKit.Caption(string.Empty);
+            _stateHashValue.style.whiteSpace = WhiteSpace.Normal;
+            _stateHashValue.style.marginTop = UiKit.SpaceXs;
+            hashCard.Add(_stateHashValue);
+            _verifyButton = UiKit.MenuButton(string.Empty, () => VerifyStateClicked?.Invoke());
+            _verifyButton.style.marginTop = UiKit.SpaceXs;
+            hashCard.Add(_verifyButton);
 
             _standingsCaption = UiKit.Subtitle(string.Empty);
             _standingsCaption.style.marginTop = UiKit.SpaceMd;
@@ -139,6 +159,9 @@ namespace Fts.Views
         }
 
         public void SetEditEnabled(bool enabled) => _editButton.SetEnabled(enabled);
+
+        /// <summary>The state-hash agreement line (hash · players · rounds), preformatted by the presenter.</summary>
+        public void SetStateHash(string text) => _stateHashValue.text = text;
 
         /// <summary>The lineup/tactic/plan editor button is wired in the editor increment (8.3b task 10);
         /// hidden until then.</summary>
@@ -185,6 +208,7 @@ namespace Fts.Views
             _advanceButton.SetEnabled(!busy);
             _editButton.SetEnabled(!busy);
             _refreshButton.SetEnabled(!busy);
+            _verifyButton.SetEnabled(!busy);
         }
 
         public void UpdateTexts()
@@ -192,6 +216,8 @@ namespace Fts.Views
             _advanceButton.text = _tr("season.advance");
             _editButton.text = _tr("season.edit_lineup");
             _refreshButton.text = _tr("season.refresh");
+            _stateHashCaption.text = _tr("season.state_hash_caption");
+            _verifyButton.text = _tr("season.verify_state");
             _backButton.text = _tr("common.back");
         }
 

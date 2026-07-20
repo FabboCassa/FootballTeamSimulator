@@ -121,6 +121,20 @@ public enum LeagueError
     FixtureNotFound,
     /// <summary>The fixture has not been played yet, so no replay is available — 8.3.</summary>
     ReplayNotReady,
+
+    // --- Online auctions (Phase 8.5) --------------------------------------------------------
+    /// <summary>No auction with that id exists in this league — 8.5.</summary>
+    AuctionNotFound,
+    /// <summary>The auction is no longer open for bids (settled/unsold, or the window closed) — 8.5.</summary>
+    AuctionClosed,
+    /// <summary>The bid is below the required minimum (start price, or current high bid + increment) — 8.5.</summary>
+    BidTooLow,
+    /// <summary>The bid exceeds the club's available budget (transfer budget minus its leading bids) — 8.5.</summary>
+    InsufficientBudget,
+    /// <summary>An auction window is already open in this league — 8.5.</summary>
+    WindowAlreadyOpen,
+    /// <summary>There are no open auctions to close/settle — 8.5.</summary>
+    NoAuctionsOpen,
 }
 
 /// <summary>Result wrapper so the service never throws for expected failures. Exactly one of
