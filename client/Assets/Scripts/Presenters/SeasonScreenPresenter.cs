@@ -53,6 +53,7 @@ namespace Fts.Presenters
             _view.RefreshClicked += OnRefresh;
             _view.VerifyStateClicked += OnVerifyState;
             _view.FixtureClicked += OnFixture;
+            _view.PlayLiveClicked += OnPlayLive;
             _view.BackClicked += OnBack;
 
             _leagueId = _selection.LeagueId;
@@ -66,6 +67,7 @@ namespace Fts.Presenters
             _view.RefreshClicked -= OnRefresh;
             _view.VerifyStateClicked -= OnVerifyState;
             _view.FixtureClicked -= OnFixture;
+            _view.PlayLiveClicked -= OnPlayLive;
             _view.BackClicked -= OnBack;
         }
 
@@ -175,6 +177,8 @@ namespace Fts.Presenters
                     rows = new List<SeasonFixtureRowVm>();
                     groups.Add(new FixtureGroupVm { RoundLabel = _loc.Tr("season.round", f.round), Rows = rows });
                 }
+                bool isYours = _yourClub.HasValue
+                               && (f.homeClubExternalId == _yourClub.Value || f.awayClubExternalId == _yourClub.Value);
                 rows.Add(new SeasonFixtureRowVm
                 {
                     FixtureId = f.id,
@@ -183,8 +187,9 @@ namespace Fts.Presenters
                     Played = f.played,
                     HomeGoals = f.homeGoals,
                     AwayGoals = f.awayGoals,
-                    IsYours = _yourClub.HasValue
-                              && (f.homeClubExternalId == _yourClub.Value || f.awayClubExternalId == _yourClub.Value),
+                    IsYours = isYours,
+                    // Your unplayed fixture in the current (next-to-resolve) round can be played live (8.6b).
+                    CanPlayLive = isYours && !f.played && st.nextRound.HasValue && f.round == st.nextRound.Value,
                 });
             }
             _view.SetFixtures(groups);
@@ -253,6 +258,19 @@ namespace Fts.Presenters
 
             _replayTarget.Set(_leagueId, fixtureId, f.homeClubName, f.awayClubName);
             _navigator.Push<OnlineReplayScreenPresenter>();
+        }
+
+        // Open the live match for your current-round fixture (8.6b). The live screen opens the session,
+        // waits for the opponent, and streams the state; the same SeasonReplayTarget carries the hand-off.
+        private void OnPlayLive(string fixtureId)
+        {
+            if (_lastSeason == null || string.IsNullOrEmpty(fixtureId)) return;
+
+            LeagueFixtureDto f = _lastSeason.fixtures.Find(x => x.id == fixtureId);
+            if (f == null || f.played) return;
+
+            _replayTarget.Set(_leagueId, fixtureId, f.homeClubName, f.awayClubName);
+            _navigator.Push<OnlineLiveMatchScreenPresenter>();
         }
 
         private void OnRefresh() => LoadSeasonAsync().Forget();

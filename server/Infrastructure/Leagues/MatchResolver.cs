@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using System.Linq;
+using Fts.Application.Leagues;
 using Sim.Core.Config;
 using Sim.Core.Match;
 using Sim.Core.Random;
@@ -62,6 +64,68 @@ public static class MatchResolver
             AwayStarterIds = StarterIdsOf(awayLineup),
         };
     }
+
+    /// <summary>
+    /// Resolves a fixture played LIVE (Phase 8.6): folds the accumulated pause-point inputs into the
+    /// authoritative <see cref="MatchPlan"/> and re-runs the whole 90' from the fixture seed. Each
+    /// <see cref="LiveChange"/> updates only its own side (a substitution / reshaped XI via a new
+    /// <see cref="LineupPlan"/>, and/or an instruction change via a new <see cref="TacticPlan"/>), keeping
+    /// the other side as it was, then emits a <see cref="MatchInputChange"/> from that minute. Because the
+    /// engine is a pure function of (plan, seed), the minutes before a change stay byte-identical and only
+    /// the remainder re-rolls — that is what lets both connected clients render the same match in sync. The
+    /// engine runs on the clubs' live condition with the same flags as the scheduled resolution, so a
+    /// finished live report equals what the round would have produced for the same inputs. The kickoff XI
+    /// (for the weekly condition credit, 8.4) is the BASE lineups, before any live sub.
+    /// </summary>
+    public static ResolveResult ResolveLive(
+        SimClub home, SimClub away, SideInputs? homeInputs, SideInputs? awayInputs,
+        IReadOnlyList<LiveChange> changes, ulong seed, BalanceConfig cfg, bool applyCondition = true)
+    {
+        int famMax = cfg.Tactics.FamiliarityMax;
+
+        Lineup homeLineup = BuildLineup(home, homeInputs?.Lineup);
+        Lineup awayLineup = BuildLineup(away, awayInputs?.Lineup);
+        TacticPlan? homeTactic = homeInputs?.Tactic;
+        TacticPlan? awayTactic = awayInputs?.Tactic;
+
+        var plan = new MatchPlan(new MatchInput(homeLineup, awayLineup, BuildTactics(homeTactic, awayTactic, famMax)));
+
+        foreach (LiveChange ch in changes.OrderBy(c => c.FromMinute))
+        {
+            if (ch.Side == LiveSide.Home)
+            {
+                if (ch.Lineup != null && ch.Lineup.TryMaterialize(home, out Lineup? nl) && nl != null) homeLineup = nl;
+                if (ch.Tactic != null) homeTactic = ch.Tactic;
+            }
+            else
+            {
+                if (ch.Lineup != null && ch.Lineup.TryMaterialize(away, out Lineup? nl) && nl != null) awayLineup = nl;
+                if (ch.Tactic != null) awayTactic = ch.Tactic;
+            }
+
+            plan = plan.WithChange(ch.FromMinute,
+                new MatchInput(homeLineup, awayLineup, BuildTactics(homeTactic, awayTactic, famMax)));
+        }
+
+        var homeRules = homeInputs?.Plan?.Resolve(home, null, famMax);
+        var awayRules = awayInputs?.Plan?.Resolve(away, null, famMax);
+
+        var engine = new MatchEngine(cfg, applyCondition: applyCondition, applyMatchFatigue: applyCondition);
+        MatchReport report = engine.Simulate(plan, homeRules, awayRules, new Pcg32(seed));
+
+        return new ResolveResult
+        {
+            Report = report,
+            HomeStarterIds = StarterIdsOf(BuildLineup(home, homeInputs?.Lineup)),
+            AwayStarterIds = StarterIdsOf(BuildLineup(away, awayInputs?.Lineup)),
+        };
+    }
+
+    /// <summary>The two kickoff XIs (base lineups, before any live sub) for the weekly condition credit
+    /// (8.4) when the round consumes a finished live result — no engine run.</summary>
+    public static (HashSet<int> Home, HashSet<int> Away) KickoffElevenIds(
+        SimClub home, SimClub away, SideInputs? homeInputs, SideInputs? awayInputs) =>
+        (StarterIdsOf(BuildLineup(home, homeInputs?.Lineup)), StarterIdsOf(BuildLineup(away, awayInputs?.Lineup)));
 
     /// <summary>The kickoff XI's player ids (credited a full match by the condition tick).</summary>
     private static HashSet<int> StarterIdsOf(Lineup lineup)

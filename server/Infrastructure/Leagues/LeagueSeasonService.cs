@@ -310,6 +310,18 @@ public sealed class LeagueSeasonService : ILeagueSeasonService
         var lineups = await _db.LeagueLineups.Where(x => x.PrivateLeagueId == league.Id).ToListAsync(ct);
         var inputsByClub = lineups.ToDictionary(x => x.ClubId, DeserializeInputs);
 
+        // A fixture played LIVE (8.6) carries its result on a Finished LiveMatch — consume it verbatim
+        // instead of re-simulating, so the live-played score feeds standings and the weekly tick coherently.
+        var roundFixtureIds = roundFixtures.Select(f => f.Id).ToList();
+        var liveByFixture = await _db.LiveMatches
+            .Where(l => l.PrivateLeagueId == league.Id
+                        && l.Status == LiveMatchStatus.Finished
+                        && roundFixtureIds.Contains(l.FixtureId))
+            .ToListAsync(ct);
+        var liveResult = liveByFixture
+            .Where(l => !string.IsNullOrEmpty(l.ReportJson))
+            .ToDictionary(l => l.FixtureId);
+
         // The clubs that played this round, keyed by their world-unique external id (= Sim.Core club id),
         // with the kickoff XI + result — the input to the weekly condition tick.
         var played = new Dictionary<int, ConditionProgressor.Participation>();
@@ -324,6 +336,27 @@ public sealed class LeagueSeasonService : ILeagueSeasonService
 
             int homeExt = entByGuid[f.HomeClubId].ExternalId;
             int awayExt = entByGuid[f.AwayClubId].ExternalId;
+
+            // A live-played fixture: use the stored live report + its denormalised score; the kickoff XI
+            // (before any live sub) credits the weekly condition tick, per the 8.4 convention.
+            if (liveResult.TryGetValue(f.Id, out var live))
+            {
+                f.HomeGoals = live.HomeGoals;
+                f.AwayGoals = live.AwayGoals;
+                f.IsPlayed = true;
+                f.MatchSeed = live.Seed;
+                f.ResolvedUtc = now;
+                f.ReplayJson = live.ReportJson;
+
+                (HashSet<int> homeStarters, HashSet<int> awayStarters) =
+                    MatchResolver.KickoffElevenIds(home, away, homeInputs, awayInputs);
+                played[homeExt] = new ConditionProgressor.Participation(
+                    homeStarters, ResultFor(live.HomeGoals, live.AwayGoals));
+                played[awayExt] = new ConditionProgressor.Participation(
+                    awayStarters, ResultFor(live.AwayGoals, live.HomeGoals));
+                continue;
+            }
+
             ulong seed = MatchSeed(worldSeed, f.Round, homeExt, awayExt);
 
             // Resolve on the clubs' live condition (server-authoritative from 8.4).
@@ -413,19 +446,10 @@ public sealed class LeagueSeasonService : ILeagueSeasonService
         return new MatchResolver.SideInputs { Lineup = lineup, Tactic = tactic, Plan = plan };
     }
 
-    /// <summary>Deterministic per-fixture seed from (world seed, round, home, away) via an FNV-style mix.</summary>
-    private static ulong MatchSeed(long worldSeed, int round, int homeExternalId, int awayExternalId)
-    {
-        unchecked
-        {
-            const ulong prime = 0x100000001B3UL;
-            ulong h = (ulong)worldSeed;
-            h = (h ^ (uint)round) * prime;
-            h = (h ^ (uint)homeExternalId) * prime;
-            h = (h ^ (uint)awayExternalId) * prime;
-            return h;
-        }
-    }
+    /// <summary>Deterministic per-fixture seed from (world seed, round, home, away). Shared with the live
+    /// session (8.6) via <see cref="FixtureSeed"/> so a live-played fixture uses the identical seed.</summary>
+    private static ulong MatchSeed(long worldSeed, int round, int homeExternalId, int awayExternalId) =>
+        FixtureSeed.For(worldSeed, round, homeExternalId, awayExternalId);
 
     // --- season view helpers -----------------------------------------------------------------------
 

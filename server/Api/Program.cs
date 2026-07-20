@@ -1,5 +1,6 @@
 using System.Text;
 using Fts.Api.Auctions;
+using Fts.Api.Matches;
 using Fts.Api.Auth;
 using Fts.Api.Dev;
 using Fts.Api.Jobs;
@@ -32,6 +33,10 @@ builder.Services.AddFtsInfrastructure(builder.Configuration, backgroundJobsEnabl
 // live match control in 8.6.
 builder.Services.AddSignalR();
 builder.Services.AddScoped<IAuctionBroadcaster, SignalRAuctionBroadcaster>();
+
+// Live match control (Phase 8.6): the real MatchHub broadcaster (replaces the Infrastructure no-op). The
+// REST endpoints stay authoritative; this is the live push layer over the second SignalR hub.
+builder.Services.AddScoped<ILiveMatchBroadcaster, SignalRMatchBroadcaster>();
 
 // JWT bearer authentication — validation parameters mirror the JwtTokenService signing settings.
 var jwt = builder.Configuration.GetSection("Jwt");
@@ -115,6 +120,11 @@ app.MapLeagueEndpoints();
 // AuctionHub for real-time bid pushes. Always mapped.
 app.MapAuctionEndpoints();
 app.MapHub<AuctionHub>("/hubs/auction");
+
+// Live match control (Phase 8.6): open/join/change/finish a live human-vs-human fixture, JWT-protected.
+// Plus the MatchHub for real-time state pushes. Always mapped.
+app.MapLiveMatchEndpoints();
+app.MapHub<MatchHub>("/hubs/match");
 
 // Internal match-simulation endpoints (Phase 7.3): dev-only — never mapped in Production, and
 // behind a config flag (default on outside prod) so a deployment can also switch them off.

@@ -175,6 +175,14 @@ public static class LeagueEndpoints
         LeagueError.InsufficientBudget => Results.BadRequest(new { error = "insufficient_budget", message }),
         LeagueError.WindowAlreadyOpen => Results.Conflict(new { error = "window_already_open", message }),
         LeagueError.NoAuctionsOpen => Results.Conflict(new { error = "no_auctions_open", message }),
+        // Live match control (8.6).
+        LeagueError.LiveMatchNotFound => Results.NotFound(new { error = "live_match_not_found", message }),
+        LeagueError.LiveMatchNotJoinable => Results.Conflict(new { error = "live_match_not_joinable", message }),
+        LeagueError.NotYourSide => Results.Json(
+            new { error = "not_your_side", message }, statusCode: StatusCodes.Status403Forbidden),
+        LeagueError.LiveMatchNotLive => Results.Conflict(new { error = "live_match_not_live", message }),
+        LeagueError.LiveMatchAlreadyFinished => Results.Conflict(new { error = "live_match_already_finished", message }),
+        LeagueError.InvalidLiveChange => Results.BadRequest(new { error = "invalid_live_change", message }),
         LeagueError.Forbidden => Results.Json(
             new { error = "forbidden", message }, statusCode: StatusCodes.Status403Forbidden),
         _ => Results.BadRequest(new { error = "league_error", message }),

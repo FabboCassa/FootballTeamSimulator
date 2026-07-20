@@ -39,6 +39,8 @@ public sealed class FtsDbContext : IdentityDbContext<AppUser, IdentityRole<Guid>
     public DbSet<Auction> Auctions => Set<Auction>();
     public DbSet<Bid> Bids => Set<Bid>();
 
+    public DbSet<LiveMatch> LiveMatches => Set<LiveMatch>();
+
     protected override void OnModelCreating(ModelBuilder b)
     {
         // IdentityDbContext.OnModelCreating configures the Identity tables — call it first.
@@ -337,6 +339,27 @@ public sealed class FtsDbContext : IdentityDbContext<AppUser, IdentityRole<Guid>
             // path (bids → auctions → private_leagues), portable across PostgreSQL and the SQLite test provider.
             e.HasIndex(x => x.AuctionId);
             e.HasIndex(x => x.PrivateLeagueId);
+        });
+
+        // --- Live match control (Phase 8.6) -------------------------------------------------
+
+        b.Entity<LiveMatch>(e =>
+        {
+            e.ToTable("live_matches");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Status).HasConversion<int>();
+            e.Property(x => x.ChangesJson).IsRequired();
+            // Cascade from the private league — disbanding a league removes its live sessions. The
+            // fixture / club / user ids are plain denormalised columns (no relationship), keeping a single
+            // cascade path (live_matches → private_leagues), portable across PostgreSQL and the SQLite
+            // test provider — the same approach as bids (8.5).
+            e.HasOne(x => x.PrivateLeague)
+                .WithMany()
+                .HasForeignKey(x => x.PrivateLeagueId)
+                .OnDelete(DeleteBehavior.Cascade);
+            // One live session per fixture.
+            e.HasIndex(x => x.FixtureId).IsUnique();
+            e.HasIndex(x => new { x.PrivateLeagueId, x.Status });
         });
     }
 }

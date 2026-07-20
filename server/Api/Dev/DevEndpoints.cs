@@ -29,6 +29,12 @@ public static class DevEndpoints
             Guid id, IDevSeedService dev, CancellationToken ct) =>
             Results.Ok(await dev.BotReadyAsync(id, ct)));
 
+        // Bot autopilot: the fixture's bot opponent joins the live match (kicking it off once the human is
+        // present) and optionally makes a substitution — so a single human can test live control solo (8.6).
+        group.MapPost("/leagues/{id:guid}/live/{fixtureId:guid}/bot", async (
+            Guid id, Guid fixtureId, DevBotLiveRequest? req, IDevSeedService dev, CancellationToken ct) =>
+            Results.Ok(await dev.BotLiveAsync(id, fixtureId, req ?? new DevBotLiveRequest(), ct)));
+
         // Cleanup: the deterministic bots leave every league they are in.
         group.MapPost("/reset", async (int? bots, IDevSeedService dev, CancellationToken ct) =>
             Results.Ok(await dev.ResetAsync(bots ?? 8, ct)));

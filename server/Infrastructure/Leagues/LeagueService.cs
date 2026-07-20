@@ -236,6 +236,8 @@ public sealed class LeagueService : ILeagueService
             // Season rows first: league_fixtures/league_lineups Restrict-reference clubs, so they must
             // go before the clubs delete below (they also cascade from the private league, but explicit
             // ordered deletes keep the teardown portable across PostgreSQL and the SQLite test provider).
+            // Live sessions (8.6) reference fixtures by a plain column — delete them before the fixtures.
+            await _db.LiveMatches.Where(x => x.PrivateLeagueId == leagueId).ExecuteDeleteAsync(ct);
             await _db.LeagueFixtures.Where(f => f.PrivateLeagueId == leagueId).ExecuteDeleteAsync(ct);
             await _db.LeagueLineups.Where(x => x.PrivateLeagueId == leagueId).ExecuteDeleteAsync(ct);
             await _db.LeagueTrainings.Where(x => x.PrivateLeagueId == leagueId).ExecuteDeleteAsync(ct);

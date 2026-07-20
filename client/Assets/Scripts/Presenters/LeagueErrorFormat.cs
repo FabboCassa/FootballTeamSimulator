@@ -29,6 +29,12 @@ namespace Fts.Presenters
             LeagueApiError.InsufficientBudget => "leagues.error.insufficient_budget",
             LeagueApiError.WindowAlreadyOpen => "leagues.error.window_already_open",
             LeagueApiError.NoAuctionsOpen => "leagues.error.no_auctions_open",
+            LeagueApiError.LiveMatchNotFound => "leagues.error.live_match_not_found",
+            LeagueApiError.LiveMatchNotJoinable => "leagues.error.live_match_not_joinable",
+            LeagueApiError.NotYourSide => "leagues.error.not_your_side",
+            LeagueApiError.LiveMatchNotLive => "leagues.error.live_match_not_live",
+            LeagueApiError.LiveMatchAlreadyFinished => "leagues.error.live_match_already_finished",
+            LeagueApiError.InvalidLiveChange => "leagues.error.invalid_live_change",
             _ => "leagues.error.server",
         };
     }

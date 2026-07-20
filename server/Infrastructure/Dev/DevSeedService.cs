@@ -1,8 +1,12 @@
 using Fts.Application.Auth;
 using Fts.Application.Dev;
 using Fts.Application.Leagues;
+using Fts.Infrastructure.Leagues;
 using Fts.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Sim.Core.Match;
+using SimClub = Sim.Core.Domain.Club;
+using SimPlayer = Sim.Core.Domain.Player;
 
 namespace Fts.Infrastructure.Dev;
 
@@ -23,16 +27,18 @@ public sealed class DevSeedService : IDevSeedService
     private readonly ILeagueService _leagues;
     private readonly ILeagueSeasonService _season;
     private readonly IAuctionService _auctions;
+    private readonly ILiveMatchService _liveMatch;
     private readonly FtsDbContext _db;
 
     public DevSeedService(
         IAuthService auth, ILeagueService leagues, ILeagueSeasonService season,
-        IAuctionService auctions, FtsDbContext db)
+        IAuctionService auctions, ILiveMatchService liveMatch, FtsDbContext db)
     {
         _auth = auth;
         _leagues = leagues;
         _season = season;
         _auctions = auctions;
+        _liveMatch = liveMatch;
         _db = db;
     }
 
@@ -178,6 +184,79 @@ public sealed class DevSeedService : IDevSeedService
             if (res.Success) n++;
         }
         return new DevBotReadyResult(n);
+    }
+
+    public async Task<DevBotLiveResult> BotLiveAsync(
+        Guid leagueId, Guid fixtureId, DevBotLiveRequest request, CancellationToken ct = default)
+    {
+        var fixture = await _db.LeagueFixtures.FirstOrDefaultAsync(
+            f => f.Id == fixtureId && f.PrivateLeagueId == leagueId, ct);
+        if (fixture is null) return new DevBotLiveResult("fixture_not_found", false, false, 0);
+
+        // The bot on one side of the fixture (a @dev.local member holding one of the two clubs).
+        var side = await (
+            from m in _db.LeagueMembers
+            join u in _db.Users on m.UserId equals u.Id
+            where m.PrivateLeagueId == leagueId && m.ClubId != null
+                  && (m.ClubId == fixture.HomeClubId || m.ClubId == fixture.AwayClubId)
+                  && u.Email!.EndsWith(BotDomain)
+            select new { m.UserId, m.ClubId }).FirstOrDefaultAsync(ct);
+        if (side is null || side.ClubId is null) return new DevBotLiveResult("no_bot_side", false, false, 0);
+
+        Guid botUserId = side.UserId;
+        Guid botClubId = side.ClubId.Value;
+
+        // The bot joins (marks itself present); the match goes Live once the human is present too.
+        var open = await _liveMatch.OpenAsync(botUserId, leagueId, fixtureId, ct);
+        if (!open.Success) return new DevBotLiveResult(open.Error.ToString(), false, false, 0);
+
+        LiveMatchStateDto state = open.Value!;
+        bool wentLive = state.Status == LiveMatchStatus.Live;
+
+        bool subMade = false;
+        int usedMinute = 0;
+        if (request.Sub && wentLive)
+        {
+            var club = await _db.Clubs.Include(c => c.Players).FirstOrDefaultAsync(c => c.Id == botClubId, ct);
+            if (club != null)
+            {
+                LineupPlan plan = BuildBotSubPlan(club);
+
+                // Not before an already-applied change (the server enforces monotonic minutes).
+                int last = 0;
+                foreach (LiveChangeDto ch in state.Changes) if (ch.FromMinute > last) last = ch.FromMinute;
+                usedMinute = Clamp(System.Math.Max(request.Minute, System.Math.Max(1, last)), 1, 90);
+
+                var res = await _liveMatch.SubmitChangeAsync(
+                    botUserId, leagueId, fixtureId,
+                    new SubmitLiveChangeRequest(usedMinute, plan, null), ct);
+                subMade = res.Success;
+                if (!subMade) return new DevBotLiveResult(res.Error.ToString(), wentLive, false, usedMinute);
+            }
+        }
+
+        return new DevBotLiveResult(state.Status.ToString(), wentLive, subMade, usedMinute);
+    }
+
+    /// <summary>A legal substitution for the bot's club: its best XI with one bench player brought on for
+    /// the last outfield slot, as a serializable <see cref="LineupPlan"/> the live change accepts.</summary>
+    private static LineupPlan BuildBotSubPlan(Persistence.Entities.Club club)
+    {
+        SimClub sim = WorldSquadReader.ToSimClub(club);
+        Lineup xi = LineupSelector.BestEleven(sim);
+
+        var inXi = new HashSet<int>();
+        foreach (LineupSlot slot in xi.Slots)
+            if (slot.Player != null) inXi.Add(slot.Player.Id);
+
+        foreach (SimPlayer p in sim.Squad.Players)
+        {
+            if (inXi.Contains(p.Id)) continue;
+            xi.Slots[xi.Slots.Count - 1].Player = p; // bring a bench player on (keeps the GK slot intact)
+            break;
+        }
+
+        return LineupPlan.From(xi);
     }
 
     public async Task<DevResetResult> ResetAsync(int bots, CancellationToken ct = default)

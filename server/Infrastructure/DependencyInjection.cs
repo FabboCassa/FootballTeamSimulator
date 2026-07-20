@@ -71,6 +71,12 @@ public static class DependencyInjection
         services.TryAddScoped<IAuctionBroadcaster, NoOpAuctionBroadcaster>();
         services.TryAddScoped<IAuctionScheduler, NoOpAuctionScheduler>();
 
+        // Live match control (Phase 8.6): authoritative live session over Postgres/EF (deterministic
+        // re-sim on each pause-point input). The broadcaster is a no-op DEFAULT (TryAdd) — the Api
+        // replaces it with the SignalR MatchHub one; the unit tests keep the no-op and prove state via REST.
+        services.AddScoped<ILiveMatchService, LiveMatchService>();
+        services.TryAddScoped<ILiveMatchBroadcaster, NoOpLiveMatchBroadcaster>();
+
         // Dev-only test-league seeding (dev tooling). Always registered (harmless); the Api maps the
         // endpoints only outside Production and behind a config flag.
         services.AddScoped<Fts.Application.Dev.IDevSeedService, Fts.Infrastructure.Dev.DevSeedService>();

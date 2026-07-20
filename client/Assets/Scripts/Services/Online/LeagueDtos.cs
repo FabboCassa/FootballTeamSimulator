@@ -255,6 +255,60 @@ namespace Fts.Services.Online
     /// <summary>Mirrors the server enum (AuctionStatus): 0 Open / 1 Settled / 2 Unsold.</summary>
     public enum AuctionStatus { Open = 0, Settled = 1, Unsold = 2 }
 
+    // --- Live match control (Phase 8.6b) -------------------------------------------------------
+
+    /// <summary>Mirrors the server enum: which side a change acts on (the server infers it from the
+    /// caller's club — the client only reads it to know which side is "you").</summary>
+    public enum LiveSide { Home = 0, Away = 1 }
+
+    /// <summary>Mirrors the server enum: where the live match is in its short lifecycle.</summary>
+    public enum LiveMatchStatus { Pending = 0, Live = 1, Finished = 2 }
+
+    /// <summary>One applied pause-point change, for the opponent's UI timeline (who changed when).</summary>
+    [Serializable]
+    public sealed class LiveChangeRowDto
+    {
+        public int fromMinute;
+        public int side; // LiveSide
+    }
+
+    /// <summary>Mirrors the server's LiveMatchStateDto (8.6): the whole live-match state pushed/polled to
+    /// both clients. <see cref="status"/> is the numeric <see cref="LiveMatchStatus"/>; <see cref="yourSide"/>
+    /// the numeric <see cref="LiveSide"/> (or null if watching); <see cref="reportJson"/> is the full
+    /// serialized Sim.Core MatchReport (parse with Newtonsoft — same as a replay) so the client re-renders
+    /// the changed remainder.</summary>
+    [Serializable]
+    public sealed class LiveMatchStateDto
+    {
+        public string fixtureId;
+        public int round;
+        public int homeClubExternalId;
+        public string homeClubName;
+        public int awayClubExternalId;
+        public string awayClubName;
+        public int status; // LiveMatchStatus (0 Pending / 1 Live / 2 Finished)
+        public int? yourSide; // LiveSide (0 Home / 1 Away) or null
+        public bool homePresent;
+        public bool awayPresent;
+        public string kickoffUtc;
+        public int homeGoals;
+        public int awayGoals;
+        public List<LiveChangeRowDto> changes = new List<LiveChangeRowDto>();
+        public string reportJson;
+    }
+
+    /// <summary>Body for POST /leagues/{id}/live/{fixtureId}/change. The side is inferred server-side from
+    /// the caller's club. <see cref="lineup"/>/<see cref="tactic"/> are the Sim.Core LineupPlan/TacticPlan
+    /// the presenter builds (serialized by Newtonsoft; the server binds them case-insensitively) — at least
+    /// one must be present.</summary>
+    [Serializable]
+    public sealed class SubmitLiveChangeBody
+    {
+        public int fromMinute;
+        public object lineup;
+        public object tactic;
+    }
+
     // --- Dev tooling (dev-only seeding, gated by DevFlags) --------------------------------------
 
     /// <summary>Body for POST /internal/dev/test-league. <see cref="creatorUserId"/> = the signed-in human
@@ -283,6 +337,25 @@ namespace Fts.Services.Online
     public sealed class DevBotBidBody
     {
         public int rounds = 1;
+    }
+
+    /// <summary>Body for POST /internal/dev/leagues/{id}/live/{fixtureId}/bot (8.6): the fixture's bot
+    /// opponent joins the live match and, if <see cref="sub"/>, makes a substitution at <see cref="minute"/>.</summary>
+    [Serializable]
+    public sealed class DevBotLiveBody
+    {
+        public bool sub;
+        public int minute;
+    }
+
+    /// <summary>Mirrors the server's DevBotLiveResult (8.6).</summary>
+    [Serializable]
+    public sealed class DevBotLiveResultDto
+    {
+        public string status;
+        public bool wentLive;
+        public bool subMade;
+        public int minute;
     }
 
     /// <summary>Mirrors the server enum (LeagueStatus): 0 Forming / 1 Active / 2 Completed / 3 Drafting.</summary>
@@ -316,6 +389,12 @@ namespace Fts.Services.Online
         InsufficientBudget,// 400 insufficient_budget (8.5)
         WindowAlreadyOpen, // 409 window_already_open (8.5)
         NoAuctionsOpen,    // 409 no_auctions_open (8.5 — nothing to close)
+        LiveMatchNotFound,       // 404 live_match_not_found (8.6)
+        LiveMatchNotJoinable,    // 409 live_match_not_joinable (8.6 — AI side / already played / not current round)
+        NotYourSide,             // 403 not_your_side (8.6)
+        LiveMatchNotLive,        // 409 live_match_not_live (8.6 — not kicked off / finished)
+        LiveMatchAlreadyFinished,// 409 live_match_already_finished (8.6)
+        InvalidLiveChange,       // 400 invalid_live_change (8.6)
         Server,        // 5xx / unexpected
     }
 

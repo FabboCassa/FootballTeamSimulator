@@ -30,5 +30,15 @@ public sealed record DevBotBidResult(int BidsPlaced);
 /// <summary>Result of marking every bot member ready (advances the all-ready season one round).</summary>
 public sealed record DevBotReadyResult(int BotsReadied);
 
+/// <summary>Simulate the fixture's bot opponent in a live match (Phase 8.6 dev tooling): the bot joins the
+/// live session — so once the human has opened it too the match goes Live — and, if <paramref name="Sub"/>,
+/// makes a legal substitution at <paramref name="Minute"/>, so a single human can see the opponent's change
+/// reflected without a second account/device.</summary>
+public sealed record DevBotLiveRequest(bool Sub = false, int Minute = 45);
+
+/// <summary>Outcome of the bot live autopilot: the reported status, whether the match kicked off (both
+/// present), whether the bot made its substitution, and the minute it used.</summary>
+public sealed record DevBotLiveResult(string Status, bool WentLive, bool SubMade, int Minute);
+
 /// <summary>Result of the cleanup: how many league memberships the bots left.</summary>
 public sealed record DevResetResult(int LeaguesLeft, int BotsChecked);

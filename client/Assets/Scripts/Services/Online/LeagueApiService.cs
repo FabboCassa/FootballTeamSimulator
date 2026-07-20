@@ -227,6 +227,66 @@ namespace Fts.Services.Online
                 : LeagueApiResult<AuctionsDto>.Ok(dto);
         }
 
+        // ---------------------------------------------------------------- live match control (8.6b)
+
+        /// <summary>Open (or return) the live session for a fixture — marks the caller present. Both members
+        /// opening the same fixture kicks it off (Live).</summary>
+        public UniTask<LeagueApiResult<LiveMatchStateDto>> OpenLiveAsync(string leagueId, string fixtureId) =>
+            LivePostAsync(leagueId, fixtureId, "/open");
+
+        /// <summary>Join a session (mark present). Open already does this — kept for completeness.</summary>
+        public UniTask<LeagueApiResult<LiveMatchStateDto>> JoinLiveAsync(string leagueId, string fixtureId) =>
+            LivePostAsync(leagueId, fixtureId, "/join");
+
+        /// <summary>The current live-match state (members only). Polled ~1s while the screen is open.</summary>
+        public async UniTask<LeagueApiResult<LiveMatchStateDto>> GetLiveAsync(string leagueId, string fixtureId)
+        {
+            if (!_api.IsSignedIn) return LeagueApiResult<LiveMatchStateDto>.Fail(LeagueApiError.NotSignedIn);
+            var (status, text, network) = await _api.SendAuthedAsync(
+                "GET", "/leagues/" + leagueId + "/live/" + fixtureId);
+            return ParseLive(status, text, network);
+        }
+
+        /// <summary>Submit a pause-point change for the caller's own side (sub / instruction change). The
+        /// server re-simulates from the fixture seed and returns the new state (with the updated report).
+        /// <paramref name="body"/> is a <see cref="SubmitLiveChangeBody"/> carrying the Sim.Core plans.</summary>
+        public async UniTask<LeagueApiResult<LiveMatchStateDto>> SubmitLiveChangeAsync(
+            string leagueId, string fixtureId, object body)
+        {
+            if (!_api.IsSignedIn) return LeagueApiResult<LiveMatchStateDto>.Fail(LeagueApiError.NotSignedIn);
+            var (status, text, network) = await _api.SendAuthedAsync(
+                "POST", "/leagues/" + leagueId + "/live/" + fixtureId + "/change", body);
+            return ParseLive(status, text, network);
+        }
+
+        /// <summary>Mark the caller absent (disconnect) — the match keeps running on the accumulated plan.</summary>
+        public UniTask<LeagueApiResult<LiveMatchStateDto>> LeaveLiveAsync(string leagueId, string fixtureId) =>
+            LivePostAsync(leagueId, fixtureId, "/leave");
+
+        /// <summary>Confirm full-time — the stored report becomes the fixture's official result at round
+        /// resolution.</summary>
+        public UniTask<LeagueApiResult<LiveMatchStateDto>> FinishLiveAsync(string leagueId, string fixtureId) =>
+            LivePostAsync(leagueId, fixtureId, "/finish");
+
+        private async UniTask<LeagueApiResult<LiveMatchStateDto>> LivePostAsync(
+            string leagueId, string fixtureId, string action)
+        {
+            if (!_api.IsSignedIn) return LeagueApiResult<LiveMatchStateDto>.Fail(LeagueApiError.NotSignedIn);
+            var (status, text, network) = await _api.SendAuthedAsync(
+                "POST", "/leagues/" + leagueId + "/live/" + fixtureId + action);
+            return ParseLive(status, text, network);
+        }
+
+        private static LeagueApiResult<LiveMatchStateDto> ParseLive(long status, string text, bool network)
+        {
+            if (!IsSuccess(status, network))
+                return LeagueApiResult<LiveMatchStateDto>.Fail(MapError(status, text, network));
+            var dto = TryParse<LiveMatchStateDto>(text);
+            return dto?.fixtureId == null
+                ? LeagueApiResult<LiveMatchStateDto>.Fail(LeagueApiError.Server)
+                : LeagueApiResult<LiveMatchStateDto>.Ok(dto);
+        }
+
         // ---------------------------------------------------------------- dev tooling (gated by DevFlags)
 
         /// <summary>Dev-only: seed a ready test league (the signed-in account as creator + bots, drafted to
@@ -256,6 +316,24 @@ namespace Fts.Services.Online
             return IsSuccess(status, network)
                 ? LeagueApiResult<bool>.Ok(true)
                 : LeagueApiResult<bool>.Fail(MapError(status, text, network));
+        }
+
+        /// <summary>Dev-only: the fixture's bot opponent joins the live match (kicking it off once you're
+        /// present) and, if <paramref name="sub"/>, makes a substitution at <paramref name="minute"/> — so a
+        /// single human can test live match control solo (8.6).</summary>
+        public async UniTask<LeagueApiResult<DevBotLiveResultDto>> BotLiveAsync(
+            string leagueId, string fixtureId, bool sub, int minute)
+        {
+            if (!_api.IsSignedIn) return LeagueApiResult<DevBotLiveResultDto>.Fail(LeagueApiError.NotSignedIn);
+            var body = new DevBotLiveBody { sub = sub, minute = minute };
+            var (status, text, network) = await _api.SendAuthedAsync(
+                "POST", "/internal/dev/leagues/" + leagueId + "/live/" + fixtureId + "/bot", body);
+            if (!IsSuccess(status, network))
+                return LeagueApiResult<DevBotLiveResultDto>.Fail(MapError(status, text, network));
+            var dto = TryParse<DevBotLiveResultDto>(text);
+            return dto == null
+                ? LeagueApiResult<DevBotLiveResultDto>.Fail(LeagueApiError.Server)
+                : LeagueApiResult<DevBotLiveResultDto>.Ok(dto);
         }
 
         // ---------------------------------------------------------------- helpers
@@ -289,14 +367,20 @@ namespace Fts.Services.Online
             return status switch
             {
                 401 => LeagueApiError.NotSignedIn,
-                403 => LeagueApiError.Forbidden,
+                403 => body != null && body.Contains("not_your_side") ? LeagueApiError.NotYourSide
+                     : LeagueApiError.Forbidden,
                 404 => body != null && body.Contains("auction_not_found") ? LeagueApiError.AuctionNotFound
+                     : body != null && body.Contains("live_match_not_found") ? LeagueApiError.LiveMatchNotFound
                      : LeagueApiError.NotFound,
                 400 => body != null && body.Contains("too_few_members") ? LeagueApiError.TooFewMembers
                      : body != null && body.Contains("bid_too_low") ? LeagueApiError.BidTooLow
                      : body != null && body.Contains("insufficient_budget") ? LeagueApiError.InsufficientBudget
+                     : body != null && body.Contains("invalid_live_change") ? LeagueApiError.InvalidLiveChange
                      : LeagueApiError.Validation,
-                409 => body != null && body.Contains("league_full") ? LeagueApiError.LeagueFull
+                409 => body != null && body.Contains("live_match_not_joinable") ? LeagueApiError.LiveMatchNotJoinable
+                     : body != null && body.Contains("live_match_already_finished") ? LeagueApiError.LiveMatchAlreadyFinished
+                     : body != null && body.Contains("live_match_not_live") ? LeagueApiError.LiveMatchNotLive
+                     : body != null && body.Contains("league_full") ? LeagueApiError.LeagueFull
                      : body != null && body.Contains("not_joinable") ? LeagueApiError.NotJoinable
                      : body != null && body.Contains("wrong_phase") ? LeagueApiError.WrongPhase
                      : body != null && body.Contains("not_your_turn") ? LeagueApiError.NotYourTurn

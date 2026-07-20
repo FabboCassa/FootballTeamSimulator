@@ -135,6 +135,22 @@ public enum LeagueError
     WindowAlreadyOpen,
     /// <summary>There are no open auctions to close/settle — 8.5.</summary>
     NoAuctionsOpen,
+
+    // --- Live match control (Phase 8.6) -----------------------------------------------------
+    /// <summary>No live session exists for that fixture (it was never opened) — 8.6.</summary>
+    LiveMatchNotFound,
+    /// <summary>The fixture cannot be played live: it is not the current round, already played, or not a
+    /// human-vs-human fixture (one side is AI / unclaimed) — 8.6.</summary>
+    LiveMatchNotJoinable,
+    /// <summary>The caller tried to change a side they do not control (only your own club) — 8.6.</summary>
+    NotYourSide,
+    /// <summary>The live match is not running (still Pending, or already Finished) so changes are rejected — 8.6.</summary>
+    LiveMatchNotLive,
+    /// <summary>The live match is already finished — 8.6.</summary>
+    LiveMatchAlreadyFinished,
+    /// <summary>The submitted change is invalid (minute out of range, moves backwards past an applied
+    /// change, or carries no lineup and no tactic) — 8.6.</summary>
+    InvalidLiveChange,
 }
 
 /// <summary>Result wrapper so the service never throws for expected failures. Exactly one of

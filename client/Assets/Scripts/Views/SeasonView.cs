@@ -23,6 +23,8 @@ namespace Fts.Views
         public bool Played;
         public int HomeGoals, AwayGoals;
         public bool IsYours;
+        /// <summary>Your unplayed fixture in the current round — tappable to open the live match (8.6b).</summary>
+        public bool CanPlayLive;
     }
 
     /// <summary>A matchday: a label + its fixtures.</summary>
@@ -45,6 +47,7 @@ namespace Fts.Views
         public event Action EditLineupClicked;
         public event Action VerifyStateClicked;
         public event Action<string> FixtureClicked; // fixture id (played only)
+        public event Action<string> PlayLiveClicked; // fixture id (your current-round unplayed fixture, 8.6b)
         public event Action BackClicked;
 
         public VisualElement Root { get; }
@@ -254,7 +257,7 @@ namespace Fts.Views
         private VisualElement FixtureRow(SeasonFixtureRowVm vm)
         {
             var row = TableRow(vm.IsYours);
-            if (vm.Played) UiKit.EnsureTapTarget(row);
+            if (vm.Played || vm.CanPlayLive) UiKit.EnsureTapTarget(row);
 
             var home = Cell(vm.HomeName, 0, TextAnchor.MiddleRight, UiKit.TextPrimary, grow: true);
             row.Add(home);
@@ -266,10 +269,22 @@ namespace Fts.Views
             var away = Cell(vm.AwayName, 0, TextAnchor.MiddleLeft, UiKit.TextPrimary, grow: true);
             row.Add(away);
 
+            // A live "▶" hint sits after the away name on your current-round unplayed fixture.
+            if (vm.CanPlayLive)
+            {
+                var live = Cell(_tr("season.play_live"), 64, TextAnchor.MiddleRight, UiKit.Accent, bold: true);
+                row.Add(live);
+            }
+
             if (vm.Played && !string.IsNullOrEmpty(vm.FixtureId))
             {
                 string id = vm.FixtureId;
                 row.RegisterCallback<ClickEvent>(_ => FixtureClicked?.Invoke(id));
+            }
+            else if (vm.CanPlayLive && !string.IsNullOrEmpty(vm.FixtureId))
+            {
+                string id = vm.FixtureId;
+                row.RegisterCallback<ClickEvent>(_ => PlayLiveClicked?.Invoke(id));
             }
             return row;
         }

@@ -21,6 +21,12 @@ public interface IDevSeedService
     /// everyone — bots + the human — is ready).</summary>
     Task<DevBotReadyResult> BotReadyAsync(Guid leagueId, CancellationToken ct = default);
 
+    /// <summary>Minimal live-match autopilot: the fixture's bot opponent joins the live session (kicking the
+    /// match off once the human is present too) and optionally makes a substitution, so a single human can
+    /// test live match control solo (Phase 8.6).</summary>
+    Task<DevBotLiveResult> BotLiveAsync(
+        Guid leagueId, Guid fixtureId, DevBotLiveRequest request, CancellationToken ct = default);
+
     /// <summary>Cleanup: log in the deterministic bots and leave every league they are in (disbanding a
     /// league when the last member leaves), so repeated dev runs don't pile up worlds.</summary>
     Task<DevResetResult> ResetAsync(int bots, CancellationToken ct = default);
