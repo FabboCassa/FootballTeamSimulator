@@ -238,6 +238,113 @@ public sealed class LeagueSeasonService : ILeagueSeasonService
         return LeagueResult<string>.Ok(fixture.ReplayJson);
     }
 
+    // --- season end (8.7) --------------------------------------------------------------------------
+
+    public async Task<LeagueResult<SeasonSummaryDto>> GetSeasonSummaryAsync(
+        Guid userId, Guid leagueId, CancellationToken ct = default)
+    {
+        var league = await _db.PrivateLeagues.FirstOrDefaultAsync(l => l.Id == leagueId, ct);
+        if (league is null)
+            return LeagueResult<SeasonSummaryDto>.Fail(LeagueError.NotFound, "League not found.");
+
+        var isMember = await _db.LeagueMembers.AnyAsync(m => m.PrivateLeagueId == leagueId && m.UserId == userId, ct);
+        if (!isMember)
+            return LeagueResult<SeasonSummaryDto>.Fail(LeagueError.Forbidden, "You are not a member of this league.");
+
+        var clubs = await _db.Clubs
+            .Where(c => c.WorldId == league.WorldId)
+            .Include(c => c.Players)
+            .ToListAsync(ct);
+
+        var fixtures = await _db.LeagueFixtures
+            .Where(f => f.PrivateLeagueId == league.Id)
+            .ToListAsync(ct);
+
+        var standings = ComputeStandings(clubs, fixtures);
+        var playedFixtures = fixtures.Where(f => f.IsPlayed).ToList();
+        int matchesPlayed = playedFixtures.Count;
+        int totalGoals = playedFixtures.Sum(f => f.HomeGoals + f.AwayGoals);
+        bool seasonComplete = league.Status == LeagueStatus.Completed
+            || (fixtures.Count > 0 && fixtures.All(f => f.IsPlayed));
+
+        SeasonAwardDto? champion = null, bestDefence = null, woodenSpoon = null;
+        if (matchesPlayed > 0 && standings.Count > 0)
+        {
+            var top = standings[0];
+            champion = new SeasonAwardDto(top.ClubExternalId, top.ClubName, top.Points);
+
+            var last = standings[^1];
+            woodenSpoon = new SeasonAwardDto(last.ClubExternalId, last.ClubName, last.Points);
+
+            // Fewest goals conceded, breaking ties by points then goal difference (a good defence that also
+            // wins beats one that just parks the bus).
+            var def = standings
+                .Where(s => s.Played > 0)
+                .OrderBy(s => s.GoalsAgainst)
+                .ThenByDescending(s => s.Points)
+                .ThenByDescending(s => s.GoalDifference)
+                .First();
+            bestDefence = new SeasonAwardDto(def.ClubExternalId, def.ClubName, def.GoalsAgainst);
+        }
+
+        TopScorerDto? topScorer = ComputeTopScorer(clubs, playedFixtures);
+
+        return LeagueResult<SeasonSummaryDto>.Ok(new SeasonSummaryDto(
+            SeasonComplete: seasonComplete,
+            FinalStandings: standings,
+            Champion: champion,
+            BestDefence: bestDefence,
+            WoodenSpoon: woodenSpoon,
+            TopScorer: topScorer,
+            MatchesPlayed: matchesPlayed,
+            TotalGoals: totalGoals));
+    }
+
+    /// <summary>Aggregates goals per scorer across every played fixture's stored MatchReport (Goal events
+    /// keyed by the scorer's world-unique player id — the Sim.Core club id equals the persisted ExternalId
+    /// in the online world) and returns the leader, or null when no goals were scored. A report that fails to
+    /// deserialize is skipped, so a single bad row never breaks the summary.</summary>
+    private static TopScorerDto? ComputeTopScorer(List<Club> clubs, List<LeagueFixture> playedFixtures)
+    {
+        var goalsByPlayer = new Dictionary<int, int>();
+        foreach (var f in playedFixtures)
+        {
+            if (string.IsNullOrEmpty(f.ReplayJson)) continue;
+            MatchReport? report = null;
+            try { report = JsonSerializer.Deserialize<MatchReport>(f.ReplayJson); }
+            catch (JsonException) { }
+            if (report is null) continue;
+            foreach (MatchEvent e in report.Events)
+            {
+                if (e.Type != MatchEventType.Goal) continue;
+                goalsByPlayer.TryGetValue(e.PlayerId, out int g);
+                goalsByPlayer[e.PlayerId] = g + 1;
+            }
+        }
+        if (goalsByPlayer.Count == 0) return null;
+
+        var playerIndex = clubs
+            .SelectMany(c => c.Players.Select(p => (Player: p, Club: c)))
+            .GroupBy(x => x.Player.ExternalId)
+            .ToDictionary(g => g.Key, g => g.First());
+
+        var best = goalsByPlayer
+            .OrderByDescending(kv => kv.Value)
+            .ThenBy(kv => kv.Key)
+            .First();
+
+        if (!playerIndex.TryGetValue(best.Key, out var found)) return null;
+        string name = string.IsNullOrEmpty(found.Player.FirstName)
+            ? found.Player.LastName
+            : $"{found.Player.FirstName} {found.Player.LastName}";
+        return new TopScorerDto(
+            PlayerExternalId: found.Player.ExternalId,
+            PlayerName: name,
+            ClubExternalId: found.Club.ExternalId,
+            ClubName: found.Club.Name,
+            Goals: best.Value);
+    }
+
     public async Task<LeagueResult<StateHashDto>> GetStateHashAsync(
         Guid userId, Guid leagueId, CancellationToken ct = default)
     {
@@ -404,6 +511,12 @@ public sealed class LeagueSeasonService : ILeagueSeasonService
 
         // A fresh matchday — everyone must ready up again for the next one.
         foreach (var m in members) m.IsReady = false;
+
+        // Season end (8.7): once every fixture in the schedule is played the league is Completed. The table
+        // freezes at the final standings; members read the summary + awards via GetSeasonSummaryAsync and the
+        // creator can start a fresh season (full reset → draft) via LeagueService.StartNewSeasonAsync.
+        if (fixtures.All(f => f.IsPlayed))
+            league.Status = LeagueStatus.Completed;
 
         await _db.SaveChangesAsync(ct);
         return round;

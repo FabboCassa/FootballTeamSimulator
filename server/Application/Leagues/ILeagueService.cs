@@ -28,6 +28,14 @@ public interface ILeagueService
     Task<LeagueResult<LeagueDetailDto>> PickClubAsync(
         Guid userId, Guid leagueId, PickClubRequest request, CancellationToken ct = default);
 
+    /// <summary>Starts a fresh season after one has finished (8.7 "rematch / new season"): creator only, only
+    /// while <see cref="LeagueStatus.Completed"/>. A FULL reset — deletes the finished season's fixtures,
+    /// lineups, training plans, auctions and live sessions, un-assigns every member's club, re-equalises the
+    /// squads and re-seeds equal budgets, resets player condition, and reopens the snake draft
+    /// (<see cref="LeagueStatus.Drafting"/>) so everyone picks a club again.</summary>
+    Task<LeagueResult<LeagueDetailDto>> StartNewSeasonAsync(
+        Guid userId, Guid leagueId, CancellationToken ct = default);
+
     /// <summary>Removes the caller's membership. If the creator leaves, the earliest remaining member
     /// inherits ownership; if the last member leaves, the league and its world are deleted.</summary>
     Task<LeagueResult<bool>> LeaveAsync(Guid userId, Guid leagueId, CancellationToken ct = default);

@@ -160,6 +160,46 @@ namespace Fts.Services.Online
         public List<LeagueStandingDto> standings = new List<LeagueStandingDto>();
     }
 
+    // --- Season end (Phase 8.7b) ---------------------------------------------------------------
+
+    /// <summary>Mirrors the server's SeasonAwardDto (8.7): a club award. <see cref="value"/> carries the
+    /// metric that earned it — points for the champion and the wooden spoon, goals conceded for the best
+    /// defence — so the row can show the number that justifies it.</summary>
+    [Serializable]
+    public sealed class SeasonAwardDto
+    {
+        public int clubExternalId;
+        public string clubName;
+        public int value;
+    }
+
+    /// <summary>Mirrors the server's TopScorerDto (8.7): the season's leading scorer, aggregated
+    /// server-side from every played fixture's stored MatchReport. Null when no goals were scored.</summary>
+    [Serializable]
+    public sealed class TopScorerDto
+    {
+        public int playerExternalId;
+        public string playerName;
+        public int clubExternalId;
+        public string clubName;
+        public int goals;
+    }
+
+    /// <summary>Mirrors the server's SeasonSummaryDto (8.7): the final table + the awards. The awards are
+    /// provisional until <see cref="seasonComplete"/> is true, and are null before any match is played.</summary>
+    [Serializable]
+    public sealed class SeasonSummaryDto
+    {
+        public bool seasonComplete;
+        public List<LeagueStandingDto> finalStandings = new List<LeagueStandingDto>();
+        public SeasonAwardDto champion;
+        public SeasonAwardDto bestDefence;
+        public SeasonAwardDto woodenSpoon;
+        public TopScorerDto topScorer;
+        public int matchesPlayed;
+        public int totalGoals;
+    }
+
     // --- Daily management (Phase 8.4b) ---------------------------------------------------------
 
     /// <summary>Mirrors the server's StateHashDto (8.4): the canonical whole-world state hash

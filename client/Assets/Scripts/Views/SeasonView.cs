@@ -46,6 +46,8 @@ namespace Fts.Views
         public event Action RefreshClicked;
         public event Action EditLineupClicked;
         public event Action VerifyStateClicked;
+        /// <summary>Opens the end-of-season summary + awards (8.7b) — shown once the season is complete.</summary>
+        public event Action SeasonEndClicked;
         public event Action<string> FixtureClicked; // fixture id (played only)
         public event Action<string> PlayLiveClicked; // fixture id (your current-round unplayed fixture, 8.6b)
         public event Action BackClicked;
@@ -60,6 +62,7 @@ namespace Fts.Views
         private readonly Button _advanceButton;
         private readonly Button _editButton;
         private readonly Button _refreshButton;
+        private readonly Button _seasonEndButton;
         private readonly Label _stateHashCaption;
         private readonly Label _stateHashValue;
         private readonly Button _verifyButton;
@@ -102,6 +105,11 @@ namespace Fts.Views
             _refreshButton = UiKit.MenuButton(string.Empty, () => RefreshClicked?.Invoke());
             _refreshButton.style.marginLeft = UiKit.SpaceXs;
             actions.Add(_refreshButton);
+            // Appears only when the season is over (8.7b) → the summary + awards screen.
+            _seasonEndButton = UiKit.PrimaryButton(string.Empty, () => SeasonEndClicked?.Invoke());
+            _seasonEndButton.style.marginLeft = UiKit.SpaceXs;
+            _seasonEndButton.style.display = DisplayStyle.None;
+            actions.Add(_seasonEndButton);
 
             // State-hash agreement panel (8.4b): the server's canonical whole-world hash. It CHANGES
             // after a round of play (condition + development evolved) — the client↔server ✅.
@@ -163,6 +171,13 @@ namespace Fts.Views
 
         public void SetEditEnabled(bool enabled) => _editButton.SetEnabled(enabled);
 
+        /// <summary>The end-of-season summary button (8.7b) — shown once every fixture has been played.</summary>
+        public void SetSeasonEnd(bool visible, bool enabled)
+        {
+            _seasonEndButton.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+            _seasonEndButton.SetEnabled(enabled);
+        }
+
         /// <summary>The state-hash agreement line (hash · players · rounds), preformatted by the presenter.</summary>
         public void SetStateHash(string text) => _stateHashValue.text = text;
 
@@ -212,6 +227,7 @@ namespace Fts.Views
             _editButton.SetEnabled(!busy);
             _refreshButton.SetEnabled(!busy);
             _verifyButton.SetEnabled(!busy);
+            _seasonEndButton.SetEnabled(!busy);
         }
 
         public void UpdateTexts()
@@ -219,6 +235,7 @@ namespace Fts.Views
             _advanceButton.text = _tr("season.advance");
             _editButton.text = _tr("season.edit_lineup");
             _refreshButton.text = _tr("season.refresh");
+            _seasonEndButton.text = _tr("season.season_end");
             _stateHashCaption.text = _tr("season.state_hash_caption");
             _verifyButton.text = _tr("season.verify_state");
             _backButton.text = _tr("common.back");

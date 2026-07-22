@@ -143,6 +143,27 @@ public static class LeagueEndpoints
                 : MapError(result.Error, result.Message);
         });
 
+        // --- Season end (Phase 8.7) ----------------------------------------------------------
+
+        // The end-of-season summary: final table + awards (champion / best defence / wooden spoon / top
+        // scorer). Members only; provisional until the season is complete.
+        group.MapGet("/{id:guid}/season/summary", async (
+            Guid id, ClaimsPrincipal user, ILeagueSeasonService season, CancellationToken ct) =>
+        {
+            if (!TryGetUserId(user, out var userId)) return Results.Unauthorized();
+            var result = await season.GetSeasonSummaryAsync(userId, id, ct);
+            return result.Success ? Results.Ok(result.Value) : MapError(result.Error, result.Message);
+        });
+
+        // Start a fresh season after the current one has finished (creator only) — full reset → new draft.
+        group.MapPost("/{id:guid}/season/new", async (
+            Guid id, ClaimsPrincipal user, ILeagueService leagues, CancellationToken ct) =>
+        {
+            if (!TryGetUserId(user, out var userId)) return Results.Unauthorized();
+            var result = await leagues.StartNewSeasonAsync(userId, id, ct);
+            return result.Success ? Results.Ok(result.Value) : MapError(result.Error, result.Message);
+        });
+
         return app;
     }
 

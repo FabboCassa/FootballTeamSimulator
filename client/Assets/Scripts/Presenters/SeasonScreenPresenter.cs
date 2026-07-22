@@ -52,6 +52,7 @@ namespace Fts.Presenters
             _view.AdvanceClicked += OnAdvance;
             _view.RefreshClicked += OnRefresh;
             _view.VerifyStateClicked += OnVerifyState;
+            _view.SeasonEndClicked += OnSeasonEnd;
             _view.FixtureClicked += OnFixture;
             _view.PlayLiveClicked += OnPlayLive;
             _view.BackClicked += OnBack;
@@ -66,6 +67,7 @@ namespace Fts.Presenters
             _view.AdvanceClicked -= OnAdvance;
             _view.RefreshClicked -= OnRefresh;
             _view.VerifyStateClicked -= OnVerifyState;
+            _view.SeasonEndClicked -= OnSeasonEnd;
             _view.FixtureClicked -= OnFixture;
             _view.PlayLiveClicked -= OnPlayLive;
             _view.BackClicked -= OnBack;
@@ -146,6 +148,8 @@ namespace Fts.Presenters
                 _youAreReady ? _loc.Tr("season.cancel_ready") : _loc.Tr("season.ready"),
                 enabled: !st.seasonComplete && !_busy);
             _view.SetAdvance(visible: _isCreator, enabled: _isCreator && !st.seasonComplete && !_busy);
+            // Once every fixture is played the season-end summary + awards open from here (8.7b).
+            _view.SetSeasonEnd(visible: st.seasonComplete, enabled: !_busy);
 
             var standings = new List<StandingRowVm>(s.standings.Count);
             for (int i = 0; i < s.standings.Count; i++)
@@ -272,6 +276,10 @@ namespace Fts.Presenters
             _replayTarget.Set(_leagueId, fixtureId, f.homeClubName, f.awayClubName);
             _navigator.Push<OnlineLiveMatchScreenPresenter>();
         }
+
+        // The end-of-season summary + awards (8.7b). The league selection already carries the league id,
+        // so the pushed screen resolves everything itself.
+        private void OnSeasonEnd() => _navigator.Push<OnlineSeasonEndScreenPresenter>();
 
         private void OnRefresh() => LoadSeasonAsync().Forget();
 

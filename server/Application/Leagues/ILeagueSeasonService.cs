@@ -46,4 +46,11 @@ public interface ILeagueSeasonService
     /// so the client renders the replay directly. Members only; the fixture must be played.</summary>
     Task<LeagueResult<string>> GetReplayAsync(
         Guid userId, Guid leagueId, Guid fixtureId, CancellationToken ct = default);
+
+    /// <summary>The end-of-season summary (Phase 8.7): the final table + awards (champion, best defence,
+    /// wooden spoon, top scorer aggregated from the stored replays). Members only. Available at any time —
+    /// the awards are provisional until the season is complete (the <see cref="SeasonSummaryDto.SeasonComplete"/>
+    /// flag says which).</summary>
+    Task<LeagueResult<SeasonSummaryDto>> GetSeasonSummaryAsync(
+        Guid userId, Guid leagueId, CancellationToken ct = default);
 }

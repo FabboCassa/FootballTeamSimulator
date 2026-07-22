@@ -31,6 +31,12 @@ public sealed class LeagueService : ILeagueService
     public const long DraftTransferBudget = 25_000_000;
     public const long DraftStartingBalance = 25_000_000;
 
+    // Neutral starting condition, matching the Player entity defaults — reapplied when a new season resets
+    // the world (8.7) so every squad begins fresh and fair.
+    private const int NeutralForm = 50;
+    private const int NeutralMorale = 50;
+    private const int FullFitness = 100;
+
     // Unambiguous alphabet (no I/L/O/0/1) so invite codes are easy to read out and type.
     private const string CodeAlphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
     private const int CodeLength = 6;
@@ -211,6 +217,61 @@ public sealed class LeagueService : ILeagueService
             await GenerateSeasonFixturesAsync(league, ct);
         }
 
+        await _db.SaveChangesAsync(ct);
+
+        var detail = await BuildDetailAsync(league, userId, ct);
+        return LeagueResult<LeagueDetailDto>.Ok(detail);
+    }
+
+    public async Task<LeagueResult<LeagueDetailDto>> StartNewSeasonAsync(
+        Guid userId, Guid leagueId, CancellationToken ct = default)
+    {
+        var league = await _db.PrivateLeagues.FirstOrDefaultAsync(l => l.Id == leagueId, ct);
+        if (league is null)
+            return LeagueResult<LeagueDetailDto>.Fail(LeagueError.NotFound, "League not found.");
+
+        var isMember = await _db.LeagueMembers.AnyAsync(
+            m => m.PrivateLeagueId == leagueId && m.UserId == userId, ct);
+        if (!isMember)
+            return LeagueResult<LeagueDetailDto>.Fail(LeagueError.Forbidden, "You are not a member of this league.");
+        if (league.CreatorUserId != userId)
+            return LeagueResult<LeagueDetailDto>.Fail(LeagueError.Forbidden, "Only the league owner can start a new season.");
+        if (league.Status != LeagueStatus.Completed)
+            return LeagueResult<LeagueDetailDto>.Fail(
+                LeagueError.WrongPhase, "A new season can only start once the current one has finished.");
+
+        // Tear down the finished season's rows (keep the world + clubs + players — the reset re-drafts the same
+        // evolving player pool). Bids/auctions reference players via a Restrict FK; live sessions reference
+        // fixtures by a plain column — delete them first. Ordered ExecuteDelete stays portable across
+        // PostgreSQL and the SQLite test provider.
+        await _db.LiveMatches.Where(x => x.PrivateLeagueId == leagueId).ExecuteDeleteAsync(ct);
+        await _db.LeagueFixtures.Where(f => f.PrivateLeagueId == leagueId).ExecuteDeleteAsync(ct);
+        await _db.LeagueLineups.Where(x => x.PrivateLeagueId == leagueId).ExecuteDeleteAsync(ct);
+        await _db.LeagueTrainings.Where(x => x.PrivateLeagueId == leagueId).ExecuteDeleteAsync(ct);
+        await _db.Bids.Where(x => x.PrivateLeagueId == leagueId).ExecuteDeleteAsync(ct);
+        await _db.Auctions.Where(x => x.PrivateLeagueId == leagueId).ExecuteDeleteAsync(ct);
+
+        // Un-assign every member's club and clear ready flags for the fresh draft.
+        var members = await _db.LeagueMembers.Where(m => m.PrivateLeagueId == leagueId).ToListAsync(ct);
+        foreach (var m in members) { m.ClubId = null; m.IsReady = false; }
+
+        // Re-equalise the (now-developed) squads to equal strength, re-seed equal budgets, and reset condition
+        // to neutral — the same fair, fresh starting state as StartDraft. Players keep the ability they
+        // developed over the season; only the squads are reshuffled equal and the draft reopens.
+        var clubs = await _db.Clubs
+            .Where(c => c.WorldId == league.WorldId)
+            .Include(c => c.Players)
+            .ToListAsync(ct);
+        var players = clubs.SelectMany(c => c.Players).ToList();
+        SquadEqualizer.Equalize(clubs, players);
+        foreach (var club in clubs)
+        {
+            club.TransferBudget = DraftTransferBudget;
+            club.Balance = DraftStartingBalance;
+        }
+        foreach (var p in players) { p.Form = NeutralForm; p.Morale = NeutralMorale; p.Fitness = FullFitness; }
+
+        league.Status = LeagueStatus.Drafting;
         await _db.SaveChangesAsync(ct);
 
         var detail = await BuildDetailAsync(league, userId, ct);

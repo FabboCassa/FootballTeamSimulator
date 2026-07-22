@@ -75,3 +75,28 @@ public sealed record LeagueSeasonDto(
     SeasonStateDto Season,
     IReadOnlyList<LeagueFixtureDto> Fixtures,
     IReadOnlyList<LeagueStandingDto> Standings);
+
+// --- Season end (Phase 8.7) ------------------------------------------------------------------------
+
+/// <summary>A club award in the season summary (champion / best defence / wooden spoon). <see cref="Value"/>
+/// carries the metric that earned it (points for the champion, goals conceded for the best defence, points
+/// for the wooden spoon) so the client can show the number that justifies the award.</summary>
+public sealed record SeasonAwardDto(int ClubExternalId, string ClubName, int Value);
+
+/// <summary>The season's top scorer, aggregated from every played fixture's stored MatchReport (goal
+/// events keyed by the scorer's world-unique player id). Null when no goals were scored.</summary>
+public sealed record TopScorerDto(
+    int PlayerExternalId, string PlayerName, int ClubExternalId, string ClubName, int Goals);
+
+/// <summary>The end-of-season summary (Phase 8.7): the final table plus the awards. Members only. Available
+/// at any time (the awards are provisional until <see cref="SeasonComplete"/> is true), so the client can
+/// preview the current leader; the ✅ is that a finished season presents a clean final table + awards.</summary>
+public sealed record SeasonSummaryDto(
+    bool SeasonComplete,
+    IReadOnlyList<LeagueStandingDto> FinalStandings,
+    SeasonAwardDto? Champion,
+    SeasonAwardDto? BestDefence,
+    SeasonAwardDto? WoodenSpoon,
+    TopScorerDto? TopScorer,
+    int MatchesPlayed,
+    int TotalGoals);

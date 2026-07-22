@@ -113,6 +113,30 @@ namespace Fts.Services.Online
             return ParseSeason(status, text, network);
         }
 
+        /// <summary>The end-of-season summary: the final table + awards (champion / best defence / wooden
+        /// spoon / top scorer). Members only; provisional until the season is complete (8.7b).</summary>
+        public async UniTask<LeagueApiResult<SeasonSummaryDto>> GetSeasonSummaryAsync(string leagueId)
+        {
+            if (!_api.IsSignedIn) return LeagueApiResult<SeasonSummaryDto>.Fail(LeagueApiError.NotSignedIn);
+            var (status, text, network) = await _api.SendAuthedAsync("GET", "/leagues/" + leagueId + "/season/summary");
+            if (!IsSuccess(status, network))
+                return LeagueApiResult<SeasonSummaryDto>.Fail(MapError(status, text, network));
+            var dto = TryParse<SeasonSummaryDto>(text);
+            return dto == null
+                ? LeagueApiResult<SeasonSummaryDto>.Fail(LeagueApiError.Server)
+                : LeagueApiResult<SeasonSummaryDto>.Ok(dto);
+        }
+
+        /// <summary>Starts a fresh season once the current one has finished (creator only, 8.7b): a FULL
+        /// reset server-side — squads re-equalised, budgets re-seeded, clubs un-assigned — which reopens
+        /// the snake draft. Returns the league detail in its new Drafting state.</summary>
+        public async UniTask<LeagueApiResult<LeagueDetailDto>> StartNewSeasonAsync(string leagueId)
+        {
+            if (!_api.IsSignedIn) return LeagueApiResult<LeagueDetailDto>.Fail(LeagueApiError.NotSignedIn);
+            var (status, text, network) = await _api.SendAuthedAsync("POST", "/leagues/" + leagueId + "/season/new");
+            return ParseDetail(status, text, network);
+        }
+
         /// <summary>Submit (or replace) the caller's match inputs for their club. <paramref name="body"/>
         /// is the { lineup, tactic, plan } wrapper the presenter builds from the Sim.Core plans (8.3b);
         /// on success the server returns the updated season state.</summary>
