@@ -41,6 +41,7 @@ namespace Fts.Presenters
             _view.NewCareerClicked += OnNewCareer;
             _view.AccountClicked += OnAccount;
             _view.OnlineLeaguesClicked += OnOnlineLeagues;
+            _view.RankedClicked += OnRanked;
             _view.LanguageClicked += OnLanguage;
             Refresh();
         }
@@ -51,6 +52,7 @@ namespace Fts.Presenters
             _view.NewCareerClicked -= OnNewCareer;
             _view.AccountClicked -= OnAccount;
             _view.OnlineLeaguesClicked -= OnOnlineLeagues;
+            _view.RankedClicked -= OnRanked;
             _view.LanguageClicked -= OnLanguage;
         }
 
@@ -91,6 +93,15 @@ namespace Fts.Presenters
         {
             if (_api.IsSignedIn)
                 _navigator.Push<LeagueListScreenPresenter>();
+            else
+                _navigator.Push<LoginScreenPresenter>();
+        }
+
+        // The ranked ladder needs an account, like online leagues: signed in → ranked home, else Account.
+        private void OnRanked()
+        {
+            if (_api.IsSignedIn)
+                _navigator.Push<RankedHomeScreenPresenter>();
             else
                 _navigator.Push<LoginScreenPresenter>();
         }

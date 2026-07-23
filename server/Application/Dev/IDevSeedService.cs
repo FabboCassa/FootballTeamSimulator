@@ -30,4 +30,8 @@ public interface IDevSeedService
     /// <summary>Cleanup: log in the deterministic bots and leave every league they are in (disbanding a
     /// league when the last member leaves), so repeated dev runs don't pile up worlds.</summary>
     Task<DevResetResult> ResetAsync(int bots, CancellationToken ct = default);
+
+    /// <summary>Fill the caller's forming ranked placement group with fresh bot coaches (Phase 9.2 dev
+    /// tooling) so a solo human's placement cohort completes and its season can start on the calendar.</summary>
+    Task<DevRankedFillResult> FillRankedAsync(DevRankedFillRequest request, CancellationToken ct = default);
 }

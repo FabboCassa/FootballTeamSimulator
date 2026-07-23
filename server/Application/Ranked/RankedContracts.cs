@@ -156,6 +156,12 @@ public enum RankedError
     ReplayNotReady,
     /// <summary>The buyer's transfer budget cannot cover the offered fee (Phase 9.2b market).</summary>
     InsufficientBudget,
+    /// <summary>The requested auction lot does not exist in the caller's group (Phase 9.2b auctions).</summary>
+    AuctionNotFound,
+    /// <summary>The auction lot is no longer open for bids (Phase 9.2b auctions).</summary>
+    AuctionClosed,
+    /// <summary>The bid is below the minimum next bid (Phase 9.2b auctions).</summary>
+    BidTooLow,
 }
 
 /// <summary>Result wrapper so the service never throws for expected failures — mirrors

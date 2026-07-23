@@ -15,6 +15,7 @@ namespace Fts.Views
         public event Action NewCareerClicked;
         public event Action AccountClicked;
         public event Action OnlineLeaguesClicked;
+        public event Action RankedClicked;
         public event Action LanguageClicked;
 
         public VisualElement Root { get; }
@@ -26,6 +27,7 @@ namespace Fts.Views
         private readonly Button _newCareerButton;
         private readonly Button _accountButton;
         private readonly Button _onlineButton;
+        private readonly Button _rankedButton;
         private readonly Button _languageButton;
         private readonly Label _errorLabel;
 
@@ -47,6 +49,8 @@ namespace Fts.Views
             Root.Add(_accountButton);
             _onlineButton = UiKit.MenuButton(string.Empty, () => OnlineLeaguesClicked?.Invoke());
             Root.Add(_onlineButton);
+            _rankedButton = UiKit.MenuButton(string.Empty, () => RankedClicked?.Invoke());
+            Root.Add(_rankedButton);
             _languageButton = UiKit.MenuButton(string.Empty, () => LanguageClicked?.Invoke());
             Root.Add(_languageButton);
 
@@ -68,6 +72,7 @@ namespace Fts.Views
             _newCareerButton.text = _tr("mainmenu.new_career");
             _accountButton.text = _tr("mainmenu.account");
             _onlineButton.text = _tr("mainmenu.online_leagues");
+            _rankedButton.text = _tr("mainmenu.ranked");
         }
 
         public void SetLanguageLabel(string text) => _languageButton.text = text;

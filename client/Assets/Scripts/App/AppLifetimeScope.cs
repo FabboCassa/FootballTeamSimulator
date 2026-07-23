@@ -35,6 +35,8 @@ namespace Fts.App
             // Private-league gateway (task 8.1b): create/join/leave/list online friend leagues.
             builder.Register<LeagueApiService>(Lifetime.Singleton);
             builder.Register<LeagueSelection>(Lifetime.Singleton);
+            // Public ranked ladder gateway (task 9.2): enrol + ladder state + season.
+            builder.Register<RankedApiService>(Lifetime.Singleton);
             // Season replay hand-off (task 8.3b): which fixture the online replay screen renders.
             builder.Register<SeasonReplayTarget>(Lifetime.Singleton);
             builder.Register<IGameSessionService, GameSessionService>(Lifetime.Singleton)

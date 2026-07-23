@@ -37,15 +37,18 @@ public sealed class RankedSeasonService : IRankedSeasonService
 {
     private readonly FtsDbContext _db;
     private readonly IRankedService _ranked;
+    private readonly IRankedAuctionService _auctions;
     private readonly INotificationService _notify;
     private readonly RankedOptions _opt;
     private readonly BalanceConfig _config = new();
 
     public RankedSeasonService(
-        FtsDbContext db, IRankedService ranked, INotificationService notify, IOptions<RankedOptions> options)
+        FtsDbContext db, IRankedService ranked, IRankedAuctionService auctions,
+        INotificationService notify, IOptions<RankedOptions> options)
     {
         _db = db;
         _ranked = ranked;
+        _auctions = auctions;
         _notify = notify;
         _opt = options.Value;
     }
@@ -65,6 +68,10 @@ public sealed class RankedSeasonService : IRankedSeasonService
         int started = await StartDueSeasonsAsync(now, ct);
         (int matchdays, int fixtures, int placements, int completed) = await ResolveDueMatchdaysAsync(now, ct);
         int windows = await AnnounceMarketWindowsAsync(now, ct);
+
+        // Settle any free-agent auction lot whose window has closed (9.2b). The lots were opened when the
+        // window opened (see AnnounceMarketWindows); the winner gets the player + is charged.
+        await _auctions.SettleDueAsync(false, ct);
 
         return new RankedTickSummary(started, matchdays, fixtures, placements, completed, windows);
     }
@@ -359,6 +366,9 @@ public sealed class RankedSeasonService : IRankedSeasonService
             group.LastMarketWindowOpened = w.Index;
             await _db.SaveChangesAsync(ct);
             opened++;
+
+            // Open a free-agent auction lot per unattached player, ending when the window closes (9.2b).
+            await _auctions.OpenWindowLotsAsync(group.Id, w.Index, w.ClosesUtc, ct);
 
             var humans = await _db.RankedSeats
                 .Where(s => s.RankedGroupId == group.Id && s.UserId != null)

@@ -137,6 +137,26 @@ public static class RankedEndpoints
             return result.Success ? Results.Ok(result.Value) : MapError(result.Error, result.Message);
         });
 
+        // --- Free-agent auctions (Phase 9.2b) -----------------------------------------------
+
+        // The caller's open auction lots + budget picture + window state.
+        group.MapGet("/auctions", async (ClaimsPrincipal user, IRankedAuctionService auctions, CancellationToken ct) =>
+        {
+            if (!TryGetUserId(user, out var userId)) return Results.Unauthorized();
+            var result = await auctions.GetAuctionsAsync(userId, ct);
+            return result.Success ? Results.Ok(result.Value) : MapError(result.Error, result.Message);
+        });
+
+        // Place an ascending bid on a lot (requires an open window + available budget).
+        group.MapPost("/auctions/{auctionId:guid}/bid", async (
+            Guid auctionId, PlaceRankedBidRequest req, ClaimsPrincipal user,
+            IRankedAuctionService auctions, CancellationToken ct) =>
+        {
+            if (!TryGetUserId(user, out var userId)) return Results.Unauthorized();
+            var result = await auctions.PlaceBidAsync(userId, auctionId, req, ct);
+            return result.Success ? Results.Ok(result.Value) : MapError(result.Error, result.Message);
+        });
+
         return app;
     }
 
@@ -161,6 +181,11 @@ public static class RankedEndpoints
         group.MapPost("/tick", async (IRankedSeasonService season, CancellationToken ct) =>
             Results.Ok(await season.TickAsync(ct)));
 
+        // Force-settle every open free-agent auction lot now, regardless of its timer (Phase 9.2b) — the
+        // dev/staging fast-forward for auctions (the season tick settles them at the window close normally).
+        group.MapPost("/auctions/settle", async (IRankedAuctionService auctions, CancellationToken ct) =>
+            Results.Ok(new { settled = await auctions.SettleDueAsync(force: true, ct) }));
+
         return app;
     }
 
@@ -180,6 +205,9 @@ public static class RankedEndpoints
         RankedError.ReplayNotReady => Results.Conflict(new { error = "replay_not_ready", message }),
         RankedError.NoCapacity => Results.Conflict(new { error = "no_capacity", message }),
         RankedError.InsufficientBudget => Results.BadRequest(new { error = "insufficient_budget", message }),
+        RankedError.AuctionNotFound => Results.NotFound(new { error = "auction_not_found", message }),
+        RankedError.AuctionClosed => Results.Conflict(new { error = "auction_closed", message }),
+        RankedError.BidTooLow => Results.BadRequest(new { error = "bid_too_low", message }),
         RankedError.Forbidden => Results.Json(
             new { error = "forbidden", message }, statusCode: StatusCodes.Status403Forbidden),
         _ => Results.BadRequest(new { error = "ranked_error", message }),

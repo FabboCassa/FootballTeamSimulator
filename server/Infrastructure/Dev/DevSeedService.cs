@@ -1,6 +1,7 @@
 using Fts.Application.Auth;
 using Fts.Application.Dev;
 using Fts.Application.Leagues;
+using Fts.Application.Ranked;
 using Fts.Infrastructure.Leagues;
 using Fts.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -28,17 +29,19 @@ public sealed class DevSeedService : IDevSeedService
     private readonly ILeagueSeasonService _season;
     private readonly IAuctionService _auctions;
     private readonly ILiveMatchService _liveMatch;
+    private readonly IRankedService _ranked;
     private readonly FtsDbContext _db;
 
     public DevSeedService(
         IAuthService auth, ILeagueService leagues, ILeagueSeasonService season,
-        IAuctionService auctions, ILiveMatchService liveMatch, FtsDbContext db)
+        IAuctionService auctions, ILiveMatchService liveMatch, IRankedService ranked, FtsDbContext db)
     {
         _auth = auth;
         _leagues = leagues;
         _season = season;
         _auctions = auctions;
         _liveMatch = liveMatch;
+        _ranked = ranked;
         _db = db;
     }
 
@@ -277,6 +280,60 @@ public sealed class DevSeedService : IDevSeedService
             }
         }
         return new DevResetResult(left, count);
+    }
+
+    // --- ranked fill (Phase 9.2 dev tooling) -----------------------------------------------------
+
+    public async Task<DevRankedFillResult> FillRankedAsync(DevRankedFillRequest request, CancellationToken ct = default)
+    {
+        // ALL forming placement groups (oldest first). Enrol fills the earliest forming group first, so to
+        // guarantee the caller's group completes we top up every forming group's free seats — an older,
+        // partially-filled group would otherwise soak up the bots and leave the caller's group short.
+        var groups = await _db.RankedGroups
+            .Where(g => g.Kind == RankedGroupKind.Placement && g.Status == RankedGroupStatus.Forming)
+            .OrderBy(g => g.CreatedUtc).ThenBy(g => g.Id)
+            .ToListAsync(ct);
+
+        int capacity = 0, free = 0;
+        foreach (var g in groups)
+        {
+            int occ = await _db.RankedSeats.CountAsync(s => s.RankedGroupId == g.Id && s.UserId != null, ct);
+            capacity += g.Capacity;
+            free += System.Math.Max(0, g.Capacity - occ);
+        }
+
+        // How many to enrol: an explicit override, else exactly enough to fill every forming group.
+        int needed = Clamp(request.Count ?? free, 0, 128);
+
+        // Fresh accounts every call — a ranked coach is one row per account ever, so bots can't be reused
+        // across ranked runs (unlike the league bots).
+        string batch = System.Guid.NewGuid().ToString("N").Substring(0, 6);
+        int enrolled = 0;
+        for (int i = 0; i < needed; i++)
+        {
+            Guid botId = await EnsureRankedBotAsync(batch, i, ct);
+            var res = await _ranked.EnrolAsync(botId, ct);
+            if (res.Success) enrolled++;
+        }
+
+        // Occupancy of the groups we targeted, after filling (most/all are now Active).
+        var groupIds = groups.Select(g => g.Id).ToList();
+        int nowOccupied = groupIds.Count == 0
+            ? enrolled
+            : await _db.RankedSeats.CountAsync(s => groupIds.Contains(s.RankedGroupId) && s.UserId != null, ct);
+        return new DevRankedFillResult(enrolled, nowOccupied, capacity);
+    }
+
+    private async Task<Guid> EnsureRankedBotAsync(string batch, int i, CancellationToken ct)
+    {
+        string email = $"rankedbot_{batch}_{i}{BotDomain}";
+        var reg = await _auth.RegisterAsync(new RegisterRequest(email, BotPassword, $"RankedBot {i}"), ct);
+        if (reg.Success) return reg.Value!.Profile.UserId;
+
+        var login = await _auth.LoginAsync(new LoginRequest(email, BotPassword), ct);
+        if (login.Success) return login.Value!.Profile.UserId;
+
+        throw new InvalidOperationException($"Dev ranked fill: could not create/login {email}.");
     }
 
     // --- helpers ---------------------------------------------------------------------------------

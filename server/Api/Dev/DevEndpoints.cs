@@ -39,6 +39,12 @@ public static class DevEndpoints
         group.MapPost("/reset", async (int? bots, IDevSeedService dev, CancellationToken ct) =>
             Results.Ok(await dev.ResetAsync(bots ?? 8, ct)));
 
+        // Ranked dev tooling (9.2): fill the forming ranked placement groups with bot coaches so a solo
+        // human's cohort completes and its season can start (then advance it via /internal/ranked/tick).
+        // `count` is a query param (optional) so a bodyless POST binds cleanly — same shape as /reset.
+        group.MapPost("/ranked/fill", async (int? count, IDevSeedService dev, CancellationToken ct) =>
+            Results.Ok(await dev.FillRankedAsync(new DevRankedFillRequest(count), ct)));
+
         return app;
     }
 }

@@ -48,6 +48,7 @@ public sealed class FtsDbContext : IdentityDbContext<AppUser, IdentityRole<Guid>
     public DbSet<RankedFixture> RankedFixtures => Set<RankedFixture>();
     public DbSet<RankedLineup> RankedLineups => Set<RankedLineup>();
     public DbSet<RankedOffer> RankedOffers => Set<RankedOffer>();
+    public DbSet<RankedAuction> RankedAuctions => Set<RankedAuction>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -494,6 +495,20 @@ public sealed class FtsDbContext : IdentityDbContext<AppUser, IdentityRole<Guid>
             e.HasIndex(x => new { x.RankedGroupId, x.Status });
             e.HasIndex(x => x.SellerUserId);
             e.HasIndex(x => x.BuyerUserId);
+        });
+
+        b.Entity<RankedAuction>(e =>
+        {
+            e.ToTable("ranked_auctions");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Status).HasConversion<int>();
+            // Cascade from the group (single path). Player/club/user ids are plain denormalised columns.
+            e.HasOne(x => x.RankedGroup)
+                .WithMany()
+                .HasForeignKey(x => x.RankedGroupId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(x => new { x.RankedGroupId, x.Status });
+            e.HasIndex(x => new { x.RankedGroupId, x.WindowIndex });
         });
     }
 }

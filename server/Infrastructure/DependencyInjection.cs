@@ -126,6 +126,8 @@ public static class DependencyInjection
         services.AddScoped<IRankedSeasonService, RankedSeasonService>();
         // Direct coach-to-coach market (Phase 9.2b): squad browse + offers during the season's windows.
         services.AddScoped<IRankedMarketService, RankedMarketService>();
+        // Free-agent auctions in the season's windows (Phase 9.2b): lots opened/settled by the season tick.
+        services.AddScoped<IRankedAuctionService, RankedAuctionService>();
     }
 
     /// <summary>Push notifications (Phase 7.4): the EF device-token store + the config-gated FCM sender.

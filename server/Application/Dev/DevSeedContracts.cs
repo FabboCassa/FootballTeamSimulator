@@ -42,3 +42,13 @@ public sealed record DevBotLiveResult(string Status, bool WentLive, bool SubMade
 
 /// <summary>Result of the cleanup: how many league memberships the bots left.</summary>
 public sealed record DevResetResult(int LeaguesLeft, int BotsChecked);
+
+/// <summary>Fill the caller's forming ranked placement group with bot coaches so a solo human can test the
+/// ranked flow (Phase 9.2 dev tooling). <paramref name="Count"/> overrides how many bots to enrol; when
+/// omitted the server enrols exactly enough to fill the earliest forming placement group. Fresh bot
+/// accounts (<c>rankedbot_{batch}_{i}@dev.local</c>) each call — a ranked coach is one row per account
+/// ever, so bots can't be reused across ranked runs.</summary>
+public sealed record DevRankedFillRequest(int? Count = null);
+
+/// <summary>How many bots were enrolled + the placement group's occupancy afterwards.</summary>
+public sealed record DevRankedFillResult(int Enrolled, int Occupied, int Capacity);
