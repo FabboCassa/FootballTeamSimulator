@@ -41,6 +41,18 @@ public sealed class RankedOptions
     /// <summary>Rating spread per placement position (1st in a group of 8 starts this × 7 above last).</summary>
     public int RatingPerPlacementPosition { get; set; } = 15;
 
+    // --- Real-time calendar (Phase 9.2) --------------------------------------------------------
+
+    /// <summary>Wall-clock gap between consecutive matchdays (default 1 day = 86400s → a 14-matchday season
+    /// runs in ~2 weeks). Tests compress this to 0 so a whole season resolves in a few ticks.</summary>
+    public int MatchdayIntervalSeconds { get; set; } = 86_400;
+
+    /// <summary>How long a market window stays open (default 1 day). Window 0 opens at season start (the
+    /// lead-in before matchday 1); window 1 opens around the season midpoint. The market CONTENT
+    /// (free-agent auctions + direct coach offers) is wired in 9.2b — 9.2a fires the windows on the
+    /// calendar and announces them.</summary>
+    public int MarketWindowDurationSeconds { get; set; } = 86_400;
+
     /// <summary>Group counts per tier, index 0 = tier 1. Only non-empty tiers are kept.</summary>
     public IReadOnlyList<int> GroupsPerTier()
     {

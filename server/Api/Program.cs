@@ -166,8 +166,17 @@ if (backgroundJobsEnabled)
     // startup (it would throw "Current JobStorage instance has not been initialized yet").
     using (var scope = app.Services.CreateScope())
     {
-        scope.ServiceProvider.GetRequiredService<IRecurringJobManager>().AddOrUpdate<HeartbeatJob>(
+        var recurring = scope.ServiceProvider.GetRequiredService<IRecurringJobManager>();
+        recurring.AddOrUpdate<HeartbeatJob>(
             HeartbeatJob.RecurringJobId,
+            j => j.ExecuteAsync(CancellationToken.None),
+            Cron.Minutely());
+
+        // The ranked real-time season calendar (Phase 9.2): each minute, start due seasons, resolve due
+        // matchdays, open market windows and close/sort finished seasons. Per-fixture kickoff times gate
+        // what actually fires, so minutely polling just asks "is anything due yet".
+        recurring.AddOrUpdate<RankedSeasonJob>(
+            RankedSeasonJob.RecurringJobId,
             j => j.ExecuteAsync(CancellationToken.None),
             Cron.Minutely());
     }

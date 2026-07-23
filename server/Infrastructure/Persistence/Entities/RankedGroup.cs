@@ -42,5 +42,14 @@ public sealed class RankedGroup
 
     public DateTime CreatedUtc { get; set; }
 
+    /// <summary>When this group's real-time season started (its fixtures were generated), or null while it
+    /// has not begun yet (Phase 9.2). The whole matchday/market-window calendar is anchored to this instant;
+    /// the presence of fixtures is what marks a season "started".</summary>
+    public DateTime? SeasonStartedUtc { get; set; }
+
+    /// <summary>Highest market-window index already opened + announced this season (Phase 9.2). Starts at -1;
+    /// used so the season job announces each window (season start, midpoint) exactly once.</summary>
+    public int LastMarketWindowOpened { get; set; } = -1;
+
     public ICollection<RankedSeat> Seats { get; set; } = new List<RankedSeat>();
 }

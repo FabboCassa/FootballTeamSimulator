@@ -109,9 +109,17 @@ public static class DependencyInjection
             if (int.TryParse(ranked["StartingRating"], out var rating) && rating > 0) o.StartingRating = rating;
             if (int.TryParse(ranked["RatingPerPlacementPosition"], out var step) && step >= 0)
                 o.RatingPerPlacementPosition = step;
+            // Real-time calendar knobs (Phase 9.2) — allow 0 (tests compress the calendar).
+            if (int.TryParse(ranked["MatchdayIntervalSeconds"], out var interval) && interval >= 0)
+                o.MatchdayIntervalSeconds = interval;
+            if (int.TryParse(ranked["MarketWindowDurationSeconds"], out var windowDur) && windowDur >= 0)
+                o.MarketWindowDurationSeconds = windowDur;
         });
 
         services.AddScoped<IRankedService, RankedService>();
+        // The real-time season engine (Phase 9.2). Registered always so unit tests can drive TickAsync
+        // directly (the recurring Hangfire job that calls it is registered only when jobs are enabled).
+        services.AddScoped<IRankedSeasonService, RankedSeasonService>();
     }
 
     /// <summary>Push notifications (Phase 7.4): the EF device-token store + the config-gated FCM sender.
@@ -139,8 +147,9 @@ public static class DependencyInjection
     /// storage connection. Jobs are activated from DI, so the job classes are registered too.</summary>
     private static void AddBackgroundJobs(IServiceCollection services, string postgres, bool enable)
     {
-        // The recurring job type is resolvable regardless (so a direct unit test can new/inject it).
+        // The recurring job types are resolvable regardless (so a direct unit test can new/inject them).
         services.AddScoped<HeartbeatJob>();
+        services.AddScoped<RankedSeasonJob>();
 
         if (!enable) return;
 

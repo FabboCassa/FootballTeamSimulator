@@ -150,6 +150,10 @@ public enum RankedError
     WrongPhase,
     /// <summary>No seat could be found or created (should be unreachable — the server opens a new world).</summary>
     NoCapacity,
+    /// <summary>The requested fixture does not exist in the caller's group (Phase 9.2).</summary>
+    FixtureNotFound,
+    /// <summary>The fixture has not been played yet, so there is no replay to serve (Phase 9.2).</summary>
+    ReplayNotReady,
 }
 
 /// <summary>Result wrapper so the service never throws for expected failures — mirrors

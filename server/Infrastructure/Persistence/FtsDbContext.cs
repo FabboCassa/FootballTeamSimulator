@@ -45,6 +45,8 @@ public sealed class FtsDbContext : IdentityDbContext<AppUser, IdentityRole<Guid>
     public DbSet<RankedGroup> RankedGroups => Set<RankedGroup>();
     public DbSet<RankedSeat> RankedSeats => Set<RankedSeat>();
     public DbSet<RankedCoach> RankedCoaches => Set<RankedCoach>();
+    public DbSet<RankedFixture> RankedFixtures => Set<RankedFixture>();
+    public DbSet<RankedLineup> RankedLineups => Set<RankedLineup>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -431,6 +433,51 @@ public sealed class FtsDbContext : IdentityDbContext<AppUser, IdentityRole<Guid>
             // One ladder enrolment per account, ever (the lookup key for /ranked/me).
             e.HasIndex(x => x.UserId).IsUnique();
             e.HasIndex(x => new { x.RankedWorldId, x.Status });
+        });
+
+        // --- Ranked real-time season (Phase 9.2) --------------------------------------------
+
+        b.Entity<RankedFixture>(e =>
+        {
+            e.ToTable("ranked_fixtures");
+            e.HasKey(x => x.Id);
+            // Cascade from the group — retiring a group removes its schedule. The two club FKs are
+            // Restrict (like league_fixtures): a single table with two cascade paths back to clubs
+            // (already cascaded from worlds) would create multiple cascade paths some providers reject.
+            e.HasOne(x => x.RankedGroup)
+                .WithMany()
+                .HasForeignKey(x => x.RankedGroupId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.HomeClub)
+                .WithMany()
+                .HasForeignKey(x => x.HomeClubId)
+                .OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.AwayClub)
+                .WithMany()
+                .HasForeignKey(x => x.AwayClubId)
+                .OnDelete(DeleteBehavior.Restrict);
+            // Deterministic identity of a fixture within a group; drives the "resolve the lowest due round".
+            e.HasIndex(x => new { x.RankedGroupId, x.Round, x.MatchIndex }).IsUnique();
+            e.HasIndex(x => new { x.RankedGroupId, x.IsPlayed });
+        });
+
+        b.Entity<RankedLineup>(e =>
+        {
+            e.ToTable("ranked_lineups");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.LineupJson).IsRequired();
+            e.HasOne(x => x.RankedGroup)
+                .WithMany()
+                .HasForeignKey(x => x.RankedGroupId)
+                .OnDelete(DeleteBehavior.Cascade);
+            // Restrict on the club FK (clubs already cascade from worlds — single cascade path via the group).
+            e.HasOne(x => x.Club)
+                .WithMany()
+                .HasForeignKey(x => x.ClubId)
+                .OnDelete(DeleteBehavior.Restrict);
+            // One live submission per club in a group (upsert key), plus a lookup by coach.
+            e.HasIndex(x => new { x.RankedGroupId, x.ClubId }).IsUnique();
+            e.HasIndex(x => new { x.RankedGroupId, x.UserId });
         });
     }
 }

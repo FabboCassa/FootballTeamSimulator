@@ -53,6 +53,36 @@ public static class RankedEndpoints
             return result.Success ? Results.Ok(result.Value) : MapError(result.Error, result.Message);
         });
 
+        // --- Real-time season (Phase 9.2) ---------------------------------------------------
+
+        // The caller's current ranked season: schedule + standings + state (InSeason=false before kickoff).
+        group.MapGet("/season", async (ClaimsPrincipal user, IRankedSeasonService season, CancellationToken ct) =>
+        {
+            if (!TryGetUserId(user, out var userId)) return Results.Unauthorized();
+            var result = await season.GetMySeasonAsync(userId, ct);
+            return result.Success ? Results.Ok(result.Value) : MapError(result.Error, result.Message);
+        });
+
+        // Submit (or replace) the caller's lineup/tactic/plan for their ranked club — reused each matchday.
+        group.MapPost("/lineup", async (
+            SubmitRankedLineupRequest req, ClaimsPrincipal user, IRankedSeasonService season, CancellationToken ct) =>
+        {
+            if (!TryGetUserId(user, out var userId)) return Results.Unauthorized();
+            var result = await season.SubmitLineupAsync(userId, req, ct);
+            return result.Success ? Results.Ok(result.Value) : MapError(result.Error, result.Message);
+        });
+
+        // The stored full MatchReport for a played fixture in the caller's group (identical bytes for all).
+        group.MapGet("/season/fixtures/{fixtureId:guid}/replay", async (
+            Guid fixtureId, ClaimsPrincipal user, IRankedSeasonService season, CancellationToken ct) =>
+        {
+            if (!TryGetUserId(user, out var userId)) return Results.Unauthorized();
+            var result = await season.GetReplayAsync(userId, fixtureId, ct);
+            return result.Success
+                ? Results.Content(result.Value!, "application/json")
+                : MapError(result.Error, result.Message);
+        });
+
         return app;
     }
 
@@ -71,6 +101,12 @@ public static class RankedEndpoints
             return result.Success ? Results.Ok(result.Value) : MapError(result.Error, result.Message);
         });
 
+        // Advance the ranked real-time calendar once by hand (Phase 9.2) — starts due seasons, resolves
+        // due matchdays, opens windows, closes finished seasons. The recurring Hangfire job does this
+        // automatically; this is for a manual smoke test / staging fast-forward.
+        group.MapPost("/tick", async (IRankedSeasonService season, CancellationToken ct) =>
+            Results.Ok(await season.TickAsync(ct)));
+
         return app;
     }
 
@@ -85,7 +121,9 @@ public static class RankedEndpoints
         RankedError.ValidationFailed => Results.BadRequest(new { error = "validation_failed", message }),
         RankedError.NotFound => Results.NotFound(new { error = "not_found", message }),
         RankedError.NotEnrolled => Results.NotFound(new { error = "not_enrolled", message }),
+        RankedError.FixtureNotFound => Results.NotFound(new { error = "fixture_not_found", message }),
         RankedError.WrongPhase => Results.Conflict(new { error = "wrong_phase", message }),
+        RankedError.ReplayNotReady => Results.Conflict(new { error = "replay_not_ready", message }),
         RankedError.NoCapacity => Results.Conflict(new { error = "no_capacity", message }),
         RankedError.Forbidden => Results.Json(
             new { error = "forbidden", message }, statusCode: StatusCodes.Status403Forbidden),
