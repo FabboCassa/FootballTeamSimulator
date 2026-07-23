@@ -1,10 +1,12 @@
 using Fts.Application.Auth;
 using Fts.Application.Leagues;
 using Fts.Application.Notifications;
+using Fts.Application.Ranked;
 using Fts.Infrastructure.Auth;
 using Fts.Infrastructure.Leagues;
 using Fts.Infrastructure.Jobs;
 using Fts.Infrastructure.Notifications;
+using Fts.Infrastructure.Ranked;
 using Fts.Infrastructure.Persistence;
 using Fts.Infrastructure.Redis;
 using Hangfire;
@@ -77,11 +79,39 @@ public static class DependencyInjection
         services.AddScoped<ILiveMatchService, LiveMatchService>();
         services.TryAddScoped<ILiveMatchBroadcaster, NoOpLiveMatchBroadcaster>();
 
+        // Public ranked ladder (Phase 9.1): server-managed pyramid worlds, enrolment, placement seasons
+        // and division placement. Scoped (request-scoped FtsDbContext + Sim.Core world generation).
+        AddRanked(services, config);
+
         // Dev-only test-league seeding (dev tooling). Always registered (harmless); the Api maps the
         // endpoints only outside Production and behind a config flag.
         services.AddScoped<Fts.Application.Dev.IDevSeedService, Fts.Infrastructure.Dev.DevSeedService>();
 
         return services;
+    }
+
+    /// <summary>Public ranked ladder (Phase 9.1). The pyramid shape lives in <see cref="RankedOptions"/>,
+    /// bound by hand from the "Ranked" section (no config-binder dependency in this class library, same as
+    /// JwtOptions/FcmOptions) so a deployment — or a test — can reshape the pyramid without a code change.</summary>
+    private static void AddRanked(IServiceCollection services, IConfiguration config)
+    {
+        var ranked = config.GetSection(RankedOptions.SectionName);
+        services.Configure<RankedOptions>(o =>
+        {
+            if (int.TryParse(ranked["GroupSize"], out var groupSize) && groupSize > 1) o.GroupSize = groupSize;
+            if (int.TryParse(ranked["PlacementGroupSize"], out var placementSize) && placementSize > 1)
+                o.PlacementGroupSize = placementSize;
+            if (int.TryParse(ranked["Tier1Groups"], out var t1) && t1 >= 0) o.Tier1Groups = t1;
+            if (int.TryParse(ranked["Tier2Groups"], out var t2) && t2 >= 0) o.Tier2Groups = t2;
+            if (int.TryParse(ranked["Tier3Groups"], out var t3) && t3 >= 0) o.Tier3Groups = t3;
+            if (int.TryParse(ranked["PlacementTopPositionsToUpperTier"], out var top) && top >= 0)
+                o.PlacementTopPositionsToUpperTier = top;
+            if (int.TryParse(ranked["StartingRating"], out var rating) && rating > 0) o.StartingRating = rating;
+            if (int.TryParse(ranked["RatingPerPlacementPosition"], out var step) && step >= 0)
+                o.RatingPerPlacementPosition = step;
+        });
+
+        services.AddScoped<IRankedService, RankedService>();
     }
 
     /// <summary>Push notifications (Phase 7.4): the EF device-token store + the config-gated FCM sender.

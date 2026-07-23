@@ -6,6 +6,7 @@ using Fts.Api.Dev;
 using Fts.Api.Jobs;
 using Fts.Api.Leagues;
 using Fts.Api.Notifications;
+using Fts.Api.Ranked;
 using Fts.Api.Simulation;
 using Fts.Application.Leagues;
 using Fts.Application.Simulation;
@@ -125,6 +126,19 @@ app.MapHub<AuctionHub>("/hubs/auction");
 // Plus the MatchHub for real-time state pushes. Always mapped.
 app.MapLiveMatchEndpoints();
 app.MapHub<MatchHub>("/hubs/match");
+
+// Public ranked ladder (Phase 9.1): enrol, read your ladder state / a group's fixed-size seat list,
+// toggle auto re-enrolment — JWT-protected. Always mapped.
+app.MapRankedEndpoints();
+
+// Ranked lifecycle (Phase 9.1): closing a placement season and sorting its coaches into divisions is a
+// SERVER action, not a player one — exposed as a dev-only internal endpoint until the 9.2 real-time
+// season scheduler drives it. Never mapped in Production, and behind a config flag.
+if (!app.Environment.IsProduction()
+    && app.Configuration.GetValue("Ranked:ExposeInternalEndpoints", true))
+{
+    app.MapRankedInternalEndpoints();
+}
 
 // Internal match-simulation endpoints (Phase 7.3): dev-only — never mapped in Production, and
 // behind a config flag (default on outside prod) so a deployment can also switch them off.

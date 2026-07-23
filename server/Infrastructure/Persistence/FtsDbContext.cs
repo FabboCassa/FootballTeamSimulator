@@ -41,6 +41,11 @@ public sealed class FtsDbContext : IdentityDbContext<AppUser, IdentityRole<Guid>
 
     public DbSet<LiveMatch> LiveMatches => Set<LiveMatch>();
 
+    public DbSet<RankedWorld> RankedWorlds => Set<RankedWorld>();
+    public DbSet<RankedGroup> RankedGroups => Set<RankedGroup>();
+    public DbSet<RankedSeat> RankedSeats => Set<RankedSeat>();
+    public DbSet<RankedCoach> RankedCoaches => Set<RankedCoach>();
+
     protected override void OnModelCreating(ModelBuilder b)
     {
         // IdentityDbContext.OnModelCreating configures the Identity tables — call it first.
@@ -360,6 +365,72 @@ public sealed class FtsDbContext : IdentityDbContext<AppUser, IdentityRole<Guid>
             // One live session per fixture.
             e.HasIndex(x => x.FixtureId).IsUnique();
             e.HasIndex(x => new { x.PrivateLeagueId, x.Status });
+        });
+
+        // --- Public ranked ladder (Phase 9.1) -----------------------------------------------
+
+        b.Entity<RankedWorld>(e =>
+        {
+            e.ToTable("ranked_worlds");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Name).HasMaxLength(120).IsRequired();
+            e.Property(x => x.Status).HasConversion<int>();
+            e.HasIndex(x => x.Status);
+        });
+
+        b.Entity<RankedGroup>(e =>
+        {
+            e.ToTable("ranked_groups");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Name).HasMaxLength(120).IsRequired();
+            e.Property(x => x.Kind).HasConversion<int>();
+            e.Property(x => x.Status).HasConversion<int>();
+            e.HasOne(x => x.RankedWorld)
+                .WithMany(w => w.Groups)
+                .HasForeignKey(x => x.RankedWorldId)
+                .OnDelete(DeleteBehavior.Cascade);
+            // The generated world is materialised lazily and is optional — SetNull (not cascade) so a
+            // world teardown can never take the competition structure with it, and so there is a single
+            // cascade path into ranked_groups (from ranked_worlds).
+            e.HasOne(x => x.World)
+                .WithMany()
+                .HasForeignKey(x => x.WorldId)
+                .OnDelete(DeleteBehavior.SetNull);
+            e.HasIndex(x => new { x.RankedWorldId, x.Kind, x.Tier, x.GroupIndex });
+            e.HasIndex(x => new { x.Kind, x.Status });
+        });
+
+        b.Entity<RankedSeat>(e =>
+        {
+            e.ToTable("ranked_seats");
+            e.HasKey(x => x.Id);
+            e.HasOne(x => x.RankedGroup)
+                .WithMany(g => g.Seats)
+                .HasForeignKey(x => x.RankedGroupId)
+                .OnDelete(DeleteBehavior.Cascade);
+            // SetNull (like league_members.ClubId): clubs already cascade from worlds, and the seat must
+            // survive a world teardown so the group keeps its fixed size.
+            e.HasOne(x => x.Club)
+                .WithMany()
+                .HasForeignKey(x => x.ClubId)
+                .OnDelete(DeleteBehavior.SetNull);
+            // A seat number is unique inside its group — the fixed-size guarantee at the DB level.
+            e.HasIndex(x => new { x.RankedGroupId, x.SeatIndex }).IsUnique();
+            e.HasIndex(x => x.UserId);
+        });
+
+        b.Entity<RankedCoach>(e =>
+        {
+            e.ToTable("ranked_coaches");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Status).HasConversion<int>();
+            e.HasOne(x => x.RankedWorld)
+                .WithMany()
+                .HasForeignKey(x => x.RankedWorldId)
+                .OnDelete(DeleteBehavior.Cascade);
+            // One ladder enrolment per account, ever (the lookup key for /ranked/me).
+            e.HasIndex(x => x.UserId).IsUnique();
+            e.HasIndex(x => new { x.RankedWorldId, x.Status });
         });
     }
 }
