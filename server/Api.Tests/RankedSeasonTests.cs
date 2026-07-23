@@ -81,6 +81,10 @@ public abstract class RankedSeasonTestBase
     protected const string ValidPassword = "Password1";
     protected const int GroupSize = 4;
 
+    /// <summary>Market window length. Default keeps a window observably open through a compressed season;
+    /// a derived fixture overrides it to 0 to exercise the "market closed" path.</summary>
+    protected virtual int WindowSeconds => 3600;
+
     protected AuthTestFactory Factory = null!;
     protected HttpClient Client = null!;
 
@@ -97,8 +101,8 @@ public abstract class RankedSeasonTestBase
                 ["Ranked:Tier2Groups"] = "1",
                 ["Ranked:Tier3Groups"] = "1",
                 ["Ranked:PlacementTopPositionsToUpperTier"] = "2",
-                ["Ranked:MatchdayIntervalSeconds"] = "0",        // every matchday is due at once → fast season
-                ["Ranked:MarketWindowDurationSeconds"] = "3600",  // a window stays observably open during the test
+                ["Ranked:MatchdayIntervalSeconds"] = "0",             // every matchday is due at once → fast season
+                ["Ranked:MarketWindowDurationSeconds"] = WindowSeconds.ToString(),
             })));
         Client = shrunk.CreateClient();
     }

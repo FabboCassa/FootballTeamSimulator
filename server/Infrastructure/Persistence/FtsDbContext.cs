@@ -47,6 +47,7 @@ public sealed class FtsDbContext : IdentityDbContext<AppUser, IdentityRole<Guid>
     public DbSet<RankedCoach> RankedCoaches => Set<RankedCoach>();
     public DbSet<RankedFixture> RankedFixtures => Set<RankedFixture>();
     public DbSet<RankedLineup> RankedLineups => Set<RankedLineup>();
+    public DbSet<RankedOffer> RankedOffers => Set<RankedOffer>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -478,6 +479,21 @@ public sealed class FtsDbContext : IdentityDbContext<AppUser, IdentityRole<Guid>
             // One live submission per club in a group (upsert key), plus a lookup by coach.
             e.HasIndex(x => new { x.RankedGroupId, x.ClubId }).IsUnique();
             e.HasIndex(x => new { x.RankedGroupId, x.UserId });
+        });
+
+        b.Entity<RankedOffer>(e =>
+        {
+            e.ToTable("ranked_offers");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Status).HasConversion<int>();
+            // Cascade from the group (single path). The player/club/user ids are plain denormalised columns.
+            e.HasOne(x => x.RankedGroup)
+                .WithMany()
+                .HasForeignKey(x => x.RankedGroupId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(x => new { x.RankedGroupId, x.Status });
+            e.HasIndex(x => x.SellerUserId);
+            e.HasIndex(x => x.BuyerUserId);
         });
     }
 }

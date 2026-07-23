@@ -133,6 +133,10 @@ public sealed class RankedSeasonService : IRankedSeasonService
             });
         }
 
+        // Seed every club a transfer budget for the season's market windows (Phase 9.2b): the money a coach
+        // spends on direct offers to other coaches. Flat + equal — a fair ranked start (like the 8.2 draft).
+        foreach (var c in clubs) c.TransferBudget = _opt.StartingTransferBudget;
+
         group.SeasonStartedUtc = now;
         group.LastMarketWindowOpened = -1;
         group.Status = RankedGroupStatus.Active;

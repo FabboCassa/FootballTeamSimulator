@@ -154,6 +154,8 @@ public enum RankedError
     FixtureNotFound,
     /// <summary>The fixture has not been played yet, so there is no replay to serve (Phase 9.2).</summary>
     ReplayNotReady,
+    /// <summary>The buyer's transfer budget cannot cover the offered fee (Phase 9.2b market).</summary>
+    InsufficientBudget,
 }
 
 /// <summary>Result wrapper so the service never throws for expected failures — mirrors

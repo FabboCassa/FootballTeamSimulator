@@ -53,6 +53,16 @@ public sealed class RankedOptions
     /// calendar and announces them.</summary>
     public int MarketWindowDurationSeconds { get; set; } = 86_400;
 
+    // --- Ranked market economy (Phase 9.2b) ----------------------------------------------------
+
+    /// <summary>Transfer budget every ranked club is seeded with when its season starts (default 25M) —
+    /// the money a coach spends on direct offers to other coaches during a market window.</summary>
+    public long StartingTransferBudget { get; set; } = 25_000_000;
+
+    /// <summary>A coach cannot sell below this squad size — a floor so a direct offer can never gut a
+    /// team down to an unplayable size.</summary>
+    public int MinSquadSizeForSale { get; set; } = 16;
+
     /// <summary>Group counts per tier, index 0 = tier 1. Only non-empty tiers are kept.</summary>
     public IReadOnlyList<int> GroupsPerTier()
     {

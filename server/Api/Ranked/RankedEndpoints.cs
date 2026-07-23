@@ -83,6 +83,60 @@ public static class RankedEndpoints
                 : MapError(result.Error, result.Message);
         });
 
+        // --- Direct coach-to-coach market (Phase 9.2b) --------------------------------------
+
+        // Browse a club's squad in the caller's group (to decide who to bid on).
+        group.MapGet("/clubs/{clubExternalId:int}/squad", async (
+            int clubExternalId, ClaimsPrincipal user, IRankedMarketService market, CancellationToken ct) =>
+        {
+            if (!TryGetUserId(user, out var userId)) return Results.Unauthorized();
+            var result = await market.GetClubSquadAsync(userId, clubExternalId, ct);
+            return result.Success ? Results.Ok(result.Value) : MapError(result.Error, result.Message);
+        });
+
+        // The caller's market view: budget + incoming/outgoing offers + whether a window is open.
+        group.MapGet("/offers", async (ClaimsPrincipal user, IRankedMarketService market, CancellationToken ct) =>
+        {
+            if (!TryGetUserId(user, out var userId)) return Results.Unauthorized();
+            var result = await market.GetOffersAsync(userId, ct);
+            return result.Success ? Results.Ok(result.Value) : MapError(result.Error, result.Message);
+        });
+
+        // Offer a fee for a player on another coach's club (requires an open window + enough budget).
+        group.MapPost("/offers", async (
+            MakeRankedOfferRequest req, ClaimsPrincipal user, IRankedMarketService market, CancellationToken ct) =>
+        {
+            if (!TryGetUserId(user, out var userId)) return Results.Unauthorized();
+            var result = await market.MakeOfferAsync(userId, req, ct);
+            return result.Success ? Results.Ok(result.Value) : MapError(result.Error, result.Message);
+        });
+
+        // Accept / reject an incoming offer (only the player's owner). Accepting moves the player + settles budgets.
+        group.MapPost("/offers/{offerId:guid}/accept", async (
+            Guid offerId, ClaimsPrincipal user, IRankedMarketService market, CancellationToken ct) =>
+        {
+            if (!TryGetUserId(user, out var userId)) return Results.Unauthorized();
+            var result = await market.RespondAsync(userId, offerId, accept: true, ct);
+            return result.Success ? Results.Ok(result.Value) : MapError(result.Error, result.Message);
+        });
+
+        group.MapPost("/offers/{offerId:guid}/reject", async (
+            Guid offerId, ClaimsPrincipal user, IRankedMarketService market, CancellationToken ct) =>
+        {
+            if (!TryGetUserId(user, out var userId)) return Results.Unauthorized();
+            var result = await market.RespondAsync(userId, offerId, accept: false, ct);
+            return result.Success ? Results.Ok(result.Value) : MapError(result.Error, result.Message);
+        });
+
+        // Withdraw an offer the caller made (while still Pending).
+        group.MapPost("/offers/{offerId:guid}/withdraw", async (
+            Guid offerId, ClaimsPrincipal user, IRankedMarketService market, CancellationToken ct) =>
+        {
+            if (!TryGetUserId(user, out var userId)) return Results.Unauthorized();
+            var result = await market.WithdrawAsync(userId, offerId, ct);
+            return result.Success ? Results.Ok(result.Value) : MapError(result.Error, result.Message);
+        });
+
         return app;
     }
 
@@ -125,6 +179,7 @@ public static class RankedEndpoints
         RankedError.WrongPhase => Results.Conflict(new { error = "wrong_phase", message }),
         RankedError.ReplayNotReady => Results.Conflict(new { error = "replay_not_ready", message }),
         RankedError.NoCapacity => Results.Conflict(new { error = "no_capacity", message }),
+        RankedError.InsufficientBudget => Results.BadRequest(new { error = "insufficient_budget", message }),
         RankedError.Forbidden => Results.Json(
             new { error = "forbidden", message }, statusCode: StatusCodes.Status403Forbidden),
         _ => Results.BadRequest(new { error = "ranked_error", message }),

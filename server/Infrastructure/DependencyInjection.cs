@@ -114,12 +114,18 @@ public static class DependencyInjection
                 o.MatchdayIntervalSeconds = interval;
             if (int.TryParse(ranked["MarketWindowDurationSeconds"], out var windowDur) && windowDur >= 0)
                 o.MarketWindowDurationSeconds = windowDur;
+            if (long.TryParse(ranked["StartingTransferBudget"], out var budget) && budget >= 0)
+                o.StartingTransferBudget = budget;
+            if (int.TryParse(ranked["MinSquadSizeForSale"], out var minSquad) && minSquad >= 0)
+                o.MinSquadSizeForSale = minSquad;
         });
 
         services.AddScoped<IRankedService, RankedService>();
         // The real-time season engine (Phase 9.2). Registered always so unit tests can drive TickAsync
         // directly (the recurring Hangfire job that calls it is registered only when jobs are enabled).
         services.AddScoped<IRankedSeasonService, RankedSeasonService>();
+        // Direct coach-to-coach market (Phase 9.2b): squad browse + offers during the season's windows.
+        services.AddScoped<IRankedMarketService, RankedMarketService>();
     }
 
     /// <summary>Push notifications (Phase 7.4): the EF device-token store + the config-gated FCM sender.
