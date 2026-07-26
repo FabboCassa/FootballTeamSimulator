@@ -72,6 +72,18 @@ public static class RankedEndpoints
             return result.Success ? Results.Ok(result.Value) : MapError(result.Error, result.Message);
         });
 
+        // The caller's currently submitted lineup (the stored LineupPlan JSON, or empty when none) — so the
+        // client's lineup editor re-opens on the saved XI instead of the best-XI default.
+        group.MapGet("/lineup", async (ClaimsPrincipal user, IRankedSeasonService season, CancellationToken ct) =>
+        {
+            if (!TryGetUserId(user, out var userId)) return Results.Unauthorized();
+            var result = await season.GetMyLineupAsync(userId, ct);
+            if (!result.Success) return MapError(result.Error, result.Message);
+            return string.IsNullOrEmpty(result.Value)
+                ? Results.Content("{}", "application/json")
+                : Results.Content(result.Value!, "application/json");
+        });
+
         // The stored full MatchReport for a played fixture in the caller's group (identical bytes for all).
         group.MapGet("/season/fixtures/{fixtureId:guid}/replay", async (
             Guid fixtureId, ClaimsPrincipal user, IRankedSeasonService season, CancellationToken ct) =>

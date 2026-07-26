@@ -113,4 +113,9 @@ public interface IRankedSeasonService
 
     /// <summary>The stored full <c>MatchReport</c> JSON for a played fixture in the caller's group.</summary>
     Task<RankedResult<string>> GetReplayAsync(Guid userId, Guid fixtureId, CancellationToken ct = default);
+
+    /// <summary>The caller's currently submitted lineup for their ranked club as the stored
+    /// <c>LineupPlan</c> JSON, or an empty string when they have not submitted one — so the client editor
+    /// re-opens on the saved XI instead of the best-XI default.</summary>
+    Task<RankedResult<string>> GetMyLineupAsync(Guid userId, CancellationToken ct = default);
 }

@@ -30,11 +30,14 @@ public sealed class DevSeedService : IDevSeedService
     private readonly IAuctionService _auctions;
     private readonly ILiveMatchService _liveMatch;
     private readonly IRankedService _ranked;
+    private readonly IRankedAuctionService _rankedAuctions;
+    private readonly IRankedMarketService _rankedMarket;
     private readonly FtsDbContext _db;
 
     public DevSeedService(
         IAuthService auth, ILeagueService leagues, ILeagueSeasonService season,
-        IAuctionService auctions, ILiveMatchService liveMatch, IRankedService ranked, FtsDbContext db)
+        IAuctionService auctions, ILiveMatchService liveMatch, IRankedService ranked,
+        IRankedAuctionService rankedAuctions, IRankedMarketService rankedMarket, FtsDbContext db)
     {
         _auth = auth;
         _leagues = leagues;
@@ -42,6 +45,8 @@ public sealed class DevSeedService : IDevSeedService
         _auctions = auctions;
         _liveMatch = liveMatch;
         _ranked = ranked;
+        _rankedAuctions = rankedAuctions;
+        _rankedMarket = rankedMarket;
         _db = db;
     }
 
@@ -324,9 +329,65 @@ public sealed class DevSeedService : IDevSeedService
         return new DevRankedFillResult(enrolled, nowOccupied, capacity);
     }
 
+    public async Task<DevRankedBotMarketResult> RankedBotMarketAsync(
+        Guid rankedGroupId, DevRankedBotMarketRequest request, CancellationToken ct = default)
+    {
+        // The group's BOT coaches (a @dev.local account holding one of its seats).
+        var seats = await _db.RankedSeats
+            .Where(s => s.RankedGroupId == rankedGroupId && s.UserId != null)
+            .Select(s => s.UserId!.Value)
+            .ToListAsync(ct);
+        if (seats.Count == 0) return new DevRankedBotMarketResult(0, 0);
+
+        var botIds = await _db.Users
+            .Where(u => seats.Contains(u.Id) && u.Email!.EndsWith(BotDomain))
+            .Select(u => u.Id)
+            .ToListAsync(ct);
+        if (botIds.Count == 0) return new DevRankedBotMarketResult(0, 0);
+
+        int bids = 0, answered = 0;
+
+        // (a) Outbid on the open auction lots: each round, a bot that isn't already leading raises to the
+        // lot's minimum next bid (the service enforces budget/min-increment, so an illegal try just fails).
+        int rounds = Clamp(request.Rounds, 1, 20);
+        for (int r = 0; r < rounds; r++)
+        {
+            var view = await _rankedAuctions.GetAuctionsAsync(botIds[0], ct);
+            if (!view.Success || view.Value is null || !view.Value.WindowOpen) break;
+
+            foreach (var lot in view.Value.Lots)
+            {
+                if (lot.Status != RankedAuctionStatus.Open) continue;
+                foreach (var botId in botIds)
+                {
+                    var res = await _rankedAuctions.PlaceBidAsync(
+                        botId, lot.Id, new PlaceRankedBidRequest(lot.MinNextBid), ct);
+                    if (res.Success) { bids++; break; } // one raise per lot per round
+                }
+            }
+        }
+
+        // (b) Answer the pending offers the human sent to a bot-held club.
+        foreach (var botId in botIds)
+        {
+            var offers = await _rankedMarket.GetOffersAsync(botId, ct);
+            if (!offers.Success || offers.Value is null) continue;
+
+            foreach (var offer in offers.Value.Incoming)
+            {
+                if (offer.Status != RankedOfferStatus.Pending) continue;
+                var res = await _rankedMarket.RespondAsync(botId, offer.Id, request.AcceptOffers, ct);
+                if (res.Success) answered++;
+            }
+        }
+
+        return new DevRankedBotMarketResult(bids, answered);
+    }
+
     private async Task<Guid> EnsureRankedBotAsync(string batch, int i, CancellationToken ct)
     {
-        string email = $"rankedbot_{batch}_{i}{BotDomain}";
+        // Alphanumeric local part only (like the league bots) — a fresh GUID batch keeps it unique.
+        string email = $"rankedbot{batch}x{i}{BotDomain}";
         var reg = await _auth.RegisterAsync(new RegisterRequest(email, BotPassword, $"RankedBot {i}"), ct);
         if (reg.Success) return reg.Value!.Profile.UserId;
 

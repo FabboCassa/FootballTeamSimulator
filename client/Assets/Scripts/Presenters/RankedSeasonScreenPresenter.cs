@@ -22,26 +22,33 @@ namespace Fts.Presenters
         private readonly ScreenNavigator _navigator;
         private readonly ILocalizationService _loc;
         private readonly RankedApiService _ranked;
+        private readonly RankedReplayTarget _replayTarget;
         private readonly RankedSeasonView _view;
 
         private CancellationTokenSource _cts;
         private bool _busy;
+        private readonly Dictionary<string, (string home, string away)> _fixtureNames =
+            new Dictionary<string, (string home, string away)>();
 
         public VisualElement View => _view.Root;
 
         public RankedSeasonScreenPresenter(
-            ScreenNavigator navigator, ILocalizationService loc, RankedApiService ranked)
+            ScreenNavigator navigator, ILocalizationService loc, RankedApiService ranked, RankedReplayTarget replayTarget)
         {
             _navigator = navigator;
             _loc = loc;
             _ranked = ranked;
+            _replayTarget = replayTarget;
             _view = new RankedSeasonView(loc.Tr);
         }
 
         public void Enter()
         {
             _view.RefreshClicked += OnRefresh;
+            _view.LineupClicked += OnLineup;
+            _view.MarketClicked += OnMarket;
             _view.AdvanceDevClicked += OnAdvanceDev;
+            _view.FixtureSelected += OnFixtureSelected;
             _view.BackClicked += OnBack;
             _view.SetDevToolsVisible(DevFlags.OnlineTestTools);
             _cts = new CancellationTokenSource();
@@ -51,7 +58,10 @@ namespace Fts.Presenters
         public void Exit()
         {
             _view.RefreshClicked -= OnRefresh;
+            _view.LineupClicked -= OnLineup;
+            _view.MarketClicked -= OnMarket;
             _view.AdvanceDevClicked -= OnAdvanceDev;
+            _view.FixtureSelected -= OnFixtureSelected;
             _view.BackClicked -= OnBack;
             _cts?.Cancel();
             _cts?.Dispose();
@@ -138,6 +148,7 @@ namespace Fts.Presenters
 
         private void RenderSchedule(List<RankedFixtureDto> fixtures)
         {
+            _fixtureNames.Clear();
             var lines = new List<RankedSeasonView.ScheduleLine>();
             if (fixtures != null)
             {
@@ -149,13 +160,33 @@ namespace Fts.Presenters
                         lastRound = f.round;
                         lines.Add(new RankedSeasonView.ScheduleLine(_loc.Tr("ranked.round", f.round), isHeader: true));
                     }
-                    string text = f.played
-                        ? _loc.Tr("ranked.fixture_played", f.homeClubName, f.homeGoals, f.awayGoals, f.awayClubName)
-                        : _loc.Tr("ranked.fixture_scheduled", f.homeClubName, f.awayClubName);
-                    lines.Add(new RankedSeasonView.ScheduleLine(text, isHeader: false));
+                    if (f.played)
+                    {
+                        // Played fixtures are tappable → the replay.
+                        _fixtureNames[f.id] = (f.homeClubName, f.awayClubName);
+                        string text = _loc.Tr("ranked.fixture_played", f.homeClubName, f.homeGoals, f.awayGoals, f.awayClubName);
+                        lines.Add(new RankedSeasonView.ScheduleLine(text, isHeader: false, fixtureId: f.id));
+                    }
+                    else
+                    {
+                        string text = _loc.Tr("ranked.fixture_scheduled", f.homeClubName, f.awayClubName);
+                        lines.Add(new RankedSeasonView.ScheduleLine(text, isHeader: false));
+                    }
                 }
             }
             _view.SetSchedule(lines);
+        }
+
+        private void OnLineup() => _navigator.Push<RankedLineupScreenPresenter>();
+
+        private void OnMarket() => _navigator.Push<RankedMarketScreenPresenter>();
+
+        private void OnFixtureSelected(string fixtureId)
+        {
+            if (string.IsNullOrEmpty(fixtureId)) return;
+            var (home, away) = _fixtureNames.TryGetValue(fixtureId, out var n) ? n : (string.Empty, string.Empty);
+            _replayTarget.Set(fixtureId, home, away);
+            _navigator.Push<RankedReplayScreenPresenter>();
         }
 
         // Dev-only: fill the placement cohort with bots FIRST (a no-op once the season is under way), then

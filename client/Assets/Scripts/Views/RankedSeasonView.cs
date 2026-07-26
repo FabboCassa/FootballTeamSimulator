@@ -12,8 +12,11 @@ namespace Fts.Views
     public sealed class RankedSeasonView
     {
         public event Action RefreshClicked;
+        public event Action LineupClicked;
+        public event Action MarketClicked;
         public event Action AdvanceDevClicked; // dev-only
         public event Action BackClicked;
+        public event Action<string> FixtureSelected; // a played fixture tapped → its id
 
         public VisualElement Root { get; }
 
@@ -27,6 +30,8 @@ namespace Fts.Views
         private readonly Label _scheduleCaption;
         private readonly VisualElement _schedule;
         private readonly Label _status;
+        private readonly Button _lineupButton;
+        private readonly Button _marketButton;
         private readonly Button _refreshButton;
         private readonly Button _advanceDevButton; // dev-only
         private readonly Button _backButton;
@@ -39,12 +44,19 @@ namespace Fts.Views
             public StandingRow(string text, bool isYou) { Text = text; IsYou = isYou; }
         }
 
-        /// <summary>One schedule line: a round header or a fixture line.</summary>
+        /// <summary>One schedule line: a round header, an unplayed fixture (label), or a played fixture
+        /// (tappable → its <see cref="FixtureId"/> for the replay).</summary>
         public readonly struct ScheduleLine
         {
             public readonly string Text;
             public readonly bool IsHeader;
-            public ScheduleLine(string text, bool isHeader) { Text = text; IsHeader = isHeader; }
+            public readonly string FixtureId; // non-null = a played fixture, rendered tappable
+            public ScheduleLine(string text, bool isHeader, string fixtureId = null)
+            {
+                Text = text;
+                IsHeader = isHeader;
+                FixtureId = fixtureId;
+            }
         }
 
         public RankedSeasonView(Func<string, string> tr)
@@ -68,8 +80,16 @@ namespace Fts.Views
             _windowBanner.style.display = DisplayStyle.None;
             col.Add(_windowBanner);
 
+            _lineupButton = UiKit.PrimaryButton(string.Empty, () => LineupClicked?.Invoke());
+            _lineupButton.style.marginTop = UiKit.SpaceSm;
+            col.Add(_lineupButton);
+
+            _marketButton = UiKit.MenuButton(string.Empty, () => MarketClicked?.Invoke());
+            _marketButton.style.marginTop = UiKit.SpaceXs;
+            col.Add(_marketButton);
+
             _refreshButton = UiKit.MenuButton(string.Empty, () => RefreshClicked?.Invoke());
-            _refreshButton.style.marginTop = UiKit.SpaceSm;
+            _refreshButton.style.marginTop = UiKit.SpaceXs;
             col.Add(_refreshButton);
 
             _standingsCaption = UiKit.Subtitle(string.Empty);
@@ -131,6 +151,16 @@ namespace Fts.Views
             if (lines == null) return;
             foreach (var line in lines)
             {
+                // A played fixture is a tappable button (opens the replay); everything else is a label.
+                if (!line.IsHeader && line.FixtureId != null)
+                {
+                    var id = line.FixtureId;
+                    var button = UiKit.MenuButton(line.Text, () => FixtureSelected?.Invoke(id));
+                    button.style.marginBottom = UiKit.SpaceXs;
+                    _schedule.Add(button);
+                    continue;
+                }
+
                 var label = line.IsHeader ? UiKit.Subtitle(line.Text) : UiKit.Caption(line.Text);
                 label.style.whiteSpace = WhiteSpace.Normal;
                 if (line.IsHeader) label.style.marginTop = UiKit.SpaceSm;
@@ -161,6 +191,8 @@ namespace Fts.Views
         {
             _standingsCaption.text = _tr("ranked.standings_caption");
             _scheduleCaption.text = _tr("ranked.schedule_caption");
+            _lineupButton.text = _tr("ranked.lineup.open");
+            _marketButton.text = _tr("ranked.market.open");
             _refreshButton.text = _tr("ranked.refresh");
             _advanceDevButton.text = _tr("ranked.dev_advance");
             _backButton.text = _tr("common.back");

@@ -45,6 +45,13 @@ public static class DevEndpoints
         group.MapPost("/ranked/fill", async (int? count, IDevSeedService dev, CancellationToken ct) =>
             Results.Ok(await dev.FillRankedAsync(new DevRankedFillRequest(count), ct)));
 
+        // Ranked market autopilot (9.2b): the group's bot coaches outbid on the open auction lots and answer
+        // the offers the human sent them — query params so a bodyless POST binds cleanly.
+        group.MapPost("/ranked/{groupId:guid}/market/bot", async (
+            Guid groupId, int? rounds, bool? accept, IDevSeedService dev, CancellationToken ct) =>
+            Results.Ok(await dev.RankedBotMarketAsync(
+                groupId, new DevRankedBotMarketRequest(rounds ?? 1, accept ?? true), ct)));
+
         return app;
     }
 }

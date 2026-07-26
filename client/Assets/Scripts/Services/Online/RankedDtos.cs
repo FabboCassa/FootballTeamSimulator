@@ -99,6 +99,29 @@ namespace Fts.Services.Online
         public bool isYou;
     }
 
+    /// <summary>One player in a browsed ranked squad (<see cref="RankedSquadDto"/>). <see cref="role"/> is
+    /// the numeric Sim.Core PositionRole (0 = GK … 7 = ST).</summary>
+    [Serializable]
+    public sealed class RankedPlayerDto
+    {
+        public int externalId;
+        public string name;
+        public int age;
+        public int role;
+        public int overall;
+        public long marketValue;
+    }
+
+    /// <summary>A club's squad (GET /ranked/clubs/{ext}/squad) — for the lineup editor + market browsing.</summary>
+    [Serializable]
+    public sealed class RankedSquadDto
+    {
+        public int clubExternalId;
+        public string clubName;
+        public bool isHuman;
+        public List<RankedPlayerDto> players = new List<RankedPlayerDto>();
+    }
+
     /// <summary>The caller's ranked season: state + schedule + standings (InSeason false before kickoff).</summary>
     [Serializable]
     public sealed class RankedSeasonDto
@@ -108,6 +131,86 @@ namespace Fts.Services.Online
         public List<RankedFixtureDto> fixtures = new List<RankedFixtureDto>();
         public List<RankedStandingDto> standings = new List<RankedStandingDto>();
     }
+
+    // --- market: direct offers + free-agent auctions (Phase 9.2b) ---------------------------------
+
+    /// <summary>Mirrors the server RankedOfferStatus.</summary>
+    public enum RankedOfferStatus { Pending = 0, Accepted = 1, Rejected = 2, Withdrawn = 3 }
+
+    /// <summary>Mirrors the server RankedAuctionStatus.</summary>
+    public enum RankedAuctionStatus { Open = 0, Settled = 1, Unsold = 2 }
+
+    /// <summary>A direct coach-to-coach offer as seen by the caller.</summary>
+    [Serializable]
+    public sealed class RankedOfferDto
+    {
+        public string id;
+        public int windowIndex;
+        public int playerExternalId;
+        public string playerName;
+        public int buyerClubExternalId;
+        public string buyerClubName;
+        public int sellerClubExternalId;
+        public string sellerClubName;
+        public long fee;
+        public int status; // RankedOfferStatus
+        public bool youAreBuyer;
+        public bool youAreSeller;
+    }
+
+    /// <summary>The caller's market view: budget + incoming/outgoing offers + whether a window is open.</summary>
+    [Serializable]
+    public sealed class RankedOffersDto
+    {
+        public long yourBudget;
+        public bool marketOpen;
+        public List<RankedOfferDto> incoming = new List<RankedOfferDto>();
+        public List<RankedOfferDto> outgoing = new List<RankedOfferDto>();
+    }
+
+    /// <summary>Body for POST /ranked/offers.</summary>
+    [Serializable]
+    public sealed class MakeRankedOfferBody
+    {
+        public int playerExternalId;
+        public long fee;
+    }
+
+    /// <summary>One free-agent auction lot.</summary>
+    [Serializable]
+    public sealed class RankedAuctionLotDto
+    {
+        public string id;
+        public int playerExternalId;
+        public string playerName;
+        public int age;
+        public int role;
+        public int overall;
+        public long marketValue;
+        public long startPrice;
+        public long highBid;
+        public int? highBidClubExternalId;
+        public bool youAreLeading;
+        public long minNextBid;
+        public int status; // RankedAuctionStatus
+        public string endsUtc;
+        public int secondsRemaining;
+    }
+
+    /// <summary>The caller's auction view: open lots + budget picture + window state.</summary>
+    [Serializable]
+    public sealed class RankedAuctionsDto
+    {
+        public long budget;
+        public long committed;
+        public long available;
+        public bool windowOpen;
+        public List<RankedAuctionLotDto> lots = new List<RankedAuctionLotDto>();
+    }
+
+    /// <summary>Body for POST /ranked/auctions/{id}/bid.</summary>
+    [Serializable]
+    public sealed class PlaceRankedBidBody { public long amount; }
 
     /// <summary>Why a ranked API call failed — mapped from the server's HTTP status (Phase 9.2).</summary>
     public enum RankedApiError

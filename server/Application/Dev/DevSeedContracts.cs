@@ -52,3 +52,12 @@ public sealed record DevRankedFillRequest(int? Count = null);
 
 /// <summary>How many bots were enrolled + the placement group's occupancy afterwards.</summary>
 public sealed record DevRankedFillResult(int Enrolled, int Occupied, int Capacity);
+
+/// <summary>Drive the bot coaches in the caller's ranked group through a round of market activity (Phase
+/// 9.2b dev tooling) so a solo human sees the market move: the bots outbid on open auction lots and respond
+/// to the offers the human sent them. <paramref name="AcceptOffers"/> makes them accept (else reject);
+/// <paramref name="Rounds"/> is how many bidding passes to run.</summary>
+public sealed record DevRankedBotMarketRequest(int Rounds = 1, bool AcceptOffers = true);
+
+/// <summary>What the bot market autopilot did.</summary>
+public sealed record DevRankedBotMarketResult(int BidsPlaced, int OffersAnswered);

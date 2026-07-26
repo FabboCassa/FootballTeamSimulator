@@ -1,5 +1,6 @@
 using Cysharp.Threading.Tasks;
 using Newtonsoft.Json;
+using Sim.Core.Match;
 
 namespace Fts.Services.Online
 {
@@ -57,6 +58,135 @@ namespace Fts.Services.Online
                 : RankedApiResult<RankedSeasonDto>.Ok(dto);
         }
 
+        /// <summary>Browse a club's squad in the caller's group (the lineup editor loads the caller's own).</summary>
+        public async UniTask<RankedApiResult<RankedSquadDto>> GetClubSquadAsync(int clubExternalId)
+        {
+            if (!_api.IsSignedIn) return RankedApiResult<RankedSquadDto>.Fail(RankedApiError.NotSignedIn);
+            var (status, text, network) = await _api.SendAuthedAsync("GET", "/ranked/clubs/" + clubExternalId + "/squad");
+            if (!IsSuccess(status, network))
+                return RankedApiResult<RankedSquadDto>.Fail(MapError(status, text, network));
+            var dto = TryParse<RankedSquadDto>(text);
+            return dto?.players == null
+                ? RankedApiResult<RankedSquadDto>.Fail(RankedApiError.Server)
+                : RankedApiResult<RankedSquadDto>.Ok(dto);
+        }
+
+        /// <summary>The caller's currently submitted lineup (the stored Sim.Core <see cref="LineupPlan"/>),
+        /// or null when they have not submitted one — so the editor re-opens on the saved XI.</summary>
+        public async UniTask<RankedApiResult<LineupPlan>> GetMyLineupAsync()
+        {
+            if (!_api.IsSignedIn) return RankedApiResult<LineupPlan>.Fail(RankedApiError.NotSignedIn);
+            var (status, text, network) = await _api.SendAuthedAsync("GET", "/ranked/lineup");
+            if (!IsSuccess(status, network))
+                return RankedApiResult<LineupPlan>.Fail(MapError(status, text, network));
+            var plan = TryParse<LineupPlan>(text);
+            // An empty "{}" body (no submission yet) parses to a plan with no slots → report it as null.
+            return RankedApiResult<LineupPlan>.Ok(plan != null && plan.Slots != null && plan.Slots.Count > 0 ? plan : null);
+        }
+
+        /// <summary>Submit (or replace) the caller's lineup/tactic/plan for their ranked club. <paramref
+        /// name="body"/> is the { lineup, tactic, plan } wrapper the presenter builds from the Sim.Core plans;
+        /// on success the server returns the updated season.</summary>
+        public async UniTask<RankedApiResult<RankedSeasonDto>> SubmitLineupAsync(object body)
+        {
+            if (!_api.IsSignedIn) return RankedApiResult<RankedSeasonDto>.Fail(RankedApiError.NotSignedIn);
+            var (status, text, network) = await _api.SendAuthedAsync("POST", "/ranked/lineup", body);
+            if (!IsSuccess(status, network))
+                return RankedApiResult<RankedSeasonDto>.Fail(MapError(status, text, network));
+            var dto = TryParse<RankedSeasonDto>(text);
+            return dto == null
+                ? RankedApiResult<RankedSeasonDto>.Fail(RankedApiError.Server)
+                : RankedApiResult<RankedSeasonDto>.Ok(dto);
+        }
+
+        /// <summary>The stored full MatchReport for a played fixture in the caller's group, deserialized to
+        /// the Sim.Core <see cref="MatchReport"/> so the caller renders the replay with the MatchRenderer.
+        /// Fails if the report has no position stream (not renderable).</summary>
+        public async UniTask<RankedApiResult<MatchReport>> GetReplayReportAsync(string fixtureId)
+        {
+            if (!_api.IsSignedIn) return RankedApiResult<MatchReport>.Fail(RankedApiError.NotSignedIn);
+            var (status, text, network) = await _api.SendAuthedAsync(
+                "GET", "/ranked/season/fixtures/" + fixtureId + "/replay");
+            if (!IsSuccess(status, network))
+                return RankedApiResult<MatchReport>.Fail(MapError(status, text, network));
+            var report = TryParse<MatchReport>(text);
+            return report?.Positions == null
+                ? RankedApiResult<MatchReport>.Fail(RankedApiError.Server)
+                : RankedApiResult<MatchReport>.Ok(report);
+        }
+
+        // ---------------------------------------------------------------- market (9.2b)
+
+        /// <summary>The caller's market view: budget + incoming/outgoing offers + window state.</summary>
+        public async UniTask<RankedApiResult<RankedOffersDto>> GetOffersAsync()
+        {
+            if (!_api.IsSignedIn) return RankedApiResult<RankedOffersDto>.Fail(RankedApiError.NotSignedIn);
+            var (status, text, network) = await _api.SendAuthedAsync("GET", "/ranked/offers");
+            return ParseOffers(status, text, network);
+        }
+
+        /// <summary>Offer a fee for a player on another coach's club (requires an open window + budget).</summary>
+        public async UniTask<RankedApiResult<RankedOffersDto>> MakeOfferAsync(int playerExternalId, long fee)
+        {
+            if (!_api.IsSignedIn) return RankedApiResult<RankedOffersDto>.Fail(RankedApiError.NotSignedIn);
+            var body = new MakeRankedOfferBody { playerExternalId = playerExternalId, fee = fee };
+            var (status, text, network) = await _api.SendAuthedAsync("POST", "/ranked/offers", body);
+            return ParseOffers(status, text, network);
+        }
+
+        /// <summary>Accept / reject an incoming offer (only the player's owner may).</summary>
+        public async UniTask<RankedApiResult<RankedOffersDto>> RespondOfferAsync(string offerId, bool accept)
+        {
+            if (!_api.IsSignedIn) return RankedApiResult<RankedOffersDto>.Fail(RankedApiError.NotSignedIn);
+            var (status, text, network) = await _api.SendAuthedAsync(
+                "POST", "/ranked/offers/" + offerId + (accept ? "/accept" : "/reject"));
+            return ParseOffers(status, text, network);
+        }
+
+        /// <summary>Withdraw an offer the caller made (while still pending).</summary>
+        public async UniTask<RankedApiResult<RankedOffersDto>> WithdrawOfferAsync(string offerId)
+        {
+            if (!_api.IsSignedIn) return RankedApiResult<RankedOffersDto>.Fail(RankedApiError.NotSignedIn);
+            var (status, text, network) = await _api.SendAuthedAsync(
+                "POST", "/ranked/offers/" + offerId + "/withdraw");
+            return ParseOffers(status, text, network);
+        }
+
+        /// <summary>The open free-agent auction lots + the caller's budget picture.</summary>
+        public async UniTask<RankedApiResult<RankedAuctionsDto>> GetAuctionsAsync()
+        {
+            if (!_api.IsSignedIn) return RankedApiResult<RankedAuctionsDto>.Fail(RankedApiError.NotSignedIn);
+            var (status, text, network) = await _api.SendAuthedAsync("GET", "/ranked/auctions");
+            if (!IsSuccess(status, network))
+                return RankedApiResult<RankedAuctionsDto>.Fail(MapError(status, text, network));
+            var dto = TryParse<RankedAuctionsDto>(text);
+            return dto?.lots == null
+                ? RankedApiResult<RankedAuctionsDto>.Fail(RankedApiError.Server)
+                : RankedApiResult<RankedAuctionsDto>.Ok(dto);
+        }
+
+        /// <summary>Place an ascending bid on a lot (requires an open window + available budget).</summary>
+        public async UniTask<RankedApiResult<bool>> PlaceBidAsync(string auctionId, long amount)
+        {
+            if (!_api.IsSignedIn) return RankedApiResult<bool>.Fail(RankedApiError.NotSignedIn);
+            var body = new PlaceRankedBidBody { amount = amount };
+            var (status, text, network) = await _api.SendAuthedAsync(
+                "POST", "/ranked/auctions/" + auctionId + "/bid", body);
+            return IsSuccess(status, network)
+                ? RankedApiResult<bool>.Ok(true)
+                : RankedApiResult<bool>.Fail(MapError(status, text, network));
+        }
+
+        private static RankedApiResult<RankedOffersDto> ParseOffers(long status, string text, bool network)
+        {
+            if (!IsSuccess(status, network))
+                return RankedApiResult<RankedOffersDto>.Fail(MapError(status, text, network));
+            var dto = TryParse<RankedOffersDto>(text);
+            return dto == null
+                ? RankedApiResult<RankedOffersDto>.Fail(RankedApiError.Server)
+                : RankedApiResult<RankedOffersDto>.Ok(dto);
+        }
+
         // ---------------------------------------------------------------- dev tooling (gated by DevFlags)
 
         /// <summary>Dev-only: fill the caller's forming ranked placement group with bot coaches so a solo
@@ -66,6 +196,17 @@ namespace Fts.Services.Online
             if (!_api.IsSignedIn) return false;
             object body = count.HasValue ? new RankedFillBody { count = count.Value } : null;
             var (status, _, network) = await _api.SendAuthedAsync("POST", "/internal/dev/ranked/fill", body);
+            return IsSuccess(status, network);
+        }
+
+        /// <summary>Dev-only: drive the group's bot coaches through a round of market activity (they outbid
+        /// on the open lots and answer the offers you sent them), so the market is solo-testable.</summary>
+        public async UniTask<bool> BotMarketDevAsync(string groupId, int rounds = 1, bool accept = true)
+        {
+            if (!_api.IsSignedIn || string.IsNullOrEmpty(groupId)) return false;
+            string path = "/internal/dev/ranked/" + groupId + "/market/bot?rounds=" + rounds
+                          + "&accept=" + (accept ? "true" : "false");
+            var (status, _, network) = await _api.SendAuthedAsync("POST", path);
             return IsSuccess(status, network);
         }
 

@@ -34,4 +34,10 @@ public interface IDevSeedService
     /// <summary>Fill the caller's forming ranked placement group with fresh bot coaches (Phase 9.2 dev
     /// tooling) so a solo human's placement cohort completes and its season can start on the calendar.</summary>
     Task<DevRankedFillResult> FillRankedAsync(DevRankedFillRequest request, CancellationToken ct = default);
+
+    /// <summary>Ranked market autopilot (Phase 9.2b dev tooling): the bot coaches in the group outbid on the
+    /// open auction lots and answer the pending offers sent to them, so a solo human can see the market
+    /// react (being outbid, an offer accepted/rejected) without a second account.</summary>
+    Task<DevRankedBotMarketResult> RankedBotMarketAsync(
+        Guid rankedGroupId, DevRankedBotMarketRequest request, CancellationToken ct = default);
 }

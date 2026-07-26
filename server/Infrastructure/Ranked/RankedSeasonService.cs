@@ -479,6 +479,21 @@ public sealed class RankedSeasonService : IRankedSeasonService
         return RankedResult<string>.Ok(fixture.ReplayJson);
     }
 
+    public async Task<RankedResult<string>> GetMyLineupAsync(Guid userId, CancellationToken ct = default)
+    {
+        var coach = await _db.RankedCoaches.FirstOrDefaultAsync(c => c.UserId == userId, ct);
+        if (coach is null)
+            return RankedResult<string>.Fail(RankedError.NotEnrolled, "You have not joined the ranked ladder.");
+
+        var (group, seat) = await CurrentGroupSeatAsync(coach, ct);
+        if (group is null || seat?.ClubId is not { } clubId)
+            return RankedResult<string>.Ok(string.Empty);
+
+        var row = await _db.RankedLineups.FirstOrDefaultAsync(
+            x => x.RankedGroupId == group.Id && x.ClubId == clubId, ct);
+        return RankedResult<string>.Ok(row?.LineupJson ?? string.Empty);
+    }
+
     // --- projections -------------------------------------------------------------------------------
 
     private async Task<(RankedGroup? group, RankedSeat? seat)> CurrentGroupSeatAsync(

@@ -37,6 +37,8 @@ namespace Fts.App
             builder.Register<LeagueSelection>(Lifetime.Singleton);
             // Public ranked ladder gateway (task 9.2): enrol + ladder state + season.
             builder.Register<RankedApiService>(Lifetime.Singleton);
+            // Ranked replay hand-off (task 9.2): which fixture the ranked replay screen renders.
+            builder.Register<RankedReplayTarget>(Lifetime.Singleton);
             // Season replay hand-off (task 8.3b): which fixture the online replay screen renders.
             builder.Register<SeasonReplayTarget>(Lifetime.Singleton);
             builder.Register<IGameSessionService, GameSessionService>(Lifetime.Singleton)
