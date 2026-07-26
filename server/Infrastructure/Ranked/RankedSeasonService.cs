@@ -38,17 +38,22 @@ public sealed class RankedSeasonService : IRankedSeasonService
     private readonly FtsDbContext _db;
     private readonly IRankedService _ranked;
     private readonly IRankedAuctionService _auctions;
+    private readonly IRankedRankingService _ranking;
+    private readonly IRankedSeasonEndService _seasonEnd;
     private readonly INotificationService _notify;
     private readonly RankedOptions _opt;
     private readonly BalanceConfig _config = new();
 
     public RankedSeasonService(
         FtsDbContext db, IRankedService ranked, IRankedAuctionService auctions,
+        IRankedRankingService ranking, IRankedSeasonEndService seasonEnd,
         INotificationService notify, IOptions<RankedOptions> options)
     {
         _db = db;
         _ranked = ranked;
         _auctions = auctions;
+        _ranking = ranking;
+        _seasonEnd = seasonEnd;
         _notify = notify;
         _opt = options.Value;
     }
@@ -69,11 +74,118 @@ public sealed class RankedSeasonService : IRankedSeasonService
         (int matchdays, int fixtures, int placements, int completed) = await ResolveDueMatchdaysAsync(now, ct);
         int windows = await AnnounceMarketWindowsAsync(now, ct);
 
+        // A group whose between-seasons break has elapsed gets its promotions/relegations applied and its
+        // squads rebuilt, then reopens for the next season (9.3).
+        int resets = await ApplyDueSeasonResetsAsync(now, ct);
+
         // Settle any free-agent auction lot whose window has closed (9.2b). The lots were opened when the
         // window opened (see AnnounceMarketWindows); the winner gets the player + is charged.
         await _auctions.SettleDueAsync(false, ct);
 
-        return new RankedTickSummary(started, matchdays, fixtures, placements, completed, windows);
+        return new RankedTickSummary(started, matchdays, fixtures, placements, completed, windows, resets);
+    }
+
+    /// <summary>Resets every group whose between-seasons break has run out (Phase 9.3). Until then a finished
+    /// group keeps its final table readable — the reset is what applies promotion/relegation and rebuilds
+    /// fair squads for the next season.</summary>
+    private async Task<int> ApplyDueSeasonResetsAsync(DateTime now, CancellationToken ct)
+    {
+        var due = await _db.RankedGroups
+            .Where(g => g.Kind == RankedGroupKind.Division
+                        && g.Status == RankedGroupStatus.Completed
+                        && g.SeasonEndedUtc != null)
+            .Select(g => new { g.Id, EndedUtc = g.SeasonEndedUtc!.Value })
+            .ToListAsync(ct);
+
+        int resets = 0;
+        foreach (var g in due)
+        {
+            if (g.EndedUtc.AddSeconds(_opt.SeasonBreakSeconds) > now) continue;
+
+            await _seasonEnd.ApplySeasonResetAsync(g.Id, ct);
+
+            // Counted from the group's own state (it reopens as Forming) rather than from the summary, so a
+            // group with no human coaches — or with squad equalisation switched off — still counts as reset.
+            var status = await _db.RankedGroups
+                .Where(x => x.Id == g.Id).Select(x => x.Status).FirstOrDefaultAsync(ct);
+            if (status == RankedGroupStatus.Forming) resets++;
+        }
+        return resets;
+    }
+
+    /// <summary>DEV/STAGING fast-forward (Phase 9.3 dev-sim tooling): pull every running season's clock back
+    /// by one matchday interval and tick, repeatedly. Both <c>SeasonStartedUtc</c> and every kickoff move by
+    /// the SAME amount, so matchdays and market windows keep their relative spacing — it is real time travel,
+    /// not a bypass of the calendar. With the production interval (1 day) this lets a solo tester run a whole
+    /// season, its reset and the season after it in seconds.</summary>
+    public async Task<RankedTickSummary> FastForwardAsync(int matchdays, CancellationToken ct = default)
+    {
+        int rounds = Math.Clamp(matchdays, 1, 400);
+        int started = 0, days = 0, fixtures = 0, placements = 0, completed = 0, windows = 0, resets = 0;
+
+        // A zero interval means every matchday is already due — a plain tick is enough (the test calendar).
+        int step = Math.Max(_opt.MatchdayIntervalSeconds, 0);
+
+        for (int i = 0; i < rounds; i++)
+        {
+            if (step > 0) await ShiftClockBackAsync(step, ct);
+            // The between-seasons break must run out too, or a fast-forward would stall at the season end.
+            await ShiftBreakBackAsync(Math.Max(step, _opt.SeasonBreakSeconds), ct);
+
+            var s = await TickAsync(ct);
+            started += s.SeasonsStarted;
+            days += s.MatchdaysResolved;
+            fixtures += s.FixturesResolved;
+            placements += s.PlacementsResolved;
+            completed += s.DivisionsCompleted;
+            windows += s.MarketWindowsOpened;
+            resets += s.SeasonsReset;
+        }
+
+        return new RankedTickSummary(started, days, fixtures, placements, completed, windows, resets);
+    }
+
+    /// <summary>Moves every started season (and its pending kickoffs) back by <paramref name="seconds"/>.</summary>
+    private async Task ShiftClockBackAsync(int seconds, CancellationToken ct)
+    {
+        var offset = TimeSpan.FromSeconds(seconds);
+
+        var groups = await _db.RankedGroups
+            .Where(g => g.SeasonStartedUtc != null && g.Status == RankedGroupStatus.Active)
+            .ToListAsync(ct);
+        if (groups.Count == 0) return;
+
+        var groupIds = groups.Select(g => g.Id).ToList();
+        var pending = await _db.RankedFixtures
+            .Where(f => groupIds.Contains(f.RankedGroupId) && !f.IsPlayed)
+            .ToListAsync(ct);
+
+        foreach (var g in groups) g.SeasonStartedUtc = g.SeasonStartedUtc!.Value - offset;
+        foreach (var f in pending) f.KickoffUtc -= offset;
+
+        // Auction lots close with their window, which just moved too.
+        var lots = await _db.RankedAuctions
+            .Where(a => groupIds.Contains(a.RankedGroupId) && a.Status == RankedAuctionStatus.Open)
+            .ToListAsync(ct);
+        foreach (var lot in lots) lot.EndsUtc -= offset;
+
+        await _db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>Ages every finished group's break by <paramref name="seconds"/> so a fast-forward walks
+    /// through the between-seasons pause instead of parking on it (Phase 9.3 dev tooling).</summary>
+    private async Task ShiftBreakBackAsync(int seconds, CancellationToken ct)
+    {
+        if (seconds <= 0) return;
+
+        var finished = await _db.RankedGroups
+            .Where(g => g.SeasonEndedUtc != null && g.Status == RankedGroupStatus.Completed)
+            .ToListAsync(ct);
+        if (finished.Count == 0) return;
+
+        var offset = TimeSpan.FromSeconds(seconds);
+        foreach (var g in finished) g.SeasonEndedUtc = g.SeasonEndedUtc!.Value - offset;
+        await _db.SaveChangesAsync(ct);
     }
 
     /// <summary>Generates the schedule for any group whose season is due but not yet started: a filled
@@ -119,7 +231,9 @@ public sealed class RankedSeasonService : IRankedSeasonService
         var clubByExternal = clubs.ToDictionary(c => c.ExternalId, c => c.Id);
 
         var externalIds = clubs.Select(c => c.ExternalId).OrderBy(x => x).ToList();
-        var schedule = FixtureScheduler.Build(externalIds, world.Seed);
+        // Mix the group's season counter into the seed (Phase 9.3) so the season after a reset is a NEW
+        // season — a different fixture order and different match seeds, not a replay of the last one.
+        var schedule = FixtureScheduler.Build(externalIds, SeasonSeed(world.Seed, group.SeasonNumber));
 
         foreach (var s in schedule)
         {
@@ -198,7 +312,8 @@ public sealed class RankedSeasonService : IRankedSeasonService
         RankedGroup group, List<RankedFixture> roundFixtures, int round, CancellationToken ct)
     {
         var world = await _db.Worlds.FirstAsync(w => w.Id == group.WorldId, ct);
-        long worldSeed = world.Seed;
+        // Per-season seed (Phase 9.3): the same world, but each season after a reset rolls its own matches.
+        long worldSeed = SeasonSeed(world.Seed, group.SeasonNumber);
 
         // Reconstruct the WHOLE group's world so the weekly tick evolves every club (idle ones rest too),
         // exactly like the private-league season (8.4). Matches resolve on the clubs' live condition.
@@ -246,6 +361,10 @@ public sealed class RankedSeasonService : IRankedSeasonService
             played[awayExt] = new ConditionProgressor.Participation(
                 r.AwayStarterIds, ResultFor(report.AwayGoals, report.HomeGoals));
 
+            // Ladder rating (Phase 9.3): every matchday moves each human coach's Elo.
+            await ApplyMatchRatingsAsync(group, humanByClub, f.HomeClubId, f.AwayClubId,
+                report.HomeGoals, report.AwayGoals, ct);
+
             // Notify the two human coaches (best-effort — the sender no-ops when FCM is unconfigured).
             await NotifyMatchdayAsync(humanByClub, f.HomeClubId, entByGuid, report.HomeGoals, report.AwayGoals, ct);
             await NotifyMatchdayAsync(humanByClub, f.AwayClubId, entByGuid, report.AwayGoals, report.HomeGoals, ct);
@@ -288,8 +407,10 @@ public sealed class RankedSeasonService : IRankedSeasonService
     private static readonly IReadOnlyDictionary<int, TrainingPlan> NoTraining = new Dictionary<int, TrainingPlan>();
 
     /// <summary>Closes a group whose schedule is fully played: a placement group is sorted into divisions
-    /// (top finishers up, the rest down) via <see cref="IRankedService.ResolvePlacementAsync"/>; a division
-    /// is just marked Completed and its humans told the final table (promotion/relegation + reset is 9.3).
+    /// (top finishers up, the rest down) via <see cref="IRankedService.ResolvePlacementAsync"/> and its
+    /// coaches get their first palmarès line; a division season is handed to
+    /// <see cref="IRankedSeasonEndService"/>, which rates + rewards its coaches and puts the group into the
+    /// between-seasons break (the promotion/relegation + squad reset then fire when the break elapses).
     /// Returns true when it actually closed something (idempotent — a re-entry is a no-op).</summary>
     private async Task<bool> CompleteSeasonAsync(RankedGroup group, List<RankedFixture> fixtures, CancellationToken ct)
     {
@@ -320,25 +441,69 @@ public sealed class RankedSeasonService : IRankedSeasonService
 
             var result = await _ranked.ResolvePlacementAsync(group.Id, order, ct);
             if (result.Success && result.Value is not null)
+            {
+                string placementWorld = await _db.RankedWorlds
+                    .Where(w => w.Id == group.RankedWorldId).Select(w => w.Name).FirstOrDefaultAsync(ct) ?? string.Empty;
+
                 foreach (var a in result.Value.Assignments)
+                {
+                    // The first line of every coach's palmarès: they entered the pyramid (Phase 9.3).
+                    await _ranking.GrantAwardAsync(
+                        a.UserId, RankedAwardKind.PlacementCompleted, group.Id, placementWorld, group.Name,
+                        tier: 0, position: a.Position, seasonNumber: group.SeasonNumber,
+                        ratingAfter: a.Rating, ratingDelta: 0, ct);
+
                     await SafeSend(a.UserId, "Piazzamento completato",
                         $"Sei stato assegnato a {a.GroupName} ({a.WorldName}) con il club {a.ClubName}.",
                         new Dictionary<string, string> { ["kind"] = "ranked_placed", ["groupId"] = a.GroupId.ToString() }, ct);
+                }
+            }
             return result.Success;
         }
 
-        group.Status = RankedGroupStatus.Completed;
-        await _db.SaveChangesAsync(ct);
-
-        var humans = await _db.RankedSeats
-            .Where(s => s.RankedGroupId == group.Id && s.UserId != null)
-            .Select(s => s.UserId!.Value)
-            .ToListAsync(ct);
-        foreach (var uid in humans)
-            await SafeSend(uid, "Stagione conclusa",
-                $"La stagione del girone {group.Name} è terminata. Controlla la classifica finale.",
-                new Dictionary<string, string> { ["kind"] = "ranked_season_end", ["groupId"] = group.Id.ToString() }, ct);
+        // A division season closes with the whole 9.3 season end: rating, awards, promotion/relegation and
+        // the squad reset that reopens the group for the next season (with a fresh free-agent auction).
+        await _seasonEnd.CompleteDivisionSeasonAsync(group.Id, standings, ct);
         return true;
+    }
+
+    /// <summary>Moves the human coaches' ladder rating after one resolved fixture (Phase 9.3). A vacant (AI)
+    /// seat plays at a tier-derived baseline, so a division with a single human coach still rates its matches;
+    /// placement seasons are skipped because placement re-seeds the rating from the final position anyway.
+    /// Both ratings are read BEFORE either is updated, so a human-vs-human match is symmetric.</summary>
+    private async Task ApplyMatchRatingsAsync(
+        RankedGroup group, IReadOnlyDictionary<Guid, Guid> humanByClub,
+        Guid homeClubId, Guid awayClubId, int homeGoals, int awayGoals, CancellationToken ct)
+    {
+        if (group.Kind != RankedGroupKind.Division) return;
+
+        Guid? homeUser = humanByClub.TryGetValue(homeClubId, out var hu) ? hu : null;
+        Guid? awayUser = humanByClub.TryGetValue(awayClubId, out var au) ? au : null;
+        if (homeUser is null && awayUser is null) return;
+
+        int aiRating = _opt.AiRatingForTier(group.Tier);
+        int homeRating = homeUser is { } h ? await _ranking.RatingOfAsync(h, ct) : aiRating;
+        int awayRating = awayUser is { } a ? await _ranking.RatingOfAsync(a, ct) : aiRating;
+
+        if (homeUser is { } homeId)
+            await _ranking.ApplyMatchAsync(homeId, awayRating, EloModel.OutcomeOf(homeGoals, awayGoals), ct);
+        if (awayUser is { } awayId)
+            await _ranking.ApplyMatchAsync(awayId, homeRating, EloModel.OutcomeOf(awayGoals, homeGoals), ct);
+    }
+
+    /// <summary>The seed a given season of a group runs on: the generated world's seed mixed (splitmix-style)
+    /// with the group's season counter, so every season after a reset gets its own schedule and match seeds
+    /// while staying fully reproducible from the world's root seed.</summary>
+    private static long SeasonSeed(long worldSeed, int seasonNumber)
+    {
+        unchecked
+        {
+            ulong mixed = (ulong)worldSeed ^ ((ulong)(uint)Math.Max(1, seasonNumber) * 0x9E3779B97F4A7C15UL);
+            mixed ^= mixed >> 29;
+            mixed *= 0xBF58476D1CE4E5B9UL;
+            mixed ^= mixed >> 32;
+            return (long)mixed;
+        }
     }
 
     /// <summary>Announces the market window that just opened for each running season (once each, at season
@@ -586,48 +751,11 @@ public sealed class RankedSeasonService : IRankedSeasonService
         return new RankedSeasonDto(true, state, fixtureDtos, standings);
     }
 
+    /// <summary>The group's table — delegated to the shared <see cref="RankedStandings"/> calculator so the
+    /// order a coach sees is byte-for-byte the order the season end rewards (Phase 9.3).</summary>
     private IReadOnlyList<RankedStandingDto> ComputeStandings(
-        List<Club> clubs, List<RankedFixture> fixtures, int? youExternal = null)
-    {
-        int win = _config.Season.PointsForWin;
-        int draw = _config.Season.PointsForDraw;
-
-        var table = clubs.ToDictionary(c => c.Id, c => new Row { ExternalId = c.ExternalId, Name = c.Name });
-
-        foreach (var f in fixtures)
-        {
-            if (!f.IsPlayed) continue;
-            if (!table.TryGetValue(f.HomeClubId, out var home) || !table.TryGetValue(f.AwayClubId, out var away))
-                continue;
-
-            home.Played++; away.Played++;
-            home.GoalsFor += f.HomeGoals; home.GoalsAgainst += f.AwayGoals;
-            away.GoalsFor += f.AwayGoals; away.GoalsAgainst += f.HomeGoals;
-
-            if (f.HomeGoals > f.AwayGoals) { home.Won++; away.Lost++; home.Points += win; }
-            else if (f.HomeGoals < f.AwayGoals) { away.Won++; home.Lost++; away.Points += win; }
-            else { home.Drawn++; away.Drawn++; home.Points += draw; away.Points += draw; }
-        }
-
-        return table.Values
-            .OrderByDescending(r => r.Points)
-            .ThenByDescending(r => r.GoalsFor - r.GoalsAgainst)
-            .ThenByDescending(r => r.GoalsFor)
-            .ThenBy(r => r.Name, StringComparer.Ordinal)
-            .Select(r => new RankedStandingDto(
-                ClubExternalId: r.ExternalId,
-                ClubName: r.Name,
-                Played: r.Played,
-                Won: r.Won,
-                Drawn: r.Drawn,
-                Lost: r.Lost,
-                GoalsFor: r.GoalsFor,
-                GoalsAgainst: r.GoalsAgainst,
-                GoalDifference: r.GoalsFor - r.GoalsAgainst,
-                Points: r.Points,
-                IsYou: youExternal == r.ExternalId))
-            .ToList();
-    }
+        List<Club> clubs, List<RankedFixture> fixtures, int? youExternal = null) =>
+        RankedStandings.Compute(clubs, fixtures, _config.Season.PointsForWin, _config.Season.PointsForDraw, youExternal);
 
     // --- helpers -----------------------------------------------------------------------------------
 
@@ -663,10 +791,4 @@ public sealed class RankedSeasonService : IRankedSeasonService
         catch { /* notifications are best-effort — never let a push failure break the calendar. */ }
     }
 
-    private sealed class Row
-    {
-        public int ExternalId;
-        public string Name = string.Empty;
-        public int Played, Won, Drawn, Lost, GoalsFor, GoalsAgainst, Points;
-    }
 }

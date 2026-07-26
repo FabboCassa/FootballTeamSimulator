@@ -81,14 +81,17 @@ public sealed record RankedSeasonDto(
         new(false, null, Array.Empty<RankedFixtureDto>(), Array.Empty<RankedStandingDto>());
 }
 
-/// <summary>What one calendar tick did — for the dashboard/logs and to assert on in tests.</summary>
+/// <summary>What one calendar tick did — for the dashboard/logs and to assert on in tests.
+/// <c>SeasonsReset</c> (Phase 9.3) counts the groups whose between-seasons break ran out and were reset:
+/// promotions/relegations applied, squads re-equalised, the group reopened for the next season.</summary>
 public sealed record RankedTickSummary(
     int SeasonsStarted,
     int MatchdaysResolved,
     int FixturesResolved,
     int PlacementsResolved,
     int DivisionsCompleted,
-    int MarketWindowsOpened);
+    int MarketWindowsOpened,
+    int SeasonsReset = 0);
 
 /// <summary>
 /// The ranked real-time season use cases (Phase 9.2). <see cref="TickAsync"/> is the whole engine — the
@@ -118,4 +121,11 @@ public interface IRankedSeasonService
     /// <c>LineupPlan</c> JSON, or an empty string when they have not submitted one — so the client editor
     /// re-opens on the saved XI instead of the best-XI default.</summary>
     Task<RankedResult<string>> GetMyLineupAsync(Guid userId, CancellationToken ct = default);
+
+    /// <summary>DEV/STAGING ONLY (Phase 9.3 dev-sim tooling): time-travel the ladder forward. Every running
+    /// season is shifted back by one matchday interval and then ticked, <paramref name="matchdays"/> times —
+    /// so a solo tester can watch a whole season (and the season after the reset) play out in seconds instead
+    /// of the real ~2 weeks. Shifting BOTH the season start and every kickoff by the same amount keeps the
+    /// market windows aligned, so it is a genuine fast-forward and not a special code path.</summary>
+    Task<RankedTickSummary> FastForwardAsync(int matchdays, CancellationToken ct = default);
 }

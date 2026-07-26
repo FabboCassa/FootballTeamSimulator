@@ -49,6 +49,7 @@ public sealed class FtsDbContext : IdentityDbContext<AppUser, IdentityRole<Guid>
     public DbSet<RankedLineup> RankedLineups => Set<RankedLineup>();
     public DbSet<RankedOffer> RankedOffers => Set<RankedOffer>();
     public DbSet<RankedAuction> RankedAuctions => Set<RankedAuction>();
+    public DbSet<RankedAward> RankedAwards => Set<RankedAward>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -402,6 +403,9 @@ public sealed class FtsDbContext : IdentityDbContext<AppUser, IdentityRole<Guid>
                 .OnDelete(DeleteBehavior.SetNull);
             e.HasIndex(x => new { x.RankedWorldId, x.Kind, x.Tier, x.GroupIndex });
             e.HasIndex(x => new { x.Kind, x.Status });
+            // Season counter (Phase 9.3): a DB default of 1 so groups created before the seasonal reset
+            // existed are backfilled as "on their first season" rather than season 0.
+            e.Property(x => x.SeasonNumber).HasDefaultValue(1);
         });
 
         b.Entity<RankedSeat>(e =>
@@ -509,6 +513,21 @@ public sealed class FtsDbContext : IdentityDbContext<AppUser, IdentityRole<Guid>
                 .OnDelete(DeleteBehavior.Cascade);
             e.HasIndex(x => new { x.RankedGroupId, x.Status });
             e.HasIndex(x => new { x.RankedGroupId, x.WindowIndex });
+        });
+
+        // --- Coach ranking & seasonal rewards (Phase 9.3) -----------------------------------
+
+        b.Entity<RankedAward>(e =>
+        {
+            e.ToTable("ranked_awards");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Kind).HasConversion<int>();
+            e.Property(x => x.WorldName).HasMaxLength(120).IsRequired();
+            e.Property(x => x.GroupName).HasMaxLength(120).IsRequired();
+            // NO foreign keys on purpose: a palmarès must survive the world/group it was earned in
+            // (a seasonal reset reopens the group, and a world can be retired) — see the entity remarks.
+            e.HasIndex(x => new { x.UserId, x.AwardedUtc });
+            e.HasIndex(x => new { x.UserId, x.Kind });
         });
     }
 }

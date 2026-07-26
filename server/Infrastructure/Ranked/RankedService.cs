@@ -190,6 +190,8 @@ public sealed class RankedService : IRankedService
             coach.Status = RankedCoachStatus.Placed;
             coach.PlacementPosition = position;
             coach.Rating = SeedRating(position, order.Count);
+            // Career-best tracking starts here (Phase 9.3): placement is the coach's first real rating.
+            if (coach.Rating > coach.PeakRating) coach.PeakRating = coach.Rating;
             coach.PlacedUtc = now;
 
             // Save each assignment so the next iteration's free-seat lookup sees it.
@@ -224,6 +226,85 @@ public sealed class RankedService : IRankedService
         foreach (var worldId in touchedWorlds) await RefreshWorldStatusAsync(worldId, ct);
 
         return RankedResult<PlacementResultDto>.Ok(new PlacementResultDto(groupId, assignments));
+    }
+
+    // --- promotion / relegation (Phase 9.3) ----------------------------------------------------
+
+    public async Task<RankedResult<PlacementAssignmentDto>> MoveToTierAsync(
+        Guid userId, int targetTier, CancellationToken ct = default)
+    {
+        var coach = await _db.RankedCoaches.FirstOrDefaultAsync(c => c.UserId == userId, ct);
+        if (coach is null)
+            return RankedResult<PlacementAssignmentDto>.Fail(RankedError.NotEnrolled, "You have not joined the ranked ladder.");
+        if (coach.SeatId is not { } currentSeatId)
+            return RankedResult<PlacementAssignmentDto>.Fail(RankedError.WrongPhase, "You do not currently hold a seat.");
+
+        var currentSeat = await _db.RankedSeats.FirstOrDefaultAsync(s => s.Id == currentSeatId, ct);
+        if (currentSeat is null)
+            return RankedResult<PlacementAssignmentDto>.Fail(RankedError.WrongPhase, "You do not currently hold a seat.");
+
+        var currentGroup = await _db.RankedGroups.FirstAsync(g => g.Id == currentSeat.RankedGroupId, ct);
+
+        // Out of the pyramid's range (promotion out of tier 1, relegation out of the bottom) → stay put.
+        bool inRange = targetTier >= 1 && targetTier <= _opt.TierCount() && targetTier != currentGroup.Tier;
+        RankedGroup? target = inRange
+            ? await FindGroupWithFreeSeatAsync(currentGroup.RankedWorldId, targetTier, ct)
+            : null;
+
+        if (target is null) return await DescribeSeatAsync(coach, currentGroup, currentSeat, ct);
+
+        await MaterializeAsync(target, ct);
+
+        var free = await _db.RankedSeats
+            .Where(s => s.RankedGroupId == target.Id && s.UserId == null)
+            .OrderBy(s => s.SeatIndex)
+            .FirstOrDefaultAsync(ct);
+        if (free is null) return await DescribeSeatAsync(coach, currentGroup, currentSeat, ct);
+
+        // Leave the old seat behind (it plays as AI again → the group keeps its fixed size) and take the new one.
+        currentSeat.UserId = null;
+        currentSeat.OccupiedUtc = null;
+
+        var now = DateTime.UtcNow;
+        free.UserId = userId;
+        free.OccupiedUtc = now;
+
+        coach.SeatId = free.Id;
+        coach.RankedWorldId = target.RankedWorldId;
+        coach.Status = RankedCoachStatus.Placed;
+        coach.PlacedUtc = now;
+        await _db.SaveChangesAsync(ct);
+
+        await RefreshWorldStatusAsync(target.RankedWorldId, ct);
+        if (currentGroup.RankedWorldId != target.RankedWorldId)
+            await RefreshWorldStatusAsync(currentGroup.RankedWorldId, ct);
+
+        return await DescribeSeatAsync(coach, target, free, ct);
+    }
+
+    /// <summary>Reports where a coach now sits (reused by <see cref="MoveToTierAsync"/> for both the moved
+    /// and the stayed-put case).</summary>
+    private async Task<RankedResult<PlacementAssignmentDto>> DescribeSeatAsync(
+        RankedCoach coach, RankedGroup group, RankedSeat seat, CancellationToken ct)
+    {
+        var club = seat.ClubId is { } cid
+            ? await _db.Clubs.FirstOrDefaultAsync(c => c.Id == cid, ct)
+            : null;
+        var worldName = await _db.RankedWorlds
+            .Where(w => w.Id == group.RankedWorldId).Select(w => w.Name).FirstOrDefaultAsync(ct) ?? string.Empty;
+
+        return RankedResult<PlacementAssignmentDto>.Ok(new PlacementAssignmentDto(
+            UserId: coach.UserId,
+            Position: coach.PlacementPosition ?? 0,
+            RankedWorldId: group.RankedWorldId,
+            WorldName: worldName,
+            GroupId: group.Id,
+            GroupName: group.Name,
+            Tier: group.Tier,
+            SeatIndex: seat.SeatIndex,
+            ClubExternalId: club?.ExternalId ?? 0,
+            ClubName: club?.Name ?? string.Empty,
+            Rating: coach.Rating));
     }
 
     /// <summary>Validates a supplied final order, or derives a deterministic one (strongest squad first,

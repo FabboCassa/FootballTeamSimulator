@@ -81,7 +81,9 @@ public static class DependencyInjection
 
         // Public ranked ladder (Phase 9.1): server-managed pyramid worlds, enrolment, placement seasons
         // and division placement. Scoped (request-scoped FtsDbContext + Sim.Core world generation).
-        AddRanked(services, config);
+        // `enableBackgroundJobs` doubles as "this environment has the real infrastructure" — it is false
+        // only under Testing (SQLite, no Redis container), which decides the leaderboard cache below.
+        AddRanked(services, config, enableBackgroundJobs);
 
         // Dev-only test-league seeding (dev tooling). Always registered (harmless); the Api maps the
         // endpoints only outside Production and behind a config flag.
@@ -93,7 +95,7 @@ public static class DependencyInjection
     /// <summary>Public ranked ladder (Phase 9.1). The pyramid shape lives in <see cref="RankedOptions"/>,
     /// bound by hand from the "Ranked" section (no config-binder dependency in this class library, same as
     /// JwtOptions/FcmOptions) so a deployment — or a test — can reshape the pyramid without a code change.</summary>
-    private static void AddRanked(IServiceCollection services, IConfiguration config)
+    private static void AddRanked(IServiceCollection services, IConfiguration config, bool redisAvailable)
     {
         var ranked = config.GetSection(RankedOptions.SectionName);
         services.Configure<RankedOptions>(o =>
@@ -118,6 +120,28 @@ public static class DependencyInjection
                 o.StartingTransferBudget = budget;
             if (int.TryParse(ranked["MinSquadSizeForSale"], out var minSquad) && minSquad >= 0)
                 o.MinSquadSizeForSale = minSquad;
+            // Ranking + seasonal reset knobs (Phase 9.3) — allow 0 (tests remove the between-seasons break).
+            if (int.TryParse(ranked["EloKFactor"], out var k) && k > 0) o.EloKFactor = k;
+            if (int.TryParse(ranked["AiRatingTopTier"], out var aiTop) && aiTop > 0) o.AiRatingTopTier = aiTop;
+            if (int.TryParse(ranked["AiRatingPerTierStep"], out var aiStep) && aiStep >= 0)
+                o.AiRatingPerTierStep = aiStep;
+            if (int.TryParse(ranked["SeasonEndPositionSwing"], out var swing) && swing >= 0)
+                o.SeasonEndPositionSwing = swing;
+            if (int.TryParse(ranked["PromotionRatingBonus"], out var promoBonus) && promoBonus >= 0)
+                o.PromotionRatingBonus = promoBonus;
+            if (int.TryParse(ranked["PromotionSlots"], out var promoSlots) && promoSlots >= 0)
+                o.PromotionSlots = promoSlots;
+            if (int.TryParse(ranked["RelegationSlots"], out var relSlots) && relSlots >= 0)
+                o.RelegationSlots = relSlots;
+            if (int.TryParse(ranked["MinRating"], out var minRating) && minRating >= 0) o.MinRating = minRating;
+            if (int.TryParse(ranked["SeasonBreakSeconds"], out var breakSecs) && breakSecs >= 0)
+                o.SeasonBreakSeconds = breakSecs;
+            if (bool.TryParse(ranked["ResetSquadsBetweenSeasons"], out var resetSquads))
+                o.ResetSquadsBetweenSeasons = resetSquads;
+            if (int.TryParse(ranked["SeasonResetSquadSize"], out var squadSize) && squadSize >= 0)
+                o.SeasonResetSquadSize = squadSize;
+            if (int.TryParse(ranked["LeaderboardTopCount"], out var topCount) && topCount > 0)
+                o.LeaderboardTopCount = topCount;
         });
 
         services.AddScoped<IRankedService, RankedService>();
@@ -128,6 +152,15 @@ public static class DependencyInjection
         services.AddScoped<IRankedMarketService, RankedMarketService>();
         // Free-agent auctions in the season's windows (Phase 9.2b): lots opened/settled by the season tick.
         services.AddScoped<IRankedAuctionService, RankedAuctionService>();
+
+        // Coach ranking + seasonal reset (Phase 9.3). PostgreSQL is authoritative for both the rating and
+        // the palmarès; the leaderboard cache is a REBUILDABLE Redis sorted set, so environments without a
+        // Redis container (notably Testing, which runs on in-memory SQLite) get the no-op and simply read
+        // the database. Nothing about a coach's progression depends on the cache being there.
+        services.AddScoped<IRankedRankingService, RankedRankingService>();
+        services.AddScoped<IRankedSeasonEndService, RankedSeasonEndService>();
+        if (redisAvailable) services.AddScoped<IRankedLeaderboardCache, RedisRankedLeaderboardCache>();
+        else services.AddScoped<IRankedLeaderboardCache, NoOpRankedLeaderboardCache>();
     }
 
     /// <summary>Push notifications (Phase 7.4): the EF device-token store + the config-gated FCM sender.

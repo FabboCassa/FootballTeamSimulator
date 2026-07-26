@@ -12,6 +12,7 @@ namespace Fts.Views
     {
         public event Action EnrolClicked;
         public event Action SeasonClicked;
+        public event Action LeaderboardClicked;
         public event Action AutoEnrolClicked;
         public event Action FillDevClicked; // dev-only
         public event Action BackClicked;
@@ -25,6 +26,7 @@ namespace Fts.Views
         private readonly Label _info;
         private readonly Button _enrolButton;
         private readonly Button _seasonButton;
+        private readonly Button _leaderboardButton;
         private readonly Button _autoEnrolButton;
         private readonly Label _status;
         private readonly Button _fillDevButton; // dev-only
@@ -57,6 +59,12 @@ namespace Fts.Views
             _seasonButton.style.display = DisplayStyle.None;
             col.Add(_seasonButton);
 
+            // The global ladder + the caller's palmarès (Phase 9.3). Always available once enrolled.
+            _leaderboardButton = UiKit.MenuButton(string.Empty, () => LeaderboardClicked?.Invoke());
+            _leaderboardButton.style.marginTop = UiKit.SpaceXs;
+            _leaderboardButton.style.display = DisplayStyle.None;
+            col.Add(_leaderboardButton);
+
             _autoEnrolButton = UiKit.MenuButton(string.Empty, () => AutoEnrolClicked?.Invoke());
             _autoEnrolButton.style.display = DisplayStyle.None;
             col.Add(_autoEnrolButton);
@@ -88,6 +96,9 @@ namespace Fts.Views
         public void SetSeasonVisible(bool visible) =>
             _seasonButton.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
 
+        public void SetLeaderboardVisible(bool visible) =>
+            _leaderboardButton.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+
         public void SetAutoEnrol(bool visible, string label)
         {
             _autoEnrolButton.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
@@ -107,6 +118,7 @@ namespace Fts.Views
         {
             _enrolButton.SetEnabled(!busy);
             _seasonButton.SetEnabled(!busy);
+            _leaderboardButton.SetEnabled(!busy);
             _autoEnrolButton.SetEnabled(!busy);
             _fillDevButton.SetEnabled(!busy);
         }
@@ -121,6 +133,7 @@ namespace Fts.Views
             _subtitle.text = _tr("ranked.subtitle");
             _enrolButton.text = _tr("ranked.enrol");
             _seasonButton.text = _tr("ranked.open_season");
+            _leaderboardButton.text = _tr("ranked.board.open");
             _fillDevButton.text = _tr("ranked.dev_fill");
             _backButton.text = _tr("common.back");
         }

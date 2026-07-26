@@ -29,4 +29,12 @@ public interface IRankedService
     /// placement seats. Called by the season scheduler in 9.2; exposed on a dev-only internal endpoint until then.</summary>
     Task<RankedResult<PlacementResultDto>> ResolvePlacementAsync(
         Guid groupId, IReadOnlyList<Guid>? finalOrder, CancellationToken ct = default);
+
+    /// <summary>Moves a placed coach to a seat in <paramref name="targetTier"/> of their current ranked
+    /// world — the promotion/relegation step of the seasonal reset (Phase 9.3). The old seat is freed (it
+    /// becomes an AI club again, so group sizes never change) and the best-suited group in the target tier is
+    /// materialised if needed. When the target tier is out of range or has no free seat the coach simply
+    /// stays put and the result reports their current seat, so a season end can never get stuck.</summary>
+    Task<RankedResult<PlacementAssignmentDto>> MoveToTierAsync(
+        Guid userId, int targetTier, CancellationToken ct = default);
 }

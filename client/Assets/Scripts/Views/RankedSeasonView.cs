@@ -25,6 +25,9 @@ namespace Fts.Views
         private readonly Label _title;
         private readonly Label _banner;
         private readonly Label _windowBanner;
+        private readonly VisualElement _seasonEndCard;
+        private readonly Label _seasonEndTitle;
+        private readonly Label _seasonEndDetail;
         private readonly Label _standingsCaption;
         private readonly VisualElement _standings;
         private readonly Label _scheduleCaption;
@@ -80,6 +83,18 @@ namespace Fts.Views
             _windowBanner.style.display = DisplayStyle.None;
             col.Add(_windowBanner);
 
+            // Season-end summary (Phase 9.3): during the between-seasons break the server keeps the final
+            // table readable, so this card sits above it with the finish + rating swing + any tier move.
+            _seasonEndCard = UiKit.Card();
+            _seasonEndCard.style.display = DisplayStyle.None;
+            col.Add(_seasonEndCard);
+            _seasonEndTitle = UiKit.Subtitle(string.Empty);
+            _seasonEndTitle.style.whiteSpace = WhiteSpace.Normal;
+            _seasonEndCard.Add(_seasonEndTitle);
+            _seasonEndDetail = UiKit.Caption(string.Empty);
+            _seasonEndDetail.style.whiteSpace = WhiteSpace.Normal;
+            _seasonEndCard.Add(_seasonEndDetail);
+
             _lineupButton = UiKit.PrimaryButton(string.Empty, () => LineupClicked?.Invoke());
             _lineupButton.style.marginTop = UiKit.SpaceSm;
             col.Add(_lineupButton);
@@ -110,7 +125,7 @@ namespace Fts.Views
             _status.style.display = DisplayStyle.None;
             col.Add(_status);
 
-            // Dev-only: advance the ranked calendar one tick (hidden unless DevFlags).
+            // Dev-only: fast-forward the ranked calendar (hidden unless DevFlags).
             _advanceDevButton = UiKit.MenuButton(string.Empty, () => AdvanceDevClicked?.Invoke());
             _advanceDevButton.style.marginTop = UiKit.SpaceMd;
             _advanceDevButton.style.display = DisplayStyle.None;
@@ -130,6 +145,16 @@ namespace Fts.Views
         {
             _windowBanner.text = text;
             _windowBanner.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+        }
+
+        /// <summary>Shows (or hides) the season-end summary card. <paramref name="celebrate"/> tints the
+        /// headline green for a title/promotion and red for a relegation.</summary>
+        public void SetSeasonEnd(string title, string detail, bool visible, bool celebrate, bool setback)
+        {
+            _seasonEndCard.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+            _seasonEndTitle.text = title;
+            _seasonEndDetail.text = detail;
+            _seasonEndTitle.style.color = celebrate ? UiKit.Positive : setback ? UiKit.Danger : UiKit.TextPrimary;
         }
 
         public void SetStandings(IReadOnlyList<StandingRow> rows)
@@ -183,7 +208,7 @@ namespace Fts.Views
             _advanceDevButton.SetEnabled(!busy);
         }
 
-        /// <summary>Shows the dev-only "advance calendar" button (DevFlags-gated by the presenter).</summary>
+        /// <summary>Shows the dev-only "fast-forward the calendar" button (DevFlags-gated by the presenter).</summary>
         public void SetDevToolsVisible(bool visible) =>
             _advanceDevButton.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
 

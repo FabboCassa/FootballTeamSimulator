@@ -51,5 +51,15 @@ public sealed class RankedGroup
     /// used so the season job announces each window (season start, midpoint) exactly once.</summary>
     public int LastMarketWindowOpened { get; set; } = -1;
 
+    /// <summary>When this group's season finished (its coaches were rated + rewarded), or null while one is
+    /// under way (Phase 9.3). The group then sits in the between-seasons BREAK — the final table stays
+    /// readable — until <c>RankedOptions.SeasonBreakSeconds</c> elapse and the reset reopens it.</summary>
+    public DateTime? SeasonEndedUtc { get; set; }
+
+    /// <summary>How many seasons this group has run (1 = the first). Bumped by the seasonal reset (Phase 9.3)
+    /// and mixed into the schedule/match seeds so consecutive seasons are not a replay of each other; also
+    /// stamped onto the awards a season hands out.</summary>
+    public int SeasonNumber { get; set; } = 1;
+
     public ICollection<RankedSeat> Seats { get; set; } = new List<RankedSeat>();
 }

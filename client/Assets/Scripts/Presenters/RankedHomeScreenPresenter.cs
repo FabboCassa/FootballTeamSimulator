@@ -39,6 +39,7 @@ namespace Fts.Presenters
         {
             _view.EnrolClicked += OnEnrol;
             _view.SeasonClicked += OnSeason;
+            _view.LeaderboardClicked += OnLeaderboard;
             _view.AutoEnrolClicked += OnAutoEnrol;
             _view.FillDevClicked += OnFillDev;
             _view.BackClicked += OnBack;
@@ -50,6 +51,7 @@ namespace Fts.Presenters
         {
             _view.EnrolClicked -= OnEnrol;
             _view.SeasonClicked -= OnSeason;
+            _view.LeaderboardClicked -= OnLeaderboard;
             _view.AutoEnrolClicked -= OnAutoEnrol;
             _view.FillDevClicked -= OnFillDev;
             _view.BackClicked -= OnBack;
@@ -83,6 +85,7 @@ namespace Fts.Presenters
                 _view.SetInfo(_loc.Tr("ranked.not_enrolled"));
                 _view.SetEnrolVisible(true);
                 _view.SetSeasonVisible(false);
+                _view.SetLeaderboardVisible(false);
                 _view.SetAutoEnrol(false, string.Empty);
                 return;
             }
@@ -99,6 +102,7 @@ namespace Fts.Presenters
 
             _view.SetEnrolVisible(false);
             _view.SetSeasonVisible(true);
+            _view.SetLeaderboardVisible(true);
             _view.SetAutoEnrol(true, _loc.Tr(s.autoEnrol ? "ranked.auto_enrol_on" : "ranked.auto_enrol_off"));
         }
 
@@ -132,6 +136,9 @@ namespace Fts.Presenters
         }
 
         private void OnSeason() => _navigator.Push<RankedSeasonScreenPresenter>();
+
+        // The global ladder + this coach's palmarès (Phase 9.3).
+        private void OnLeaderboard() => _navigator.Push<RankedLeaderboardScreenPresenter>();
 
         private void OnAutoEnrol() => AutoEnrolAsync().Forget();
 

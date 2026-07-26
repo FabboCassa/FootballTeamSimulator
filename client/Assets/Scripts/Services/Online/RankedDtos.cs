@@ -212,6 +212,75 @@ namespace Fts.Services.Online
     [Serializable]
     public sealed class PlaceRankedBidBody { public long amount; }
 
+    // --- ranking: global leaderboard + palmarès (Phase 9.3) ---------------------------------------
+
+    /// <summary>Mirrors the server RankedAwardKind — what a palmarès line records.</summary>
+    public enum RankedAwardKind
+    {
+        SeasonPlayed = 0,
+        Champion = 1,
+        Promotion = 2,
+        Relegation = 3,
+        PlacementCompleted = 4,
+        TopFlightTitle = 5,
+    }
+
+    /// <summary>One row of the global ladder (GET /ranked/leaderboard).</summary>
+    [Serializable]
+    public sealed class RankedLeaderboardEntryDto
+    {
+        public int rank;
+        public string userId;
+        public string displayName;
+        public int rating;
+        public int peakRating;
+        public int? tier;
+        public string groupName;
+        public int seasonsPlayed;
+        public int titles;
+        public bool isYou;
+    }
+
+    /// <summary>The ladder's top slice + the caller's own row (present even when outside the slice).</summary>
+    [Serializable]
+    public sealed class RankedLeaderboardDto
+    {
+        public List<RankedLeaderboardEntryDto> entries = new List<RankedLeaderboardEntryDto>();
+        public RankedLeaderboardEntryDto you;
+        public int totalCoaches;
+    }
+
+    /// <summary>One line of a coach's permanent record (a title, a promotion, a season played…).</summary>
+    [Serializable]
+    public sealed class RankedAwardDto
+    {
+        public string id;
+        public int kind;           // RankedAwardKind
+        public string worldName;
+        public string groupName;
+        public int tier;
+        public int position;
+        public int seasonNumber;
+        public int ratingAfter;
+        public int ratingDelta;
+        public string awardedUtc;
+    }
+
+    /// <summary>The caller's persistent record (GET /ranked/palmares): rating, counters, award history.</summary>
+    [Serializable]
+    public sealed class RankedPalmaresDto
+    {
+        public string userId;
+        public string displayName;
+        public int rating;
+        public int peakRating;
+        public int seasonsPlayed;
+        public int titles;
+        public int promotions;
+        public int relegations;
+        public List<RankedAwardDto> awards = new List<RankedAwardDto>();
+    }
+
     /// <summary>Why a ranked API call failed — mapped from the server's HTTP status (Phase 9.2).</summary>
     public enum RankedApiError
     {

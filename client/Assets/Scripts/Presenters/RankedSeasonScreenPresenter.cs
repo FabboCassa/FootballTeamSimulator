@@ -27,6 +27,10 @@ namespace Fts.Presenters
 
         private CancellationTokenSource _cts;
         private bool _busy;
+
+        /// <summary>The group whose season-end card is already on screen — so the 3s poll does not re-fetch
+        /// the palmarès every tick while the group sits in its between-seasons break (Phase 9.3).</summary>
+        private string _seasonEndGroup;
         private readonly Dictionary<string, (string home, string away)> _fixtureNames =
             new Dictionary<string, (string home, string away)>();
 
@@ -108,6 +112,8 @@ namespace Fts.Presenters
                 _view.SetTitle(_loc.Tr("ranked.title"));
                 _view.SetBanner(_loc.Tr("ranked.not_in_season"));
                 _view.SetWindowBanner(string.Empty, false);
+                _view.SetSeasonEnd(string.Empty, string.Empty, false, false, false);
+                _seasonEndGroup = null;
                 _view.SetStandings(null);
                 _view.SetSchedule(null);
                 return;
@@ -126,8 +132,61 @@ namespace Fts.Presenters
             bool windowOpen = st.currentWindow != null && st.currentWindow.isOpen;
             _view.SetWindowBanner(_loc.Tr("ranked.window_open"), windowOpen);
 
+            // Season over → the group is in its between-seasons break: show what the season was worth.
+            if (st.seasonComplete)
+            {
+                LoadSeasonEndAsync(st.groupName).Forget();
+            }
+            else
+            {
+                _view.SetSeasonEnd(string.Empty, string.Empty, false, false, false);
+                _seasonEndGroup = null;
+            }
+
             RenderStandings(season.standings);
             RenderSchedule(season.fixtures);
+        }
+
+        /// <summary>Builds the season-end card from the caller's palmarès: the server hands out the awards the
+        /// moment the last matchday resolves, so the newest rows for this group ARE the season just played
+        /// (finish, rating after, swing, and any promotion/relegation). Fetched once per completed season.</summary>
+        private async UniTaskVoid LoadSeasonEndAsync(string groupName)
+        {
+            if (string.IsNullOrEmpty(groupName) || _seasonEndGroup == groupName) return;
+
+            var result = await _ranked.GetPalmaresAsync();
+            if (!result.Success || result.Value?.awards == null) return;
+
+            // The highest season number recorded for this group = the season that just finished.
+            int season = -1;
+            foreach (var a in result.Value.awards)
+                if (a.groupName == groupName && a.seasonNumber > season) season = a.seasonNumber;
+            if (season < 0) return;
+
+            RankedAwardDto played = null;
+            bool champion = false, promoted = false, relegated = false;
+            foreach (var a in result.Value.awards)
+            {
+                if (a.groupName != groupName || a.seasonNumber != season) continue;
+                if (a.kind == (int)RankedAwardKind.SeasonPlayed) played = a;
+                else if (a.kind == (int)RankedAwardKind.Champion || a.kind == (int)RankedAwardKind.TopFlightTitle)
+                    champion = true;
+                else if (a.kind == (int)RankedAwardKind.Promotion) promoted = true;
+                else if (a.kind == (int)RankedAwardKind.Relegation) relegated = true;
+            }
+            if (played == null) return;
+
+            string title = champion ? _loc.Tr("ranked.seasonend.champion")
+                : promoted ? _loc.Tr("ranked.seasonend.promoted")
+                : relegated ? _loc.Tr("ranked.seasonend.relegated")
+                : _loc.Tr("ranked.seasonend.done");
+
+            string detail = _loc.Tr("ranked.seasonend.detail",
+                played.position, played.ratingAfter, Signed(played.ratingDelta))
+                + "\n" + _loc.Tr("ranked.seasonend.break");
+
+            _view.SetSeasonEnd(title, detail, true, champion || promoted, relegated);
+            _seasonEndGroup = groupName;
         }
 
         private void RenderStandings(List<RankedStandingDto> standings)
@@ -190,8 +249,9 @@ namespace Fts.Presenters
         }
 
         // Dev-only: fill the placement cohort with bots FIRST (a no-op once the season is under way), then
-        // advance the ranked calendar one tick (start seasons / resolve matchdays / settle), then refresh —
-        // so a solo human can start + watch the season without a second account or waiting on the real clock.
+        // FAST-FORWARD the ranked calendar — with the real 1-matchday-a-day spacing a single tick resolves
+        // almost nothing, while the fast-forward time-travels the ladder, so a solo human can watch a whole
+        // season, the seasonal reset and the season after it without a second account or a two-week wait.
         private void OnAdvanceDev() => AdvanceDevAsync().Forget();
 
         private async UniTaskVoid AdvanceDevAsync()
@@ -201,12 +261,18 @@ namespace Fts.Presenters
             _view.SetBusy(true);
             _view.ShowStatus(_loc.Tr("ranked.dev_filling"), isError: false);
             await _ranked.FillDevAsync();   // fills the forming placement group (0 bots if already full/started)
-            await _ranked.TickDevAsync();   // then advance the calendar
+            await _ranked.FastForwardDevAsync(DevFastForwardMatchdays);
             _busy = false;
             _view.SetBusy(false);
             _view.ClearStatus();
+            // The finished season may have been reset behind us → let the card rebuild for the new season.
+            _seasonEndGroup = null;
             await LoadAsync();
         }
+
+        /// <summary>How many matchdays one press of the dev fast-forward covers — enough to walk a season
+        /// forward briskly without skipping past the between-seasons break in a single tap.</summary>
+        private const int DevFastForwardMatchdays = 3;
 
         private static string Signed(int value) => value > 0 ? "+" + value : value.ToString();
 

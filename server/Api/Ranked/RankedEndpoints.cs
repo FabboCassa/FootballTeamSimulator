@@ -169,6 +169,25 @@ public static class RankedEndpoints
             return result.Success ? Results.Ok(result.Value) : MapError(result.Error, result.Message);
         });
 
+        // --- Coach ranking & palmarès (Phase 9.3) -------------------------------------------
+
+        // The global ladder: the top coaches by rating, plus the caller's own row when outside the slice.
+        group.MapGet("/leaderboard", async (
+            int? top, ClaimsPrincipal user, IRankedRankingService ranking, CancellationToken ct) =>
+        {
+            if (!TryGetUserId(user, out var userId)) return Results.Unauthorized();
+            var result = await ranking.GetLeaderboardAsync(userId, top ?? 0, ct);
+            return result.Success ? Results.Ok(result.Value) : MapError(result.Error, result.Message);
+        });
+
+        // The caller's persistent record: rating, career best, seasons played and the full award history.
+        group.MapGet("/palmares", async (ClaimsPrincipal user, IRankedRankingService ranking, CancellationToken ct) =>
+        {
+            if (!TryGetUserId(user, out var userId)) return Results.Unauthorized();
+            var result = await ranking.GetPalmaresAsync(userId, ct);
+            return result.Success ? Results.Ok(result.Value) : MapError(result.Error, result.Message);
+        });
+
         return app;
     }
 
@@ -192,6 +211,14 @@ public static class RankedEndpoints
         // automatically; this is for a manual smoke test / staging fast-forward.
         group.MapPost("/tick", async (IRankedSeasonService season, CancellationToken ct) =>
             Results.Ok(await season.TickAsync(ct)));
+
+        // Time-travel the ladder forward N matchdays (Phase 9.3 dev-sim tooling): every running season's
+        // clock — and any between-seasons break — is pulled back one interval per step and ticked, so a solo
+        // tester can watch a whole season, the seasonal reset and the season after it in seconds instead of
+        // the real ~2 weeks. `matchdays` is a query param so a bodyless POST binds cleanly.
+        group.MapPost("/fast-forward", async (
+            int? matchdays, IRankedSeasonService season, CancellationToken ct) =>
+            Results.Ok(await season.FastForwardAsync(matchdays ?? 1, ct)));
 
         // Force-settle every open free-agent auction lot now, regardless of its timer (Phase 9.2b) — the
         // dev/staging fast-forward for auctions (the season tick settles them at the window close normally).

@@ -187,6 +187,37 @@ namespace Fts.Services.Online
                 : RankedApiResult<RankedOffersDto>.Ok(dto);
         }
 
+        // ---------------------------------------------------------------- ranking (9.3)
+
+        /// <summary>The global ladder: the top coaches by rating, plus the caller's own row when they sit
+        /// outside the slice. <paramref name="top"/> 0 = the server's default page size.</summary>
+        public async UniTask<RankedApiResult<RankedLeaderboardDto>> GetLeaderboardAsync(int top = 0)
+        {
+            if (!_api.IsSignedIn) return RankedApiResult<RankedLeaderboardDto>.Fail(RankedApiError.NotSignedIn);
+            string path = top > 0 ? "/ranked/leaderboard?top=" + top : "/ranked/leaderboard";
+            var (status, text, network) = await _api.SendAuthedAsync("GET", path);
+            if (!IsSuccess(status, network))
+                return RankedApiResult<RankedLeaderboardDto>.Fail(MapError(status, text, network));
+            var dto = TryParse<RankedLeaderboardDto>(text);
+            return dto?.entries == null
+                ? RankedApiResult<RankedLeaderboardDto>.Fail(RankedApiError.Server)
+                : RankedApiResult<RankedLeaderboardDto>.Ok(dto);
+        }
+
+        /// <summary>The caller's persistent record: rating, career best, seasons played and the award history
+        /// (titles, promotions, relegations). NotEnrolled when the account never joined the ladder.</summary>
+        public async UniTask<RankedApiResult<RankedPalmaresDto>> GetPalmaresAsync()
+        {
+            if (!_api.IsSignedIn) return RankedApiResult<RankedPalmaresDto>.Fail(RankedApiError.NotSignedIn);
+            var (status, text, network) = await _api.SendAuthedAsync("GET", "/ranked/palmares");
+            if (!IsSuccess(status, network))
+                return RankedApiResult<RankedPalmaresDto>.Fail(MapError(status, text, network));
+            var dto = TryParse<RankedPalmaresDto>(text);
+            return dto?.awards == null
+                ? RankedApiResult<RankedPalmaresDto>.Fail(RankedApiError.Server)
+                : RankedApiResult<RankedPalmaresDto>.Ok(dto);
+        }
+
         // ---------------------------------------------------------------- dev tooling (gated by DevFlags)
 
         /// <summary>Dev-only: fill the caller's forming ranked placement group with bot coaches so a solo
@@ -216,6 +247,18 @@ namespace Fts.Services.Online
         {
             if (!_api.IsSignedIn) return false;
             var (status, _, network) = await _api.SendAuthedAsync("POST", "/internal/ranked/tick");
+            return IsSuccess(status, network);
+        }
+
+        /// <summary>Dev-only: time-travel the ladder forward <paramref name="matchdays"/> matchdays (server
+        /// /internal/ranked/fast-forward). A single tick only resolves what the REAL calendar has made due —
+        /// one matchday a day — so this is what actually lets a solo tester watch a season, the seasonal reset
+        /// and the season after it play out (Phase 9.3).</summary>
+        public async UniTask<bool> FastForwardDevAsync(int matchdays = 1)
+        {
+            if (!_api.IsSignedIn) return false;
+            var (status, _, network) = await _api.SendAuthedAsync(
+                "POST", "/internal/ranked/fast-forward?matchdays=" + matchdays);
             return IsSuccess(status, network);
         }
 

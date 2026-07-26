@@ -21,8 +21,16 @@ public sealed class RankedCoach
     public Guid RankedWorldId { get; set; }
     public RankedWorld? RankedWorld { get; set; }
 
-    /// <summary>Elo-style ladder rating. Seeded at placement; the real Elo update lands in 9.3.</summary>
+    /// <summary>Elo-style ladder rating — the ladder's persistent progression. Seeded at placement, then
+    /// moved by <c>IRankedRankingService</c> after every matchday and at each season end (Phase 9.3).
+    /// PostgreSQL is authoritative; the Redis leaderboard is a rebuildable cache of this column.</summary>
     public int Rating { get; set; }
+
+    /// <summary>Highest rating ever held (never decreases) — the "career best" shown on the palmarès.</summary>
+    public int PeakRating { get; set; }
+
+    /// <summary>Division seasons completed (Phase 9.3). Placement does not count.</summary>
+    public int SeasonsPlayed { get; set; }
 
     public RankedCoachStatus Status { get; set; }
 
