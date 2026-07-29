@@ -84,6 +84,27 @@ public static class RankedEndpoints
                 : Results.Content(result.Value!, "application/json");
         });
 
+        // Submit (or replace) the training plan the caller's ranked club develops on (Phase 9.4).
+        group.MapPost("/training", async (
+            SubmitRankedTrainingRequest req, ClaimsPrincipal user, IRankedSeasonService season, CancellationToken ct) =>
+        {
+            if (!TryGetUserId(user, out var userId)) return Results.Unauthorized();
+            var result = await season.SubmitTrainingAsync(userId, req, ct);
+            return result.Success ? Results.Ok(result.Value) : MapError(result.Error, result.Message);
+        });
+
+        // The caller's stored training plan (the serialized TrainingPlan JSON, or {} when none) — so the
+        // client's training screen opens on the saved plan instead of the seeded default.
+        group.MapGet("/training", async (ClaimsPrincipal user, IRankedSeasonService season, CancellationToken ct) =>
+        {
+            if (!TryGetUserId(user, out var userId)) return Results.Unauthorized();
+            var result = await season.GetMyTrainingAsync(userId, ct);
+            if (!result.Success) return MapError(result.Error, result.Message);
+            return string.IsNullOrEmpty(result.Value)
+                ? Results.Content("{}", "application/json")
+                : Results.Content(result.Value!, "application/json");
+        });
+
         // The stored full MatchReport for a played fixture in the caller's group (identical bytes for all).
         group.MapGet("/season/fixtures/{fixtureId:guid}/replay", async (
             Guid fixtureId, ClaimsPrincipal user, IRankedSeasonService season, CancellationToken ct) =>
@@ -166,6 +187,28 @@ public static class RankedEndpoints
         {
             if (!TryGetUserId(user, out var userId)) return Results.Unauthorized();
             var result = await auctions.PlaceBidAsync(userId, auctionId, req, ct);
+            return result.Success ? Results.Ok(result.Value) : MapError(result.Error, result.Message);
+        });
+
+        // --- Daily digest (Phase 9.4) -------------------------------------------------------
+
+        // "What do I need to do today?" — the whole daily loop in one call (state, next match, last result,
+        // table position, market window + pending offers/lots, whether the inputs are ready) plus a short
+        // prioritised to-do list. Never 404s for a signed-in account: a coach who never joined gets the
+        // "enrol" digest.
+        group.MapGet("/today", async (ClaimsPrincipal user, IRankedTodayService today, CancellationToken ct) =>
+        {
+            if (!TryGetUserId(user, out var userId)) return Results.Unauthorized();
+            var result = await today.GetTodayAsync(userId, ct);
+            return result.Success ? Results.Ok(result.Value) : MapError(result.Error, result.Message);
+        });
+
+        // One-tap "my day is handled": seed/repair the stored inputs and mark the upcoming matchday as
+        // confirmed. Idempotent — confirming twice changes nothing. Returns the refreshed digest.
+        group.MapPost("/today/confirm", async (ClaimsPrincipal user, IRankedTodayService today, CancellationToken ct) =>
+        {
+            if (!TryGetUserId(user, out var userId)) return Results.Unauthorized();
+            var result = await today.ConfirmMatchdayAsync(userId, ct);
             return result.Success ? Results.Ok(result.Value) : MapError(result.Error, result.Message);
         });
 

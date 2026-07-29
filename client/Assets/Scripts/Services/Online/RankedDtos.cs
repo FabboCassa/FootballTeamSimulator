@@ -281,6 +281,97 @@ namespace Fts.Services.Online
         public List<RankedAwardDto> awards = new List<RankedAwardDto>();
     }
 
+    // --- Daily digest (Phase 9.4) --------------------------------------------------------------
+
+    /// <summary>Mirrors the server RankedTodoKind. The wire carries only the kind + a count — the client
+    /// renders the localised sentence (`ranked.todo.*`), so no server string is ever shown to the user.</summary>
+    public enum RankedTodoKind
+    {
+        Enrol = 0,
+        ConfirmMatchday = 1,
+        RespondOffer = 2,
+        MarketWindow = 3,
+        SeasonSummary = 4,
+    }
+
+    /// <summary>One thing to do today. Lower <see cref="priority"/> = more urgent (the server sorts).</summary>
+    [Serializable]
+    public sealed class RankedTodoDto
+    {
+        public int kind;      // RankedTodoKind
+        public int count;
+        public int priority;
+    }
+
+    /// <summary>The caller's next scheduled match.</summary>
+    [Serializable]
+    public sealed class RankedTodayNextMatchDto
+    {
+        public string fixtureId;
+        public int round;
+        public string kickoffUtc;
+        public int secondsToKickoff;
+        public bool youAreHome;
+        public int opponentClubExternalId;
+        public string opponentClubName;
+    }
+
+    /// <summary>The caller's most recent result, from their own point of view.</summary>
+    [Serializable]
+    public sealed class RankedTodayLastResultDto
+    {
+        public string fixtureId;
+        public int round;
+        public bool youAreHome;
+        public int opponentClubExternalId;
+        public string opponentClubName;
+        public int goalsFor;
+        public int goalsAgainst;
+    }
+
+    /// <summary>The whole daily loop in one payload (GET /ranked/today, POST /ranked/today/confirm). A
+    /// signed-in account always gets a valid answer: someone who never joined comes back with
+    /// <see cref="enrolled"/> false and a single "enrol" to-do.</summary>
+    [Serializable]
+    public sealed class RankedTodayDto
+    {
+        public bool enrolled;
+        public int status;              // RankedCoachStatus
+        public int rating;
+        public bool autoEnrol;
+        public string groupId;
+        public string groupName;
+        public int? kind;               // RankedGroupKind
+        public int? tier;
+        public int? clubExternalId;
+        public string clubName;
+
+        public bool inSeason;
+        public bool seasonComplete;
+        public int totalRounds;
+        public int roundsPlayed;
+        public int? nextRound;
+        public int? yourPosition;
+        public int? yourPoints;
+        public RankedTodayNextMatchDto nextMatch;
+        public RankedTodayLastResultDto lastResult;
+
+        public bool lineupReady;
+        public bool lineupConfirmed;
+        public bool trainingSet;
+        public int? trainingTeamFocus;  // Sim.Core TeamTrainingFocus
+
+        public RankedMarketWindowDto marketWindow;
+        public long budget;
+        public int incomingOffers;
+        public int outgoingOffers;
+        public int openLots;
+        public int lotsYouLead;
+
+        public int actionCount;
+        public List<RankedTodoDto> todo = new List<RankedTodoDto>();
+    }
+
     /// <summary>Why a ranked API call failed — mapped from the server's HTTP status (Phase 9.2).</summary>
     public enum RankedApiError
     {

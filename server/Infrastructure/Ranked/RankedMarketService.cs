@@ -218,6 +218,12 @@ public sealed class RankedMarketService : IRankedMarketService
         offer.ResolvedUtc = now;
         await _db.SaveChangesAsync(ct);
 
+        // SMART DEFAULT (Phase 9.4): the seller just lost a player who may have been in their stored XI.
+        // Rebuild that lineup from the best available squad now, instead of letting it fail silently at the
+        // next kickoff — the coach's tactic and pre-match plan are preserved.
+        if (await RankedInputDefaults.RepairAfterSquadChangeAsync(_db, offer.RankedGroupId, offer.SellerClubId, ct))
+            await _db.SaveChangesAsync(ct);
+
         await SafeSend(offer.BuyerUserId, "Offerta accettata",
             $"Hai acquistato {PlayerName(player)} per {offer.Fee:N0}.",
             new Dictionary<string, string> { ["kind"] = "ranked_offer_accepted" }, ct);

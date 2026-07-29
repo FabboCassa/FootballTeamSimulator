@@ -47,6 +47,7 @@ public sealed class FtsDbContext : IdentityDbContext<AppUser, IdentityRole<Guid>
     public DbSet<RankedCoach> RankedCoaches => Set<RankedCoach>();
     public DbSet<RankedFixture> RankedFixtures => Set<RankedFixture>();
     public DbSet<RankedLineup> RankedLineups => Set<RankedLineup>();
+    public DbSet<RankedTraining> RankedTrainings => Set<RankedTraining>();
     public DbSet<RankedOffer> RankedOffers => Set<RankedOffer>();
     public DbSet<RankedAuction> RankedAuctions => Set<RankedAuction>();
     public DbSet<RankedAward> RankedAwards => Set<RankedAward>();
@@ -482,6 +483,28 @@ public sealed class FtsDbContext : IdentityDbContext<AppUser, IdentityRole<Guid>
                 .HasForeignKey(x => x.ClubId)
                 .OnDelete(DeleteBehavior.Restrict);
             // One live submission per club in a group (upsert key), plus a lookup by coach.
+            e.HasIndex(x => new { x.RankedGroupId, x.ClubId }).IsUnique();
+            e.HasIndex(x => new { x.RankedGroupId, x.UserId });
+        });
+
+        // --- Daily loop: stored training plans (Phase 9.4) ----------------------------------
+
+        b.Entity<RankedTraining>(e =>
+        {
+            e.ToTable("ranked_trainings");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.TrainingJson).IsRequired();
+            e.HasOne(x => x.RankedGroup)
+                .WithMany()
+                .HasForeignKey(x => x.RankedGroupId)
+                .OnDelete(DeleteBehavior.Cascade);
+            // Restrict on the club FK (clubs already cascade from worlds — single cascade path via the group),
+            // exactly like ranked_lineups; the seasonal reset deletes these rows explicitly.
+            e.HasOne(x => x.Club)
+                .WithMany()
+                .HasForeignKey(x => x.ClubId)
+                .OnDelete(DeleteBehavior.Restrict);
+            // One live training plan per club in a group (upsert key), plus a lookup by coach.
             e.HasIndex(x => new { x.RankedGroupId, x.ClubId }).IsUnique();
             e.HasIndex(x => new { x.RankedGroupId, x.UserId });
         });

@@ -1,5 +1,6 @@
 using Cysharp.Threading.Tasks;
 using Newtonsoft.Json;
+using Sim.Core.Development;
 using Sim.Core.Match;
 
 namespace Fts.Services.Online
@@ -113,6 +114,65 @@ namespace Fts.Services.Online
             return report?.Positions == null
                 ? RankedApiResult<MatchReport>.Fail(RankedApiError.Server)
                 : RankedApiResult<MatchReport>.Ok(report);
+        }
+
+        // ---------------------------------------------------------------- daily digest (9.4)
+
+        /// <summary>The caller's daily digest: everything the ranked day needs in one call (state, next match,
+        /// last result, table position, market, whether the inputs are ready) + a prioritised to-do list.
+        /// Succeeds for any signed-in account — a coach who never joined gets the "enrol" digest.</summary>
+        public async UniTask<RankedApiResult<RankedTodayDto>> GetTodayAsync()
+        {
+            if (!_api.IsSignedIn) return RankedApiResult<RankedTodayDto>.Fail(RankedApiError.NotSignedIn);
+            var (status, text, network) = await _api.SendAuthedAsync("GET", "/ranked/today");
+            return ParseToday(status, text, network);
+        }
+
+        /// <summary>One-tap "my day is handled": the server seeds/repairs the stored inputs and stamps the
+        /// upcoming matchday as confirmed, then returns the refreshed digest. Idempotent.</summary>
+        public async UniTask<RankedApiResult<RankedTodayDto>> ConfirmMatchdayAsync()
+        {
+            if (!_api.IsSignedIn) return RankedApiResult<RankedTodayDto>.Fail(RankedApiError.NotSignedIn);
+            var (status, text, network) = await _api.SendAuthedAsync("POST", "/ranked/today/confirm");
+            return ParseToday(status, text, network);
+        }
+
+        /// <summary>The caller's stored training plan (the Sim.Core <see cref="TrainingPlan"/>), or null when
+        /// nothing is stored — so the training screen opens on the saved plan, not on a fresh default.</summary>
+        public async UniTask<RankedApiResult<TrainingPlan>> GetMyTrainingAsync()
+        {
+            if (!_api.IsSignedIn) return RankedApiResult<TrainingPlan>.Fail(RankedApiError.NotSignedIn);
+            var (status, text, network) = await _api.SendAuthedAsync("GET", "/ranked/training");
+            if (!IsSuccess(status, network))
+                return RankedApiResult<TrainingPlan>.Fail(MapError(status, text, network));
+            // An empty "{}" body (nothing stored) parses to a default plan — indistinguishable from a stored
+            // Balanced one, which is exactly what the server would have seeded anyway.
+            return RankedApiResult<TrainingPlan>.Ok(TryParse<TrainingPlan>(text));
+        }
+
+        /// <summary>Submit (or replace) the training plan the caller's ranked club develops on. <paramref
+        /// name="body"/> is the { training } wrapper the presenter builds (shared with the private-league
+        /// training screen).</summary>
+        public async UniTask<RankedApiResult<RankedSeasonDto>> SubmitTrainingAsync(object body)
+        {
+            if (!_api.IsSignedIn) return RankedApiResult<RankedSeasonDto>.Fail(RankedApiError.NotSignedIn);
+            var (status, text, network) = await _api.SendAuthedAsync("POST", "/ranked/training", body);
+            if (!IsSuccess(status, network))
+                return RankedApiResult<RankedSeasonDto>.Fail(MapError(status, text, network));
+            var dto = TryParse<RankedSeasonDto>(text);
+            return dto == null
+                ? RankedApiResult<RankedSeasonDto>.Fail(RankedApiError.Server)
+                : RankedApiResult<RankedSeasonDto>.Ok(dto);
+        }
+
+        private static RankedApiResult<RankedTodayDto> ParseToday(long status, string text, bool network)
+        {
+            if (!IsSuccess(status, network))
+                return RankedApiResult<RankedTodayDto>.Fail(MapError(status, text, network));
+            var dto = TryParse<RankedTodayDto>(text);
+            return dto == null
+                ? RankedApiResult<RankedTodayDto>.Fail(RankedApiError.Server)
+                : RankedApiResult<RankedTodayDto>.Ok(dto);
         }
 
         // ---------------------------------------------------------------- market (9.2b)

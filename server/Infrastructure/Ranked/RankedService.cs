@@ -275,6 +275,18 @@ public sealed class RankedService : IRankedService
         coach.PlacedUtc = now;
         await _db.SaveChangesAsync(ct);
 
+        // SMART DEFAULTS (Phase 9.4): a coach who lands on a seat whose season is already under way (the
+        // documented v1 quirk — groups run independent clocks) gets a stored best-XI lineup and a balanced
+        // training plan straight away, so their new club is never fielded by a silent fallback. A group that
+        // has not kicked off yet is seeded when its season starts instead.
+        if (free.ClubId is { } newClubId
+            && await _db.RankedFixtures.AnyAsync(f => f.RankedGroupId == target.Id, ct))
+        {
+            bool wrote = await RankedInputDefaults.EnsureLineupAsync(_db, target.Id, newClubId, userId, ct);
+            wrote |= await RankedInputDefaults.EnsureTrainingAsync(_db, target.Id, newClubId, userId, ct);
+            if (wrote) await _db.SaveChangesAsync(ct);
+        }
+
         await RefreshWorldStatusAsync(target.RankedWorldId, ct);
         if (currentGroup.RankedWorldId != target.RankedWorldId)
             await RefreshWorldStatusAsync(currentGroup.RankedWorldId, ct);

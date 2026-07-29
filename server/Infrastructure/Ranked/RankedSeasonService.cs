@@ -58,11 +58,9 @@ public sealed class RankedSeasonService : IRankedSeasonService
         _opt = options.Value;
     }
 
-    private static readonly JsonSerializerOptions PlanJson = new()
-    {
-        PropertyNameCaseInsensitive = true,
-        Converters = { new JsonStringEnumConverter() },
-    };
+    /// <summary>Shared with the other ranked services (see <see cref="RankedPlanJson"/>) so a plan written by
+    /// any of them — including the 9.4 seeded defaults — reads back identically here.</summary>
+    private static readonly JsonSerializerOptions PlanJson = RankedPlanJson.Options;
 
     // --- the clock ---------------------------------------------------------------------------------
 
@@ -261,6 +259,13 @@ public sealed class RankedSeasonService : IRankedSeasonService
         group.SeasonStartedUtc = now;
         group.LastMarketWindowOpened = -1;
         group.Status = RankedGroupStatus.Active;
+
+        // SMART DEFAULTS (Phase 9.4): every human coach starts the season with a stored best-XI lineup and a
+        // balanced training plan, so a coach who never opens a screen still fields their best team and trains
+        // sensibly — and the daily digest can state truthfully that their inputs are ready. Same XI the engine
+        // would have picked as its silent fallback, so nothing about a result changes.
+        await RankedInputDefaults.SeedForGroupAsync(_db, group.Id, ct);
+
         await _db.SaveChangesAsync(ct);
     }
 
@@ -371,12 +376,15 @@ public sealed class RankedSeasonService : IRankedSeasonService
         }
 
         // Server-authoritative weekly tick (1 resolved round = 1 week): evolve the WHOLE world's condition +
-        // development on the same reconstructed Sim.Core clubs the matches used (9.2b). Ranked coaches do not
-        // submit training yet, so every club trains the AI default; a client re-running the same deterministic
-        // progressors from this state derives the same world-state hash (the 8.4 agreement mechanic).
+        // development on the same reconstructed Sim.Core clubs the matches used (9.2b). Since 9.4 a ranked
+        // coach's stored training plan drives their club's development week (a club without one — every AI
+        // seat — trains the AI default); a client re-running the same deterministic progressors from this
+        // state derives the same world-state hash (the 8.4 agreement mechanic).
         var simWorld = new SimLeague { Division = 1 };
         foreach (SimClub sc in simByGuid.Values) simWorld.Clubs.Add(sc);
-        OnlineSeasonTick.EvolveWeek(new[] { simWorld }, played, NoTraining, unchecked((ulong)worldSeed), round, _config);
+
+        IReadOnlyDictionary<int, TrainingPlan> trainingPlans = await LoadTrainingPlansAsync(group.Id, entByGuid, ct);
+        OnlineSeasonTick.EvolveWeek(new[] { simWorld }, played, trainingPlans, unchecked((ulong)worldSeed), round, _config);
 
         // Persist the evolved condition + attributes back onto every player.
         foreach (var (guid, ent) in entByGuid)
@@ -403,8 +411,25 @@ public sealed class RankedSeasonService : IRankedSeasonService
         : goalsFor < goalsAgainst ? TeamResult.Loss
         : TeamResult.Draw;
 
-    /// <summary>Ranked coaches do not submit training yet — every club trains the AI default each week.</summary>
-    private static readonly IReadOnlyDictionary<int, TrainingPlan> NoTraining = new Dictionary<int, TrainingPlan>();
+    /// <summary>The stored training plans keyed by club external id (= the Sim.Core club id), for the weekly
+    /// development tick (Phase 9.4). A club without a row is simply absent → the tick trains it the AI
+    /// default, which is what every ranked club did before 9.4 and what every AI seat still does. Mirrors
+    /// <c>LeagueSeasonService.LoadTrainingPlansAsync</c> (8.4).</summary>
+    private async Task<IReadOnlyDictionary<int, TrainingPlan>> LoadTrainingPlansAsync(
+        Guid groupId, IReadOnlyDictionary<Guid, Club> entByGuid, CancellationToken ct)
+    {
+        var rows = await _db.RankedTrainings.Where(x => x.RankedGroupId == groupId).ToListAsync(ct);
+        var plans = new Dictionary<int, TrainingPlan>();
+        foreach (var row in rows)
+        {
+            if (!entByGuid.TryGetValue(row.ClubId, out var club)) continue;
+            TrainingPlan? plan = null;
+            try { plan = JsonSerializer.Deserialize<TrainingPlan>(row.TrainingJson, PlanJson); }
+            catch (JsonException) { }
+            if (plan != null) plans[club.ExternalId] = plan;
+        }
+        return plans;
+    }
 
     /// <summary>Closes a group whose schedule is fully played: a placement group is sorted into divisions
     /// (top finishers up, the rest down) via <see cref="IRankedService.ResolvePlacementAsync"/> and its
@@ -579,6 +604,10 @@ public sealed class RankedSeasonService : IRankedSeasonService
         string? tacticJson = request.Tactic != null ? JsonSerializer.Serialize(request.Tactic, PlanJson) : null;
         string? planJson = request.Plan != null ? JsonSerializer.Serialize(request.Plan, PlanJson) : null;
 
+        // Submitting a lineup IS a confirmation of the upcoming matchday (Phase 9.4): a coach who went to the
+        // trouble of picking a team should not then be nagged to confirm it on the digest.
+        int confirmedRound = await NextRoundAsync(group.Id, ct) ?? 0;
+
         var existing = await _db.RankedLineups.FirstOrDefaultAsync(
             x => x.RankedGroupId == group.Id && x.ClubId == clubId, ct);
         if (existing is null)
@@ -592,6 +621,7 @@ public sealed class RankedSeasonService : IRankedSeasonService
                 LineupJson = lineupJson,
                 TacticJson = tacticJson,
                 PrematchPlanJson = planJson,
+                ConfirmedRound = confirmedRound,
                 UpdatedUtc = DateTime.UtcNow,
             });
         }
@@ -600,6 +630,7 @@ public sealed class RankedSeasonService : IRankedSeasonService
             existing.LineupJson = lineupJson;
             existing.TacticJson = tacticJson;
             existing.PrematchPlanJson = planJson;
+            existing.ConfirmedRound = Math.Max(existing.ConfirmedRound, confirmedRound);
             existing.UpdatedUtc = DateTime.UtcNow;
         }
         await _db.SaveChangesAsync(ct);
@@ -644,6 +675,64 @@ public sealed class RankedSeasonService : IRankedSeasonService
         return RankedResult<string>.Ok(fixture.ReplayJson);
     }
 
+    public async Task<RankedResult<RankedSeasonDto>> SubmitTrainingAsync(
+        Guid userId, SubmitRankedTrainingRequest request, CancellationToken ct = default)
+    {
+        var coach = await _db.RankedCoaches.FirstOrDefaultAsync(c => c.UserId == userId, ct);
+        if (coach is null)
+            return RankedResult<RankedSeasonDto>.Fail(RankedError.NotEnrolled, "You have not joined the ranked ladder.");
+        if (request.Training is null)
+            return RankedResult<RankedSeasonDto>.Fail(RankedError.ValidationFailed, "A training plan is required.");
+
+        var (group, seat) = await CurrentGroupSeatAsync(coach, ct);
+        if (group is null || seat?.ClubId is not { } clubId)
+            return RankedResult<RankedSeasonDto>.Fail(RankedError.WrongPhase, "You do not currently hold a ranked club.");
+
+        bool started = await _db.RankedFixtures.AnyAsync(f => f.RankedGroupId == group.Id, ct);
+        if (!started || group.Status == RankedGroupStatus.Completed)
+            return RankedResult<RankedSeasonDto>.Fail(RankedError.WrongPhase, "Your ranked season is not under way.");
+
+        string trainingJson = JsonSerializer.Serialize(request.Training, PlanJson);
+
+        var existing = await _db.RankedTrainings.FirstOrDefaultAsync(
+            x => x.RankedGroupId == group.Id && x.ClubId == clubId, ct);
+        if (existing is null)
+        {
+            _db.RankedTrainings.Add(new RankedTraining
+            {
+                Id = Guid.NewGuid(),
+                RankedGroupId = group.Id,
+                UserId = userId,
+                ClubId = clubId,
+                TrainingJson = trainingJson,
+                UpdatedUtc = DateTime.UtcNow,
+            });
+        }
+        else
+        {
+            existing.TrainingJson = trainingJson;
+            existing.UpdatedUtc = DateTime.UtcNow;
+        }
+        await _db.SaveChangesAsync(ct);
+
+        return RankedResult<RankedSeasonDto>.Ok(await BuildSeasonAsync(group, seat, userId, ct));
+    }
+
+    public async Task<RankedResult<string>> GetMyTrainingAsync(Guid userId, CancellationToken ct = default)
+    {
+        var coach = await _db.RankedCoaches.FirstOrDefaultAsync(c => c.UserId == userId, ct);
+        if (coach is null)
+            return RankedResult<string>.Fail(RankedError.NotEnrolled, "You have not joined the ranked ladder.");
+
+        var (group, seat) = await CurrentGroupSeatAsync(coach, ct);
+        if (group is null || seat?.ClubId is not { } clubId)
+            return RankedResult<string>.Ok(string.Empty);
+
+        var row = await _db.RankedTrainings.FirstOrDefaultAsync(
+            x => x.RankedGroupId == group.Id && x.ClubId == clubId, ct);
+        return RankedResult<string>.Ok(row?.TrainingJson ?? string.Empty);
+    }
+
     public async Task<RankedResult<string>> GetMyLineupAsync(Guid userId, CancellationToken ct = default)
     {
         var coach = await _db.RankedCoaches.FirstOrDefaultAsync(c => c.UserId == userId, ct);
@@ -670,6 +759,14 @@ public sealed class RankedSeasonService : IRankedSeasonService
         var group = await _db.RankedGroups.FirstOrDefaultAsync(g => g.Id == seat.RankedGroupId, ct);
         return (group, seat);
     }
+
+    /// <summary>The group's lowest still-unplayed round — the matchday a submission/confirmation applies to,
+    /// or null when the season is complete (Phase 9.4).</summary>
+    private async Task<int?> NextRoundAsync(Guid groupId, CancellationToken ct) =>
+        await _db.RankedFixtures
+            .Where(f => f.RankedGroupId == groupId && !f.IsPlayed)
+            .Select(f => (int?)f.Round)
+            .MinAsync(ct);
 
     private async Task<RankedSeasonDto> BuildSeasonAsync(
         RankedGroup group, RankedSeat mySeat, Guid callerId, CancellationToken ct)

@@ -198,6 +198,9 @@ public sealed class RankedSeasonEndService : IRankedSeasonEndService
         await _db.RankedAuctions.Where(a => a.RankedGroupId == group.Id).ExecuteDeleteAsync(ct);
         await _db.RankedOffers.Where(o => o.RankedGroupId == group.Id).ExecuteDeleteAsync(ct);
         await _db.RankedLineups.Where(l => l.RankedGroupId == group.Id).ExecuteDeleteAsync(ct);
+        // Stored training plans go with the season (Phase 9.4): the next season's start re-seeds a balanced
+        // default for every human seat, and a coach's focus is re-chosen on the squad they actually have.
+        await _db.RankedTrainings.Where(t => t.RankedGroupId == group.Id).ExecuteDeleteAsync(ct);
         await _db.RankedFixtures.Where(f => f.RankedGroupId == group.Id).ExecuteDeleteAsync(ct);
 
         bool equalised = false;

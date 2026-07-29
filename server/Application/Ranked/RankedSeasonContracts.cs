@@ -1,3 +1,4 @@
+using Sim.Core.Development;
 using Sim.Core.Match;
 using Sim.Core.Tactics;
 
@@ -18,6 +19,11 @@ namespace Fts.Application.Ranked;
 /// <summary>Submit (or replace) the caller's match inputs for their ranked seat's club: the lineup is
 /// required, the tactic and pre-match plan are optional.</summary>
 public sealed record SubmitRankedLineupRequest(LineupPlan Lineup, TacticPlan? Tactic, PrematchPlan? Plan);
+
+/// <summary>Submit (or replace) the training plan the caller's ranked club develops on each matchday-week
+/// (Phase 9.4). A club without a submission trains the AI default — the server seeds a balanced plan when the
+/// season starts, so this only ever refines an existing sensible default.</summary>
+public sealed record SubmitRankedTrainingRequest(TrainingPlan Training);
 
 /// <summary>One scheduled/played match in a ranked group's season, with its real-time kickoff.</summary>
 public sealed record RankedFixtureDto(
@@ -121,6 +127,15 @@ public interface IRankedSeasonService
     /// <c>LineupPlan</c> JSON, or an empty string when they have not submitted one — so the client editor
     /// re-opens on the saved XI instead of the best-XI default.</summary>
     Task<RankedResult<string>> GetMyLineupAsync(Guid userId, CancellationToken ct = default);
+
+    /// <summary>Submit (or replace) the training plan the caller's ranked club develops on (Phase 9.4). Used
+    /// by the weekly development tick that runs with every resolved matchday.</summary>
+    Task<RankedResult<RankedSeasonDto>> SubmitTrainingAsync(
+        Guid userId, SubmitRankedTrainingRequest request, CancellationToken ct = default);
+
+    /// <summary>The caller's stored training plan as the serialized <c>TrainingPlan</c> JSON, or an empty
+    /// string when nothing is stored — so the client's training screen opens on the saved plan.</summary>
+    Task<RankedResult<string>> GetMyTrainingAsync(Guid userId, CancellationToken ct = default);
 
     /// <summary>DEV/STAGING ONLY (Phase 9.3 dev-sim tooling): time-travel the ladder forward. Every running
     /// season is shifted back by one matchday interval and then ticked, <paramref name="matchdays"/> times —

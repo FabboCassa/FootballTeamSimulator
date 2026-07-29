@@ -159,6 +159,10 @@ public static class DependencyInjection
         // the database. Nothing about a coach's progression depends on the cache being there.
         services.AddScoped<IRankedRankingService, RankedRankingService>();
         services.AddScoped<IRankedSeasonEndService, RankedSeasonEndService>();
+
+        // The daily digest (Phase 9.4): a read-only projection over the ladder's own state + the one-tap
+        // matchday confirmation. Scoped like the rest (request-scoped FtsDbContext).
+        services.AddScoped<IRankedTodayService, RankedTodayService>();
         if (redisAvailable) services.AddScoped<IRankedLeaderboardCache, RedisRankedLeaderboardCache>();
         else services.AddScoped<IRankedLeaderboardCache, NoOpRankedLeaderboardCache>();
     }

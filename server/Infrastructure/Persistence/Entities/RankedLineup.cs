@@ -31,5 +31,14 @@ public sealed class RankedLineup
     /// <summary>Serialized Sim.Core <c>PrematchPlan</c>, or null.</summary>
     public string? PrematchPlanJson { get; set; }
 
+    /// <summary>
+    /// The last matchday the coach explicitly signed off on (Phase 9.4) — set by submitting a lineup or by the
+    /// one-tap "confirm matchday" on the daily digest; 0 means "never confirmed" (e.g. the best-XI default the
+    /// server seeded at season start). The digest compares it with the next round to decide whether the coach
+    /// still has anything to do today. Purely informational: the calendar resolves the stored lineup either
+    /// way, so forgetting to confirm never forfeits a match.
+    /// </summary>
+    public int ConfirmedRound { get; set; }
+
     public DateTime UpdatedUtc { get; set; }
 }
