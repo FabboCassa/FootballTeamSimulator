@@ -179,6 +179,46 @@ namespace Fts.Infrastructure.Migrations
                     b.ToTable("device_registrations", (string)null);
                 });
 
+            modelBuilder.Entity("Fts.Infrastructure.Persistence.Entities.AccountSignal", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AddressHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("DeviceHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime>("FirstSeenUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("LastSeenUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("SeenCount")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AddressHash");
+
+                    b.HasIndex("DeviceHash");
+
+                    b.HasIndex("UserId", "AddressHash", "DeviceHash")
+                        .IsUnique();
+
+                    b.ToTable("account_signals", (string)null);
+                });
+
             modelBuilder.Entity("Fts.Infrastructure.Persistence.Entities.Auction", b =>
                 {
                     b.Property<Guid>("Id")
@@ -362,6 +402,60 @@ namespace Fts.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("coaches", (string)null);
+                });
+
+            modelBuilder.Entity("Fts.Infrastructure.Persistence.Entities.IntegrityFlag", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Details")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<long>("Fee")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("MarketValue")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("PlayerExternalId")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("RankedGroupId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Severity")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("SubjectUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SubjectUserId");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("Kind", "CreatedUtc");
+
+                    b.HasIndex("Status", "CreatedUtc");
+
+                    b.ToTable("integrity_flags", (string)null);
                 });
 
             modelBuilder.Entity("Fts.Infrastructure.Persistence.Entities.League", b =>
@@ -1441,6 +1535,15 @@ namespace Fts.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Fts.Infrastructure.Persistence.Entities.AccountSignal", b =>
+                {
+                    b.HasOne("Fts.Infrastructure.Auth.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Fts.Infrastructure.Persistence.Entities.Auction", b =>

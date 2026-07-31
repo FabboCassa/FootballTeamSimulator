@@ -85,6 +85,15 @@ public abstract class RankedSeasonTestBase
     /// a derived fixture overrides it to 0 to exercise the "market closed" path.</summary>
     protected virtual int WindowSeconds => 3600;
 
+    /// <summary>Wall-clock gap between matchdays. Default 0 = every matchday is due at once, so a season
+    /// resolves in a few ticks. A fixture that needs a kickoff still in the FUTURE (the 9.5 input deadline)
+    /// overrides it.</summary>
+    protected virtual int MatchdayIntervalSeconds => 0;
+
+    /// <summary>Hook for a fixture that needs extra configuration (e.g. tighter 9.5 rate limits) without
+    /// re-implementing the shrunk-pyramid setup.</summary>
+    protected virtual void ConfigureExtra(IDictionary<string, string?> settings) { }
+
     protected AuthTestFactory Factory = null!;
     protected HttpClient Client = null!;
 
@@ -92,18 +101,27 @@ public abstract class RankedSeasonTestBase
     public void SetUp()
     {
         Factory = new AuthTestFactory();
+        var settings = new Dictionary<string, string?>
+        {
+            ["Ranked:GroupSize"] = GroupSize.ToString(),
+            ["Ranked:PlacementGroupSize"] = GroupSize.ToString(),
+            ["Ranked:Tier1Groups"] = "1",
+            ["Ranked:Tier2Groups"] = "1",
+            ["Ranked:Tier3Groups"] = "1",
+            ["Ranked:PlacementTopPositionsToUpperTier"] = "2",
+            // 0 = every matchday is due at once → fast season (overridden where a future kickoff matters).
+            ["Ranked:MatchdayIntervalSeconds"] = MatchdayIntervalSeconds.ToString(),
+            ["Ranked:MarketWindowDurationSeconds"] = WindowSeconds.ToString(),
+            // 9.5 multi-account heuristics OFF by default here: every account in a fixture registers from
+            // the same test host within seconds of the others, which is exactly the pattern the heuristics
+            // are meant to notice. Leaving them on would scatter each cohort across fresh groups and no
+            // season would ever start. The fixture that actually tests them switches them back on.
+            ["Integrity:EnableMultiAccountHeuristics"] = "false",
+        };
+        ConfigureExtra(settings);
+
         var shrunk = Factory.WithWebHostBuilder(b =>
-            b.ConfigureAppConfiguration(cfg => cfg.AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["Ranked:GroupSize"] = GroupSize.ToString(),
-                ["Ranked:PlacementGroupSize"] = GroupSize.ToString(),
-                ["Ranked:Tier1Groups"] = "1",
-                ["Ranked:Tier2Groups"] = "1",
-                ["Ranked:Tier3Groups"] = "1",
-                ["Ranked:PlacementTopPositionsToUpperTier"] = "2",
-                ["Ranked:MatchdayIntervalSeconds"] = "0",             // every matchday is due at once → fast season
-                ["Ranked:MarketWindowDurationSeconds"] = WindowSeconds.ToString(),
-            })));
+            b.ConfigureAppConfiguration(cfg => cfg.AddInMemoryCollection(settings)));
         Client = shrunk.CreateClient();
     }
 

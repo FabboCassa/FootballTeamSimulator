@@ -266,6 +266,28 @@ namespace Fts.Services.Online
 
         /// <summary>The caller's persistent record: rating, career best, seasons played and the award history
         /// (titles, promotions, relegations). NotEnrolled when the account never joined the ladder.</summary>
+        /// <summary>Report another coach in your group (Phase 9.5), identified by the club external id the
+        /// UI shows. The answer is deliberately thin — the server tells a reporter nothing about what
+        /// happens next, so this cannot be used to probe other accounts.</summary>
+        public async UniTask<RankedApiResult<RankedReportDto>> ReportAsync(
+            int subjectClubExternalId, RankedReportReason reason, string details = null)
+        {
+            if (!_api.IsSignedIn) return RankedApiResult<RankedReportDto>.Fail(RankedApiError.NotSignedIn);
+            var body = new SubmitRankedReportBody
+            {
+                subjectClubExternalId = subjectClubExternalId,
+                reason = (int)reason,
+                details = details,
+            };
+            var (status, text, network) = await _api.SendAuthedAsync("POST", "/ranked/report", body);
+            if (!IsSuccess(status, network))
+                return RankedApiResult<RankedReportDto>.Fail(MapError(status, text, network));
+            var dto = TryParse<RankedReportDto>(text);
+            return dto == null
+                ? RankedApiResult<RankedReportDto>.Fail(RankedApiError.Server)
+                : RankedApiResult<RankedReportDto>.Ok(dto);
+        }
+
         public async UniTask<RankedApiResult<RankedPalmaresDto>> GetPalmaresAsync()
         {
             if (!_api.IsSignedIn) return RankedApiResult<RankedPalmaresDto>.Fail(RankedApiError.NotSignedIn);
@@ -353,7 +375,11 @@ namespace Fts.Services.Online
                 409 => body != null && body.Contains("replay_not_ready") ? RankedApiError.ReplayNotReady
                      : body != null && body.Contains("auction_closed") ? RankedApiError.AuctionClosed
                      : body != null && body.Contains("no_capacity") ? RankedApiError.NoCapacity
+                     // Phase 9.5 integrity guards.
+                     : body != null && body.Contains("integrity_blocked") ? RankedApiError.IntegrityBlocked
+                     : body != null && body.Contains("deadline_passed") ? RankedApiError.DeadlinePassed
                      : RankedApiError.WrongPhase,
+                429 => RankedApiError.RateLimited,
                 >= 500 => RankedApiError.Server,
                 _ => RankedApiError.Server,
             };

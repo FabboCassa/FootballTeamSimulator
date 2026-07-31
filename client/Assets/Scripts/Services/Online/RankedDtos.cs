@@ -372,6 +372,37 @@ namespace Fts.Services.Online
         public List<RankedTodoDto> todo = new List<RankedTodoDto>();
     }
 
+    // --- abuse & integrity (Phase 9.5) --------------------------------------------------------
+
+    /// <summary>Why a coach is reporting another coach — mirrors the server enum, sent as its integer
+    /// value (the Api binds enums numerically). The client localises the label per value.</summary>
+    public enum RankedReportReason
+    {
+        Collusion = 0,
+        Inactivity = 1,
+        OffensiveName = 2,
+        Cheating = 3,
+        Other = 4,
+    }
+
+    /// <summary>POST /ranked/report — identify the reported coach by the club external id the UI shows.</summary>
+    [Serializable]
+    public sealed class SubmitRankedReportBody
+    {
+        public int subjectClubExternalId;
+        public int reason;
+        public string details;
+    }
+
+    /// <summary>The server's acknowledgement. Deliberately thin — a reporter is told the report was filed
+    /// and nothing else, so the endpoint cannot be used to probe other accounts.</summary>
+    [Serializable]
+    public sealed class RankedReportDto
+    {
+        public string flagId;
+        public string createdUtc;
+    }
+
     /// <summary>Why a ranked API call failed — mapped from the server's HTTP status (Phase 9.2).</summary>
     public enum RankedApiError
     {
@@ -391,6 +422,9 @@ namespace Fts.Services.Online
         AuctionNotFound,  // 404 auction_not_found
         AuctionClosed,    // 409 auction_closed
         BidTooLow,        // 400 bid_too_low
+        IntegrityBlocked, // 409 integrity_blocked — the fee is far outside the band around market value
+        DeadlinePassed,   // 409 deadline_passed  — the next matchday has kicked off
+        RateLimited,      // 429 rate_limited     — too many requests in the window
     }
 
     /// <summary>Result wrapper mirroring <see cref="LeagueApiResult{T}"/> — the presenter maps the error to loc.</summary>

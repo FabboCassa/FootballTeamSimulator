@@ -21,6 +21,10 @@ namespace Fts.Views
         public event Action BackClicked;
         public event Action<long> AmountConfirmClicked;
         public event Action AmountCancelClicked;
+        /// <summary>A reason was picked in the report panel (Phase 9.5) — the value is the server's
+        /// RankedReportReason integer.</summary>
+        public event Action<int> ReportReasonClicked;
+        public event Action ReportCancelClicked;
 
         public VisualElement Root { get; }
 
@@ -44,6 +48,23 @@ namespace Fts.Views
         private readonly TextField _amountField;
         private readonly Button _amountConfirm;
         private readonly Button _amountCancel;
+
+        // Inline report panel (Phase 9.5): pick a reason, no keyboard.
+        private readonly VisualElement _reportPanel;
+        private readonly Label _reportTitle;
+        private readonly List<Button> _reportReasons = new List<Button>();
+        private readonly Button _reportCancel;
+
+        /// <summary>The report reasons, in the server's enum order (Collusion, Inactivity, OffensiveName,
+        /// Cheating, Other) — the view only knows their loc keys and their integer values.</summary>
+        private static readonly string[] ReasonKeys =
+        {
+            "ranked.report.reason_collusion",
+            "ranked.report.reason_inactivity",
+            "ranked.report.reason_name",
+            "ranked.report.reason_cheating",
+            "ranked.report.reason_other",
+        };
 
         /// <summary>A generic market row: a title + detail line, plus up to two actions.</summary>
         public sealed class RowVm
@@ -138,6 +159,24 @@ namespace Fts.Views
             _amountCancel = UiKit.MenuButton(string.Empty, () => AmountCancelClicked?.Invoke());
             amountRow.Add(_amountConfirm);
             amountRow.Add(_amountCancel);
+
+            // Inline report panel (Phase 9.5): one tap per reason, deliberately keyboard-free so it works
+            // the same on a phone as on a desktop.
+            _reportPanel = UiKit.Card();
+            _reportPanel.style.display = DisplayStyle.None;
+            col.Add(_reportPanel);
+            _reportTitle = UiKit.Caption(string.Empty);
+            _reportTitle.style.whiteSpace = WhiteSpace.Normal;
+            _reportPanel.Add(_reportTitle);
+            for (int i = 0; i < ReasonKeys.Length; i++)
+            {
+                int reason = i;
+                var b = UiKit.MenuButton(string.Empty, () => ReportReasonClicked?.Invoke(reason));
+                _reportReasons.Add(b);
+                _reportPanel.Add(b);
+            }
+            _reportCancel = UiKit.MenuButton(string.Empty, () => ReportCancelClicked?.Invoke());
+            _reportPanel.Add(_reportCancel);
 
             _status = UiKit.Caption(string.Empty);
             _status.style.whiteSpace = WhiteSpace.Normal;
@@ -242,6 +281,16 @@ namespace Fts.Views
 
         public void HideAmountPanel() => _amountPanel.style.display = DisplayStyle.None;
 
+        /// <summary>Opens the report panel for one club (Phase 9.5). <paramref name="title"/> already names
+        /// the club, so the panel needs no other context.</summary>
+        public void ShowReportPanel(string title)
+        {
+            _reportTitle.text = title;
+            _reportPanel.style.display = DisplayStyle.Flex;
+        }
+
+        public void HideReportPanel() => _reportPanel.style.display = DisplayStyle.None;
+
         public void ShowStatus(string message, bool isError)
         {
             _status.text = message;
@@ -256,6 +305,7 @@ namespace Fts.Views
             _refreshButton.SetEnabled(!busy);
             _botButton.SetEnabled(!busy);
             _amountConfirm.SetEnabled(!busy);
+            foreach (var b in _reportReasons) b.SetEnabled(!busy);
         }
 
         /// <summary>Shows the dev-only "bots react" button (DevFlags-gated by the presenter).</summary>
@@ -272,6 +322,8 @@ namespace Fts.Views
             _botButton.text = _tr("ranked.market.dev_bots");
             _amountConfirm.text = _tr("ranked.market.confirm");
             _amountCancel.text = _tr("ranked.market.cancel");
+            for (int i = 0; i < _reportReasons.Count; i++) _reportReasons[i].text = _tr(ReasonKeys[i]);
+            _reportCancel.text = _tr("ranked.market.cancel");
             _backButton.text = _tr("common.back");
         }
     }

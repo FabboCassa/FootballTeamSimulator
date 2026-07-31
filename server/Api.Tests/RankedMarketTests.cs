@@ -37,6 +37,16 @@ public class RankedMarketTests : RankedSeasonTestBase
         return await Client.SendAsync(req);
     }
 
+    /// <summary>A target to trade at an HONEST price (Phase 9.5): the cheapest player in the squad, and a
+    /// fee equal to his market value — dead centre of the collusion band, and comfortably inside a 25M
+    /// budget. Before 9.5 these tests offered a flat 1M for the club's BEST player, which is now exactly
+    /// the "gifted star" the integrity guard exists to refuse.</summary>
+    private static (int PlayerExternalId, long FairFee) FairTarget(RankedSquadDto squad)
+    {
+        var target = squad.Players.OrderBy(p => p.MarketValue).ThenBy(p => p.ExternalId).First();
+        return (target.ExternalId, Math.Max(25_000, target.MarketValue));
+    }
+
     private async Task<HttpResponseMessage> Respond(string token, Guid offerId, bool accept)
     {
         using var req = Authed(HttpMethod.Post, $"/ranked/offers/{offerId}/{(accept ? "accept" : "reject")}", token);
@@ -69,15 +79,14 @@ public class RankedMarketTests : RankedSeasonTestBase
         int buyerClub = (await GetMine(buyer)).ClubExternalId!.Value;
         int sellerClub = (await GetMine(seller)).ClubExternalId!.Value;
 
-        // Browse the seller's squad and pick a target.
+        // Browse the seller's squad and pick a target at a fair price.
         var sellerSquad = await Squad(buyer, sellerClub);
         Assert.That(sellerSquad.IsHuman, Is.True);
         Assert.That(sellerSquad.Players, Is.Not.Empty);
-        int targetPlayer = sellerSquad.Players[0].ExternalId;
+        var (targetPlayer, fee) = FairTarget(sellerSquad);
 
         long buyerBudgetBefore = (await Offers(buyer)).YourBudget;
         long sellerBudgetBefore = (await Offers(seller)).YourBudget;
-        const long fee = 1_000_000;
 
         var madeResp = await MakeOffer(buyer, targetPlayer, fee);
         Assert.That(madeResp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
@@ -133,9 +142,9 @@ public class RankedMarketTests : RankedSeasonTestBase
         var tokens = await StartMarket();
         string buyer = tokens[0], seller = tokens[1], bystander = tokens[2];
         int sellerClub = (await GetMine(seller)).ClubExternalId!.Value;
-        int target = (await Squad(buyer, sellerClub)).Players[0].ExternalId;
+        var (target, fee) = FairTarget(await Squad(buyer, sellerClub));
 
-        await MakeOffer(buyer, target, 1_000_000);
+        await MakeOffer(buyer, target, fee);
         var offerId = (await Offers(seller)).Incoming.Single(o => o.Status == RankedOfferStatus.Pending).Id;
 
         // The buyer cannot accept their own offer, and an unrelated coach cannot either.
@@ -149,9 +158,9 @@ public class RankedMarketTests : RankedSeasonTestBase
         var tokens = await StartMarket();
         string buyer = tokens[0], seller = tokens[1];
         int sellerClub = (await GetMine(seller)).ClubExternalId!.Value;
-        int target = (await Squad(buyer, sellerClub)).Players[0].ExternalId;
+        var (target, fee) = FairTarget(await Squad(buyer, sellerClub));
 
-        await MakeOffer(buyer, target, 1_000_000);
+        await MakeOffer(buyer, target, fee);
         var offerId = (await Offers(buyer)).Outgoing.Single(o => o.Status == RankedOfferStatus.Pending).Id;
 
         using var req = Authed(HttpMethod.Post, $"/ranked/offers/{offerId}/withdraw", buyer);

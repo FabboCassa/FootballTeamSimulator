@@ -1,5 +1,7 @@
+using Fts.Application.Integrity;
 using Fts.Application.Notifications;
 using Fts.Application.Ranked;
+using Fts.Infrastructure.Integrity;
 using Fts.Infrastructure.Persistence;
 using Fts.Infrastructure.Persistence.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -23,12 +25,21 @@ public sealed class RankedMarketService : IRankedMarketService
     private readonly FtsDbContext _db;
     private readonly INotificationService _notify;
     private readonly RankedOptions _opt;
+    private readonly IIntegrityService _integrity;
+    private readonly IntegrityOptions _integrityOpt;
 
-    public RankedMarketService(FtsDbContext db, INotificationService notify, IOptions<RankedOptions> options)
+    public RankedMarketService(
+        FtsDbContext db,
+        INotificationService notify,
+        IOptions<RankedOptions> options,
+        IIntegrityService integrity,
+        IOptions<IntegrityOptions> integrityOptions)
     {
         _db = db;
         _notify = notify;
         _opt = options.Value;
+        _integrity = integrity;
+        _integrityOpt = integrityOptions.Value;
     }
 
     // --- browse ------------------------------------------------------------------------------------
@@ -109,6 +120,23 @@ public sealed class RankedMarketService : IRankedMarketService
         var buyerClub = await _db.Clubs.FirstAsync(c => c.Id == buyerClubId, ct);
         if (buyerClub.TransferBudget < request.Fee)
             return RankedResult<RankedOffersDto>.Fail(RankedError.InsufficientBudget, "Your budget cannot cover that fee.");
+
+        // COLLUSION GUARD (Phase 9.5): the fee has to look like a fee. A star handed over for pocket change
+        // boosts a friend's squad for free; a wildly inflated fee moves a budget between accounts. Both are
+        // refused here (and recorded), while anything a real haggle could produce passes untouched.
+        var assessment = TransferIntegrity.Assess(request.Fee, player.MarketValue, _integrityOpt.Bands());
+        if (assessment.IsBlocked)
+        {
+            await _integrity.FlagAsync(
+                IntegrityFlagKind.BlockedTransfer, severity: 100, userId: userId, subjectUserId: sellerUserId,
+                rankedGroupId: group.Id, fee: request.Fee, marketValue: player.MarketValue,
+                details: $"{assessment.Reason}; fee={assessment.FeePercentOfValue}% of value; player={player.ExternalId}",
+                ct);
+            return RankedResult<RankedOffersDto>.Fail(
+                RankedError.IntegrityBlocked,
+                $"That fee is {assessment.FeePercentOfValue}% of the player's market value — offers must stay "
+                + $"between {_integrityOpt.MinFeePercentOfValue}% and {_integrityOpt.MaxFeePercentOfValue}%.");
+        }
 
         var now = DateTime.UtcNow;
         // Upsert: one live pending offer per (buyer, player) — re-offering just updates the fee.
@@ -197,6 +225,25 @@ public sealed class RankedMarketService : IRankedMarketService
         if (sellerSquad - 1 < _opt.MinSquadSizeForSale)
             return RankedResult<RankedOffersDto>.Fail(RankedError.ValidationFailed, "Selling would leave your squad too small.");
 
+        // COLLUSION GUARD, second half (Phase 9.5): re-assess at ACCEPT time. The offer passed the band when
+        // it was made, but a player is re-priced as he develops, and the accept is the moment money actually
+        // moves — so the deal has to still look like a deal now.
+        var assessment = TransferIntegrity.Assess(offer.Fee, player.MarketValue, _integrityOpt.Bands());
+        if (assessment.IsBlocked)
+        {
+            offer.Status = RankedOfferStatus.Rejected;
+            offer.ResolvedUtc = now;
+            await _db.SaveChangesAsync(ct);
+            await _integrity.FlagAsync(
+                IntegrityFlagKind.BlockedTransfer, severity: 100, userId: offer.BuyerUserId, subjectUserId: userId,
+                rankedGroupId: offer.RankedGroupId, fee: offer.Fee, marketValue: player.MarketValue,
+                details: $"{assessment.Reason} at accept; fee={assessment.FeePercentOfValue}% of value; player={player.ExternalId}",
+                ct);
+            return RankedResult<RankedOffersDto>.Fail(
+                RankedError.IntegrityBlocked,
+                $"That fee is {assessment.FeePercentOfValue}% of the player's market value — the deal was refused.");
+        }
+
         // Execute the transfer.
         player.ClubId = offer.BuyerClubId;
         player.ContractSeasonsRemaining = SignedContractSeasons;
@@ -223,6 +270,30 @@ public sealed class RankedMarketService : IRankedMarketService
         // next kickoff — the coach's tactic and pre-match plan are preserved.
         if (await RankedInputDefaults.RepairAfterSquadChangeAsync(_db, offer.RankedGroupId, offer.SellerClubId, ct))
             await _db.SaveChangesAsync(ct);
+
+        // The deal went through — now record what it looked like (Phase 9.5). Two independent signals:
+        // a fee in the grey band around market value, and the same pair of coaches trading over and over
+        // inside one group. Neither blocks anything; both are what a reviewer would want to see.
+        if (assessment.IsSuspicious)
+        {
+            await _integrity.FlagAsync(
+                IntegrityFlagKind.SuspiciousTransfer, severity: SuspicionSeverity(assessment.FeePercentOfValue),
+                userId: offer.BuyerUserId, subjectUserId: offer.SellerUserId, rankedGroupId: offer.RankedGroupId,
+                fee: offer.Fee, marketValue: player.MarketValue,
+                details: $"{assessment.Reason}; fee={assessment.FeePercentOfValue}% of value; player={player.ExternalId}",
+                ct);
+        }
+
+        int tradesBetween = await _integrity.CompletedTradesBetweenAsync(
+            offer.RankedGroupId, offer.BuyerUserId, offer.SellerUserId, ct);
+        if (tradesBetween >= _integrityOpt.RepeatedTradesPerPairThreshold)
+        {
+            await _integrity.FlagAsync(
+                IntegrityFlagKind.RepeatedTradingPair, severity: Math.Min(100, tradesBetween * 20),
+                userId: offer.BuyerUserId, subjectUserId: offer.SellerUserId, rankedGroupId: offer.RankedGroupId,
+                fee: offer.Fee, marketValue: player.MarketValue,
+                details: $"{tradesBetween} completed transfers between the same two coaches in one group", ct);
+        }
 
         await SafeSend(offer.BuyerUserId, "Offerta accettata",
             $"Hai acquistato {PlayerName(player)} per {offer.Fee:N0}.",
@@ -259,6 +330,11 @@ public sealed class RankedMarketService : IRankedMarketService
     }
 
     // --- helpers -----------------------------------------------------------------------------------
+
+    /// <summary>How loud a grey-band flag is: the further the fee sat from market value, the higher the
+    /// severity, capped below the 100 a hard block gets.</summary>
+    private static int SuspicionSeverity(int feePercentOfValue) =>
+        Math.Clamp(Math.Abs(100 - feePercentOfValue), 10, 90);
 
     private async Task<(RankedGroup? group, RankedSeat? seat)> CurrentGroupSeatAsync(
         RankedCoach coach, CancellationToken ct)

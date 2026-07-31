@@ -69,6 +69,12 @@ public class RankedTodayTests : RankedSeasonTestBase
 
     private static bool HasTodo(RankedTodayDto d, RankedTodoKind kind) => d.Todo.Any(t => t.Kind == kind);
 
+    /// <summary>A fee the 9.5 collusion guard is happy with: the player's own market value, floored at the
+    /// minimum a transfer can be. These tests used to offer a flat 1M for whoever they needed, which is
+    /// exactly the "gifted star" the guard now refuses — the offers here are incidental to what is being
+    /// tested (the digest and the lineup repair), so they simply pay the going rate.</summary>
+    private static long FairFee(RankedPlayerDto player) => Math.Max(25_000, player.MarketValue);
+
     /// <summary>A full cohort + one tick: the season starts and its first matchday resolves.</summary>
     private async Task<List<string>> StartSeason()
     {
@@ -162,9 +168,13 @@ public class RankedTodayTests : RankedSeasonTestBase
         string buyer = tokens[0], seller = tokens[1];
 
         int sellerClub = (await GetMine(seller)).ClubExternalId!.Value;
-        int target = (await Squad(buyer, sellerClub)).Players[0].ExternalId;
+        // Who is bought does not matter here — only that an offer is pending — so take the cheapest player
+        // and pay what he is worth (see FairFee).
+        var target = (await Squad(buyer, sellerClub)).Players
+            .OrderBy(p => p.MarketValue).ThenBy(p => p.ExternalId).First();
 
-        using (var req = Authed(HttpMethod.Post, "/ranked/offers", buyer, new MakeRankedOfferRequest(target, 1_000_000)))
+        using (var req = Authed(HttpMethod.Post, "/ranked/offers", buyer,
+                   new MakeRankedOfferRequest(target.ExternalId, FairFee(target))))
             Assert.That((await Client.SendAsync(req)).StatusCode, Is.EqualTo(HttpStatusCode.OK));
 
         var sellerDay = await Today(seller);
@@ -219,10 +229,20 @@ public class RankedTodayTests : RankedSeasonTestBase
 
         var before = await StoredLineup(seller);
         Assert.That(before, Is.Not.Null, "the seller starts with the seeded best XI");
-        int soldPlayer = before!.Slots[5].PlayerId;   // an outfield starter, not the goalkeeper slot
+
+        // An outfield STARTER (never the goalkeeper slot) — the cheapest one, so that paying his full market
+        // value both satisfies the 9.5 collusion guard and stays inside the seeded budget.
+        int sellerClub = (await GetMine(seller)).ClubExternalId!.Value;
+        var squad = (await Squad(buyer, sellerClub)).Players.ToDictionary(p => p.ExternalId);
+        var sold = before!.Slots.Skip(1)
+            .Where(s => squad.ContainsKey(s.PlayerId))
+            .Select(s => squad[s.PlayerId])
+            .OrderBy(p => p.MarketValue).ThenBy(p => p.ExternalId)
+            .First();
+        int soldPlayer = sold.ExternalId;
 
         using (var req = Authed(HttpMethod.Post, "/ranked/offers", buyer,
-                   new MakeRankedOfferRequest(soldPlayer, 1_000_000)))
+                   new MakeRankedOfferRequest(soldPlayer, FairFee(sold))))
             Assert.That((await Client.SendAsync(req)).StatusCode, Is.EqualTo(HttpStatusCode.OK));
 
         using (var req = Authed(HttpMethod.Get, "/ranked/offers", seller))

@@ -1,4 +1,6 @@
 using System.Security.Claims;
+using Fts.Api.Integrity;
+using Fts.Application.Integrity;
 using Fts.Application.Ranked;
 
 namespace Fts.Api.Ranked;
@@ -25,7 +27,7 @@ public static class RankedEndpoints
             if (!TryGetUserId(user, out var userId)) return Results.Unauthorized();
             var result = await ranked.EnrolAsync(userId, ct);
             return result.Success ? Results.Ok(result.Value) : MapError(result.Error, result.Message);
-        });
+        }).RequireRateLimiting(IntegrityRateLimits.Writes);
 
         // The caller's ladder state (Enrolled=false when they never joined).
         group.MapGet("/me", async (ClaimsPrincipal user, IRankedService ranked, CancellationToken ct) =>
@@ -51,7 +53,7 @@ public static class RankedEndpoints
             if (!TryGetUserId(user, out var userId)) return Results.Unauthorized();
             var result = await ranked.SetAutoEnrolAsync(userId, req.AutoEnrol, ct);
             return result.Success ? Results.Ok(result.Value) : MapError(result.Error, result.Message);
-        });
+        }).RequireRateLimiting(IntegrityRateLimits.Writes);
 
         // --- Real-time season (Phase 9.2) ---------------------------------------------------
 
@@ -70,7 +72,7 @@ public static class RankedEndpoints
             if (!TryGetUserId(user, out var userId)) return Results.Unauthorized();
             var result = await season.SubmitLineupAsync(userId, req, ct);
             return result.Success ? Results.Ok(result.Value) : MapError(result.Error, result.Message);
-        });
+        }).RequireRateLimiting(IntegrityRateLimits.Writes);
 
         // The caller's currently submitted lineup (the stored LineupPlan JSON, or empty when none) — so the
         // client's lineup editor re-opens on the saved XI instead of the best-XI default.
@@ -91,7 +93,7 @@ public static class RankedEndpoints
             if (!TryGetUserId(user, out var userId)) return Results.Unauthorized();
             var result = await season.SubmitTrainingAsync(userId, req, ct);
             return result.Success ? Results.Ok(result.Value) : MapError(result.Error, result.Message);
-        });
+        }).RequireRateLimiting(IntegrityRateLimits.Writes);
 
         // The caller's stored training plan (the serialized TrainingPlan JSON, or {} when none) — so the
         // client's training screen opens on the saved plan instead of the seeded default.
@@ -142,7 +144,7 @@ public static class RankedEndpoints
             if (!TryGetUserId(user, out var userId)) return Results.Unauthorized();
             var result = await market.MakeOfferAsync(userId, req, ct);
             return result.Success ? Results.Ok(result.Value) : MapError(result.Error, result.Message);
-        });
+        }).RequireRateLimiting(IntegrityRateLimits.Writes);
 
         // Accept / reject an incoming offer (only the player's owner). Accepting moves the player + settles budgets.
         group.MapPost("/offers/{offerId:guid}/accept", async (
@@ -151,7 +153,7 @@ public static class RankedEndpoints
             if (!TryGetUserId(user, out var userId)) return Results.Unauthorized();
             var result = await market.RespondAsync(userId, offerId, accept: true, ct);
             return result.Success ? Results.Ok(result.Value) : MapError(result.Error, result.Message);
-        });
+        }).RequireRateLimiting(IntegrityRateLimits.Writes);
 
         group.MapPost("/offers/{offerId:guid}/reject", async (
             Guid offerId, ClaimsPrincipal user, IRankedMarketService market, CancellationToken ct) =>
@@ -159,7 +161,7 @@ public static class RankedEndpoints
             if (!TryGetUserId(user, out var userId)) return Results.Unauthorized();
             var result = await market.RespondAsync(userId, offerId, accept: false, ct);
             return result.Success ? Results.Ok(result.Value) : MapError(result.Error, result.Message);
-        });
+        }).RequireRateLimiting(IntegrityRateLimits.Writes);
 
         // Withdraw an offer the caller made (while still Pending).
         group.MapPost("/offers/{offerId:guid}/withdraw", async (
@@ -168,7 +170,7 @@ public static class RankedEndpoints
             if (!TryGetUserId(user, out var userId)) return Results.Unauthorized();
             var result = await market.WithdrawAsync(userId, offerId, ct);
             return result.Success ? Results.Ok(result.Value) : MapError(result.Error, result.Message);
-        });
+        }).RequireRateLimiting(IntegrityRateLimits.Writes);
 
         // --- Free-agent auctions (Phase 9.2b) -----------------------------------------------
 
@@ -188,7 +190,7 @@ public static class RankedEndpoints
             if (!TryGetUserId(user, out var userId)) return Results.Unauthorized();
             var result = await auctions.PlaceBidAsync(userId, auctionId, req, ct);
             return result.Success ? Results.Ok(result.Value) : MapError(result.Error, result.Message);
-        });
+        }).RequireRateLimiting(IntegrityRateLimits.Bids);
 
         // --- Daily digest (Phase 9.4) -------------------------------------------------------
 
@@ -210,7 +212,7 @@ public static class RankedEndpoints
             if (!TryGetUserId(user, out var userId)) return Results.Unauthorized();
             var result = await today.ConfirmMatchdayAsync(userId, ct);
             return result.Success ? Results.Ok(result.Value) : MapError(result.Error, result.Message);
-        });
+        }).RequireRateLimiting(IntegrityRateLimits.Writes);
 
         // --- Coach ranking & palmarès (Phase 9.3) -------------------------------------------
 
@@ -230,6 +232,19 @@ public static class RankedEndpoints
             var result = await ranking.GetPalmaresAsync(userId, ct);
             return result.Success ? Results.Ok(result.Value) : MapError(result.Error, result.Message);
         });
+
+        // --- Abuse & integrity (Phase 9.5) --------------------------------------------------
+
+        // Report another coach in your group (collusion, an abandoned club, an offensive name…). The
+        // response is deliberately thin — a reporter learns nothing about the outcome, so the endpoint
+        // cannot be used to probe other accounts. Capped per window here and per day in the service.
+        group.MapPost("/report", async (
+            SubmitRankedReportRequest req, ClaimsPrincipal user, IIntegrityService integrity, CancellationToken ct) =>
+        {
+            if (!TryGetUserId(user, out var userId)) return Results.Unauthorized();
+            var result = await integrity.ReportAsync(userId, req, ct);
+            return result.Success ? Results.Ok(result.Value) : MapError(result.Error, result.Message);
+        }).RequireRateLimiting(IntegrityRateLimits.Reports);
 
         return app;
     }
@@ -268,6 +283,18 @@ public static class RankedEndpoints
         group.MapPost("/auctions/settle", async (IRankedAuctionService auctions, CancellationToken ct) =>
             Results.Ok(new { settled = await auctions.SettleDueAsync(force: true, ct) }));
 
+        // The abuse & integrity review queue (Phase 9.5). Read-only, dev-gated: the real moderation
+        // surface is the 10.3 admin dashboard, but the flags have to be inspectable NOW — both for the
+        // scripted abuse smoke and so a live incident can be looked at without opening a psql session.
+        group.MapGet("/integrity/flags", async (
+            int? status, int? take, IIntegrityService integrity, CancellationToken ct) =>
+        {
+            IntegrityFlagStatus? filter = status is { } s && Enum.IsDefined(typeof(IntegrityFlagStatus), s)
+                ? (IntegrityFlagStatus)s
+                : null;
+            return Results.Ok(await integrity.GetFlagsAsync(filter, take ?? 0, ct));
+        });
+
         return app;
     }
 
@@ -290,6 +317,12 @@ public static class RankedEndpoints
         RankedError.AuctionNotFound => Results.NotFound(new { error = "auction_not_found", message }),
         RankedError.AuctionClosed => Results.Conflict(new { error = "auction_closed", message }),
         RankedError.BidTooLow => Results.BadRequest(new { error = "bid_too_low", message }),
+        // Integrity (Phase 9.5): a refused deal is a CONFLICT with the ladder's rules, not a malformed
+        // request — the client shows the message as-is so the coach knows which band they broke.
+        RankedError.IntegrityBlocked => Results.Conflict(new { error = "integrity_blocked", message }),
+        RankedError.DeadlinePassed => Results.Conflict(new { error = "deadline_passed", message }),
+        RankedError.RateLimited => Results.Json(
+            new { error = "rate_limited", message }, statusCode: StatusCodes.Status429TooManyRequests),
         RankedError.Forbidden => Results.Json(
             new { error = "forbidden", message }, statusCode: StatusCodes.Status403Forbidden),
         _ => Results.BadRequest(new { error = "ranked_error", message }),

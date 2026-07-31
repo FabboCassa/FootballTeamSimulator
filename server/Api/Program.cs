@@ -3,6 +3,7 @@ using Fts.Api.Auctions;
 using Fts.Api.Matches;
 using Fts.Api.Auth;
 using Fts.Api.Dev;
+using Fts.Api.Integrity;
 using Fts.Api.Jobs;
 using Fts.Api.Leagues;
 using Fts.Api.Notifications;
@@ -78,10 +79,22 @@ builder.Services.AddAuthorization();
 // Match simulation runs the same Sim.Core as the client (Phase 7.3). Stateless + no I/O → singleton.
 builder.Services.AddSingleton<ISimulationService, SimulationService>();
 
+// Abuse & integrity (Phase 9.5): per-account rate limits on the ranked write surface. Framework-native
+// (no new dependency); the permit counts live in the Integrity configuration section.
+builder.Services.AddFtsRateLimiting();
+
 var app = builder.Build();
 
 app.UseAuthentication();
 app.UseAuthorization();
+
+// Rate limiting AFTER authentication so the buckets partition per ACCOUNT rather than per address —
+// see IntegrityRateLimits for why that distinction matters behind a shared NAT (Phase 9.5).
+app.UseRateLimiter();
+
+// Record where authenticated ranked requests come from (hashed, never raw) so the multi-account
+// heuristics have evidence at enrolment time (Phase 9.5). Runs after the response, never fails a request.
+app.UseFtsIntegritySignals();
 
 // Apply pending EF migrations on startup (dev convenience so `docker compose up` ⇒ DB
 // migrated). Skipped under the Testing environment (no live DB) and gated by a config flag

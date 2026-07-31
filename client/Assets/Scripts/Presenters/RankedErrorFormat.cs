@@ -22,6 +22,10 @@ namespace Fts.Presenters
             RankedApiError.AuctionNotFound => "ranked.error.auction_not_found",
             RankedApiError.AuctionClosed => "ranked.error.auction_closed",
             RankedApiError.BidTooLow => "ranked.error.bid_too_low",
+            // Phase 9.5: the integrity guards a coach can actually run into.
+            RankedApiError.IntegrityBlocked => "ranked.error.integrity_blocked",
+            RankedApiError.DeadlinePassed => "ranked.error.deadline_passed",
+            RankedApiError.RateLimited => "ranked.error.rate_limited",
             _ => "ranked.error.server",
         };
     }

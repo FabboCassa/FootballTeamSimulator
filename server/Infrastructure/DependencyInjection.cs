@@ -1,8 +1,10 @@
 using Fts.Application.Auth;
+using Fts.Application.Integrity;
 using Fts.Application.Leagues;
 using Fts.Application.Notifications;
 using Fts.Application.Ranked;
 using Fts.Infrastructure.Auth;
+using Fts.Infrastructure.Integrity;
 using Fts.Infrastructure.Leagues;
 using Fts.Infrastructure.Jobs;
 using Fts.Infrastructure.Notifications;
@@ -85,11 +87,84 @@ public static class DependencyInjection
         // only under Testing (SQLite, no Redis container), which decides the leaderboard cache below.
         AddRanked(services, config, enableBackgroundJobs);
 
+        // Abuse & integrity (Phase 9.5): price-band guards, multi-account heuristics, player reports and
+        // the review queue. Registered ALWAYS — the ranked services depend on it, and the guards must be
+        // live in every environment (a test that could silently run without them would prove nothing).
+        AddIntegrity(services, config);
+
         // Dev-only test-league seeding (dev tooling). Always registered (harmless); the Api maps the
         // endpoints only outside Production and behind a config flag.
         services.AddScoped<Fts.Application.Dev.IDevSeedService, Fts.Infrastructure.Dev.DevSeedService>();
 
         return services;
+    }
+
+    /// <summary>Abuse &amp; integrity (Phase 9.5). Knobs bound by hand from the "Integrity" section, same
+    /// convention as <see cref="RankedOptions"/>, so a live ladder can be tightened (or a guard switched
+    /// off in an emergency) without a redeploy.</summary>
+    private static void AddIntegrity(IServiceCollection services, IConfiguration config)
+    {
+        var integrity = config.GetSection(IntegrityOptions.SectionName);
+        services.Configure<IntegrityOptions>(o =>
+        {
+            // Transfer price bands.
+            if (int.TryParse(integrity["MinFeePercentOfValue"], out var minPct) && minPct >= 0)
+                o.MinFeePercentOfValue = minPct;
+            if (int.TryParse(integrity["MaxFeePercentOfValue"], out var maxPct) && maxPct > 0)
+                o.MaxFeePercentOfValue = maxPct;
+            if (int.TryParse(integrity["SuspiciousLowPercentOfValue"], out var susLow) && susLow >= 0)
+                o.SuspiciousLowPercentOfValue = susLow;
+            if (int.TryParse(integrity["SuspiciousHighPercentOfValue"], out var susHigh) && susHigh > 0)
+                o.SuspiciousHighPercentOfValue = susHigh;
+            if (long.TryParse(integrity["MinPlayerValueChecked"], out var minValue) && minValue >= 0)
+                o.MinPlayerValueChecked = minValue;
+            if (int.TryParse(integrity["RepeatedTradesPerPairThreshold"], out var pairs) && pairs > 0)
+                o.RepeatedTradesPerPairThreshold = pairs;
+
+            // Multi-account heuristics.
+            if (bool.TryParse(integrity["EnableMultiAccountHeuristics"], out var heuristics))
+                o.EnableMultiAccountHeuristics = heuristics;
+            if (int.TryParse(integrity["SharedAddressPoints"], out var addrPts) && addrPts >= 0)
+                o.SharedAddressPoints = addrPts;
+            if (int.TryParse(integrity["SharedDevicePoints"], out var devPts) && devPts >= 0)
+                o.SharedDevicePoints = devPts;
+            if (int.TryParse(integrity["CreatedTogetherPoints"], out var togetherPts) && togetherPts >= 0)
+                o.CreatedTogetherPoints = togetherPts;
+            if (int.TryParse(integrity["CreatedTogetherMinutes"], out var togetherMins) && togetherMins >= 0)
+                o.CreatedTogetherMinutes = togetherMins;
+            if (int.TryParse(integrity["LinkScoreThreshold"], out var threshold) && threshold > 0)
+                o.LinkScoreThreshold = threshold;
+            if (!string.IsNullOrWhiteSpace(integrity["SignalSalt"]))
+                o.SignalSalt = integrity["SignalSalt"]!;
+            if (int.TryParse(integrity["SignalRefreshMinutes"], out var refresh) && refresh >= 0)
+                o.SignalRefreshMinutes = refresh;
+
+            // Reports.
+            if (int.TryParse(integrity["MaxReportsPerDay"], out var maxReports) && maxReports > 0)
+                o.MaxReportsPerDay = maxReports;
+            if (int.TryParse(integrity["MaxReportDetailsLength"], out var detailLen) && detailLen > 0)
+                o.MaxReportDetailsLength = detailLen;
+
+            // Input deadlines.
+            if (bool.TryParse(integrity["EnforceLineupDeadline"], out var deadline))
+                o.EnforceLineupDeadline = deadline;
+            if (int.TryParse(integrity["LineupLockSeconds"], out var lockSecs) && lockSecs >= 0)
+                o.LineupLockSeconds = lockSecs;
+
+            // Rate limits.
+            if (bool.TryParse(integrity["EnableRateLimiting"], out var limiting))
+                o.EnableRateLimiting = limiting;
+            if (int.TryParse(integrity["RateWindowSeconds"], out var window) && window > 0)
+                o.RateWindowSeconds = window;
+            if (int.TryParse(integrity["WritesPerWindow"], out var writes) && writes > 0)
+                o.WritesPerWindow = writes;
+            if (int.TryParse(integrity["BidsPerWindow"], out var bids) && bids > 0)
+                o.BidsPerWindow = bids;
+            if (int.TryParse(integrity["ReportsPerWindow"], out var reports) && reports > 0)
+                o.ReportsPerWindow = reports;
+        });
+
+        services.AddScoped<IIntegrityService, IntegrityService>();
     }
 
     /// <summary>Public ranked ladder (Phase 9.1). The pyramid shape lives in <see cref="RankedOptions"/>,

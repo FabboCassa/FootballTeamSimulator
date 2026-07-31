@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using Fts.Application.Integrity;
 using Fts.Application.Ranked;
 using Fts.Infrastructure.Leagues;
 using Fts.Infrastructure.Persistence;
@@ -31,11 +32,13 @@ public sealed class RankedService : IRankedService
 {
     private readonly FtsDbContext _db;
     private readonly RankedOptions _opt;
+    private readonly IIntegrityService _integrity;
 
-    public RankedService(FtsDbContext db, IOptions<RankedOptions> options)
+    public RankedService(FtsDbContext db, IOptions<RankedOptions> options, IIntegrityService integrity)
     {
         _db = db;
         _opt = options.Value;
+        _integrity = integrity;
     }
 
     // --- enrolment -----------------------------------------------------------------------------
@@ -47,7 +50,20 @@ public sealed class RankedService : IRankedService
         if (existing is not null)
             return RankedResult<RankedStateDto>.Ok(await BuildStateAsync(existing, ct));
 
-        RankedGroup group = await FindOrCreatePlacementGroupAsync(ct);
+        // MULTI-ACCOUNT GUARD (Phase 9.5): accounts that look like the same person are never seated in the
+        // same group. Nothing is refused — the coach still joins the ladder immediately — they simply land
+        // in a different cohort, which is where the boosting would otherwise happen.
+        var linked = await _integrity.LinkedUserIdsAsync(userId, ct);
+
+        RankedGroup group = await FindOrCreatePlacementGroupAsync(linked, ct);
+        if (linked.Count > 0)
+        {
+            await _integrity.FlagAsync(
+                IntegrityFlagKind.LinkedAccounts, severity: 60, userId: userId,
+                subjectUserId: linked.First(), rankedGroupId: group.Id, fee: 0, marketValue: 0,
+                details: $"{linked.Count} linked account(s) at enrolment; seated in a separate group", ct);
+        }
+
         RankedSeat? seat = await ClaimSeatAsync(group, userId, ct);
         if (seat is null)
             return RankedResult<RankedStateDto>.Fail(RankedError.NoCapacity, "No placement seat available.");
@@ -354,8 +370,14 @@ public sealed class RankedService : IRankedService
     // --- seats, groups, worlds -----------------------------------------------------------------
 
     /// <summary>An existing placement group still taking coaches, or a new one in a world that can absorb
-    /// a whole cohort — opening a new ranked world when none can.</summary>
-    private async Task<RankedGroup> FindOrCreatePlacementGroupAsync(CancellationToken ct)
+    /// a whole cohort — opening a new ranked world when none can.
+    ///
+    /// <paramref name="avoidUserIds"/> (Phase 9.5) are accounts the caller must not share a group with:
+    /// a forming group holding one of them is skipped as if it were full. When every candidate is blocked
+    /// the normal "open a fresh placement group" path runs, so the guard can never leave a coach unable to
+    /// enrol — it only ever changes WHICH cohort they land in.</summary>
+    private async Task<RankedGroup> FindOrCreatePlacementGroupAsync(
+        IReadOnlyCollection<Guid> avoidUserIds, CancellationToken ct)
     {
         var forming = await _db.RankedGroups
             .Where(g => g.Kind == RankedGroupKind.Placement && g.Status == RankedGroupStatus.Forming)
@@ -364,8 +386,18 @@ public sealed class RankedService : IRankedService
 
         foreach (var g in forming)
         {
-            int occupied = await _db.RankedSeats.CountAsync(s => s.RankedGroupId == g.Id && s.UserId != null, ct);
-            if (occupied < g.Capacity) return g;
+            // One read serves both questions (a group is only GroupSize seats): is there room, and is one
+            // of the seats held by an account linked to the caller?
+            var occupants = (await _db.RankedSeats
+                    .Where(s => s.RankedGroupId == g.Id && s.UserId != null)
+                    .Select(s => s.UserId)
+                    .ToListAsync(ct))
+                .Where(u => u.HasValue).Select(u => u!.Value).ToList();
+
+            if (occupants.Count >= g.Capacity) continue;
+            if (avoidUserIds.Count > 0 && occupants.Any(u => avoidUserIds.Contains(u))) continue;
+
+            return g;
         }
 
         var worlds = await _db.RankedWorlds

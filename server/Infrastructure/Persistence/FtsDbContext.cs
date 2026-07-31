@@ -52,6 +52,9 @@ public sealed class FtsDbContext : IdentityDbContext<AppUser, IdentityRole<Guid>
     public DbSet<RankedAuction> RankedAuctions => Set<RankedAuction>();
     public DbSet<RankedAward> RankedAwards => Set<RankedAward>();
 
+    public DbSet<IntegrityFlag> IntegrityFlags => Set<IntegrityFlag>();
+    public DbSet<AccountSignal> AccountSignals => Set<AccountSignal>();
+
     protected override void OnModelCreating(ModelBuilder b)
     {
         // IdentityDbContext.OnModelCreating configures the Identity tables — call it first.
@@ -551,6 +554,40 @@ public sealed class FtsDbContext : IdentityDbContext<AppUser, IdentityRole<Guid>
             // (a seasonal reset reopens the group, and a world can be retired) — see the entity remarks.
             e.HasIndex(x => new { x.UserId, x.AwardedUtc });
             e.HasIndex(x => new { x.UserId, x.Kind });
+        });
+
+        // --- Abuse & integrity (Phase 9.5) --------------------------------------------------
+
+        b.Entity<IntegrityFlag>(e =>
+        {
+            e.ToTable("integrity_flags");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Kind).HasConversion<int>();
+            e.Property(x => x.Status).HasConversion<int>();
+            e.Property(x => x.Details).HasMaxLength(512).IsRequired();
+            // NO foreign keys on purpose: the audit trail must survive the group/world it refers to,
+            // exactly like ranked_awards — see the entity remarks.
+            e.HasIndex(x => new { x.Status, x.CreatedUtc });
+            e.HasIndex(x => new { x.Kind, x.CreatedUtc });
+            e.HasIndex(x => x.UserId);
+            e.HasIndex(x => x.SubjectUserId);
+        });
+
+        b.Entity<AccountSignal>(e =>
+        {
+            e.ToTable("account_signals");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.AddressHash).HasMaxLength(64).IsRequired();
+            e.Property(x => x.DeviceHash).HasMaxLength(64).IsRequired();
+            // Fingerprints belong to the account: deleting the account deletes them.
+            e.HasOne<AppUser>()
+                .WithMany()
+                .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            // Upsert key, plus the reverse lookup the link heuristics walk (who else was seen here?).
+            e.HasIndex(x => new { x.UserId, x.AddressHash, x.DeviceHash }).IsUnique();
+            e.HasIndex(x => x.AddressHash);
+            e.HasIndex(x => x.DeviceHash);
         });
     }
 }

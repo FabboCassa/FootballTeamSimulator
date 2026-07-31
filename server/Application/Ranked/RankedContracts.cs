@@ -162,6 +162,15 @@ public enum RankedError
     AuctionClosed,
     /// <summary>The bid is below the minimum next bid (Phase 9.2b auctions).</summary>
     BidTooLow,
+    /// <summary>Refused by an integrity guard (Phase 9.5): the deal does not look like a real transfer —
+    /// the fee is far outside the band around the player's market value.</summary>
+    IntegrityBlocked,
+    /// <summary>The caller is doing this too often (Phase 9.5) — e.g. filing reports past the daily cap.
+    /// Endpoint-level flooding is stopped earlier, by the rate-limiting middleware.</summary>
+    RateLimited,
+    /// <summary>The input deadline for the upcoming matchday has passed (Phase 9.5): kickoff is here, so
+    /// the stored lineup is what plays.</summary>
+    DeadlinePassed,
 }
 
 /// <summary>Result wrapper so the service never throws for expected failures — mirrors

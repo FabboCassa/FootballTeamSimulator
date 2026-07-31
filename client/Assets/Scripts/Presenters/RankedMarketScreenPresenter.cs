@@ -41,6 +41,9 @@ namespace Fts.Presenters
         private string _pendingBidLotId;
         private int _pendingOfferPlayerId = -1;
 
+        // Which club the report panel is open for (Phase 9.5), -1 = closed.
+        private int _pendingReportClubExt = -1;
+
         public VisualElement View => _view.Root;
 
         public RankedMarketScreenPresenter(
@@ -59,6 +62,8 @@ namespace Fts.Presenters
             _view.BotMarketClicked += OnBotMarket;
             _view.AmountConfirmClicked += OnAmountConfirm;
             _view.AmountCancelClicked += OnAmountCancel;
+            _view.ReportReasonClicked += OnReportReason;
+            _view.ReportCancelClicked += OnReportCancel;
             _view.BackClicked += OnBack;
             _view.SetDevToolsVisible(DevFlags.OnlineTestTools);
             _view.SetActiveTab(_tab);
@@ -72,6 +77,8 @@ namespace Fts.Presenters
             _view.BotMarketClicked -= OnBotMarket;
             _view.AmountConfirmClicked -= OnAmountConfirm;
             _view.AmountCancelClicked -= OnAmountCancel;
+            _view.ReportReasonClicked -= OnReportReason;
+            _view.ReportCancelClicked -= OnReportCancel;
             _view.BackClicked -= OnBack;
         }
 
@@ -208,13 +215,18 @@ namespace Fts.Presenters
                 return;
             }
 
-            // A club is open → its players, each offerable.
+            // A club is open → its players, each offerable. The club's own row also carries the report
+            // action (Phase 9.5): this is the first point where the client knows whether the club is run by
+            // a coach at all — an AI seat has nobody to report.
+            int browsedClubExt = _browsedSquad.clubExternalId;
             rows.Add(new RankedMarketView.RowVm
             {
                 Title = _browsedSquad.clubName,
                 Detail = _loc.Tr(_browsedSquad.isHuman ? "ranked.market.human_club" : "ranked.market.ai_club"),
                 PrimaryLabel = _loc.Tr("ranked.market.back_to_clubs"),
                 PrimaryAction = () => { _browsedSquad = null; Render(); },
+                SecondaryLabel = _browsedSquad.isHuman ? _loc.Tr("ranked.report.open") : null,
+                SecondaryAction = () => OnReport(browsedClubExt),
             });
             foreach (var p in _browsedSquad.players)
             {
@@ -246,6 +258,8 @@ namespace Fts.Presenters
             if (tab != TabBrowse) _browsedSquad = null;
             _view.ClearStatus();
             _view.HideAmountPanel();
+            _view.HideReportPanel();
+            _pendingReportClubExt = -1;
             Render();
         }
 
@@ -367,6 +381,49 @@ namespace Fts.Presenters
                 return;
             }
             await LoadAsync();
+        }
+
+        // --- reporting a coach (Phase 9.5) -----------------------------------------------------------
+
+        private void OnReport(int clubExternalId)
+        {
+            _pendingReportClubExt = clubExternalId;
+            _view.HideAmountPanel();
+            _view.ClearStatus();
+            string clubName = _browsedSquad?.clubName
+                              ?? _clubs.FirstOrDefault(c => c.clubExternalId == clubExternalId)?.clubName
+                              ?? string.Empty;
+            _view.ShowReportPanel(_loc.Tr("ranked.report.title", clubName));
+        }
+
+        private void OnReportCancel()
+        {
+            _pendingReportClubExt = -1;
+            _view.HideReportPanel();
+        }
+
+        private void OnReportReason(int reason) => SendReportAsync(reason).Forget();
+
+        private async UniTaskVoid SendReportAsync(int reason)
+        {
+            if (_busy || _pendingReportClubExt < 0) return;
+            _busy = true;
+            _view.SetBusy(true);
+
+            var res = await _ranked.ReportAsync(_pendingReportClubExt, (RankedReportReason)reason);
+
+            _busy = false;
+            _view.SetBusy(false);
+            if (!res.Success)
+            {
+                _view.ShowStatus(_loc.Tr(RankedErrorFormat.Key(res.Error)), isError: true);
+                return;
+            }
+
+            // The server tells a reporter nothing beyond "filed" — so neither do we.
+            _pendingReportClubExt = -1;
+            _view.HideReportPanel();
+            _view.ShowStatus(_loc.Tr("ranked.report.sent"), isError: false);
         }
 
         // Dev-only: the group's bots outbid on the lots and answer the offers you sent them.

@@ -42,12 +42,14 @@ public sealed class RankedSeasonService : IRankedSeasonService
     private readonly IRankedSeasonEndService _seasonEnd;
     private readonly INotificationService _notify;
     private readonly RankedOptions _opt;
+    private readonly Fts.Infrastructure.Integrity.IntegrityOptions _integrityOpt;
     private readonly BalanceConfig _config = new();
 
     public RankedSeasonService(
         FtsDbContext db, IRankedService ranked, IRankedAuctionService auctions,
         IRankedRankingService ranking, IRankedSeasonEndService seasonEnd,
-        INotificationService notify, IOptions<RankedOptions> options)
+        INotificationService notify, IOptions<RankedOptions> options,
+        IOptions<Fts.Infrastructure.Integrity.IntegrityOptions> integrityOptions)
     {
         _db = db;
         _ranked = ranked;
@@ -56,6 +58,7 @@ public sealed class RankedSeasonService : IRankedSeasonService
         _seasonEnd = seasonEnd;
         _notify = notify;
         _opt = options.Value;
+        _integrityOpt = integrityOptions.Value;
     }
 
     /// <summary>Shared with the other ranked services (see <see cref="RankedPlanJson"/>) so a plan written by
@@ -600,6 +603,19 @@ public sealed class RankedSeasonService : IRankedSeasonService
             return RankedResult<RankedSeasonDto>.Fail(
                 RankedError.ValidationFailed, "The lineup is not valid for your current squad.");
 
+        // INPUT DEADLINE (Phase 9.5): once the next matchday's kickoff has arrived, the team that plays is
+        // the one already stored. The calendar is polled by a minutely job, so without this guard a coach
+        // could keep resubmitting during the gap between kickoff and resolution — picking their side after
+        // seeing how the rest of the day is going. Rejecting costs nobody anything: a seeded default lineup
+        // is always on file (9.4), so a missed deadline never means fielding no team.
+        if (_integrityOpt.EnforceLineupDeadline
+            && await LineupDeadlinePassedAsync(group.Id, DateTime.UtcNow, ct))
+        {
+            return RankedResult<RankedSeasonDto>.Fail(
+                RankedError.DeadlinePassed,
+                "The next matchday has kicked off — your stored lineup is the one that plays.");
+        }
+
         string lineupJson = JsonSerializer.Serialize(request.Lineup, PlanJson);
         string? tacticJson = request.Tactic != null ? JsonSerializer.Serialize(request.Tactic, PlanJson) : null;
         string? planJson = request.Plan != null ? JsonSerializer.Serialize(request.Plan, PlanJson) : null;
@@ -762,6 +778,21 @@ public sealed class RankedSeasonService : IRankedSeasonService
 
     /// <summary>The group's lowest still-unplayed round — the matchday a submission/confirmation applies to,
     /// or null when the season is complete (Phase 9.4).</summary>
+    /// <summary>Whether the upcoming matchday is already locked (Phase 9.5): its kickoff is at or before
+    /// now plus the configured lock-out. A season with no pending round left is never locked — there is
+    /// nothing to influence.</summary>
+    private async Task<bool> LineupDeadlinePassedAsync(Guid groupId, DateTime now, CancellationToken ct)
+    {
+        var nextKickoff = await _db.RankedFixtures
+            .Where(f => f.RankedGroupId == groupId && !f.IsPlayed)
+            .OrderBy(f => f.Round)
+            .Select(f => (DateTime?)f.KickoffUtc)
+            .FirstOrDefaultAsync(ct);
+
+        if (nextKickoff is not { } kickoff) return false;
+        return kickoff <= now.AddSeconds(_integrityOpt.LineupLockSeconds);
+    }
+
     private async Task<int?> NextRoundAsync(Guid groupId, CancellationToken ct) =>
         await _db.RankedFixtures
             .Where(f => f.RankedGroupId == groupId && !f.IsPlayed)
