@@ -67,7 +67,29 @@ public sealed class RankedSeasonService : IRankedSeasonService
 
     // --- the clock ---------------------------------------------------------------------------------
 
+    /// <summary>
+    /// One calendar tick at a time in this process (Phase 9.6). The recurring job carries Hangfire's
+    /// distributed lock, but the dev/staging endpoints (<c>/internal/ranked/tick</c> and the fast-forward)
+    /// are a different path — during the load test they ran straight into the minutely job, two ticks
+    /// resolving the same due matchdays and contending on the same rows. The gate is per process, which is
+    /// exactly the scope the job's own lock does not cover; across instances the Hangfire lock still rules.
+    /// </summary>
+    private static readonly SemaphoreSlim TickGate = new(1, 1);
+
     public async Task<RankedTickSummary> TickAsync(CancellationToken ct = default)
+    {
+        await TickGate.WaitAsync(ct);
+        try
+        {
+            return await RunTickAsync(ct);
+        }
+        finally
+        {
+            TickGate.Release();
+        }
+    }
+
+    private async Task<RankedTickSummary> RunTickAsync(CancellationToken ct)
     {
         var now = DateTime.UtcNow;
 
@@ -84,6 +106,24 @@ public sealed class RankedSeasonService : IRankedSeasonService
         await _auctions.SettleDueAsync(false, ct);
 
         return new RankedTickSummary(started, matchdays, fixtures, placements, completed, windows, resets);
+    }
+
+    /// <summary>
+    /// Starts a fresh unit of work for one group and loads it (Phase 9.6).
+    ///
+    /// A tick walks every group on the ladder, and each group's work is heavy in its own right: a whole
+    /// generated world reconstructed, a matchday simulated, every player written back, a full match report
+    /// serialized per fixture. Sharing one change tracker across all of them means the entire ladder's graph
+    /// — tens of thousands of players plus every stored replay — piles up in memory, and each further
+    /// SaveChanges pays to scan it. The 9.6 load test caught exactly that: 44ms per fixture with 25 groups
+    /// on the ladder, 1.16s per fixture with 125. The groups are independent (a separate world each) and
+    /// every step commits before the next begins, so dropping the tracked graph between them is safe and
+    /// keeps a tick linear in the number of groups.
+    /// </summary>
+    private async Task<RankedGroup?> BeginGroupAsync(Guid groupId, CancellationToken ct)
+    {
+        _db.ChangeTracker.Clear();
+        return await _db.RankedGroups.FirstOrDefaultAsync(g => g.Id == groupId, ct);
     }
 
     /// <summary>Resets every group whose between-seasons break has run out (Phase 9.3). Until then a finished
@@ -103,6 +143,8 @@ public sealed class RankedSeasonService : IRankedSeasonService
         {
             if (g.EndedUtc.AddSeconds(_opt.SeasonBreakSeconds) > now) continue;
 
+            // A reset rebuilds a whole world's squads — its own unit of work, like every other per-group step.
+            _db.ChangeTracker.Clear();
             await _seasonEnd.ApplySeasonResetAsync(g.Id, ct);
 
             // Counted from the group's own state (it reopens as Forming) rather than from the summary, so a
@@ -127,20 +169,31 @@ public sealed class RankedSeasonService : IRankedSeasonService
         // A zero interval means every matchday is already due — a plain tick is enough (the test calendar).
         int step = Math.Max(_opt.MatchdayIntervalSeconds, 0);
 
-        for (int i = 0; i < rounds; i++)
+        // Hold the tick gate for the WHOLE fast-forward (Phase 9.6) and drive the tick body directly: moving
+        // the clock back and then ticking has to be one atomic move, or the minutely job lands in the middle
+        // of it and resolves half a shifted calendar — which is what muddied the first load-test run.
+        await TickGate.WaitAsync(ct);
+        try
         {
-            if (step > 0) await ShiftClockBackAsync(step, ct);
-            // The between-seasons break must run out too, or a fast-forward would stall at the season end.
-            await ShiftBreakBackAsync(Math.Max(step, _opt.SeasonBreakSeconds), ct);
+            for (int i = 0; i < rounds; i++)
+            {
+                if (step > 0) await ShiftClockBackAsync(step, ct);
+                // The between-seasons break must run out too, or a fast-forward would stall at the season end.
+                await ShiftBreakBackAsync(Math.Max(step, _opt.SeasonBreakSeconds), ct);
 
-            var s = await TickAsync(ct);
-            started += s.SeasonsStarted;
-            days += s.MatchdaysResolved;
-            fixtures += s.FixturesResolved;
-            placements += s.PlacementsResolved;
-            completed += s.DivisionsCompleted;
-            windows += s.MarketWindowsOpened;
-            resets += s.SeasonsReset;
+                var s = await RunTickAsync(ct);
+                started += s.SeasonsStarted;
+                days += s.MatchdaysResolved;
+                fixtures += s.FixturesResolved;
+                placements += s.PlacementsResolved;
+                completed += s.DivisionsCompleted;
+                windows += s.MarketWindowsOpened;
+                resets += s.SeasonsReset;
+            }
+        }
+        finally
+        {
+            TickGate.Release();
         }
 
         return new RankedTickSummary(started, days, fixtures, placements, completed, windows, resets);
@@ -194,16 +247,22 @@ public sealed class RankedSeasonService : IRankedSeasonService
     /// (<see cref="FixtureScheduler"/>) stamped with real-time kickoffs from <see cref="RankedCalendar"/>.</summary>
     private async Task<int> StartDueSeasonsAsync(DateTime now, CancellationToken ct)
     {
-        // Candidate groups: materialised, not completed, with no fixtures yet.
-        var candidates = await _db.RankedGroups
+        // Candidate groups: materialised, not completed, with no fixtures yet. Ids only — each group is then
+        // loaded inside its own unit of work (see BeginGroupAsync).
+        var candidateIds = await _db.RankedGroups
             .Where(g => g.WorldId != null
                         && g.Status != RankedGroupStatus.Completed
                         && !_db.RankedFixtures.Any(f => f.RankedGroupId == g.Id))
+            .Select(g => g.Id)
             .ToListAsync(ct);
 
         int started = 0;
-        foreach (var group in candidates)
+        foreach (var groupId in candidateIds)
         {
+            var group = await BeginGroupAsync(groupId, ct);
+            if (group is null || group.WorldId is null || group.Status == RankedGroupStatus.Completed) continue;
+            if (await _db.RankedFixtures.AnyAsync(f => f.RankedGroupId == group.Id, ct)) continue;
+
             int humans = await _db.RankedSeats.CountAsync(
                 s => s.RankedGroupId == group.Id && s.UserId != null, ct);
 
@@ -278,26 +337,77 @@ public sealed class RankedSeasonService : IRankedSeasonService
     private async Task<(int matchdays, int fixtures, int placements, int completed)> ResolveDueMatchdaysAsync(
         DateTime now, CancellationToken ct)
     {
-        var groups = await _db.RankedGroups
+        var activeIds = await _db.RankedGroups
             .Where(g => g.SeasonStartedUtc != null && g.Status == RankedGroupStatus.Active)
+            .Select(g => g.Id)
             .ToListAsync(ct);
 
         int matchdays = 0, fixturesResolved = 0, placements = 0, completed = 0;
+        if (activeIds.Count == 0) return (matchdays, fixturesResolved, placements, completed);
 
-        foreach (var group in groups)
+        // Groups that still have something to play, MOST OVERDUE FIRST — and, when several are due at the
+        // same instant (which is the normal case: a ladder's matchdays land together), the one served least
+        // recently goes first. Without that order a capped tick would keep serving the head of an unordered
+        // list and starve everyone behind it.
+        var due = await (
+            from f in _db.RankedFixtures
+            join g in _db.RankedGroups on f.RankedGroupId equals g.Id
+            where !f.IsPlayed && g.SeasonStartedUtc != null && g.Status == RankedGroupStatus.Active
+            group f by f.RankedGroupId into grp
+            select new { GroupId = grp.Key, NextKickoff = grp.Min(x => x.KickoffUtc) })
+            .ToListAsync(ct);
+
+        var lastServed = await _db.RankedFixtures
+            .Where(f => f.IsPlayed && f.ResolvedUtc != null)
+            .GroupBy(f => f.RankedGroupId)
+            .Select(g => new { GroupId = g.Key, Last = g.Max(x => x.ResolvedUtc) })
+            .ToDictionaryAsync(x => x.GroupId, x => x.Last ?? DateTime.MinValue, ct);
+
+        var order = due
+            .OrderBy(d => d.NextKickoff)
+            .ThenBy(d => lastServed.TryGetValue(d.GroupId, out var last) ? last : DateTime.MinValue)
+            .ToList();
+
+        // Optional safety valve for a big live ladder (Phase 9.6): 0 = no cap, which is the behaviour the
+        // calendar has always had. With a cap the leftover groups simply resolve on the next run — kickoffs
+        // are a day apart, so a minute's delay costs nothing, and no single run can grow unbounded.
+        int cap = _opt.MaxMatchdaysPerTick > 0 ? _opt.MaxMatchdaysPerTick : int.MaxValue;
+
+        // A group whose schedule is fully played only needs closing — cheap, and never held back by the cap.
+        var pendingGroups = new HashSet<Guid>(due.Select(d => d.GroupId));
+        foreach (var groupId in activeIds)
         {
+            if (pendingGroups.Contains(groupId)) continue;
+
+            var group = await BeginGroupAsync(groupId, ct);
+            if (group is null || group.Status != RankedGroupStatus.Active) continue;
+
             var fixtures = await _db.RankedFixtures
                 .Where(f => f.RankedGroupId == group.Id)
                 .ToListAsync(ct);
             if (fixtures.Count == 0) continue;
 
-            var pending = fixtures.Where(f => !f.IsPlayed).ToList();
-            if (pending.Count == 0)
+            // The season is over — close it (and sort a placement cohort into divisions).
+            if (await CompleteSeasonAsync(group, fixtures, ct))
             {
-                // The season is over — close it (and sort a placement cohort into divisions).
-                if (await CompleteSeasonAsync(group, fixtures, ct)) { if (group.Kind == RankedGroupKind.Placement) placements++; else completed++; }
-                continue;
+                if (group.Kind == RankedGroupKind.Placement) placements++; else completed++;
             }
+        }
+
+        foreach (var candidate in order)
+        {
+            if (matchdays >= cap) break;
+            if (candidate.NextKickoff > now) continue; // not due yet
+
+            var group = await BeginGroupAsync(candidate.GroupId, ct);
+            if (group is null || group.SeasonStartedUtc is null
+                || group.Status != RankedGroupStatus.Active) continue;
+
+            var fixtures = await _db.RankedFixtures
+                .Where(f => f.RankedGroupId == group.Id)
+                .ToListAsync(ct);
+            var pending = fixtures.Where(f => !f.IsPlayed).ToList();
+            if (pending.Count == 0) continue;
 
             int round = pending.Min(f => f.Round);
             var roundFixtures = pending.Where(f => f.Round == round).OrderBy(f => f.MatchIndex).ToList();
@@ -310,7 +420,12 @@ public sealed class RankedSeasonService : IRankedSeasonService
 
             // If that was the last round, close the season in the same tick.
             if (fixtures.All(f => f.IsPlayed))
-                if (await CompleteSeasonAsync(group, fixtures, ct)) { if (group.Kind == RankedGroupKind.Placement) placements++; else completed++; }
+            {
+                if (await CompleteSeasonAsync(group, fixtures, ct))
+                {
+                    if (group.Kind == RankedGroupKind.Placement) placements++; else completed++;
+                }
+            }
         }
 
         return (matchdays, fixturesResolved, placements, completed);
@@ -538,13 +653,18 @@ public sealed class RankedSeasonService : IRankedSeasonService
     /// start and around the midpoint). 9.2a fires the signal + notification; the market content is 9.2b.</summary>
     private async Task<int> AnnounceMarketWindowsAsync(DateTime now, CancellationToken ct)
     {
-        var groups = await _db.RankedGroups
+        var groupIds = await _db.RankedGroups
             .Where(g => g.SeasonStartedUtc != null && g.Status == RankedGroupStatus.Active)
+            .Select(g => g.Id)
             .ToListAsync(ct);
 
         int opened = 0;
-        foreach (var group in groups)
+        foreach (var groupId in groupIds)
         {
+            var group = await BeginGroupAsync(groupId, ct);
+            if (group is null || group.SeasonStartedUtc is null
+                || group.Status != RankedGroupStatus.Active) continue;
+
             int totalRounds = (await _db.RankedFixtures
                 .Where(f => f.RankedGroupId == group.Id)
                 .Select(f => (int?)f.Round)

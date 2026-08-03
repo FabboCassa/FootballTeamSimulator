@@ -53,6 +53,13 @@ public sealed class RankedOptions
     /// calendar and announces them.</summary>
     public int MarketWindowDurationSeconds { get; set; } = 86_400;
 
+    /// <summary>Safety valve for a large live ladder (Phase 9.6): the most matchdays a single calendar tick
+    /// may resolve. 0 (the default) means no cap — the behaviour the calendar has always had. Raising a cap
+    /// bounds how long one run can take; the groups it skips resolve on the next run a minute later, which
+    /// costs nothing when kickoffs are a day apart. Leave it at 0 unless a tick starts crowding its own
+    /// schedule.</summary>
+    public int MaxMatchdaysPerTick { get; set; } = 0;
+
     // --- Ranked market economy (Phase 9.2b) ----------------------------------------------------
 
     /// <summary>Transfer budget every ranked club is seeded with when its season starts (default 25M) —

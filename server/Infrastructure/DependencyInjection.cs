@@ -191,6 +191,8 @@ public static class DependencyInjection
                 o.MatchdayIntervalSeconds = interval;
             if (int.TryParse(ranked["MarketWindowDurationSeconds"], out var windowDur) && windowDur >= 0)
                 o.MarketWindowDurationSeconds = windowDur;
+            if (int.TryParse(ranked["MaxMatchdaysPerTick"], out var tickCap) && tickCap >= 0)
+                o.MaxMatchdaysPerTick = tickCap;
             if (long.TryParse(ranked["StartingTransferBudget"], out var budget) && budget >= 0)
                 o.StartingTransferBudget = budget;
             if (int.TryParse(ranked["MinSquadSizeForSale"], out var minSquad) && minSquad >= 0)

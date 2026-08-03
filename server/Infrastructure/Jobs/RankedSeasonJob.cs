@@ -1,4 +1,5 @@
 using Fts.Application.Ranked;
+using Hangfire;
 using Microsoft.Extensions.Logging;
 
 namespace Fts.Infrastructure.Jobs;
@@ -23,6 +24,15 @@ public sealed class RankedSeasonJob
 
     public const string RecurringJobId = "fts-ranked-season";
 
+    /// <summary>
+    /// A tick must never overlap itself (Phase 9.6). The job is scheduled every minute, but a matchday run
+    /// on a large ladder can take longer than that — the load test measured a run of several minutes — and
+    /// two concurrent ticks would resolve the same due matchday twice over, or deadlock each other on the
+    /// same rows. Hangfire's distributed lock is the right guard because it holds across API instances, not
+    /// just inside one process. Waiting rather than skipping is deliberate: the tick is idempotent (nothing
+    /// is due twice), so a queued run simply finds nothing left to do.
+    /// </summary>
+    [DisableConcurrentExecution(timeoutInSeconds: 3600)]
     public async Task ExecuteAsync(CancellationToken ct = default)
     {
         var s = await _season.TickAsync(ct);

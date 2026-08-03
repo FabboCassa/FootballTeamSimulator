@@ -45,6 +45,16 @@ public static class DevEndpoints
         group.MapPost("/ranked/fill", async (int? count, IDevSeedService dev, CancellationToken ct) =>
             Results.Ok(await dev.FillRankedAsync(new DevRankedFillRequest(count), ct)));
 
+        // Load-test cohort (9.6): create N accounts, enrol them all on the ladder and tick the calendar so
+        // their seasons are running with an open market window — returning the accounts WITH access tokens
+        // so the load generator can start measuring immediately. Query params so a bodyless POST binds
+        // cleanly (the lesson from /ranked/fill). Can take minutes for a big cohort: every full placement
+        // group materialises its own generated world.
+        group.MapPost("/ranked/load-seed", async (
+            int? coaches, int? ticks, IDevSeedService dev, CancellationToken ct) =>
+            Results.Ok(await dev.SeedLoadCohortAsync(
+                new DevLoadSeedRequest(coaches ?? 200, ticks ?? 1), ct)));
+
         // Ranked market autopilot (9.2b): the group's bot coaches outbid on the open auction lots and answer
         // the offers the human sent them — query params so a bodyless POST binds cleanly.
         group.MapPost("/ranked/{groupId:guid}/market/bot", async (

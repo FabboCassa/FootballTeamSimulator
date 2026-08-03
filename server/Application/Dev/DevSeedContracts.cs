@@ -53,6 +53,35 @@ public sealed record DevRankedFillRequest(int? Count = null);
 /// <summary>How many bots were enrolled + the placement group's occupancy afterwards.</summary>
 public sealed record DevRankedFillResult(int Enrolled, int Occupied, int Capacity);
 
+/// <summary>Seed a whole LOAD-TEST cohort in one call (Phase 9.6 dev tooling): create
+/// <paramref name="Coaches"/> fresh accounts, enrol every one of them on the ladder (filling placement
+/// group after placement group, opening new worlds as needed exactly like real traffic would), then run
+/// <paramref name="Ticks"/> calendar ticks so the seasons are under way and the first market window — with
+/// its free-agent lots — is open. Registering and enrolling a thousand accounts over HTTP one at a time
+/// would take minutes and mix the cost of the SETUP into the measurement; doing it in-process keeps the
+/// generator's numbers about the endpoints under test.</summary>
+public sealed record DevLoadSeedRequest(int Coaches = 200, int Ticks = 1);
+
+/// <summary>One seeded load-test account. The access token lets the generator act as that coach without
+/// paying for a login round-trip (Identity password hashing is deliberately expensive); the refresh token
+/// comes along because a long run outlives the access token's 15 minutes, and a generator quietly collecting
+/// 401s would measure unauthenticated requests instead of load.</summary>
+public sealed record DevLoadAccountDto(
+    Guid UserId, string Email, string AccessToken, string RefreshToken, int ExpiresInSeconds);
+
+/// <summary>What the load cohort seeding produced: how many accounts were created and enrolled, how many
+/// ranked groups they landed in, what the calendar ticks did, and the accounts themselves (with tokens).</summary>
+public sealed record DevLoadSeedResult(
+    int Requested,
+    int Created,
+    int Enrolled,
+    int Groups,
+    int SeasonsStarted,
+    int FixturesResolved,
+    int MarketWindowsOpened,
+    long ElapsedMs,
+    IReadOnlyList<DevLoadAccountDto> Accounts);
+
 /// <summary>Drive the bot coaches in the caller's ranked group through a round of market activity (Phase
 /// 9.2b dev tooling) so a solo human sees the market move: the bots outbid on open auction lots and respond
 /// to the offers the human sent them. <paramref name="AcceptOffers"/> makes them accept (else reject);

@@ -30,6 +30,7 @@ public sealed class DevSeedService : IDevSeedService
     private readonly IAuctionService _auctions;
     private readonly ILiveMatchService _liveMatch;
     private readonly IRankedService _ranked;
+    private readonly IRankedSeasonService _rankedSeason;
     private readonly IRankedAuctionService _rankedAuctions;
     private readonly IRankedMarketService _rankedMarket;
     private readonly FtsDbContext _db;
@@ -37,7 +38,8 @@ public sealed class DevSeedService : IDevSeedService
     public DevSeedService(
         IAuthService auth, ILeagueService leagues, ILeagueSeasonService season,
         IAuctionService auctions, ILiveMatchService liveMatch, IRankedService ranked,
-        IRankedAuctionService rankedAuctions, IRankedMarketService rankedMarket, FtsDbContext db)
+        IRankedSeasonService rankedSeason, IRankedAuctionService rankedAuctions,
+        IRankedMarketService rankedMarket, FtsDbContext db)
     {
         _auth = auth;
         _leagues = leagues;
@@ -45,6 +47,7 @@ public sealed class DevSeedService : IDevSeedService
         _auctions = auctions;
         _liveMatch = liveMatch;
         _ranked = ranked;
+        _rankedSeason = rankedSeason;
         _rankedAuctions = rankedAuctions;
         _rankedMarket = rankedMarket;
         _db = db;
@@ -382,6 +385,90 @@ public sealed class DevSeedService : IDevSeedService
         }
 
         return new DevRankedBotMarketResult(bids, answered);
+    }
+
+    // --- load-test cohort (Phase 9.6 dev tooling) ------------------------------------------------
+
+    public async Task<DevLoadSeedResult> SeedLoadCohortAsync(
+        DevLoadSeedRequest request, CancellationToken ct = default)
+    {
+        int coaches = Clamp(request.Coaches, 1, 2000);
+        int ticks = Clamp(request.Ticks, 0, 20);
+        var started = System.Diagnostics.Stopwatch.StartNew();
+
+        // Fresh accounts every run: a ranked coach is one row per account ever, so a load cohort cannot be
+        // reused (same reason FillRankedAsync mints new bots). The batch tag also gives us a cheap way to
+        // count the groups these coaches landed in without shipping a thousand ids into a WHERE IN.
+        string batch = System.Guid.NewGuid().ToString("N").Substring(0, 6);
+        string prefix = LoadBotPrefix(batch);
+
+        var accounts = new List<DevLoadAccountDto>(coaches);
+        int enrolled = 0;
+        for (int i = 0; i < coaches; i++)
+        {
+            ct.ThrowIfCancellationRequested();
+            var bot = await EnsureLoadBotAsync(batch, i, ct);
+            accounts.Add(new DevLoadAccountDto(
+                bot.Id, bot.Email, bot.Token, bot.RefreshToken, bot.ExpiresInSeconds));
+
+            // The REAL enrolment path: it fills the earliest forming placement group and opens a fresh
+            // world when the existing ones run out of placeable room — exactly what a launch-day rush does.
+            var res = await _ranked.EnrolAsync(bot.Id, ct);
+            if (res.Success) enrolled++;
+
+            // One request seeds hundreds of coaches, and every full placement group materialises a whole
+            // generated world (clubs + squads + free agents) through this same scoped DbContext. Left alone
+            // the change tracker would end up holding tens of thousands of entities and the identity-fixup
+            // cost would grow with every account. Each use case above saves and re-queries what it needs, so
+            // dropping the tracked graph between coaches is safe — and keeps the seeding linear.
+            _db.ChangeTracker.Clear();
+        }
+
+        // Start the seasons the now-full placement cohorts are waiting for, and open the first market
+        // window (its free-agent lots are what the auction-spike scenario bids on).
+        int seasonsStarted = 0, fixturesResolved = 0, windowsOpened = 0;
+        for (int t = 0; t < ticks; t++)
+        {
+            var summary = await _rankedSeason.TickAsync(ct);
+            seasonsStarted += summary.SeasonsStarted;
+            fixturesResolved += summary.FixturesResolved;
+            windowsOpened += summary.MarketWindowsOpened;
+            _db.ChangeTracker.Clear();
+        }
+
+        int groups = await (
+            from s in _db.RankedSeats
+            join u in _db.Users on s.UserId equals (Guid?)u.Id
+            where u.Email!.StartsWith(prefix)
+            select s.RankedGroupId).Distinct().CountAsync(ct);
+
+        started.Stop();
+        return new DevLoadSeedResult(
+            coaches, accounts.Count, enrolled, groups,
+            seasonsStarted, fixturesResolved, windowsOpened,
+            (long)started.Elapsed.TotalMilliseconds, accounts);
+    }
+
+    private static string LoadBotPrefix(string batch) => $"loadbot{batch}x";
+
+    /// <summary>A fresh load-test account WITH its token pair — the generator then needs no login round trip
+    /// (Identity password hashing is deliberately expensive and would dominate the ramp-up) and can keep its
+    /// session alive through a long run instead of drifting into 401s.</summary>
+    private async Task<(Guid Id, string Email, string Token, string RefreshToken, int ExpiresInSeconds)>
+        EnsureLoadBotAsync(string batch, int i, CancellationToken ct)
+    {
+        string email = $"{LoadBotPrefix(batch)}{i}{BotDomain}";
+        var reg = await _auth.RegisterAsync(new RegisterRequest(email, BotPassword, $"LoadBot {i}"), ct);
+        if (reg.Success)
+            return (reg.Value!.Profile.UserId, email, reg.Value.AccessToken,
+                    reg.Value.RefreshToken, reg.Value.ExpiresInSeconds);
+
+        var login = await _auth.LoginAsync(new LoginRequest(email, BotPassword), ct);
+        if (login.Success)
+            return (login.Value!.Profile.UserId, email, login.Value.AccessToken,
+                    login.Value.RefreshToken, login.Value.ExpiresInSeconds);
+
+        throw new InvalidOperationException($"Dev load seed: could not create/login {email}.");
     }
 
     private async Task<Guid> EnsureRankedBotAsync(string batch, int i, CancellationToken ct)

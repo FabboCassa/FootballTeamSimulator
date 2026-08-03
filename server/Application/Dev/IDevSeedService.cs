@@ -35,6 +35,12 @@ public interface IDevSeedService
     /// tooling) so a solo human's placement cohort completes and its season can start on the calendar.</summary>
     Task<DevRankedFillResult> FillRankedAsync(DevRankedFillRequest request, CancellationToken ct = default);
 
+    /// <summary>Seed a whole load-test cohort (Phase 9.6 dev tooling): create N accounts, enrol them all on
+    /// the ladder and tick the calendar so their seasons are running with an open market window — then hand
+    /// back the accounts WITH access tokens so the load generator can start hitting the API immediately
+    /// instead of spending minutes registering and logging in over HTTP.</summary>
+    Task<DevLoadSeedResult> SeedLoadCohortAsync(DevLoadSeedRequest request, CancellationToken ct = default);
+
     /// <summary>Ranked market autopilot (Phase 9.2b dev tooling): the bot coaches in the group outbid on the
     /// open auction lots and answer the pending offers sent to them, so a solo human can see the market
     /// react (being outbid, an offer accepted/rejected) without a second account.</summary>
