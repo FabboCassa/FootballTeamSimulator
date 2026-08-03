@@ -458,7 +458,9 @@ namespace Fts.Services
         private DifficultyContext BuildDifficultyContext()
         {
             DifficultySettings settings = DifficultyModel.Resolve(_career.Difficulty, _config);
-            return DifficultyModel.MatchContext(_career.UserClubId, settings);
+            // The config goes in explicitly so the AI's rotation policy (task 10.1) comes from THIS
+            // career's balance config rather than the shipped defaults.
+            return DifficultyModel.MatchContext(_career.UserClubId, settings, _config.Difficulty);
         }
 
         private int GetFamiliarity(TacticPlan tactic) =>

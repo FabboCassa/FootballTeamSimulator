@@ -70,6 +70,16 @@ public sealed class RankedOptions
     /// team down to an unplayable size.</summary>
     public int MinSquadSizeForSale { get; set; } = 16;
 
+    /// <summary>
+    /// Opening price of EVERY auction lot in the ladder (default 1M): the same for a phenom and for a
+    /// squad filler, so with equal budgets anyone can bid on anyone and the auction — not the valuation
+    /// model — decides what a player is worth. The balance harness is what argued for it: priced at half
+    /// of market value, a ranked world's best player asks more than six times the whole kitty, so the top
+    /// of the market was decoration. Set to 0 to fall back on the value-based opening price the private
+    /// leagues use.
+    /// </summary>
+    public long AuctionFlatStartPrice { get; set; } = 1_000_000;
+
     // --- Coach ranking & seasonal reset (Phase 9.3) --------------------------------------------
 
     /// <summary>Elo K-factor: the most a single matchday can move a rating. 24 keeps a 14-matchday season

@@ -17,6 +17,10 @@ namespace Sim.Core.Difficulty
         /// <summary>Most ranks a slot can slip below best when an AI competence roll misses.</summary>
         public readonly int AiLineupMaxSlips;
 
+        /// <summary>How willing an AI manager is (percent) to rest tired players — the task-10.1 rotation
+        /// lever, independent of competence so a weaker AI can no longer profit from fresher legs.</summary>
+        public readonly int AiRotationPercent;
+
         /// <summary>Multiplier (1/1000) on the user club's seeded transfer budget.</summary>
         public readonly int UserBudgetPermille;
 
@@ -32,11 +36,13 @@ namespace Sim.Core.Difficulty
             int aiLineupMaxSlips,
             int userBudgetPermille,
             int aiBudgetPermille,
-            int boardReactivityPermille)
+            int boardReactivityPermille,
+            int aiRotationPercent = 0)
         {
             Level = level;
             AiLineupCompetence = aiLineupCompetence;
             AiLineupMaxSlips = aiLineupMaxSlips;
+            AiRotationPercent = aiRotationPercent;
             UserBudgetPermille = userBudgetPermille;
             AiBudgetPermille = aiBudgetPermille;
             BoardReactivityPermille = boardReactivityPermille;
@@ -55,11 +61,22 @@ namespace Sim.Core.Difficulty
         public readonly int AiLineupCompetence;
         public readonly int AiLineupMaxSlips;
 
-        public DifficultyContext(int humanClubId, int aiLineupCompetence, int aiLineupMaxSlips)
+        /// <summary>How this level's AI managers handle tired players (task 10.1). Default
+        /// <see cref="Match.RotationPolicy.None"/> = the pre-10.1 behaviour, so an omitted policy changes
+        /// nothing.</summary>
+        public readonly Match.RotationPolicy Rotation;
+
+        public DifficultyContext(
+            int humanClubId, int aiLineupCompetence, int aiLineupMaxSlips,
+            Match.RotationPolicy rotation = default)
         {
             HumanClubId = humanClubId;
             AiLineupCompetence = aiLineupCompetence;
             AiLineupMaxSlips = aiLineupMaxSlips;
+            Rotation = rotation;
         }
+
+        /// <summary>True when this level asks an AI manager to do anything other than field his best XI.</summary>
+        public bool DegradesAiLineups => AiLineupCompetence < 100 || Rotation.IsActive;
     }
 }

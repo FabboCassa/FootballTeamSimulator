@@ -330,11 +330,15 @@ namespace Sim.Core.Career
             if (difficulty.HasValue)
             {
                 DifficultyContext d = difficulty.Value;
-                if (club.Id != d.HumanClubId && d.AiLineupCompetence < 100)
+                // A fully competent manager who also never rotates is the best XI, so the legacy path is
+                // kept literally; anything else goes through the selector (which still returns the best XI
+                // when the squad is fully fit — the rotation policy only ever discounts tired players).
+                if (club.Id != d.HumanClubId && d.DegradesAiLineups)
                 {
                     Pcg32 lineupRng = LineupRng(worldSeed, fixtureId, club.Id);
                     return LineupSelector.CompetentEleven(
-                        club, LineupSelector.DefaultFormation, d.AiLineupCompetence, d.AiLineupMaxSlips, lineupRng);
+                        club, LineupSelector.DefaultFormation,
+                        d.AiLineupCompetence, d.AiLineupMaxSlips, d.Rotation, lineupRng);
                 }
             }
 

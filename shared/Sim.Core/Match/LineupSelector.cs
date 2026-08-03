@@ -74,7 +74,20 @@ namespace Sim.Core.Match
         /// keeping the pre-5.7 path). Deterministic given <paramref name="rng"/>.
         /// </summary>
         public static Lineup CompetentEleven(
-            Club club, PositionRole[] formation, int competencePercent, int maxSlips, IRandomSource rng)
+            Club club, PositionRole[] formation, int competencePercent, int maxSlips, IRandomSource rng) =>
+            CompetentEleven(club, formation, competencePercent, maxSlips, RotationPolicy.None, rng);
+
+        /// <summary>
+        /// The same selection with an explicit <see cref="RotationPolicy"/> (task 10.1): the manager ranks
+        /// candidates on a rating adjusted for tiredness, so a rotating manager prefers a fresh squad player
+        /// to a drained starter. The two levers are now independent — <paramref name="competencePercent"/>
+        /// is quality, <paramref name="rotation"/> is freshness — which is what stops a lower difficulty
+        /// from accidentally handing the AI a rested XI. <see cref="RotationPolicy.None"/> (or a fully fit
+        /// squad, whose ratings the policy never touches) reproduces the pre-10.1 selection exactly.
+        /// </summary>
+        public static Lineup CompetentEleven(
+            Club club, PositionRole[] formation, int competencePercent, int maxSlips,
+            RotationPolicy rotation, IRandomSource rng)
         {
             var lineup = new Lineup { ClubId = club.Id };
             var used = new HashSet<int>();
@@ -94,8 +107,9 @@ namespace Sim.Core.Match
 
                 ranked.Sort((a, b) =>
                 {
-                    int ra = PlayerRating.OverallFor(a, slotRole);
-                    int rb = PlayerRating.OverallFor(b, slotRole);
+                    // The rating the MANAGER sees: true ability, discounted for tiredness when he rotates.
+                    int ra = rotation.Adjust(PlayerRating.OverallFor(a, slotRole), a.Condition.Fitness);
+                    int rb = rotation.Adjust(PlayerRating.OverallFor(b, slotRole), b.Condition.Fitness);
                     if (ra != rb) return rb - ra;      // higher rating first
                     return a.Id - b.Id;                // stable tie-break
                 });

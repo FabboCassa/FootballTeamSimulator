@@ -197,6 +197,8 @@ public static class DependencyInjection
                 o.StartingTransferBudget = budget;
             if (int.TryParse(ranked["MinSquadSizeForSale"], out var minSquad) && minSquad >= 0)
                 o.MinSquadSizeForSale = minSquad;
+            if (long.TryParse(ranked["AuctionFlatStartPrice"], out var flatStart) && flatStart >= 0)
+                o.AuctionFlatStartPrice = flatStart;
             // Ranking + seasonal reset knobs (Phase 9.3) — allow 0 (tests remove the between-seasons break).
             if (int.TryParse(ranked["EloKFactor"], out var k) && k > 0) o.EloKFactor = k;
             if (int.TryParse(ranked["AiRatingTopTier"], out var aiTop) && aiTop > 0) o.AiRatingTopTier = aiTop;

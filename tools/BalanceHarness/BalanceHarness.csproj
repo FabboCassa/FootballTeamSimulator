@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Phase 10.1 balance harness — the "simulate many seasons to detect dominant tactics or broken
+    pricing" tool ARCHITECTURE.md section 8 asks for. Deliberately OUTSIDE FootballTeamSimulator.sln
+    (like tools/LoadTest): it is a measuring instrument, not shipped code, and `dotnet test` on the
+    solution must never build or run it.
+
+    It references the REAL models rather than restating them, so a number it prints is a number the
+    game would produce:
+      - Sim.Core            the whole single-player simulation (engine, tactics, condition,
+                            development, valuation, transfers, finances, difficulty);
+      - server/Infrastructure  the ladder's rating maths (EloModel) and the pyramid shape
+                            (RankedOptions defaults) — duplicating either would let the harness
+                            drift away from the thing it is supposed to measure.
+    The Infrastructure reference drags EF/Hangfire/Firebase into the restore; that is the price of
+    not copy-pasting the Elo model, and the packages are already cached by the server build.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Fts.BalanceHarness</RootNamespace>
+    <AssemblyName>fts-balance</AssemblyName>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <ServerGarbageCollection>true</ServerGarbageCollection>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\shared\Sim.Core\Sim.Core.csproj" />
+    <ProjectReference Include="..\..\server\Infrastructure\Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -74,6 +74,35 @@ public class RankedAuctionTests : RankedSeasonTestBase
         });
     }
 
+    /// <summary>
+    /// Task 10.1: every lot opens at the SAME price, so the ladder's best player is as biddable as its
+    /// worst and the auction decides what he costs. Priced at half of market value (the private-league
+    /// rule) the top of a ranked world asks more than six times the whole kitty, which made the elite
+    /// decoration - the balance harness measured exactly that.
+    /// </summary>
+    [Test]
+    public async Task EveryLot_OpensAtTheSamePrice_SoTheBestPlayerIsWithinReachOfEveryone()
+    {
+        var tokens = await StartAuctions();
+        var a = await Auctions(tokens[0]);
+
+        long opening = a.Lots[0].StartPrice;
+        Assert.Multiple(() =>
+        {
+            Assert.That(a.Lots.Select(l => l.StartPrice).Distinct().Count(), Is.EqualTo(1),
+                "champion and squad filler must open at the same price");
+            Assert.That(opening, Is.LessThanOrEqualTo(a.Budget),
+                "the opening price must sit inside the seeded kitty, or nobody could open at all");
+        });
+
+        // The most valuable free agent on the board: with a flat opening he is one bid away like anyone else.
+        var best = a.Lots.OrderByDescending(l => l.MarketValue).First();
+        Assert.That(best.MarketValue, Is.GreaterThan(opening),
+            "the point of the flat price is that it sits BELOW what the best player is worth");
+        Assert.That((await Bid(tokens[0], best.Id, best.StartPrice)).StatusCode, Is.EqualTo(HttpStatusCode.OK),
+            "a coach with the standard budget can open the bidding on the board's best player");
+    }
+
     [Test]
     public async Task Bidding_ThenSettling_GivesThePlayerToTheTopBidder_AndChargesOnlyThem()
     {

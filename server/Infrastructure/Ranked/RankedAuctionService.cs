@@ -130,7 +130,7 @@ public sealed class RankedAuctionService : IRankedAuctionService
                 PlayerId = fa.Id,
                 PlayerExternalId = fa.ExternalId,
                 WindowIndex = windowIndex,
-                StartPrice = Math.Max(MinStartPrice, fa.MarketValue * StartPricePermille / 1000),
+                StartPrice = OpeningPrice(fa.MarketValue),
                 HighBid = 0,
                 Status = RankedAuctionStatus.Open,
                 EndsUtc = endsUtc,
@@ -197,6 +197,19 @@ public sealed class RankedAuctionService : IRankedAuctionService
     }
 
     // --- helpers -----------------------------------------------------------------------------------
+
+    /// <summary>
+    /// What a lot opens at. With <see cref="RankedOptions.AuctionFlatStartPrice"/> set (the ladder default)
+    /// EVERY player opens at the SAME price, champion and squad filler alike, and the auction decides what
+    /// he is worth: with equal budgets, anyone can open on anyone, and taking a star means giving up the
+    /// three good players his final price would have bought. Set it to 0 to fall back on the private-league
+    /// rule (half of market value), where the valuation model prices the lot before anyone bids and the top
+    /// of the market is simply out of reach.
+    /// </summary>
+    private long OpeningPrice(long marketValue) =>
+        _opt.AuctionFlatStartPrice > 0
+            ? Math.Max(MinStartPrice, _opt.AuctionFlatStartPrice)
+            : Math.Max(MinStartPrice, marketValue * StartPricePermille / 1000);
 
     private static long MinNextBid(RankedAuction lot) =>
         lot.HighBid <= 0

@@ -44,16 +44,30 @@ namespace Sim.Core.Difficulty
                 cfg.AiLineupMaxSlips,
                 Row(cfg.UserBudgetPermille, i, 1000),
                 Row(cfg.AiBudgetPermille, i, 1000),
-                Row(cfg.BoardReactivityPermille, i, 1000));
+                Row(cfg.BoardReactivityPermille, i, 1000),
+                Row(cfg.AiRotationPercent, i, 0));
         }
+
+        /// <summary>The rotation policy this level's AI managers follow (task 10.1). Kept here rather than
+        /// in <see cref="DifficultySettings"/> so the two tuning constants stay in one place.</summary>
+        public static Match.RotationPolicy Rotation(DifficultySettings s, DifficultyBalance cfg) =>
+            new Match.RotationPolicy(
+                s.AiRotationPercent, cfg.RotationFitnessTarget, cfg.RotationPenaltyPerFitnessPoint);
 
         /// <summary>Convenience: resolve straight from a full config.</summary>
         public static DifficultySettings Resolve(DifficultyLevel level, BalanceConfig cfg) =>
             Resolve(level, cfg.Difficulty);
 
-        /// <summary>The AI-competence slice the season simulator needs (the user club is never degraded).</summary>
-        public static DifficultyContext MatchContext(int humanClubId, DifficultySettings s) =>
-            new DifficultyContext(humanClubId, s.AiLineupCompetence, s.AiLineupMaxSlips);
+        /// <summary>
+        /// The AI-lineup slice the season simulator needs — competence AND rotation (the user club is never
+        /// degraded either way). <paramref name="cfg"/> supplies the two rotation constants; omitting it
+        /// uses the shipped defaults, which is what every host does today.
+        /// </summary>
+        public static DifficultyContext MatchContext(
+            int humanClubId, DifficultySettings s, DifficultyBalance? cfg = null) =>
+            new DifficultyContext(
+                humanClubId, s.AiLineupCompetence, s.AiLineupMaxSlips,
+                Rotation(s, cfg ?? new DifficultyBalance()));
 
         /// <summary>
         /// Seeds every club's <see cref="Club.TransferBudget"/> from the base finance/strength model,

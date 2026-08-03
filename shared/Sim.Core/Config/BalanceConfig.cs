@@ -108,6 +108,20 @@ namespace Sim.Core.Config
         /// <summary>Most ranks a slot can slip below the best available player when the competence roll misses (bounds how bad a poor selection gets — never the literal worst).</summary>
         public int AiLineupMaxSlips { get; set; } = 3;
 
+        // --- AI quality: squad rotation (task 10.1) ---
+        // Until 10.1 rotation was an ACCIDENT of the competence lever: a competence miss benches the best
+        // candidate, which with live condition is the same thing as resting him. The balance harness caught
+        // the consequence — a weaker AI fielded fresher legs, so Easy and Hard nearly tied (Easy−Hard gap
+        // +6.9 points a season on the bare engine, −0.5 with condition live). Rotation is now its own
+        // lever, pulling the SAME way as competence: a good AI rests tired players AND picks the best of
+        // the fresh, a poor one does neither.
+        /// <summary>Per-level willingness (percent) of an AI manager to rest tired players. {Easy never, Normal partly, Hard fully}. 0 reproduces the pre-10.1 selection exactly.</summary>
+        public int[] AiRotationPercent { get; set; } = { 0, 60, 100 };
+        /// <summary>Fitness below which a rotating manager starts discounting a player; at or above it he is ranked on merit (so a fully fit squad ranks exactly as before).</summary>
+        public int RotationFitnessTarget { get; set; } = 90;
+        /// <summary>Rating points a fully-rotating manager deducts per missing fitness point (1 = a player 20 below the target ranks like a player 20 points worse).</summary>
+        public int RotationPenaltyPerFitnessPoint { get; set; } = 1;
+
         // --- Money: user vs AI transfer budget (asymmetric) ---
         /// <summary>Per-level multiplier (1/1000) on the USER club's seeded transfer budget. {Easy generous, Normal neutral, Hard tight}.</summary>
         public int[] UserBudgetPermille { get; set; } = { 1500, 1000, 700 };
@@ -203,8 +217,8 @@ namespace Sim.Core.Config
         /// <summary>Highest tier any facility can reach (1 = the starting baseline).</summary>
         public int MaxFacilityTier { get; set; } = 5;
 
-        /// <summary>Lump-sum cost of the FIRST upgrade (tier 1→2); higher upgrades scale up with the current tier squared.</summary>
-        public long FacilityUpgradeBaseCost { get; set; } = 4_000_000;
+        /// <summary>Lump-sum cost of the FIRST upgrade (tier 1→2); higher upgrades scale up with the current tier squared. Scaled x4 with the rest of the money in the 10.1 rescale — left alone, upgrading a stadium would have become pocket change.</summary>
+        public long FacilityUpgradeBaseCost { get; set; } = 16_000_000;
 
         // --- Training ground → development facility level (the 5.5 ✅) ---
         /// <summary>Development facility level added per training tier above 1. Tier 1 maps to DevelopmentBalance.FacilityNeutralLevel (neutral), so a fresh world develops exactly as 4.4; each upgrade lifts the FacilityLevel that feeds DevelopmentModel growth.</summary>
@@ -236,36 +250,47 @@ namespace Sim.Core.Config
         // --- Gate receipts (per home match) ---
         /// <summary>Average share of capacity that attends a home match, in percent.</summary>
         public int AverageAttendancePercent { get; set; } = 85;
-        /// <summary>Ticket price per attendee in the top flight.</summary>
-        public long TicketPriceTopFlight { get; set; } = 30;
-        /// <summary>Ticket-price discount per division below the top flight, in 1/1000 (200 = −20%/division).</summary>
-        public int TicketDivisionDiscountPermille { get; set; } = 200;
+        /// <summary>Ticket price per attendee in the top flight. NOTE this is not a real ticket price: gate,
+        /// sponsorship and prize money together stand in for a club's whole revenue (broadcast included),
+        /// and the 10.1 rescale multiplied all three by 4 so a top-flight club earns on the order of a real
+        /// mid-size European first-division club (~225M a season) instead of ~56M.</summary>
+        public long TicketPriceTopFlight { get; set; } = 120;
+        /// <summary>Ticket-price discount per division below the top flight, in 1/1000 (400 = −40%/division). Raised from 200 in the 10.1 rescale: the value curve is cubic, so a second-division squad is worth a QUARTER of a first-division one and its wage bill falls far faster than its income — leaving the lower division at a 38% wage share against the top flight's 63%, i.e. not "a first division in scale" but a structurally cheaper one.</summary>
+        public int TicketDivisionDiscountPermille { get; set; } = 400;
         /// <summary>Floor on the ticket-price league multiplier, in 1/1000.</summary>
         public int TicketDivisionFloorPermille { get; set; } = 300;
 
         // --- Sponsors (per week) ---
         /// <summary>Weekly sponsor income for a top-flight, tier-1-stadium club.</summary>
-        public long SponsorWeeklyTopFlight { get; set; } = 150_000;
+        public long SponsorWeeklyTopFlight { get; set; } = 600_000;
         /// <summary>Extra weekly sponsor income per stadium tier above 1 (bigger ground/brand → much bigger commercial deals). Scales strongly so big clubs' commercial income tracks their size — as in reality, where the elite earn most from commercial/broadcast — bringing their wage-to-revenue ratio down to the realistic ~63-68% (real Premier League average is ~63%) and keeping them clearly profitable (so a top-club save has a meaty transfer budget). Raised from 60k after the first economy run left the champion at a 91% wage ratio.</summary>
-        public long SponsorWeeklyPerStadiumTier { get; set; } = 180_000;
-        /// <summary>Sponsor discount per division below the top flight, in 1/1000 (250 = −25%/division).</summary>
-        public int SponsorDivisionDiscountPermille { get; set; } = 250;
+        public long SponsorWeeklyPerStadiumTier { get; set; } = 720_000;
+        /// <summary>Sponsor discount per division below the top flight, in 1/1000 (450 = −45%/division). Raised from 250 with the ticket discount, for the same reason: commercial income has to fall about as fast as squad value does, or the lower division ends up richer relative to its wage bill than the top flight.</summary>
+        public int SponsorDivisionDiscountPermille { get; set; } = 450;
         /// <summary>Floor on the sponsor league multiplier, in 1/1000.</summary>
         public int SponsorDivisionFloorPermille { get; set; } = 250;
 
         // --- Prize money (per season, by final league position) ---
         /// <summary>Prize for finishing 1st in the top flight (linear down to the wooden-spoon prize for last).</summary>
-        public long PrizeWinnerTopFlight { get; set; } = 8_000_000;
+        public long PrizeWinnerTopFlight { get; set; } = 32_000_000;
         /// <summary>Prize for finishing last in the top flight.</summary>
-        public long PrizeLastTopFlight { get; set; } = 1_000_000;
-        /// <summary>Prize discount per division below the top flight, in 1/1000.</summary>
-        public int PrizeDivisionDiscountPermille { get; set; } = 250;
+        public long PrizeLastTopFlight { get; set; } = 4_000_000;
+        /// <summary>Prize discount per division below the top flight, in 1/1000 (400 = −40%/division; raised from 250 with the other two, so promotion is a real financial jump and relegation a real fall).</summary>
+        public int PrizeDivisionDiscountPermille { get; set; } = 400;
         /// <summary>Floor on the prize league multiplier, in 1/1000.</summary>
         public int PrizeDivisionFloorPermille { get; set; } = 250;
 
         // --- Wages (per week, the dominant expense) ---
-        /// <summary>Weekly wage = player market value / this divisor. Calibrated against the harness so the league wage bill is ~75% of income (clubs lean modestly profitable → the board can fund transfers; big clubs run tightest, minnows bank cash). Raised from 300 after the first run showed wages at 163% of income — the value scale's fat elite tail makes top-club squad values huge, so the divisor must be large.</summary>
-        public long WageWeeklyValueDivisor { get; set; } = 650;
+        /// <summary>
+        /// Weekly wage = player market value / this divisor. LOWERED from 650 to 130 in the 10.1 rescale
+        /// (wages x5) alongside revenues x4, which together close the one real gap the balance harness
+        /// found: our squads were worth 8.5 seasons of income where real football sits near 2, so wages
+        /// were 5.7% of squad value against a real ~30% and a single signing cost 42% of a club's annual
+        /// income — which is why clubs could only ever buy one player a season. Values themselves were
+        /// left alone: they were calibrated against Transfermarkt at 5.1 and are the side that matches
+        /// reality. Target after the rescale: league wage bill ~65% of income (real Europe 64-67%).
+        /// </summary>
+        public long WageWeeklyValueDivisor { get; set; } = 130;
         /// <summary>Wage multiplier (1/1000) for the club that finishes 1st — success lifts the wage bill (bonuses/renewals).</summary>
         public int WageResultCeilPermille { get; set; } = 1100;
         /// <summary>Wage multiplier (1/1000) for the club that finishes last — a poor season trims the wage bill.</summary>
@@ -275,7 +300,7 @@ namespace Sim.Core.Config
         /// <summary>Operating-cash floor: the board covers shortfalls down to this, so bankruptcy is impossible (the 5.5 acceptance).</summary>
         public long MinBalance { get; set; } = 0;
         /// <summary>Cash a fresh top-flight club starts a career with (division-discounted).</summary>
-        public long StartingBalanceTopFlight { get; set; } = 20_000_000;
+        public long StartingBalanceTopFlight { get; set; } = 80_000_000;
         /// <summary>Starting-balance discount per division below the top flight, in 1/1000.</summary>
         public int StartingBalanceDivisionDiscountPermille { get; set; } = 300;
         /// <summary>Floor on the starting-balance league multiplier, in 1/1000.</summary>
@@ -285,13 +310,13 @@ namespace Sim.Core.Config
         /// <summary>Percent of current cash reserves the board makes available for transfers each season.</summary>
         public int TransferBudgetCashPercent { get; set; } = 50;
         /// <summary>Flat board grant on top of the cash share, for a top-flight club (division-discounted).</summary>
-        public long BoardGrantTopFlight { get; set; } = 10_000_000;
+        public long BoardGrantTopFlight { get; set; } = 40_000_000;
         /// <summary>Board-grant discount per division below the top flight, in 1/1000.</summary>
         public int BoardGrantDivisionDiscountPermille { get; set; } = 250;
         /// <summary>Floor on the board-grant league multiplier, in 1/1000.</summary>
         public int BoardGrantDivisionFloorPermille { get; set; } = 250;
         /// <summary>Hard floor on a seeded transfer budget so even a skint club can do minimal business.</summary>
-        public long MinTransferBudget { get; set; } = 250_000;
+        public long MinTransferBudget { get; set; } = 1_000_000;
     }
 
     /// <summary>
