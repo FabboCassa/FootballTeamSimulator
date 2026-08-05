@@ -2,6 +2,14 @@
 # Firebase service-account keys and any other server secrets — never commit these.
 server/secrets/
 
+# Release signing (Roadmap 10.2): the Android keystore passwords and any keystore file
+# that ends up in the tree. tools/keystore.local.example.ps1 IS committed as a template.
+tools/keystore.local.ps1
+*.keystore
+*.jks
+*.mobileprovision
+*.p12
+
 # ===== .NET =====
 bin/
 obj/

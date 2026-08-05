@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Elimina il tuo account | Football Team Simulator</title>
+<meta name="description" content="Elimina definitivamente il tuo account Football Team Simulator e i dati collegati. Delete your Football Team Simulator account and its data.">
+<style>
+  :root{
+    --bg:#141C30; --surface:#1D2740; --surface-alt:#26304C; --border:#36415F;
+    --text:#EAF0FF; --muted:#9AA7C4; --accent:#27C281; --accent-dark:#1E9A66;
+    --danger:#E0574B; --amber:#F2B33D;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; padding:32px 16px; background:var(--bg); color:var(--text);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif; line-height:1.55;
+  }
+  main{max-width:640px; margin:0 auto}
+  .card{background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:24px; margin-bottom:20px}
+  h1{font-size:26px; margin:0 0 6px}
+  h2{font-size:18px; margin:24px 0 8px}
+  .sub{color:var(--muted); margin:0 0 24px}
+  ul{padding-left:20px} li{margin:4px 0}
+  label{display:block; font-size:14px; color:var(--muted); margin:14px 0 6px}
+  input[type=email],input[type=password],input[type=url]{
+    width:100%; padding:12px 14px; border-radius:10px; border:1px solid var(--border);
+    background:var(--surface-alt); color:var(--text); font-size:16px;
+  }
+  .check{display:flex; gap:10px; align-items:flex-start; margin:18px 0 4px; color:var(--text); font-size:14px}
+  .check input{margin-top:3px; width:18px; height:18px}
+  button{
+    width:100%; margin-top:18px; padding:14px; border:0; border-radius:999px; font-size:16px; font-weight:700;
+    background:var(--danger); color:#fff; cursor:pointer;
+  }
+  button:disabled{background:var(--surface-alt); color:var(--muted); cursor:not-allowed}
+  .status{margin-top:16px; padding:12px 14px; border-radius:10px; font-size:14px; display:none; white-space:pre-line}
+  .status.show{display:block}
+  .status.ok{background:rgba(39,194,129,.12); border:1px solid var(--accent-dark); color:var(--accent)}
+  .status.err{background:rgba(224,87,75,.12); border:1px solid var(--danger); color:#FFB4AC}
+  .status.work{background:rgba(242,179,61,.12); border:1px solid var(--amber); color:var(--amber)}
+  details{margin-top:10px; color:var(--muted); font-size:14px}
+  footer{color:var(--muted); font-size:13px; text-align:center; margin-top:8px}
+  a{color:var(--accent)}
+  .en{color:var(--muted)}
+</style>
+</head>
+<body>
+<main>
+  <div class="card">
+    <h1>Elimina il tuo account</h1>
+    <p class="sub">Football Team Simulator &mdash; cancellazione definitiva</p>
+
+    <p>Puoi eliminare l'account anche dall'app: <strong>Account &rarr; Elimina account</strong>.
+       Questa pagina serve se hai gi&agrave; disinstallato il gioco.</p>
+
+    <h2>Cosa viene eliminato</h2>
+    <ul>
+      <li>Email, password e profilo allenatore</li>
+      <li>Sessioni attive e dispositivi registrati per le notifiche</li>
+      <li>Le iscrizioni alle leghe private (una lega rimasta senza membri viene chiusa)</li>
+      <li>Le impronte tecniche usate contro gli account multipli e le segnalazioni collegate</li>
+    </ul>
+
+    <h2>Cosa resta, in forma anonima</h2>
+    <ul>
+      <li>Il risultato delle stagioni classificate gi&agrave; giocate (classifiche e palmar&egrave;s degli altri
+          allenatori restano coerenti), senza pi&ugrave; alcun riferimento a te</li>
+      <li>Il tuo posto in un girone in corso continua come squadra gestita dal computer</li>
+    </ul>
+    <p><strong>L'operazione &egrave; immediata e non &egrave; reversibile.</strong></p>
+  </div>
+
+  <div class="card">
+    <form id="form" autocomplete="off">
+      <label for="email">Email</label>
+      <input id="email" type="email" required autocomplete="username">
+
+      <label for="password">Password</label>
+      <input id="password" type="password" required autocomplete="current-password">
+
+      <label class="check" for="confirm">
+        <input id="confirm" type="checkbox" required>
+        <span>Ho capito che l'account e i dati collegati saranno eliminati per sempre.<br>
+              <span class="en">I understand my account and its data will be permanently deleted.</span></span>
+      </label>
+
+      <button id="submit" type="submit">Elimina definitivamente l'account</button>
+
+      <details>
+        <summary>Impostazioni avanzate (server)</summary>
+        <label for="api">Indirizzo del server</label>
+        <input id="api" type="url" spellcheck="false">
+      </details>
+    </form>
+
+    <div id="status" class="status"></div>
+  </div>
+
+  <div class="card">
+    <h2>Delete your account (English)</h2>
+    <p class="en">You can also delete your account from inside the game: <strong>Account &rarr; Delete account</strong>.
+      Deleting removes your email, password, coach profile, sessions, registered devices, private-league
+      memberships and abuse-prevention fingerprints. Finished ranked seasons stay on record in anonymous form
+      so other coaches' tables and honours remain correct, and a seat you hold in a running season carries on
+      as a computer-managed club. The deletion is immediate and cannot be undone.</p>
+    <p class="en">If the form does not work for you, write to
+      <a href="mailto:casarini.fabio@gmail.com">casarini.fabio@gmail.com</a> from the address you registered with.</p>
+  </div>
+
+  <footer>Football Team Simulator &mdash; Fabio Casarini</footer>
+</main>
+
+<script>
+(function () {
+  // The API this page talks to. Override for a test environment with ?api=https://...
+  var DEFAULT_API = "https://api.footballteamsimulator.com";
+
+  var params = new URLSearchParams(location.search);
+  var apiField = document.getElementById("api");
+  apiField.value = (params.get("api") || DEFAULT_API).replace(/\/+$/, "");
+
+  var form = document.getElementById("form");
+  var button = document.getElementById("submit");
+  var status = document.getElementById("status");
+
+  function say(kind, text) {
+    status.className = "status show " + kind;
+    status.textContent = text;
+  }
+
+  form.addEventListener("submit", async function (e) {
+    e.preventDefault();
+    var api = apiField.value.replace(/\/+$/, "");
+    var email = document.getElementById("email").value.trim();
+    var password = document.getElementById("password").value;
+
+    button.disabled = true;
+    say("work", "Eliminazione in corso... / Deleting...");
+
+    try {
+      // Step 1: prove who you are. Step 2: delete, re-confirming the password server-side.
+      var login = await fetch(api + "/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email, password: password })
+      });
+      if (!login.ok) {
+        say("err", "Email o password non corretti. / Wrong email or password.");
+        button.disabled = false;
+        return;
+      }
+      var auth = await login.json();
+
+      var del = await fetch(api + "/auth/account/delete", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + auth.accessToken
+        },
+        body: JSON.stringify({ password: password })
+      });
+
+      if (del.ok) {
+        say("ok", "Account eliminato. Puoi chiudere questa pagina.\nAccount deleted. You can close this page.");
+        form.querySelectorAll("input").forEach(function (i) { i.disabled = true; });
+        return;
+      }
+
+      say("err", "Eliminazione non riuscita (codice " + del.status + "). Riprova o scrivi a casarini.fabio@gmail.com."
+        + "\nDeletion failed (status " + del.status + "). Try again or email casarini.fabio@gmail.com.");
+      button.disabled = false;
+    } catch (err) {
+      say("err", "Server non raggiungibile. Controlla la connessione e riprova."
+        + "\nCould not reach the server. Check your connection and try again.");
+      button.disabled = false;
+    }
+  });
+})();
+</script>
+</body>
+</html>

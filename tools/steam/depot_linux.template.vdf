@@ -1,0 +1,20 @@
+// Linux depot TEMPLATE (Roadmap 10.2) - resolved by tools\release-steam.ps1.
+// The launch option on the partner site must point at FootballTeamSimulator.x86_64 and the
+// file needs the executable bit; steamcmd preserves it when uploading from Linux/macOS but
+// NOT from Windows, so set "Executable" on the launch option in Steamworks as well.
+"DepotBuildConfig"
+{
+	"DepotID"	"{{DEPOT_LINUX}}"
+	"contentroot"	"{{CONTENT_ROOT}}\linux"
+
+	"FileMapping"
+	{
+		"LocalPath"	"*"
+		"DepotPath"	"."
+		"recursive"	"1"
+	}
+
+	"FileExclusion"	"*_BurstDebugInformation_DoNotShip*"
+	"FileExclusion"	"*_BackUpThisFolder_ButDontShipItWithYourGame*"
+	"FileExclusion"	"*.log"
+}

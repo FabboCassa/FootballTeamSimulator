@@ -57,6 +57,23 @@ public static class AuthEndpoints
             return profile is null ? Results.Unauthorized() : Results.Ok(profile);
         }).RequireAuthorization();
 
+        // Protected + password-confirmed: delete this account for good (Phase 10.2a). Both mobile stores
+        // require an in-app route; the public deletion web page logs in first and then calls this same
+        // endpoint, so there is only ever one deletion path.
+        group.MapPost("/account/delete", async (
+            DeleteAccountRequest req, ClaimsPrincipal user, IAccountDeletionService deletion, CancellationToken ct) =>
+        {
+            var id = user.FindFirstValue(ClaimTypes.NameIdentifier)
+                     ?? user.FindFirstValue("sub");
+            if (!Guid.TryParse(id, out var userId))
+                return Results.Unauthorized();
+
+            var result = await deletion.DeleteAsync(userId, req, ct);
+            return result.Success
+                ? Results.Ok(result.Value)
+                : MapError(result.Error, result.Message);
+        }).RequireAuthorization();
+
         return app;
     }
 

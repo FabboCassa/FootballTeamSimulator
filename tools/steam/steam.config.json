@@ -1,0 +1,11 @@
+{
+  "$comment": "Steam depot ids for tools\\release-steam.ps1 (Roadmap 10.2). Fill these in from the Steamworks partner site once the App ID exists. IDs are NOT secrets - the Steam account password / 2FA never lives here (release-steam.ps1 takes the login interactively or from a cached steamcmd session).",
+  "appId": "0000000",
+  "depots": {
+    "windows": "0000001",
+    "mac": "0000002",
+    "linux": "0000003"
+  },
+  "branch": "",
+  "$branchNote": "Empty = upload the build but do NOT set it live. Set to 'default' only when you actually mean to publish to everyone; use a named beta branch (e.g. 'alpha') while testing."
+}

@@ -1,0 +1,19 @@
+// macOS depot TEMPLATE (Roadmap 10.2) - resolved by tools\release-steam.ps1.
+// NOTE: a macOS build must be signed and notarised by Apple before it will launch on a
+// user's Mac without a Gatekeeper warning; see docs/store/release-checklist.md.
+"DepotBuildConfig"
+{
+	"DepotID"	"{{DEPOT_MAC}}"
+	"contentroot"	"{{CONTENT_ROOT}}\mac"
+
+	"FileMapping"
+	{
+		"LocalPath"	"*"
+		"DepotPath"	"."
+		"recursive"	"1"
+	}
+
+	"FileExclusion"	"*_BurstDebugInformation_DoNotShip*"
+	"FileExclusion"	"*_BackUpThisFolder_ButDontShipItWithYourGame*"
+	"FileExclusion"	"*.log"
+}

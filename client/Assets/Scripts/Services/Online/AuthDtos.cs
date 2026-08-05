@@ -27,6 +27,14 @@ namespace Fts.Services.Online
         public string refreshToken;
     }
 
+    /// <summary>Deleting your own account (Roadmap 10.2a). The password travels again because the
+    /// server re-checks it: an access token can be minutes old on an unlocked phone.</summary>
+    [Serializable]
+    public sealed class DeleteAccountBody
+    {
+        public string password;
+    }
+
     [Serializable]
     public sealed class AuthResponseDto
     {

@@ -5,6 +5,9 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>Fts.Api</RootNamespace>
+    <!-- Release version (Roadmap 10.2). Written by tools/set-version.ps1 from tools/version.json -
+         do not hand-edit; GET /health reports it so a deployed instance can be identified. -->
+    <Version>0.1.0</Version>
   </PropertyGroup>
 
   <ItemGroup>

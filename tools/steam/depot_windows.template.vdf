@@ -1,0 +1,21 @@
+// Windows depot TEMPLATE (Roadmap 10.2) - resolved by tools\release-steam.ps1.
+// The exclusions are Unity build by-products that must never ship: the Burst debug
+// information folder and the IL2CPP backup folder are both explicitly named
+// "DoNotShip" / "ButDontShipItWithYourGame" by Unity itself.
+"DepotBuildConfig"
+{
+	"DepotID"	"{{DEPOT_WINDOWS}}"
+	"contentroot"	"{{CONTENT_ROOT}}\windows"
+
+	"FileMapping"
+	{
+		"LocalPath"	"*"
+		"DepotPath"	"."
+		"recursive"	"1"
+	}
+
+	"FileExclusion"	"*_BurstDebugInformation_DoNotShip*"
+	"FileExclusion"	"*_BackUpThisFolder_ButDontShipItWithYourGame*"
+	"FileExclusion"	"*.pdb"
+	"FileExclusion"	"*.log"
+}

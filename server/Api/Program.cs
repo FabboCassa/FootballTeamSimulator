@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Text;
 using Fts.Api.Auctions;
 using Fts.Api.Matches;
@@ -83,7 +84,27 @@ builder.Services.AddSingleton<ISimulationService, SimulationService>();
 // (no new dependency); the permit counts live in the Integrity configuration section.
 builder.Services.AddFtsRateLimiting();
 
+// Browser origins allowed to call this API (Phase 10.2a): the hosted WebGL build and the public
+// account-deletion page. Empty by default, so nothing changes for the native clients — a phone or a
+// desktop player is not a browser and never sends an Origin. Configure per environment, e.g.
+// Cors__AllowedOrigins__0=https://footballteamsimulator.pages.dev
+var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").GetChildren()
+    .Select(c => c.Value)
+    .Where(v => !string.IsNullOrWhiteSpace(v))
+    .Select(v => v!.Trim())
+    .ToArray();
+if (allowedOrigins.Length > 0)
+{
+    builder.Services.AddCors(o => o.AddDefaultPolicy(p => p
+        .WithOrigins(allowedOrigins)
+        .AllowAnyHeader()
+        .AllowAnyMethod()));
+}
+
 var app = builder.Build();
+
+// Before authentication so a rejected pre-flight still carries the CORS headers.
+if (allowedOrigins.Length > 0) app.UseCors();
 
 app.UseAuthentication();
 app.UseAuthorization();
@@ -107,10 +128,20 @@ if (!app.Environment.IsEnvironment("Testing")
     db.Database.Migrate();
 }
 
-// Liveness - also proves the server runs the same Sim.Core DLL as the client.
+// Liveness - also proves the server runs the same Sim.Core DLL as the client, and reports the
+// release version (Roadmap 10.2) so a deployed instance can be identified without shell access.
+// InformationalVersion carries the SourceRevisionId suffix ("0.1.0+<sha>") when built in a repo;
+// only the marketing part is reported.
+var apiVersion = (typeof(Program).Assembly
+        .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+        ?? typeof(Program).Assembly.GetName().Version?.ToString()
+        ?? "0.0.0")
+    .Split('+')[0];
+
 app.MapGet("/health", () => Results.Ok(new
 {
     status = "ok",
+    version = apiVersion,
     simCore = SimCoreInfo.Version,
     utc = DateTime.UtcNow
 }));

@@ -323,5 +323,9 @@ public static class DependencyInjection
 
         services.AddScoped<JwtTokenService>();
         services.AddScoped<IAuthService, AuthService>();
+
+        // Account deletion (Phase 10.2a). Depends on ILeagueService and the ranked leaderboard cache,
+        // both registered further down — registration order is irrelevant, resolution order is not.
+        services.AddScoped<IAccountDeletionService, AccountDeletionService>();
     }
 }

@@ -1,0 +1,24 @@
+// Steam app build script TEMPLATE (Roadmap 10.2).
+// tools\release-steam.ps1 substitutes the {{...}} placeholders from tools\steam\steam.config.json
+// and writes the resolved file to client\builds\steam\ (gitignored). Do not run this file directly.
+"appbuild"
+{
+	"appid"		"{{APP_ID}}"
+	"desc"		"{{BUILD_DESC}}"
+	"buildoutput"	"{{BUILD_OUTPUT}}"
+	"contentroot"	"{{CONTENT_ROOT}}"
+
+	// Empty = upload only, nothing goes live. A branch name here publishes to that branch.
+	"setlive"	"{{BRANCH}}"
+
+	// 1 = validate and report what WOULD be uploaded without uploading it.
+	"preview"	"{{PREVIEW}}"
+	"local"		""
+
+	"depots"
+	{
+		"{{DEPOT_WINDOWS}}"	"depot_windows.vdf"
+		"{{DEPOT_MAC}}"		"depot_mac.vdf"
+		"{{DEPOT_LINUX}}"	"depot_linux.vdf"
+	}
+}

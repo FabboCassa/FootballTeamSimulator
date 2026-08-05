@@ -1,4 +1,5 @@
 using Cysharp.Threading.Tasks;
+using Fts.Services;
 using Fts.Services.Localization;
 using Fts.Services.Navigation;
 using Fts.Services.Online;
@@ -18,17 +19,20 @@ namespace Fts.Presenters
         private readonly ScreenNavigator _navigator;
         private readonly ILocalizationService _loc;
         private readonly ApiClient _api;
+        private readonly OverlayHost _overlay;
         private readonly LoginView _view;
 
         private bool _busy;
 
         public VisualElement View => _view.Root;
 
-        public LoginScreenPresenter(ScreenNavigator navigator, ILocalizationService loc, ApiClient api)
+        public LoginScreenPresenter(
+            ScreenNavigator navigator, ILocalizationService loc, ApiClient api, OverlayHost overlay)
         {
             _navigator = navigator;
             _loc = loc;
             _api = api;
+            _overlay = overlay;
             _view = new LoginView(loc.Tr);
         }
 
@@ -38,6 +42,9 @@ namespace Fts.Presenters
             _view.ToggleModeClicked += OnToggleMode;
             _view.LogoutClicked += OnLogout;
             _view.BackClicked += OnBack;
+            _view.DeleteRequested += OnDeleteRequested;
+            _view.DeleteConfirmClicked += OnDeleteConfirm;
+            _view.DeleteCancelClicked += OnDeleteCancel;
 
             _view.SetServerUrl(_api.BaseUrl);
             RefreshAuthState();
@@ -49,6 +56,9 @@ namespace Fts.Presenters
             _view.ToggleModeClicked -= OnToggleMode;
             _view.LogoutClicked -= OnLogout;
             _view.BackClicked -= OnBack;
+            _view.DeleteRequested -= OnDeleteRequested;
+            _view.DeleteConfirmClicked -= OnDeleteConfirm;
+            _view.DeleteCancelClicked -= OnDeleteCancel;
         }
 
         private void RefreshAuthState()
@@ -115,6 +125,63 @@ namespace Fts.Presenters
             _view.SetBusy(false);
             RefreshAuthState();
         }
+
+        // ---- delete account (Roadmap 10.2a) ----
+        // Two gates before anything irreversible happens: the password panel, then a modal confirm.
+        // Both mobile stores require this route to exist inside the app.
+
+        private void OnDeleteRequested() => _view.ShowDeletePanel();
+
+        private void OnDeleteCancel() => _view.HideDeletePanel();
+
+        private void OnDeleteConfirm()
+        {
+            if (_busy) return;
+
+            if (string.IsNullOrEmpty(_view.DeletePassword))
+            {
+                _view.ShowDeleteStatus(_loc.Tr("login.error.missing_fields"), isError: true);
+                return;
+            }
+
+            Dialogs.Confirm(
+                _overlay, _loc,
+                "login.delete_dialog_title", "login.delete_dialog_message", "login.delete_confirm",
+                () => DeleteAsync().Forget());
+        }
+
+        private async UniTaskVoid DeleteAsync()
+        {
+            if (_busy) return;
+            _busy = true;
+            _view.SetBusy(true);
+            _view.ShowDeleteStatus(_loc.Tr("login.deleting"), isError: false);
+
+            var result = await _api.DeleteAccountAsync(_view.DeletePassword);
+
+            _busy = false;
+            _view.SetBusy(false);
+
+            if (result.Success)
+            {
+                // The session is already gone: the screen drops back to the signed-out form.
+                _view.HideDeletePanel();
+                RefreshAuthState();
+                _view.ShowStatus(_loc.Tr("login.delete_done"), isError: false);
+                Dialogs.Toast(_overlay, _loc, "login.delete_done");
+                return;
+            }
+
+            _view.ShowDeleteStatus(_loc.Tr(DeleteErrorKey(result.Error)), isError: true);
+        }
+
+        private static string DeleteErrorKey(ApiError error) => error switch
+        {
+            // The server re-checks the password, so a 401 here means "wrong password", not "signed out".
+            ApiError.InvalidCredentials => "login.error.wrong_password",
+            ApiError.Network => "login.error.network",
+            _ => "login.error.server"
+        };
 
         private static string ErrorKey(ApiError error) => error switch
         {

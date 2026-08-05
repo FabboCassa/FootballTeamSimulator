@@ -20,6 +20,10 @@ namespace Fts.Infrastructure.Ranked;
 /// </summary>
 public sealed class RankedRankingService : IRankedRankingService
 {
+    /// <summary>Shown where a coach row has no profile behind it any more — an account deleted under
+    /// 10.2a keeps its ladder record, re-stamped with an id that belongs to nobody.</summary>
+    public const string RemovedCoachName = "Allenatore rimosso";
+
     private readonly FtsDbContext _db;
     private readonly IRankedLeaderboardCache _cache;
     private readonly RankedOptions _opt;
@@ -231,7 +235,7 @@ public sealed class RankedRankingService : IRankedRankingService
             list.Add(new RankedLeaderboardEntryDto(
                 Rank: startRank + i,
                 UserId: c.UserId,
-                DisplayName: names.TryGetValue(c.UserId, out var n) ? n : string.Empty,
+                DisplayName: names.TryGetValue(c.UserId, out var n) ? n : RemovedCoachName,
                 Rating: c.Rating,
                 PeakRating: Math.Max(c.PeakRating, c.Rating),
                 Tier: group?.Tier,

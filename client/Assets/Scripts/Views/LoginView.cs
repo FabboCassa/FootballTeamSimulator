@@ -17,6 +17,11 @@ namespace Fts.Views
         public event Action LogoutClicked;
         public event Action BackClicked;
 
+        /// <summary>"Delete account" tapped — opens the password panel (Roadmap 10.2a).</summary>
+        public event Action DeleteRequested;
+        public event Action DeleteConfirmClicked;
+        public event Action DeleteCancelClicked;
+
         public VisualElement Root { get; }
 
         private readonly Func<string, string> _tr;
@@ -40,6 +45,15 @@ namespace Fts.Views
 
         private readonly Label _signedInLabel;
         private readonly Button _logoutButton;
+
+        private readonly Button _deleteButton;
+        private readonly VisualElement _deleteCard;
+        private readonly Label _deleteWarning;
+        private readonly Label _deletePasswordCaption;
+        private readonly TextField _deletePasswordField;
+        private readonly Button _deleteConfirmButton;
+        private readonly Button _deleteCancelButton;
+        private readonly Label _deleteStatus;
 
         private readonly Button _backButton;
 
@@ -102,6 +116,45 @@ namespace Fts.Views
             _logoutButton = UiKit.PrimaryButton(string.Empty, () => LogoutClicked?.Invoke());
             _signedInCard.Add(_logoutButton);
 
+            // Deleting the account is deliberately the quietest control on the screen: an outline
+            // button, not a filled one, so it never competes with logout for a mis-tap.
+            _deleteButton = UiKit.MenuButton(string.Empty, () => DeleteRequested?.Invoke());
+            _deleteButton.style.marginTop = UiKit.SpaceSm;
+            _deleteButton.style.color = UiKit.Danger;
+            _signedInCard.Add(_deleteButton);
+
+            // --- delete-account panel (hidden until asked for) ---
+            _deleteCard = UiKit.Card();
+            _deleteCard.style.display = DisplayStyle.None;
+            col.Add(_deleteCard);
+
+            _deleteWarning = UiKit.Caption(string.Empty);
+            _deleteWarning.style.whiteSpace = WhiteSpace.Normal;
+            _deleteWarning.style.color = UiKit.Danger;
+            _deleteWarning.style.marginBottom = UiKit.SpaceSm;
+            _deleteCard.Add(_deleteWarning);
+
+            _deletePasswordCaption = UiKit.Caption(string.Empty);
+            _deleteCard.Add(_deletePasswordCaption);
+            _deletePasswordField = Field(isPassword: true);
+            _deleteCard.Add(_deletePasswordField);
+
+            _deleteConfirmButton = UiKit.PrimaryButton(string.Empty, () => DeleteConfirmClicked?.Invoke());
+            _deleteConfirmButton.style.marginTop = UiKit.SpaceSm;
+            _deleteConfirmButton.style.backgroundColor = UiKit.Danger;
+            _deleteCard.Add(_deleteConfirmButton);
+
+            _deleteCancelButton = UiKit.MenuButton(string.Empty, () => DeleteCancelClicked?.Invoke());
+            _deleteCancelButton.style.marginTop = UiKit.SpaceSm;
+            _deleteCard.Add(_deleteCancelButton);
+
+            // The form card's status label is hidden while signed in, so this panel carries its own.
+            _deleteStatus = UiKit.Caption(string.Empty);
+            _deleteStatus.style.marginTop = UiKit.SpaceSm;
+            _deleteStatus.style.whiteSpace = WhiteSpace.Normal;
+            _deleteStatus.style.display = DisplayStyle.None;
+            _deleteCard.Add(_deleteStatus);
+
             // --- advanced: server URL ---
             _serverCaption = UiKit.Caption(string.Empty);
             _serverCaption.style.marginTop = UiKit.SpaceMd;
@@ -151,6 +204,10 @@ namespace Fts.Views
         {
             _submitButton.SetEnabled(!busy);
             _toggleButton.SetEnabled(!busy);
+            _logoutButton.SetEnabled(!busy);
+            _deleteButton.SetEnabled(!busy);
+            _deleteConfirmButton.SetEnabled(!busy);
+            _deleteCancelButton.SetEnabled(!busy);
         }
 
         public void ShowSignedIn(string displayName, string email)
@@ -164,6 +221,35 @@ namespace Fts.Views
         {
             _signedInCard.style.display = DisplayStyle.None;
             _formCard.style.display = DisplayStyle.Flex;
+            HideDeletePanel();
+        }
+
+        // ---- delete account (Roadmap 10.2a) ----
+
+        public string DeletePassword => _deletePasswordField.value ?? string.Empty;
+
+        public void ShowDeletePanel()
+        {
+            _deletePasswordField.SetValueWithoutNotify(string.Empty);
+            _deleteStatus.style.display = DisplayStyle.None;
+            _deleteCard.style.display = DisplayStyle.Flex;
+            _deleteButton.SetEnabled(false);
+            _deletePasswordField.Focus();
+        }
+
+        public void HideDeletePanel()
+        {
+            _deleteCard.style.display = DisplayStyle.None;
+            _deletePasswordField.SetValueWithoutNotify(string.Empty);
+            _deleteStatus.style.display = DisplayStyle.None;
+            _deleteButton.SetEnabled(true);
+        }
+
+        public void ShowDeleteStatus(string message, bool isError)
+        {
+            _deleteStatus.text = message;
+            _deleteStatus.style.color = isError ? UiKit.Danger : UiKit.Positive;
+            _deleteStatus.style.display = DisplayStyle.Flex;
         }
 
         public void UpdateTexts()
@@ -174,6 +260,11 @@ namespace Fts.Views
             _passwordCaption.text = _tr("login.password");
             _serverCaption.text = _tr("login.server_url");
             _logoutButton.text = _tr("login.logout");
+            _deleteButton.text = _tr("login.delete_account");
+            _deleteWarning.text = _tr("login.delete_warning");
+            _deletePasswordCaption.text = _tr("login.delete_password");
+            _deleteConfirmButton.text = _tr("login.delete_confirm");
+            _deleteCancelButton.text = _tr("common.cancel");
             _backButton.text = _tr("common.back");
             SetMode(_registerMode);
         }

@@ -113,6 +113,33 @@ namespace Fts.Services.Online
             ClearSession();
         }
 
+        /// <summary>Deletes this account for good (Roadmap 10.2a) and, on success, clears the local
+        /// session — there is nothing left to sign back into. The password is sent because the server
+        /// re-confirms it; a wrong one comes back as <see cref="ApiError.InvalidCredentials"/> and the
+        /// account is untouched. Both mobile stores require this to exist in the app.</summary>
+        public async UniTask<ApiResult> DeleteAccountAsync(string password)
+        {
+            if (!IsSignedIn) return ApiResult.Fail(ApiError.InvalidCredentials);
+
+            var body = new DeleteAccountBody { password = password };
+            var (status, _, network) = await SendAuthedAsync("POST", "/auth/account/delete", body);
+
+            if (network) return ApiResult.Fail(ApiError.Network);
+
+            if (status is >= 200 and < 300)
+            {
+                ClearSession();
+                return ApiResult.Ok();
+            }
+
+            return ApiResult.Fail(status switch
+            {
+                401 => ApiError.InvalidCredentials,
+                400 => ApiError.Validation,
+                _ => ApiError.Server
+            });
+        }
+
         /// <summary>Fetches the account profile from a protected endpoint, refreshing the access token
         /// first if it's about to expire. Returns null if not signed in / unreachable.</summary>
         public async UniTask<AuthProfile?> GetMeAsync()

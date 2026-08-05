@@ -20,6 +20,21 @@ public sealed record AuthResponse(
 /// <summary>Account-level coach profile surfaced to the client (also the /auth/me payload).</summary>
 public sealed record CoachProfileDto(Guid UserId, string Email, string DisplayName);
 
+/// <summary>Deleting your own account (Phase 10.2a). The password is re-checked at the moment of the
+/// request: an access token can be minutes old and sitting on an unlocked phone, and this is the one
+/// call in the API that cannot be undone.</summary>
+public sealed record DeleteAccountRequest(string Password);
+
+/// <summary>What the deletion actually did. Returned to the caller (and asserted by the tests) so the
+/// operation is auditable from the outside without exposing anyone else's data.</summary>
+public sealed record DeleteAccountResult(
+    int PrivateLeaguesLeft,
+    int SessionsRevoked,
+    int DevicesRemoved,
+    int SignalsRemoved,
+    bool RankedHistoryAnonymised,
+    int RankedAwardsAnonymised);
+
 /// <summary>Why an auth call failed — the Api maps these to HTTP status codes without leaking
 /// which of email/password was wrong (login/refresh both return a generic message).</summary>
 public enum AuthError
