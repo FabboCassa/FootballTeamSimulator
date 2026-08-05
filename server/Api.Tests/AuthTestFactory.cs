@@ -6,6 +6,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace Fts.Api.Tests;
 
@@ -26,6 +27,16 @@ public sealed class AuthTestFactory : WebApplicationFactory<Program>
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
+
+        // Silence the host's own logging. EF Core logs every SQL statement at Information, which for a
+        // suite that generates whole worlds means tens of thousands of lines: locally it is noise, in CI
+        // it is worse than noise — GitHub truncates the step and the actual failure becomes unreadable.
+        // Warnings and errors still come through, and the tests' own TestContext output is untouched.
+        builder.ConfigureLogging(logging =>
+        {
+            logging.ClearProviders();
+            logging.SetMinimumLevel(LogLevel.Warning);
+        });
 
         builder.ConfigureTestServices(services =>
         {

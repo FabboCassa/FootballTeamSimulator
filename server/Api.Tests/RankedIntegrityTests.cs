@@ -138,6 +138,19 @@ public class LinkHeuristicsTests
 [TestFixture]
 public class RankedIntegrityTests : RankedSeasonTestBase
 {
+    /// <summary>
+    /// These tests are about the PRICE-BAND guard, not about budgets — so the budget must never be the
+    /// thing that refuses an offer. With the shipped flat 25M a ranked club can only afford a slice of
+    /// its own world, and WHICH slice depends on the values that world happened to generate; the world
+    /// seed is fresh every run, so the test was really measuring the dice. It passed on one machine and
+    /// failed on CI with "no cheap player to overpay for". A budget nothing can exhaust removes the dice:
+    /// whatever refuses an offer here can only be the guard under test.
+    /// </summary>
+    protected override void ConfigureExtra(IDictionary<string, string?> settings)
+    {
+        settings["Ranked:StartingTransferBudget"] = "2000000000";
+    }
+
     protected async Task<RankedSquadDto> Squad(string token, int clubExternalId)
     {
         using var req = Authed(HttpMethod.Get, $"/ranked/clubs/{clubExternalId}/squad", token);
@@ -194,13 +207,14 @@ public class RankedIntegrityTests : RankedSeasonTestBase
 
         // 1) The gift: a star for pocket change.
         var gift = await MakeOffer(buyer, star.ExternalId, star.MarketValue / 100);
-        // 2) The laundered budget: a wild overpay for someone cheap (still inside the 25M budget, so the
-        //    budget guard cannot be what refuses it).
+        // 2) The laundered budget: a wild overpay for the squad's cheapest POLICED player (the guard
+        //    ignores anyone under MinPlayerValueChecked). The fixture's budget is deliberately far larger
+        //    than any fee, so the refusal can only come from the price band.
         var cheap = (await Squad(buyer, sellerClub)).Players
-            .Where(p => p.MarketValue > 250_000 && p.MarketValue * 4 < 25_000_000)
-            .OrderBy(p => p.MarketValue)
+            .Where(p => p.MarketValue > 250_000)
+            .OrderBy(p => p.MarketValue).ThenBy(p => p.ExternalId)
             .FirstOrDefault();
-        Assert.That(cheap, Is.Not.Null, "a squad should have a policed player cheap enough to overpay for");
+        Assert.That(cheap, Is.Not.Null, "a generated squad should have at least one policed player");
         var overpay = await MakeOffer(buyer, cheap!.ExternalId, cheap.MarketValue * 4);
 
         var flags = await Flags();
@@ -228,12 +242,14 @@ public class RankedIntegrityTests : RankedSeasonTestBase
         string buyer = tokens[0], seller = tokens[1];
         int sellerClub = (await GetMine(seller)).ClubExternalId!.Value;
 
-        // A player worth policing whose half-price fee still fits the budget.
+        // A player worth policing. No upper bound: the fixture's budget covers any fee, so the price band
+        // is the only thing being tested (an upper bound here would put the generated values back in
+        // charge of whether the test can run at all).
         var target = (await Squad(buyer, sellerClub)).Players
-            .Where(p => p.MarketValue >= 500_000 && p.MarketValue <= 20_000_000)
-            .OrderByDescending(p => p.MarketValue)
+            .Where(p => p.MarketValue >= 500_000)
+            .OrderByDescending(p => p.MarketValue).ThenBy(p => p.ExternalId)
             .FirstOrDefault();
-        Assert.That(target, Is.Not.Null, "a generated squad should have a mid-priced player to trade");
+        Assert.That(target, Is.Not.Null, "a generated squad should have a player worth policing");
 
         long halfPrice = target!.MarketValue / 2; // ~50% → inside the hard band, inside the grey band
         var made = await MakeOffer(buyer, target.ExternalId, halfPrice);

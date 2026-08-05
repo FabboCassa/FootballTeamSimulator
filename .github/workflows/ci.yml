@@ -17,8 +17,21 @@ jobs:
         run: |
           dotnet build shared/Sim.Core/Sim.Core.csproj -c Release
           dotnet build shared/Contracts/Contracts.csproj -c Release
+      # verbosity=normal on purpose: the harness prints its measurements ([balance-*], the golden
+      # master hash) through TestContext and those lines are the point of the run.
       - name: Run Sim.Core tests
-        run: dotnet test shared/Sim.Core.Tests/Sim.Core.Tests.csproj -c Release --logger "console;verbosity=normal"
+        run: >
+          dotnet test shared/Sim.Core.Tests/Sim.Core.Tests.csproj -c Release
+          --logger "console;verbosity=normal"
+          --logger "trx;LogFileName=simcore-tests.trx"
+          --results-directory artifacts/test-results
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: simcore-test-results
+          path: artifacts/test-results
+          if-no-files-found: ignore
 
   test-server:
     runs-on: ubuntu-latest
@@ -27,5 +40,20 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
+      # verbosity=minimal keeps the step readable: this suite spins up the real host for every
+      # fixture, and a failure has to stay visible instead of being buried (GitHub truncates a large
+      # step, which hides exactly the lines you came for). Failed tests still print their message
+      # and stack trace, and the full run is in the uploaded .trx either way.
       - name: Run server tests
-        run: dotnet test server/Api.Tests/Api.Tests.csproj -c Release --logger "console;verbosity=normal"
+        run: >
+          dotnet test server/Api.Tests/Api.Tests.csproj -c Release
+          --logger "console;verbosity=minimal"
+          --logger "trx;LogFileName=server-tests.trx"
+          --results-directory artifacts/test-results
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-test-results
+          path: artifacts/test-results
+          if-no-files-found: ignore
