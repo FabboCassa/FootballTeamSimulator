@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Fts.Application.Balance;
 using Fts.Application.Notifications;
 using Fts.Application.Ranked;
 using Fts.Infrastructure.Leagues;
@@ -43,13 +44,18 @@ public sealed class RankedSeasonService : IRankedSeasonService
     private readonly INotificationService _notify;
     private readonly RankedOptions _opt;
     private readonly Fts.Infrastructure.Integrity.IntegrityOptions _integrityOpt;
-    private readonly BalanceConfig _config = new();
+    /// <summary>The server's ACTIVE balance (Phase 10.3), snapshotted for the lifetime of this scoped
+    /// service so one request - or one calendar tick - resolves against ONE set of numbers even if an
+    /// admin pushes a revision half way through it. Before 10.3 this was `new BalanceConfig()`, i.e. the
+    /// balance embedded in the build; with nothing ever pushed it still is, byte for byte.</summary>
+    private readonly BalanceConfig _config;
 
     public RankedSeasonService(
         FtsDbContext db, IRankedService ranked, IRankedAuctionService auctions,
         IRankedRankingService ranking, IRankedSeasonEndService seasonEnd,
         INotificationService notify, IOptions<RankedOptions> options,
-        IOptions<Fts.Infrastructure.Integrity.IntegrityOptions> integrityOptions)
+        IOptions<Fts.Infrastructure.Integrity.IntegrityOptions> integrityOptions,
+        IBalanceProvider balance)
     {
         _db = db;
         _ranked = ranked;
@@ -59,6 +65,7 @@ public sealed class RankedSeasonService : IRankedSeasonService
         _notify = notify;
         _opt = options.Value;
         _integrityOpt = integrityOptions.Value;
+        _config = balance.Current;
     }
 
     /// <summary>Shared with the other ranked services (see <see cref="RankedPlanJson"/>) so a plan written by

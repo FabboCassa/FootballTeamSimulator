@@ -75,6 +75,15 @@ public sealed class AuthService : IAuthService
         if (user is null || !await _users.CheckPasswordAsync(user, request.Password))
             return AuthResult<AuthResponse>.Fail(AuthError.InvalidCredentials, "Invalid email or password.");
 
+        // Live ops lockout (Phase 10.3). This service authenticates with CheckPasswordAsync rather than
+        // SignInManager, which means Identity's lockout is stored but never CONSULTED — before 10.3 a
+        // suspended account could still sign in, which would have made the admin "lock" button a no-op.
+        // Checked AFTER the password so a wrong password on a banned account still says "invalid
+        // credentials": that keeps the endpoint from becoming a way to enumerate who is suspended.
+        if (await _users.IsLockedOutAsync(user))
+            return AuthResult<AuthResponse>.Fail(
+                AuthError.AccountLocked, "This account has been suspended.");
+
         var profile = await _db.CoachProfiles.FirstOrDefaultAsync(p => p.UserId == user.Id, ct)
             ?? await CreateFallbackProfileAsync(user, ct);
 
@@ -94,6 +103,13 @@ public sealed class AuthService : IAuthService
 
         if (stored is null || !stored.IsActive || stored.User is null)
             return AuthResult<AuthResponse>.Fail(AuthError.InvalidRefreshToken, "Invalid or expired refresh token.");
+
+        // A lock revokes the account's refresh tokens, so this is belt AND braces — it also covers a token
+        // minted in the same second as the lock, and any future path that stores one without going through
+        // the admin service.
+        if (await _users.IsLockedOutAsync(stored.User))
+            return AuthResult<AuthResponse>.Fail(
+                AuthError.AccountLocked, "This account has been suspended.");
 
         var profile = await _db.CoachProfiles.FirstOrDefaultAsync(p => p.UserId == stored.UserId, ct)
             ?? await CreateFallbackProfileAsync(stored.User, ct);

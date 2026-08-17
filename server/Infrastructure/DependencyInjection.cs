@@ -1,9 +1,13 @@
+using Fts.Application.Admin;
 using Fts.Application.Auth;
+using Fts.Application.Balance;
 using Fts.Application.Integrity;
 using Fts.Application.Leagues;
 using Fts.Application.Notifications;
 using Fts.Application.Ranked;
+using Fts.Infrastructure.Admin;
 using Fts.Infrastructure.Auth;
+using Fts.Infrastructure.Balance;
 using Fts.Infrastructure.Integrity;
 using Fts.Infrastructure.Leagues;
 using Fts.Infrastructure.Jobs;
@@ -55,6 +59,12 @@ public static class DependencyInjection
             .AddDbContextCheck<FtsDbContext>("postgres", tags: new[] { ReadyTag })
             .AddCheck<RedisHealthCheck>("redis", tags: new[] { ReadyTag });
 
+        // The server's ACTIVE balance (Phase 10.3). Registered FIRST because the gameplay services below
+        // take it as a constructor dependency. Singleton by definition — it is one piece of process state,
+        // and the whole point is that a push swaps it for everyone at once. Until something is pushed it
+        // holds `new BalanceConfig()`, i.e. exactly the balance embedded in this build.
+        services.AddSingleton<IBalanceProvider, BalanceProvider>();
+
         AddAuth(services, config);
         AddNotifications(services, config);
         AddBackgroundJobs(services, postgres, enableBackgroundJobs);
@@ -95,6 +105,12 @@ public static class DependencyInjection
         // Dev-only test-league seeding (dev tooling). Always registered (harmless); the Api maps the
         // endpoints only outside Production and behind a config flag.
         services.AddScoped<Fts.Application.Dev.IDevSeedService, Fts.Infrastructure.Dev.DevSeedService>();
+
+        // Live ops (Phase 10.3): metrics, worlds, accounts, balance push. Scoped (request-scoped
+        // FtsDbContext + Identity's UserManager/RoleManager). Registered in EVERY environment, including
+        // Production — an admin API that only exists outside production is not live ops; the admin ROLE is
+        // the gate, not the environment.
+        services.AddScoped<IAdminService, AdminService>();
 
         return services;
     }
@@ -274,6 +290,7 @@ public static class DependencyInjection
         // The recurring job types are resolvable regardless (so a direct unit test can new/inject them).
         services.AddScoped<HeartbeatJob>();
         services.AddScoped<RankedSeasonJob>();
+        services.AddScoped<BalanceReloadJob>();
 
         if (!enable) return;
 

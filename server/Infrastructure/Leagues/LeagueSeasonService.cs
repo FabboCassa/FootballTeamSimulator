@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Fts.Application.Balance;
 using Fts.Application.Leagues;
 using Fts.Infrastructure.Persistence;
 using Fts.Infrastructure.Persistence.Entities;
@@ -28,9 +29,17 @@ namespace Fts.Infrastructure.Leagues;
 public sealed class LeagueSeasonService : ILeagueSeasonService
 {
     private readonly FtsDbContext _db;
-    private readonly BalanceConfig _config = new();
+    /// <summary>The server's ACTIVE balance (Phase 10.3), snapshotted for the lifetime of this scoped
+    /// service so one request - or one calendar tick - resolves against ONE set of numbers even if an
+    /// admin pushes a revision half way through it. Before 10.3 this was `new BalanceConfig()`, i.e. the
+    /// balance embedded in the build; with nothing ever pushed it still is, byte for byte.</summary>
+    private readonly BalanceConfig _config;
 
-    public LeagueSeasonService(FtsDbContext db) => _db = db;
+    public LeagueSeasonService(FtsDbContext db, IBalanceProvider balance)
+    {
+        _db = db;
+        _config = balance.Current;
+    }
 
     /// <summary>Options for the stored plan JSON: tolerant of string- or number-valued enums and of
     /// property-name casing, so the round-trip is robust regardless of how the client serialised.</summary>

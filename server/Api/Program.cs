@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Text;
+using Fts.Api.Admin;
 using Fts.Api.Auctions;
 using Fts.Api.Matches;
 using Fts.Api.Auth;
@@ -10,13 +11,19 @@ using Fts.Api.Leagues;
 using Fts.Api.Notifications;
 using Fts.Api.Ranked;
 using Fts.Api.Simulation;
+using Fts.Application.Admin;
+using Fts.Application.Balance;
 using Fts.Application.Leagues;
 using Fts.Application.Simulation;
 using Fts.Infrastructure;
+using Fts.Infrastructure.Admin;
+using Fts.Infrastructure.Auth;
+using Fts.Infrastructure.Balance;
 using Fts.Infrastructure.Jobs;
 using Fts.Infrastructure.Persistence;
 using Hangfire;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Sim.Core;
@@ -101,6 +108,25 @@ if (allowedOrigins.Length > 0)
         .AllowAnyMethod()));
 }
 
+// The release version this build carries (Roadmap 10.2). InformationalVersion carries the
+// SourceRevisionId suffix ("0.1.0+<sha>") when built in a repo; only the marketing part is reported.
+// Computed BEFORE the container is built because live ops (10.3) needs it as a registered singleton, not
+// just as a closure over the /health handler.
+var apiVersion = (typeof(Program).Assembly
+        .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+        ?? typeof(Program).Assembly.GetName().Version?.ToString()
+        ?? "0.0.0")
+    .Split('+')[0];
+
+// The three facts about this instance that Infrastructure cannot discover for itself (Phase 10.3). The
+// Api knows them all already — they are what /health reports — so it hands them over rather than making a
+// class library take a dependency on the hosting abstractions.
+builder.Services.AddSingleton(new AdminRuntimeInfo(
+    Version: apiVersion,
+    SimCoreVersion: SimCoreInfo.Version,
+    Environment: builder.Environment.EnvironmentName,
+    StartedUtc: DateTime.UtcNow));
+
 var app = builder.Build();
 
 // Before authentication so a rejected pre-flight still carries the CORS headers.
@@ -128,16 +154,55 @@ if (!app.Environment.IsEnvironment("Testing")
     db.Database.Migrate();
 }
 
+// Live ops bootstrap (Phase 10.3), in this order and for these reasons:
+//   1. the "admin" role must exist before anyone can be put in it;
+//   2. Admin:BootstrapEmail promotes ONE account by email — this is how the first admin comes into
+//      existence on a fresh deployment, since there is no admin to grant the role. It is idempotent and
+//      config-driven (Admin__BootstrapEmail as an env var), so the answer to "how do I get in?" is a
+//      deployment setting rather than a hard-coded account or a seeded password;
+//   3. the active balance revision is loaded, so the first request already simulates on the pushed
+//      numbers instead of the build's defaults for however long the reload job takes to fire.
+// Skipped under Testing for the same reason as the migration above: the test host creates its SQLite
+// schema AFTER the app has started, so anything that touches a table here would run against a database
+// that does not have one yet. The pieces that matter to a test are reachable without this block —
+// AdminService creates the role on the grant path, and the balance provider starts on the build's
+// defaults, which is exactly what a test wants as a baseline.
+if (!app.Environment.IsEnvironment("Testing"))
+{
+    using var scope = app.Services.CreateScope();
+    var sp = scope.ServiceProvider;
+
+    var roles = sp.GetRequiredService<RoleManager<IdentityRole<Guid>>>();
+    if (!await roles.RoleExistsAsync(AdminService.AdminRole))
+        await roles.CreateAsync(new IdentityRole<Guid> { Id = Guid.NewGuid(), Name = AdminService.AdminRole });
+
+    var bootstrapEmail = app.Configuration["Admin:BootstrapEmail"]?.Trim();
+    if (!string.IsNullOrWhiteSpace(bootstrapEmail))
+    {
+        var users = sp.GetRequiredService<UserManager<AppUser>>();
+        var bootstrapUser = await users.FindByEmailAsync(bootstrapEmail);
+        if (bootstrapUser is null)
+        {
+            app.Logger.LogWarning(
+                "Admin:BootstrapEmail is set to {Email} but no such account exists yet — register it and "
+                + "restart, or grant the role from an existing admin.", bootstrapEmail);
+        }
+        else if (!await users.IsInRoleAsync(bootstrapUser, AdminService.AdminRole))
+        {
+            await users.AddToRoleAsync(bootstrapUser, AdminService.AdminRole);
+            app.Logger.LogWarning("Granted the admin role to {Email} from Admin:BootstrapEmail.", bootstrapEmail);
+        }
+    }
+
+    await BalanceStore.LoadActiveAsync(
+        sp.GetRequiredService<FtsDbContext>(),
+        sp.GetRequiredService<IBalanceProvider>(),
+        app.Logger);
+}
+
 // Liveness - also proves the server runs the same Sim.Core DLL as the client, and reports the
 // release version (Roadmap 10.2) so a deployed instance can be identified without shell access.
-// InformationalVersion carries the SourceRevisionId suffix ("0.1.0+<sha>") when built in a repo;
-// only the marketing part is reported.
-var apiVersion = (typeof(Program).Assembly
-        .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
-        ?? typeof(Program).Assembly.GetName().Version?.ToString()
-        ?? "0.0.0")
-    .Split('+')[0];
-
+// `apiVersion` is computed above, before the container is built (live ops registers it as a singleton).
 app.MapGet("/health", () => Results.Ok(new
 {
     status = "ok",
@@ -174,6 +239,12 @@ app.MapHub<MatchHub>("/hubs/match");
 // Public ranked ladder (Phase 9.1): enrol, read your ladder state / a group's fixed-size seat list,
 // toggle auto re-enrolment — JWT-protected. Always mapped.
 app.MapRankedEndpoints();
+
+// Live ops (Phase 10.3): metrics, worlds, accounts and the balance push. Mapped in EVERY environment,
+// Production included — this is the surface an operator needs precisely when things are live. It is gated
+// by the admin ROLE (AdminOnlyFilter), not by the environment flags the dev endpoints use, and a
+// signed-in non-admin gets a 404 rather than a 403 so its existence is not advertised.
+app.MapAdminEndpoints();
 
 // Ranked lifecycle (Phase 9.1): closing a placement season and sorting its coaches into divisions is a
 // SERVER action, not a player one — exposed as a dev-only internal endpoint until the 9.2 real-time
@@ -221,6 +292,14 @@ if (backgroundJobsEnabled)
         // what actually fires, so minutely polling just asks "is anything due yet".
         recurring.AddOrUpdate<RankedSeasonJob>(
             RankedSeasonJob.RecurringJobId,
+            j => j.ExecuteAsync(CancellationToken.None),
+            Cron.Minutely());
+
+        // Balance push propagation (Phase 10.3): a push swaps the config on the instance that served it,
+        // and this brings every other instance up to the same revision within a minute. Cheap — it reads
+        // one row and does nothing when the revision has not moved.
+        recurring.AddOrUpdate<BalanceReloadJob>(
+            BalanceReloadJob.RecurringJobId,
             j => j.ExecuteAsync(CancellationToken.None),
             Cron.Minutely());
     }

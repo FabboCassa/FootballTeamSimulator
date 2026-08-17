@@ -29,7 +29,11 @@ param(
     [switch]$Build,
     [switch]$Deploy,
     [string]$ProjectName = "football-team-simulator",
-    [string]$Branch = ""
+    [string]$Branch = "",
+    # Roadmap 10.3: web/admin.html is the live-ops dashboard. It is NOT published by default - it holds no
+    # secrets (the API's admin role is the gate) but there is no reason to hand out its address either, and
+    # the intended way to use it is locally, from the machine of whoever is on call. See docs/ops/runbook.md.
+    [switch]$IncludeAdmin
 )
 
 $ErrorActionPreference = "Stop"
@@ -59,7 +63,13 @@ $extra = Join-Path $root "web"
 $extraFiles = @()
 if (Test-Path $extra) {
     $extraFiles = Get-ChildItem $extra -File | Where-Object { $_.Name -ne "index.html" }
+    if (-not $IncludeAdmin) {
+        $extraFiles = $extraFiles | Where-Object { $_.Name -ne "admin.html" }
+    }
     foreach ($f in $extraFiles) { Copy-Item $f.FullName $stage -Force }
+}
+if (-not $IncludeAdmin -and (Test-Path (Join-Path $extra "admin.html"))) {
+    Write-Host "Skipped web/admin.html (live-ops dashboard). Pass -IncludeAdmin to publish it." -ForegroundColor DarkGray
 }
 
 $stamp = Get-Date -Format "yyyyMMddHHmm"

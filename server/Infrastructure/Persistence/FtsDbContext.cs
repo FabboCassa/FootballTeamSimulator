@@ -55,6 +55,9 @@ public sealed class FtsDbContext : IdentityDbContext<AppUser, IdentityRole<Guid>
     public DbSet<IntegrityFlag> IntegrityFlags => Set<IntegrityFlag>();
     public DbSet<AccountSignal> AccountSignals => Set<AccountSignal>();
 
+    public DbSet<BalanceRevision> BalanceRevisions => Set<BalanceRevision>();
+    public DbSet<AdminAuditEntry> AdminAudit => Set<AdminAuditEntry>();
+
     protected override void OnModelCreating(ModelBuilder b)
     {
         // IdentityDbContext.OnModelCreating configures the Identity tables — call it first.
@@ -588,6 +591,40 @@ public sealed class FtsDbContext : IdentityDbContext<AppUser, IdentityRole<Guid>
             e.HasIndex(x => new { x.UserId, x.AddressHash, x.DeviceHash }).IsUnique();
             e.HasIndex(x => x.AddressHash);
             e.HasIndex(x => x.DeviceHash);
+        });
+
+        // --- Live ops (Phase 10.3) ----------------------------------------------------------
+
+        b.Entity<BalanceRevision>(e =>
+        {
+            e.ToTable("balance_revisions");
+            e.HasKey(x => x.Id);
+            // The whole serialised BalanceConfig — tens of KB, deliberately unbounded (a MaxLength here
+            // would turn "someone added a section to Sim.Core" into a truncated, unreadable revision).
+            e.Property(x => x.Json).IsRequired();
+            e.Property(x => x.Note).HasMaxLength(280).IsRequired();
+            e.Property(x => x.CreatedByEmail).HasMaxLength(256).IsRequired();
+            // The active balance is "the highest revision", so the counter must be unique — two rows
+            // claiming the same number would make the question ambiguous. Concurrent pushes race on this
+            // index and the loser gets a duplicate-key error rather than a silent overwrite.
+            e.HasIndex(x => x.Revision).IsUnique();
+            // NO foreign key to the author on purpose: a revision outlives the account that pushed it
+            // (same reasoning as ranked_awards), which is why the email is captured by value.
+        });
+
+        b.Entity<AdminAuditEntry>(e =>
+        {
+            e.ToTable("admin_audit");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Action).HasConversion<int>();
+            e.Property(x => x.ActorEmail).HasMaxLength(256).IsRequired();
+            e.Property(x => x.Target).HasMaxLength(120).IsRequired();
+            e.Property(x => x.Details).HasMaxLength(512).IsRequired();
+            // FK-free like ranked_awards / integrity_flags: an audit trail a cascade delete can erase is
+            // not an audit trail.
+            e.HasIndex(x => x.CreatedUtc);
+            e.HasIndex(x => new { x.Action, x.CreatedUtc });
+            e.HasIndex(x => x.ActorUserId);
         });
     }
 }

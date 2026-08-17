@@ -61,6 +61,8 @@ services:
       # Dev-only online-league seeding endpoints (/internal/dev/*). On for the local stack; never mapped
       # under Production. Set to "false" to switch them off even here.
       Dev__ExposeSeedEndpoints: "true"
+      Admin__BootstrapEmail: "ops@fts.local"
+      Cors__AllowedOrigins__0: "http://localhost:8090"
     volumes:
       # Mount the Firebase service-account key at runtime (do NOT copy it into the image).
       - ./secrets/fcm.json:/run/secrets/fcm.json:ro

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Fts.Application.Balance;
 using Fts.Application.Leagues;
 using Fts.Infrastructure.Persistence;
 using Fts.Infrastructure.Persistence.Entities;
@@ -27,12 +28,18 @@ public sealed class LiveMatchService : ILiveMatchService
 {
     private readonly FtsDbContext _db;
     private readonly ILiveMatchBroadcaster _broadcaster;
-    private readonly BalanceConfig _config = new();
+    /// <summary>The server's ACTIVE balance (Phase 10.3), snapshotted for the lifetime of this scoped
+    /// service so one request - or one calendar tick - resolves against ONE set of numbers even if an
+    /// admin pushes a revision half way through it. Before 10.3 this was `new BalanceConfig()`, i.e. the
+    /// balance embedded in the build; with nothing ever pushed it still is, byte for byte.</summary>
+    private readonly BalanceConfig _config;
 
-    public LiveMatchService(FtsDbContext db, ILiveMatchBroadcaster broadcaster)
+    public LiveMatchService(
+        FtsDbContext db, ILiveMatchBroadcaster broadcaster, IBalanceProvider balance)
     {
         _db = db;
         _broadcaster = broadcaster;
+        _config = balance.Current;
     }
 
     /// <summary>Tolerant of string- or number-valued enums and of casing, like the season service.</summary>

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Fts.Application.Balance;
 using Fts.Application.Ranked;
 using Fts.Infrastructure.Persistence;
 using Fts.Infrastructure.Persistence.Entities;
@@ -30,12 +31,18 @@ public sealed class RankedTodayService : IRankedTodayService
 {
     private readonly FtsDbContext _db;
     private readonly RankedOptions _opt;
-    private readonly BalanceConfig _config = new();
+    /// <summary>The server's ACTIVE balance (Phase 10.3), snapshotted for the lifetime of this scoped
+    /// service so one request - or one calendar tick - resolves against ONE set of numbers even if an
+    /// admin pushes a revision half way through it. Before 10.3 this was `new BalanceConfig()`, i.e. the
+    /// balance embedded in the build; with nothing ever pushed it still is, byte for byte.</summary>
+    private readonly BalanceConfig _config;
 
-    public RankedTodayService(FtsDbContext db, IOptions<RankedOptions> options)
+    public RankedTodayService(
+        FtsDbContext db, IOptions<RankedOptions> options, IBalanceProvider balance)
     {
         _db = db;
         _opt = options.Value;
+        _config = balance.Current;
     }
 
     // --- read --------------------------------------------------------------------------------------

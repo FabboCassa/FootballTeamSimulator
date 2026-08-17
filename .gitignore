@@ -43,3 +43,7 @@ client/crashlytics-build.properties
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# ===== Live ops (Roadmap 10.3) =====
+# Database archives from tools/backup-db.ps1. Never in the repo - they are the whole database.
+backups/

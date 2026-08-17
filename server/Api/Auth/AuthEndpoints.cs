@@ -86,6 +86,11 @@ public static class AuthEndpoints
             new { error = "invalid_credentials", message }, statusCode: StatusCodes.Status401Unauthorized),
         AuthError.InvalidRefreshToken => Results.Json(
             new { error = "invalid_refresh_token", message }, statusCode: StatusCodes.Status401Unauthorized),
+        // 403, not 401 (Phase 10.3): the credentials WERE right, the account is not allowed in. A 401 would
+        // send the client into its refresh-then-retry loop, which for a suspended account is a request
+        // storm that can never succeed.
+        AuthError.AccountLocked => Results.Json(
+            new { error = "account_locked", message }, statusCode: StatusCodes.Status403Forbidden),
         _ => Results.BadRequest(new { error = "auth_error", message }),
     };
 }

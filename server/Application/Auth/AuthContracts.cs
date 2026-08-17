@@ -44,7 +44,15 @@ public enum AuthError
     WeakPassword,
     InvalidCredentials,
     InvalidRefreshToken,
-    ValidationFailed
+    ValidationFailed,
+    /// <summary>The account is locked out by live ops (Phase 10.3). Appended at the END of the enum so
+    /// every existing value keeps its number — the client mirrors this by name, but the wire format is the
+    /// error STRING, so nothing needs to be rebuilt in step.
+    ///
+    /// Distinct from <see cref="InvalidCredentials"/> on purpose: a suspended player told "wrong password"
+    /// will reset it, fail again, and open a support ticket. Saying the account is suspended is the honest
+    /// answer and leaks nothing — they already know their own password.</summary>
+    AccountLocked
 }
 
 /// <summary>Result wrapper so the service never throws for expected failures. Exactly one of
