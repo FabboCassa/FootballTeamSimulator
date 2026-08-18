@@ -6,12 +6,25 @@ Run through this on a release day. It is ordered so the cheap checks fail first.
 
 ## 0. Before anything
 
+Most of this section and the per-store artwork rules are now MACHINE-CHECKED too (Roadmap 10.4b):
+
+```powershell
+.\tools\preflight-store.ps1                                  # everything
+.\tools\preflight-store.ps1 -Platform Play -SiteUrl https://<site>
+```
+
+It settles the version agreement, the Android target SDK, the signing setup, every image's exact
+pixel size and alpha channel, the Steam ids, and whether the published legal pages still say DRAFT.
+Exit code 0 or the submission is not ready.
+
 - [ ] `.\tools\build-simcore.ps1` — the client is running the current Sim.Core.
 - [ ] `dotnet test shared/Sim.Core.Tests/Sim.Core.Tests.csproj` — 216 green, golden master
       `0xCDEA5A2F7B9E5CF6` unchanged.
 - [ ] `cd server && dotnet test Api.Tests/Api.Tests.csproj` — green, and
       `[server-determinism] 0xCDEA5A2F7B9E5CF6` matches the client's.
 - [ ] `.\tools\set-version.ps1 -Check` — every target agrees with `tools/version.json`.
+      (`.\tools\preflight-store.ps1` asserts the same thing, and was written because they did
+      not agree: `ProjectSettings.asset` said 1.0 while `version.json` said 0.1.0.)
 - [ ] Bump if this is a new build: `.\tools\set-version.ps1 -Version x.y.z -BumpBuild`.
 - [ ] Commit `ProjectSettings.asset`, `Api.csproj` and `version.json` together.
 
@@ -22,26 +35,53 @@ Run through this on a release day. It is ordered so the cheap checks fail first.
 These are not per-platform paperwork; without them a submission is refused or a launch is
 irresponsible.
 
+Most of this section is now MACHINE-CHECKED. Stand the production stack up per
+`docs/ops/deploy.md`, then:
+
+```powershell
+.\tools\preflight-launch.ps1 -BaseUrl https://<domain> -AdminEmail <admin> -AdminPassword <...> `
+    -WebOrigin https://<web build origin> -EnvFile .\server\.env.prod -BackupPath .\backups
+```
+
+Exit code 0 or the launch does not happen. What it cannot settle it prints as a MANUAL list rather
+than passing quietly — the boxes below marked *(preflight)* are the ones it settles.
+
 - [x] **Account deletion** — in-app (Account → Delete account) and the public page
       `web/delete-account.html`, both on `POST /auth/account/delete` (Roadmap 10.2a).
       Still to do at deploy time: publish the page and set `Cors__AllowedOrigins__0` to the
       site's origin, or the browser form cannot call the API.
-- [ ] **HTTPS in front of the API.** The compose stack is plain HTTP; production needs TLS
-      termination before any store form can claim encryption in transit.
+- [ ] **HTTPS in front of the API** *(preflight)*. `server/docker-compose.prod.yml` puts Caddy
+      in front and it obtains/renews a Let's Encrypt certificate by itself; nothing else
+      publishes a port. The preflight checks the certificate validates, that plain http
+      redirects rather than serving the API, and that HSTS is set.
 - [ ] **Privacy policy published at a stable URL** (not a document in a repository).
+      The pipeline exists (Roadmap 10.4b): fill the placeholders in
+      `docs/store/privacy-policy*.md` and `eula*.md`, run `.\tools\build-legal-pages.ps1`
+      (it REFUSES while `[DATE]` / `[CONTACT EMAIL]` / the Draft banner are still there),
+      then `.\tools\deploy-web.ps1 -PagesOnly -Deploy`. What is left is not code: a real
+      contact address, a publication date, and a lawyer's read.
 - [ ] **`Integrity__SignalSalt` overridden** with a real secret in the production
-      environment — the default in `appsettings.json` is a placeholder.
-- [ ] **`Jwt__SigningKey` overridden** with a real >= 32-byte secret.
-- [ ] **Dev endpoints off.** `Dev:ExposeSeedEndpoints`, `Ranked:ExposeInternalEndpoints`,
-      `Simulation:ExposeInternalEndpoints`, `Jobs:ExposeDashboard` and
-      `Jobs:ExposeTestEndpoint` must all be false — or the environment must be Production,
-      which already gates them. Verify by hitting `/internal/dev/test-league` and
-      `/hangfire` on the deployed instance and getting 404.
-- [ ] **Hangfire worker on its own instance**, not inside the API process (carried forward
-      from the 9.6 load test — while they share a process, matchday resolution competes
-      with player requests).
-- [ ] **Database backup** taken and a restore actually tested.
-- [ ] `GET /health` on the deployed instance reports the version being shipped.
+      environment — the default in `appsettings.json` is a placeholder. Not probeable from
+      outside; the preflight checks the env file for it instead (`-EnvFile`).
+- [ ] **`Jwt__SigningKey` overridden** with a real >= 32-byte secret *(preflight)*. The script
+      mints a token with each signing key that ships in this repository and offers it to
+      `/auth/me`: anything but a 401 and the launch stops there.
+- [ ] **Dev endpoints off** *(preflight)*. `Dev:ExposeSeedEndpoints`,
+      `Ranked:ExposeInternalEndpoints`, `Simulation:ExposeInternalEndpoints`,
+      `Jobs:ExposeDashboard` and `Jobs:ExposeTestEndpoint` must all be false — or the
+      environment must be Production, which already gates them (the prod compose sets both).
+      The preflight walks all nine routes and requires 404 from every one.
+- [ ] **Hangfire worker on its own instance** *(preflight)*, not inside the API process
+      (carried forward from the 9.6 load test — while they share a process, matchday
+      resolution competes with player requests). `Jobs__Role=api` / `Jobs__Role=worker` on the
+      same image; `GET /health` reports which, and the preflight fails a public name that
+      answers `worker` and warns on `both`.
+- [ ] **Database backup** taken and a restore actually tested. The preflight checks the newest
+      archive's age with `-BackupPath`; reading one BACK is manual and it says so every run.
+- [ ] `GET /health` on the deployed instance reports the version being shipped *(preflight —
+      compared against `tools/version.json`)*.
+- [ ] **CORS** set to the web build's origin *(preflight, with `-WebOrigin`)*. Without it the
+      public account-deletion page cannot submit, and that page is itself a store blocker.
 
 ---
 
@@ -57,7 +97,8 @@ irresponsible.
 - [ ] Launch options configured on the partner site, one per OS; the Linux one must be
       marked executable.
 - [ ] Store page: capsules and screenshots per `asset-specs.md`, copy from
-      `store-copy.md`.
+      `store-copy.md`. Put the images under `store-assets/steam/` and let
+      `.\tools\preflight-store.ps1 -Platform Steam` check every size for you.
 - [ ] Age rating questionnaire completed.
 - [ ] The build is on a beta branch, not `default`, until it has been played end to end.
 
@@ -68,10 +109,13 @@ runtime performance.
 
 ## 3. Google Play
 
-- [ ] **Target API level 36 (Android 16).** From 31 August 2026 new apps and updates must
-      target it. `AndroidTargetSdkVersion` is currently `0` (auto = highest installed), so
-      this depends on which SDK platform Unity has installed — check it explicitly, and
-      install API 36 through Unity Hub / the SDK manager if it is missing.
+- [x] **Target API level 36 (Android 16).** From 31 August 2026 new apps AND updates must
+      target it (an extension to 1 November 2026 can be requested in the Play Console).
+      `AndroidTargetSdkVersion` was `0` — auto, meaning "whatever SDK platform Unity happens
+      to have installed", which is not a decision, it is a coin toss. Now pinned to `36`
+      (Roadmap 10.4b). **You must still install SDK Platform 36** through Unity Hub or the
+      Android SDK manager, or the build fails; confirm in Player Settings that Target API
+      Level reads "Android 16.0 (API level 36)".
 - [ ] Release keystore created and **backed up off the machine**; `tools/keystore.local.ps1`
       filled in from the example.
 - [ ] Play App Signing enabled at first upload (it is the safety net if the keystore is
@@ -80,8 +124,11 @@ runtime performance.
 - [ ] Internal testing track first; install from Play on a real device and play a match.
 - [ ] Data Safety form completed from `data-safety.md`.
 - [ ] Content rating questionnaire (IARC) completed.
-- [ ] Store listing: icon 512, feature graphic 1024x500, at least 2 phone screenshots.
-- [ ] Privacy policy URL entered.
+- [ ] Store listing: icon 512, feature graphic 1024x500, at least 2 phone screenshots —
+      under `store-assets/play/`, verified to the pixel (and for the right alpha channel) by
+      `.\tools\preflight-store.ps1 -Platform Play`.
+- [ ] Privacy policy URL entered: `<site>/privacy-policy.html` (built by
+      `.\tools\build-legal-pages.ps1`, staged by `.\tools\deploy-web.ps1` from `web/`).
 - [ ] Account deletion URL entered: `<site>/delete-account.html` (staged by
       `.\tools\deploy-web.ps1` from `web/`).
 
@@ -94,10 +141,17 @@ runtime performance.
 - [ ] App Privacy answers entered from `data-safety.md`.
 - [ ] In-app account deletion present (Apple enforces this strictly).
 - [ ] Screenshots at exactly 1320 x 2868 (iPhone 6.9"), and 2064 x 2752 if iPad is offered.
+      Apple validates to the pixel, so put them under `store-assets/appstore/iphone/` and let
+      `.\tools\preflight-store.ps1 -Platform AppStore` catch an off-by-one before a review cycle does.
 - [ ] TestFlight build installed and played before submitting for review.
 
 ## 5. Web (Cloudflare Pages)
 
+- [ ] **The legal pages can go up FIRST**, months before the game build is presentable:
+      `.\tools\build-legal-pages.ps1` then `.\tools\deploy-web.ps1 -PagesOnly -Deploy -Branch pages`.
+      Note that a Pages deployment REPLACES the site rather than merging into it, so once the
+      game is live a `-PagesOnly` push to production would take it down — the script refuses
+      that without `-Force`.
 - [ ] `.\tools\deploy-web.ps1 -Build` — stages, prints the total size (budget: under 50 MB).
 - [ ] Serve the staged folder locally over HTTP and check: the game loads, a career can be
       started, and a hard refresh keeps the save (IndexedDB).

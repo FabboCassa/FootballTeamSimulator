@@ -47,3 +47,17 @@ desktop.ini
 # ===== Live ops (Roadmap 10.3) =====
 # Database archives from tools/backup-db.ps1. Never in the repo - they are the whole database.
 backups/
+
+# ===== Deployment (Roadmap 10.4) =====
+# The production environment file: database password, JWT signing key, integrity salt. The
+# .env.prod.example TEMPLATE is committed; a filled-in one never is.
+server/.env.prod
+server/.env
+.env.prod
+
+# ===== Build/test output =====
+# `dotnet test > test-output.txt` and friends. This is UTF-16 build noise, 66 MB of it, and it was
+# committed once by accident in 9.5 - it is in the history now (it compresses well, so the repo is
+# still small), but it does not need to be there again.
+test-output.txt
+*-output.txt

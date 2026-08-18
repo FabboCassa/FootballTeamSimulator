@@ -44,7 +44,7 @@ public static class IntegritySignalMiddleware
         try
         {
             var integrity = ctx.RequestServices.GetRequiredService<IIntegrityService>();
-            await integrity.RecordAccountSignalAsync(userId, ClientAddress(ctx), DeviceId(ctx));
+            await integrity.RecordAccountSignalAsync(userId, ResolveClientAddress(ctx), DeviceId(ctx));
         }
         catch
         {
@@ -54,17 +54,11 @@ public static class IntegritySignalMiddleware
     }
 
     /// <summary>The client address as best the deployment can tell: the first hop of an
-    /// <c>X-Forwarded-For</c> chain when behind a proxy, else the socket address.</summary>
-    private static string? ClientAddress(HttpContext ctx)
-    {
-        var forwarded = ctx.Request.Headers["X-Forwarded-For"].ToString();
-        if (!string.IsNullOrWhiteSpace(forwarded))
-        {
-            var first = forwarded.Split(',')[0].Trim();
-            if (first.Length > 0) return first;
-        }
-        return ctx.Connection.RemoteIpAddress?.ToString();
-    }
+    /// <c>X-Forwarded-For</c> chain when behind a proxy, else the socket address. Roadmap 10.4 moved the
+    /// reading into <see cref="Fts.Api.Integrity.ClientAddress"/> so the rate limiter resolves the caller
+    /// exactly the same way — behind the production proxy the socket address is the proxy's, and the two
+    /// address-partitioned features must not disagree about that.</summary>
+    private static string? ResolveClientAddress(HttpContext ctx) => ClientAddress.Resolve(ctx);
 
     private static string? DeviceId(HttpContext ctx)
     {

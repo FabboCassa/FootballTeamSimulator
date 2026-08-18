@@ -13,6 +13,10 @@ repository so they version alongside the build they describe.
 | `eula.md` / `eula.it.md` | End-user licence agreement draft (EN / IT). **Same caveat.** |
 | `data-safety.md` | The answers to Google Play's Data Safety form and Apple's App Privacy questionnaire, derived from what the server actually stores. |
 
+The four legal documents are the SOURCE; `web/privacy-policy.html`, `web/privacy-policy.it.html`,
+`web/eula.html` and `web/eula.it.html` are GENERATED from them by `tools\build-legal-pages.ps1`.
+Edit the markdown and regenerate — never the HTML.
+
 ## The one-paragraph summary of where things stand
 
 The game builds for four targets today (WebGL, Windows/macOS/Linux standalone, Android,
@@ -34,7 +38,11 @@ into the repository:
 3. **An Apple Developer Program membership** (99 USD/year) and a Mac with Xcode — Apple
    permits no other route to an .ipa.
 4. **A hosted, publicly reachable privacy policy URL.** Both mobile stores require it as a
-   link, not a document; publish `privacy-policy.md` on the same domain as the web build.
+   link, not a document. The pipeline is built (10.4b): `tools\build-legal-pages.ps1` turns
+   the four markdown documents into `web/*.html` and `tools\deploy-web.ps1 -PagesOnly`
+   publishes them without needing a game build. What is still on you: a real contact
+   address, a publication date, and the lawyer's read — the generator REFUSES to build a
+   page that still says `[CONTACT EMAIL]`.
 5. **Screenshots and capsule art.** `asset-specs.md` lists what is required; the game can
    produce the screenshots, the store-page artwork is a design job.
 6. **A production backend.** The load test (9.6) carried forward two deployment

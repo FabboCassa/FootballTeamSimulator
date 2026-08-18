@@ -69,9 +69,13 @@ public static class IntegrityRateLimits
         var opt = Options(ctx);
         if (!opt.EnableRateLimiting) return RateLimitPartition.GetNoLimiter("disabled");
 
+        // Roadmap 10.4: the anonymous fallback resolves the address through ClientAddress rather than
+        // reading the socket directly. Behind the production reverse proxy the socket is the PROXY's, so
+        // the socket reading collapsed every anonymous caller into a single shared bucket — one script
+        // could then exhaust the window for everybody at once.
         string key = ctx.User.FindFirstValue(ClaimTypes.NameIdentifier)
                      ?? ctx.User.FindFirstValue("sub")
-                     ?? ctx.Connection.RemoteIpAddress?.ToString()
+                     ?? ClientAddress.Resolve(ctx)
                      ?? "anonymous";
 
         return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions

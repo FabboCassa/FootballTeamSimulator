@@ -146,11 +146,16 @@ Restoring over the live database requires naming it **and** `-Force`, and it war
 
 ## Deploy-time reminders carried in from earlier phases
 
-- **Run the Hangfire worker on its own instance** (9.6). While it shares a process with the API, matchday
-  resolution competes with readers — that is exactly what the loaded measurement showed.
+- ~~**Run the Hangfire worker on its own instance** (9.6)~~ — **DONE (10.4).** `Jobs__Role=api` /
+  `Jobs__Role=worker` on the same image; `server/docker-compose.prod.yml` runs both. `GET /health`
+  reports the role, so an operator can tell an API replica from the scheduler without shelling in.
+  Scale `api` freely; the worker stays at ONE — the recurring jobs are minutely and the calendar tick
+  is not designed to be raced.
+- ~~**TLS in front of the API**~~ — **DONE (10.4).** Caddy terminates it in the production stack and
+  renews by itself; nothing but Caddy publishes a port. See `docs/ops/deploy.md`.
 - **Re-confirm p95 on a staging host** with the load generator off-box (9.6). `POST /ranked/today/confirm`
-  is the heaviest endpoint and the first thing to look at.
-- **TLS in front of the API** is still on `docs/store/release-checklist.md`.
+  is the heaviest endpoint and the first thing to look at. Still open — and now worth re-measuring with
+  the worker split out, since the 9.6 numbers were taken with both in one process.
 - `ReplayJson` stores the full `MatchReport` including the position stream (~180KB per fixture, ~108MB per
   ladder matchday). It is derived deterministically from seed + lineups, so the client could regenerate it
   — a standing optimisation candidate if storage or tick cost ever bites (9.6).
@@ -168,3 +173,14 @@ After a deploy:
 It walks the whole surface: the 404-for-non-admins property, metrics, closing and reopening a world,
 locking an account and proving it cannot sign in, a balance push, a refused fragment, a rollback, and that
 every one of those left an audit line. Exit code 0 = all checks passed.
+
+Before a RELEASE (rather than after any deploy) run the launch preflight as well:
+
+```powershell
+.\tools\preflight-launch.ps1 -BaseUrl https://api.example.com -AdminEmail ops@example.com `
+    -AdminPassword ... -WebOrigin https://<web origin> -EnvFile .\server\.env.prod -BackupPath .\backups
+```
+
+It asserts the section-1 blockers of `docs/store/release-checklist.md`: TLS + HSTS + the http redirect,
+the shipped version, `role`, readiness, nine dev routes all 404, that no signing key from this repository
+is accepted, CORS, and the age of the newest backup. Exit code 0 or the release does not go out.

@@ -4,6 +4,7 @@
 #   .\tools\deploy-web.ps1 -Build                # run the WebGL build first, then stage
 #   .\tools\deploy-web.ps1 -Deploy               # stage, then upload with wrangler
 #   .\tools\deploy-web.ps1 -Deploy -Branch main  # production deploy (default is a preview)
+#   .\tools\deploy-web.ps1 -PagesOnly -Deploy    # publish ONLY the static pages, no game build
 #
 # Why staging exists rather than uploading client/builds/webgl directly:
 #
@@ -33,7 +34,16 @@ param(
     # Roadmap 10.3: web/admin.html is the live-ops dashboard. It is NOT published by default - it holds no
     # secrets (the API's admin role is the gate) but there is no reason to hand out its address either, and
     # the intended way to use it is locally, from the machine of whoever is on call. See docs/ops/runbook.md.
-    [switch]$IncludeAdmin
+    [switch]$IncludeAdmin,
+    # Roadmap 10.4b: publish the static pages WITHOUT a WebGL build. The privacy policy and the
+    # account-deletion page have to be live URLs before a store submission is even accepted, and that is
+    # months before the web build is something anyone should see. Without this the script refuses to run
+    # at all when client/builds/webgl is empty.
+    [switch]$PagesOnly,
+    # Required to send a -PagesOnly deployment to the PRODUCTION branch. A Cloudflare Pages deployment
+    # replaces the WHOLE site rather than patching it, so pushing a pages-only stage over a live game is
+    # how you take the game offline by accident.
+    [switch]$Force
 )
 
 $ErrorActionPreference = "Stop"
@@ -43,19 +53,23 @@ $stage = Join-Path $root "client/builds/web-deploy"
 
 $version = (Get-Content (Join-Path $PSScriptRoot "version.json") -Raw | ConvertFrom-Json)
 
+if ($PagesOnly -and $Build) {
+    Write-Error "-PagesOnly and -Build contradict each other: one skips the game build, the other runs it."
+}
+
 if ($Build) {
     Write-Host "Building WebGL first..." -ForegroundColor Cyan
     & (Join-Path $PSScriptRoot "build-webgl.ps1")
 }
 
-if (-not (Test-Path (Join-Path $source "index.html"))) {
-    Write-Error "No WebGL build at $source. Run .\tools\build-webgl.ps1 (or pass -Build)."
+if (-not $PagesOnly -and -not (Test-Path (Join-Path $source "index.html"))) {
+    Write-Error "No WebGL build at $source. Run .\tools\build-webgl.ps1 (or pass -Build), or -PagesOnly for just the static pages."
 }
 
 # ---------------------------------------------------------------- stage
 if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $stage | Out-Null
-Copy-Item (Join-Path $source "*") $stage -Recurse -Force
+if (-not $PagesOnly) { Copy-Item (Join-Path $source "*") $stage -Recurse -Force }
 
 # Static pages that ship alongside the game (Roadmap 10.2a): the public account-deletion page
 # Google Play requires. Copied AFTER the build so a name clash can never overwrite index.html.
@@ -66,6 +80,22 @@ if (Test-Path $extra) {
     if (-not $IncludeAdmin) {
         $extraFiles = $extraFiles | Where-Object { $_.Name -ne "admin.html" }
     }
+    # Roadmap 10.4b: build-legal-pages.ps1 can produce DRAFT pages on purpose (-AllowDraft) so the
+    # layout can be looked at, and they land in this same folder. Publishing one is the exact mistake
+    # that folder makes easy - a live privacy policy stamped NOT FOR PUBLICATION, on the URL a store
+    # reviewer opens. Refuse, rather than warn: the whole point of the draft banner is that it never
+    # reaches anyone.
+    $drafts = @()
+    foreach ($f in $extraFiles) {
+        if ($f.Extension -eq ".html") {
+            $content = Get-Content $f.FullName -Raw
+            if ($content -match "NOT FOR PUBLICATION") { $drafts += $f.Name }
+        }
+    }
+    if ($drafts.Count -gt 0) {
+        Write-Error ("Refusing to stage DRAFT pages: {0}. Fill in the placeholders in docs/store and re-run .\tools\build-legal-pages.ps1 without -AllowDraft." -f ($drafts -join ", "))
+    }
+
     foreach ($f in $extraFiles) { Copy-Item $f.FullName $stage -Force }
 }
 if (-not $IncludeAdmin -and (Test-Path (Join-Path $extra "admin.html"))) {
@@ -74,19 +104,22 @@ if (-not $IncludeAdmin -and (Test-Path (Join-Path $extra "admin.html"))) {
 
 $stamp = Get-Date -Format "yyyyMMddHHmm"
 $buildFolder = "Build-{0}-{1}" -f $version.version, $stamp
-$stagedBuild = Join-Path $stage "Build"
-if (-not (Test-Path $stagedBuild)) { Write-Error "Unexpected layout: no Build folder in $source" }
-# -NewName takes a NAME, not a path (a full path throws on some PowerShell versions).
-Rename-Item -Path $stagedBuild -NewName $buildFolder
 
-# One line to rewrite: `var buildUrl = "Build";` in the FTS template.
-$indexPath = Join-Path $stage "index.html"
-$index = Get-Content $indexPath -Raw
-if ($index -notmatch 'var\s+buildUrl\s*=\s*"Build"') {
-    Write-Error 'index.html does not contain the expected buildUrl = "Build" line - the WebGL template changed, update this script.'
+if (-not $PagesOnly) {
+    $stagedBuild = Join-Path $stage "Build"
+    if (-not (Test-Path $stagedBuild)) { Write-Error "Unexpected layout: no Build folder in $source" }
+    # -NewName takes a NAME, not a path (a full path throws on some PowerShell versions).
+    Rename-Item -Path $stagedBuild -NewName $buildFolder
+
+    # One line to rewrite: `var buildUrl = "Build";` in the FTS template.
+    $indexPath = Join-Path $stage "index.html"
+    $index = Get-Content $indexPath -Raw
+    if ($index -notmatch 'var\s+buildUrl\s*=\s*"Build"') {
+        Write-Error 'index.html does not contain the expected buildUrl = "Build" line - the WebGL template changed, update this script.'
+    }
+    $index = [regex]::Replace($index, 'var\s+buildUrl\s*=\s*"Build"', ('var buildUrl = "{0}"' -f $buildFolder))
+    [System.IO.File]::WriteAllText($indexPath, $index)
 }
-$index = [regex]::Replace($index, 'var\s+buildUrl\s*=\s*"Build"', ('var buildUrl = "{0}"' -f $buildFolder))
-[System.IO.File]::WriteAllText($indexPath, $index)
 
 # ---------------------------------------------------------------- _headers
 $sb = New-Object System.Text.StringBuilder
@@ -113,7 +146,8 @@ foreach ($f in $extraFiles) {
     [void]$sb.AppendLine("")
 }
 
-$buildFiles = Get-ChildItem (Join-Path $stage $buildFolder) -File | Sort-Object Name
+$buildFiles = @()
+if (-not $PagesOnly) { $buildFiles = @(Get-ChildItem (Join-Path $stage $buildFolder) -File | Sort-Object Name) }
 foreach ($f in $buildFiles) {
     $name = $f.Name
 
@@ -144,7 +178,11 @@ foreach ($f in $buildFiles) {
 $totalMb = ((Get-ChildItem $stage -Recurse -File | Measure-Object Length -Sum).Sum / 1MB)
 Write-Host ""
 Write-Host ("Staged     : {0}" -f $stage) -ForegroundColor Green
-Write-Host ("Build dir  : {0} ({1} file(s))" -f $buildFolder, $buildFiles.Count)
+if ($PagesOnly) {
+    Write-Host "Build dir  : none (-PagesOnly: static pages only, no game)" -ForegroundColor Yellow
+} else {
+    Write-Host ("Build dir  : {0} ({1} file(s))" -f $buildFolder, $buildFiles.Count)
+}
 if ($extraFiles.Count -gt 0) {
     Write-Host ("Extra pages: {0}" -f (($extraFiles | ForEach-Object { $_.Name }) -join ", "))
 }
@@ -156,6 +194,21 @@ if (-not $Deploy) {
     Write-Host "Staged only. Serve it locally to check:  python -m http.server 8000  (from $stage)" -ForegroundColor Yellow
     Write-Host "Then deploy with: .\tools\deploy-web.ps1 -Deploy" -ForegroundColor Yellow
     exit 0
+}
+
+# A Cloudflare Pages deployment REPLACES the site; it does not merge into it. So a -PagesOnly push to the
+# production branch takes the game down and leaves four legal pages in its place. That is fine the first
+# time (there is no game up yet) and a disaster the second, which is exactly the shape of mistake that
+# deserves a flag rather than a warning nobody reads.
+if ($PagesOnly -and -not $Force) {
+    # An unset branch is treated as production too: wrangler then infers the branch from git, and the
+    # branch you are standing on is usually main. Guessing safe here costs one flag; guessing wrong costs
+    # the live site.
+    $branchless = [string]::IsNullOrWhiteSpace($Branch)
+    if ($branchless -or $Branch -eq "main" -or $Branch -eq "master") {
+        $shown = if ($branchless) { "<unset - wrangler infers it from git, usually main>" } else { $Branch }
+        Write-Error ("-PagesOnly would replace the WHOLE site with just the static pages (branch: {0}), taking the game down if one is deployed. Deploy to a preview branch first (-Branch pages), or pass -Force if the site is empty and this is the first publish." -f $shown)
+    }
 }
 
 # ---------------------------------------------------------------- deploy

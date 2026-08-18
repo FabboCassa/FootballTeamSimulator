@@ -1,7 +1,7 @@
 {
-  "$comment": "Single source of truth for the shipped version (Roadmap 10.2). Apply it with tools\\set-version.ps1 - never hand-edit ProjectSettings.asset or Api.csproj versions.",
-  "version": "0.1.0",
-  "androidVersionCode": 1,
-  "iosBuildNumber": 1,
-  "channel": "alpha"
+    "$comment":  "Single source of truth for the shipped version (Roadmap 10.2). Apply it with tools\\set-version.ps1 - never hand-edit ProjectSettings.asset or Api.csproj versions.",
+    "version":  "0.1.0",
+    "androidVersionCode":  1,
+    "iosBuildNumber":  1,
+    "channel":  "alpha"
 }

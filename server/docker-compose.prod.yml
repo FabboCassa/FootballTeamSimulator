@@ -1,0 +1,170 @@
+# Production stack for the FTS backend (Roadmap 10.4).
+#
+# Differences from docker-compose.yml, which stays what it is — the LOCAL DEV stack — and is not to be
+# pointed at a real database:
+#
+#   1. TLS. Caddy terminates HTTPS on 80/443 and gets a real certificate from Let's Encrypt on its own.
+#      Nothing else publishes a port: postgres, redis and both app processes are reachable only on the
+#      compose network. Without this the stores cannot be told the API encrypts data in transit, which is
+#      a submission blocker on both mobile platforms.
+#   2. TWO app processes from ONE image: `api` (Jobs__Role=api) behind the proxy, and `worker`
+#      (Jobs__Role=worker) which runs the Hangfire scheduler and maps no player endpoints. This is the
+#      9.6 load test's standing recommendation — while they share a process, matchday resolution and
+#      player requests compete for the same CPU.
+#   3. Every secret comes from the environment (an .env file next to this one — see .env.prod.example);
+#      there is not one usable default in this file. A missing variable fails the `docker compose` call
+#      rather than starting a server with a dev signing key.
+#   4. ASPNETCORE_ENVIRONMENT=Production, which is itself the gate on every dev endpoint: /internal/dev/*,
+#      /internal/ranked/*, /internal/sim/* and /hangfire are not mapped at all under Production,
+#      regardless of the flags. The flags are set to false as well, belt and braces.
+#
+# Usage:
+#   cp .env.prod.example .env.prod && edit it
+#   docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
+#   ..\tools\preflight-launch.ps1 -BaseUrl https://<your domain>
+#
+# Scaling the API later is `--scale api=N`: the api role holds no scheduling state. The WORKER must stay
+# at 1 — the recurring jobs are minutely and the calendar tick is not designed to be raced.
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: fts-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+    # NO ports: — the database is not reachable from the internet, only from this network. Back it up
+    # with tools/backup-db.ps1, which works inside this container over the local socket.
+    volumes:
+      - fts-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:8-alpine
+    container_name: fts-redis
+    restart: unless-stopped
+    volumes:
+      - fts-redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ---- the player-facing instance ---------------------------------------------------------------
+  api:
+    build:
+      context: ..
+      dockerfile: server/Api/Dockerfile
+    image: fts-api:${FTS_VERSION:-latest}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: "Production"
+      ASPNETCORE_URLS: "http://+:8080"
+      Jobs__Role: "api"
+      # The api instance owns the schema: it migrates on startup and the worker waits for it to be
+      # healthy before starting, so two processes never race the same migration.
+      Database__AutoMigrate: "true"
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+      ConnectionStrings__Redis: "redis:6379"
+      Jwt__SigningKey: ${JWT_SIGNING_KEY:?set JWT_SIGNING_KEY (>= 32 bytes)}
+      Integrity__SignalSalt: ${INTEGRITY_SIGNAL_SALT:?set INTEGRITY_SIGNAL_SALT}
+      Admin__BootstrapEmail: ${ADMIN_BOOTSTRAP_EMAIL:-}
+      Cors__AllowedOrigins__0: ${WEB_ORIGIN:-}
+      Fcm__Enabled: ${FCM_ENABLED:-false}
+      Fcm__ProjectId: ${FCM_PROJECT_ID:-}
+      Fcm__CredentialsPath: ${FCM_CREDENTIALS_PATH:-}
+      # Explicit belt-and-braces: Production already refuses to map any of these.
+      Dev__ExposeSeedEndpoints: "false"
+      Ranked__ExposeInternalEndpoints: "false"
+      Simulation__ExposeInternalEndpoints: "false"
+      Jobs__ExposeDashboard: "false"
+      Jobs__ExposeTestEndpoint: "false"
+    volumes:
+      - ./secrets:/run/secrets:ro
+    # NO ports: — only Caddy talks to it.
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ---- the scheduler ------------------------------------------------------------------------------
+  worker:
+    # Same build, same image, same tag as `api` — compose resolves it from the build cache rather than
+    # compiling twice, and repeating the block here means `docker compose up worker` alone still works.
+    build:
+      context: ..
+      dockerfile: server/Api/Dockerfile
+    image: fts-api:${FTS_VERSION:-latest}
+    restart: unless-stopped
+    depends_on:
+      # Waits for the api instance to be HEALTHY, which means the migration it owns has finished.
+      api:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: "Production"
+      ASPNETCORE_URLS: "http://+:8080"
+      Jobs__Role: "worker"
+      # The api instance already migrated; a second migrator would only be a race.
+      Database__AutoMigrate: "false"
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+      ConnectionStrings__Redis: "redis:6379"
+      # The worker resolves matchdays and settles auctions, so it needs the same signing key and salt as
+      # the API: same database, same hashes, same tokens.
+      Jwt__SigningKey: ${JWT_SIGNING_KEY}
+      Integrity__SignalSalt: ${INTEGRITY_SIGNAL_SALT}
+      # Push notifications are sent from BACKGROUND jobs (outbid, kickoff), so FCM belongs here too.
+      Fcm__Enabled: ${FCM_ENABLED:-false}
+      Fcm__ProjectId: ${FCM_PROJECT_ID:-}
+      Fcm__CredentialsPath: ${FCM_CREDENTIALS_PATH:-}
+      Dev__ExposeSeedEndpoints: "false"
+      Ranked__ExposeInternalEndpoints: "false"
+      Simulation__ExposeInternalEndpoints: "false"
+      Jobs__ExposeDashboard: "false"
+      Jobs__ExposeTestEndpoint: "false"
+    volumes:
+      - ./secrets:/run/secrets:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ---- TLS termination ----------------------------------------------------------------------------
+  caddy:
+    image: caddy:2-alpine
+    container_name: fts-caddy
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      # Caddy asks Let's Encrypt for a certificate for this name, so it must resolve to this host.
+      FTS_DOMAIN: ${FTS_DOMAIN:?set FTS_DOMAIN (the public API hostname)}
+      FTS_ACME_EMAIL: ${FTS_ACME_EMAIL:?set FTS_ACME_EMAIL (expiry notices)}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - fts-caddy-data:/data
+      - fts-caddy-config:/config
+
+volumes:
+  fts-pgdata:
+  fts-redisdata:
+  fts-caddy-data:
+  fts-caddy-config:

@@ -67,7 +67,7 @@ public static class DependencyInjection
 
         AddAuth(services, config);
         AddNotifications(services, config);
-        AddBackgroundJobs(services, postgres, enableBackgroundJobs);
+        AddBackgroundJobs(services, postgres, enableBackgroundJobs, config);
 
         // Private-league lifecycle (Phase 8.1): create/join/leave/list, backed by the shared
         // Sim.Core world generation. Scoped (it uses the request-scoped FtsDbContext).
@@ -285,7 +285,8 @@ public static class DependencyInjection
     /// schema, created on startup). Skipped when <paramref name="enable"/> is false (unit tests run
     /// under the Testing environment with SQLite and no live Postgres) so the host starts without a
     /// storage connection. Jobs are activated from DI, so the job classes are registered too.</summary>
-    private static void AddBackgroundJobs(IServiceCollection services, string postgres, bool enable)
+    private static void AddBackgroundJobs(
+        IServiceCollection services, string postgres, bool enable, IConfiguration config)
     {
         // The recurring job types are resolvable regardless (so a direct unit test can new/inject them).
         services.AddScoped<HeartbeatJob>();
@@ -301,7 +302,13 @@ public static class DependencyInjection
             // Hangfire.PostgreSql 1.20+: options-based connection setup; creates its schema if missing.
             .UsePostgreSqlStorage(o => o.UseNpgsqlConnection(postgres)));
 
-        services.AddHangfireServer();
+        // Roadmap 10.4: the Hangfire SERVER (the thing that actually executes jobs) is added only when
+        // this process has the worker role. The storage + CLIENT above are registered either way, so an
+        // api-role instance can still ENQUEUE an auction settlement from a request — it simply does not
+        // execute it, the worker does. Jobs:Role unset ⇒ Both ⇒ exactly the pre-10.4 behaviour, which is
+        // what the local compose stack and the test host run.
+        if (JobsRoleReader.Read(config).ProcessesJobs())
+            services.AddHangfireServer();
 
         // Online-auction settlement (Phase 8.5): the DI-activated per-lot job + the real scheduler that
         // enqueues it (replacing the no-op default). Only when jobs are enabled — the Hangfire client the

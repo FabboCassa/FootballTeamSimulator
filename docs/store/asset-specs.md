@@ -12,6 +12,27 @@ that.
 
 ---
 
+## Where the files go
+
+`store-assets/` at the repository root, in the layout `tools\preflight-store.ps1` expects — it reads
+each PNG's header and checks the dimensions and the alpha channel against the tables below, so a
+misnamed or mis-sized file is caught here rather than by a store reviewer:
+
+```
+store-assets/
+  play/      icon-512.png (alpha)  feature-1024x500.png (NO alpha)  phone/ 2-8 at 1080x1920
+  appstore/  icon-1024.png (NO alpha)                               iphone/ 3-10 at 1320x2868
+  steam/     capsule-small-231x87.png  capsule-header-460x215.png  capsule-main-616x353.png
+             capsule-vertical-374x448.png  library-600x900.png  library-hero-3840x1240.png
+             library-logo-1280x720.png (alpha)  community-184x184.png  screenshots/ 5+ at 1920x1080
+  web/       favicon-32.png  favicon-180.png  og-1200x630.png
+```
+
+PNG throughout: the checker reads dimensions out of the PNG header, and for a JPEG it can only warn.
+Apple rejects an image one pixel off outright, so that warning is not a small thing.
+
+---
+
 ## Steam
 
 | Asset | Size (px) | Notes |

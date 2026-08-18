@@ -34,6 +34,15 @@ var builder = WebApplication.CreateBuilder(args);
 // unit tests on SQLite with no live Postgres, so the scheduler is disabled there (the rest wires up).
 var backgroundJobsEnabled = !builder.Environment.IsEnvironment("Testing");
 
+// What this process is FOR (Roadmap 10.4). Jobs:Role unset ⇒ Both ⇒ exactly the pre-10.4 behaviour, so
+// the local compose stack, `dotnet run` and the test host are untouched. A production deployment runs the
+// SAME image twice — Jobs__Role=api behind the proxy, Jobs__Role=worker with no published port — which is
+// the 9.6 load test's standing recommendation: while the scheduler shares a process with the API, matchday
+// resolution competes with player requests for the same CPU. An unknown value throws (see JobsRoleReader).
+var processRole = JobsRoleReader.Read(builder.Configuration);
+var servesApi = processRole.ServesApi();
+var processesJobs = backgroundJobsEnabled && processRole.ProcessesJobs();
+
 // EF Core (PostgreSQL) + Redis + readiness health checks + Identity/auth services (Phase 7.2) +
 // notifications & Hangfire (Phase 7.4).
 builder.Services.AddFtsInfrastructure(builder.Configuration, backgroundJobsEnabled);
@@ -203,11 +212,15 @@ if (!app.Environment.IsEnvironment("Testing"))
 // Liveness - also proves the server runs the same Sim.Core DLL as the client, and reports the
 // release version (Roadmap 10.2) so a deployed instance can be identified without shell access.
 // `apiVersion` is computed above, before the container is built (live ops registers it as a singleton).
+// `role` (Roadmap 10.4) is what makes a two-process deployment verifiable from outside: the launch
+// preflight asserts that the instance behind the public name says "api", and an operator who has just
+// scaled something can tell an API replica from the scheduler without shelling into it.
 app.MapGet("/health", () => Results.Ok(new
 {
     status = "ok",
     version = apiVersion,
     simCore = SimCoreInfo.Version,
+    role = processRole.ToString().ToLowerInvariant(),
     utc = DateTime.UtcNow
 }));
 
@@ -217,64 +230,72 @@ app.MapHealthChecks("/health/ready", new Microsoft.AspNetCore.Diagnostics.Health
     Predicate = check => check.Tags.Contains(DependencyInjection.ReadyTag)
 });
 
-// Auth: /auth/register, /auth/login, /auth/refresh, /auth/logout, /auth/me (Phase 7.2).
-app.MapAuthEndpoints();
-
-// Device registration for push notifications (Phase 7.4): a real, JWT-protected API. Always mapped.
-app.MapNotificationEndpoints();
-
-// Private-league lifecycle (Phase 8.1): create/join/leave/list, JWT-protected. Always mapped.
-app.MapLeagueEndpoints();
-
-// Online auctions (Phase 8.5): open/close a window, read lots, bid — JWT-protected. Plus the live
-// AuctionHub for real-time bid pushes. Always mapped.
-app.MapAuctionEndpoints();
-app.MapHub<AuctionHub>("/hubs/auction");
-
-// Live match control (Phase 8.6): open/join/change/finish a live human-vs-human fixture, JWT-protected.
-// Plus the MatchHub for real-time state pushes. Always mapped.
-app.MapLiveMatchEndpoints();
-app.MapHub<MatchHub>("/hubs/match");
-
-// Public ranked ladder (Phase 9.1): enrol, read your ladder state / a group's fixed-size seat list,
-// toggle auto re-enrolment — JWT-protected. Always mapped.
-app.MapRankedEndpoints();
-
-// Live ops (Phase 10.3): metrics, worlds, accounts and the balance push. Mapped in EVERY environment,
-// Production included — this is the surface an operator needs precisely when things are live. It is gated
-// by the admin ROLE (AdminOnlyFilter), not by the environment flags the dev endpoints use, and a
-// signed-in non-admin gets a 404 rather than a 403 so its existence is not advertised.
-app.MapAdminEndpoints();
-
-// Ranked lifecycle (Phase 9.1): closing a placement season and sorting its coaches into divisions is a
-// SERVER action, not a player one — exposed as a dev-only internal endpoint until the 9.2 real-time
-// season scheduler drives it. Never mapped in Production, and behind a config flag.
-if (!app.Environment.IsProduction()
-    && app.Configuration.GetValue("Ranked:ExposeInternalEndpoints", true))
+// Everything below the health probes is the PLAYER-FACING surface, and a worker-role process maps none
+// of it (Roadmap 10.4): a scheduler that also answers /auth/login is not isolated from player traffic,
+// which was the point of splitting it out. /health and /health/ready above stay mapped in every role so an
+// orchestrator can probe the worker exactly like the API.
+if (servesApi)
 {
-    app.MapRankedInternalEndpoints();
-}
+    // Auth: /auth/register, /auth/login, /auth/refresh, /auth/logout, /auth/me (Phase 7.2).
+    app.MapAuthEndpoints();
 
-// Internal match-simulation endpoints (Phase 7.3): dev-only — never mapped in Production, and
-// behind a config flag (default on outside prod) so a deployment can also switch them off.
-if (!app.Environment.IsProduction()
-    && app.Configuration.GetValue("Simulation:ExposeInternalEndpoints", true))
-{
-    app.MapSimulationEndpoints();
-}
+    // Device registration for push notifications (Phase 7.4): a real, JWT-protected API. Always mapped.
+    app.MapNotificationEndpoints();
 
-// Dev-only test-league seeding (dev tooling): spin up a ready online league (bots + draft) in one call
-// so online features can be tested without hand-creating accounts. Never mapped in Production, and behind
-// the Dev:ExposeSeedEndpoints flag. These endpoints are UNAUTHENTICATED — they must never reach prod.
-if (!app.Environment.IsProduction()
-    && app.Configuration.GetValue("Dev:ExposeSeedEndpoints", true))
-{
-    app.MapDevEndpoints();
-}
+    // Private-league lifecycle (Phase 8.1): create/join/leave/list, JWT-protected. Always mapped.
+    app.MapLeagueEndpoints();
+
+    // Online auctions (Phase 8.5): open/close a window, read lots, bid — JWT-protected. Plus the live
+    // AuctionHub for real-time bid pushes. Always mapped.
+    app.MapAuctionEndpoints();
+    app.MapHub<AuctionHub>("/hubs/auction");
+
+    // Live match control (Phase 8.6): open/join/change/finish a live human-vs-human fixture, JWT-protected.
+    // Plus the MatchHub for real-time state pushes. Always mapped.
+    app.MapLiveMatchEndpoints();
+    app.MapHub<MatchHub>("/hubs/match");
+
+    // Public ranked ladder (Phase 9.1): enrol, read your ladder state / a group's fixed-size seat list,
+    // toggle auto re-enrolment — JWT-protected. Always mapped.
+    app.MapRankedEndpoints();
+
+    // Live ops (Phase 10.3): metrics, worlds, accounts and the balance push. Mapped in EVERY environment,
+    // Production included — this is the surface an operator needs precisely when things are live. It is gated
+    // by the admin ROLE (AdminOnlyFilter), not by the environment flags the dev endpoints use, and a
+    // signed-in non-admin gets a 404 rather than a 403 so its existence is not advertised.
+    app.MapAdminEndpoints();
+
+    // Ranked lifecycle (Phase 9.1): closing a placement season and sorting its coaches into divisions is a
+    // SERVER action, not a player one — exposed as a dev-only internal endpoint until the 9.2 real-time
+    // season scheduler drives it. Never mapped in Production, and behind a config flag.
+    if (!app.Environment.IsProduction()
+        && app.Configuration.GetValue("Ranked:ExposeInternalEndpoints", true))
+    {
+        app.MapRankedInternalEndpoints();
+    }
+
+    // Internal match-simulation endpoints (Phase 7.3): dev-only — never mapped in Production, and
+    // behind a config flag (default on outside prod) so a deployment can also switch them off.
+    if (!app.Environment.IsProduction()
+        && app.Configuration.GetValue("Simulation:ExposeInternalEndpoints", true))
+    {
+        app.MapSimulationEndpoints();
+    }
+
+    // Dev-only test-league seeding (dev tooling): spin up a ready online league (bots + draft) in one call
+    // so online features can be tested without hand-creating accounts. Never mapped in Production, and behind
+    // the Dev:ExposeSeedEndpoints flag. These endpoints are UNAUTHENTICATED — they must never reach prod.
+    if (!app.Environment.IsProduction()
+        && app.Configuration.GetValue("Dev:ExposeSeedEndpoints", true))
+    {
+        app.MapDevEndpoints();
+    }
+
+} // if (servesApi)
 
 // Background jobs (Phase 7.4): register the recurring heartbeat that proves the scheduler fires,
 // and expose the dev-only dashboard + job-enqueue diagnostics (gated like the sim endpoints).
-if (backgroundJobsEnabled)
+if (processesJobs)
 {
     // Use the DI-resolved manager, NOT the static RecurringJob API: the static one reads
     // JobStorage.Current, which the service-based Hangfire.NetCore setup does not populate at

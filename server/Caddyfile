@@ -1,0 +1,54 @@
+# TLS termination for the FTS API (Roadmap 10.4).
+#
+# Caddy is here for one reason: the release checklist's "HTTPS in front of the API" blocker. It obtains
+# and renews a Let's Encrypt certificate for $FTS_DOMAIN by itself, so there is no certbot cron, no
+# renewal that quietly stops working, and no plaintext hop for a password or a JWT.
+#
+# The API listens on plain HTTP inside the compose network and publishes no port of its own, so this file
+# is the ONLY way in from the internet.
+
+{
+	email {$FTS_ACME_EMAIL}
+	# One access log for the whole site, in JSON so it can be shipped somewhere later.
+	log {
+		output stdout
+		format json
+	}
+}
+
+{$FTS_DOMAIN} {
+	encode zstd gzip
+
+	header {
+		# The API is served over HTTPS only from here on. Two years, because a downgrade on an auth
+		# request is exactly the request worth protecting.
+		Strict-Transport-Security "max-age=63072000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		# Do not advertise the stack.
+		-Server
+	}
+
+	# The SignalR hubs (/hubs/auction, /hubs/match) are WebSocket upgrades and long-lived; Caddy's
+	# reverse_proxy passes an upgrade through natively, but the read timeout has to allow a connection
+	# that is deliberately idle between two bids.
+	reverse_proxy api:8080 {
+		# X-Forwarded-For / -Proto / -Host are set by Caddy automatically. The 9.5 integrity signals and
+		# the anonymous rate-limit bucket read the FIRST entry of X-Forwarded-For as the client, which is
+		# only trustworthy because this proxy overwrites the header on the way in and the API port is not
+		# published to the host — nothing can reach the API without passing through here.
+		header_up X-Forwarded-For {remote_host}
+
+		transport http {
+			read_timeout 300s
+			write_timeout 300s
+		}
+
+		# Take an instance out of rotation rather than serving errors from it. Relevant the moment the
+		# stack is scaled with `--scale api=N`.
+		health_uri /health
+		health_interval 15s
+		health_timeout 5s
+	}
+}
