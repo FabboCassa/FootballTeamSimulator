@@ -44,20 +44,13 @@ namespace Fts.Views
         {
             _tr = tr;
 
-            Root = new VisualElement();
-            Root.style.flexGrow = 1f;
-            Root.style.backgroundColor = UiKit.Background;
-            Root.style.paddingTop = UiKit.SpaceSm;
-            Root.style.paddingBottom = UiKit.SpaceSm;
-            Root.style.paddingLeft = UiKit.SpaceMd;
-            Root.style.paddingRight = UiKit.SpaceMd;
+            Root = UiKit.ScreenRoot();
 
-            var col = UiKit.CenteredColumn(720f);
+            var col = UiKit.PageColumn(UiKit.WidthWide);
             col.style.flexGrow = 1f;
             Root.Add(col);
 
-            _header = UiKit.Header(string.Empty);
-            _header.style.unityTextAlign = TextAnchor.MiddleCenter;
+            _header = UiKit.ScreenTitle(string.Empty);
             col.Add(_header);
 
             _summary = UiKit.Caption(string.Empty);

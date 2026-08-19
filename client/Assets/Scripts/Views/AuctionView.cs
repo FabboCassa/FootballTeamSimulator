@@ -62,20 +62,13 @@ namespace Fts.Views
         {
             _tr = tr;
 
-            Root = new VisualElement();
-            Root.style.flexGrow = 1f;
-            Root.style.backgroundColor = UiKit.Background;
-            Root.style.paddingTop = UiKit.SpaceSm;
-            Root.style.paddingBottom = UiKit.SpaceSm;
-            Root.style.paddingLeft = UiKit.SpaceMd;
-            Root.style.paddingRight = UiKit.SpaceMd;
+            Root = UiKit.ScreenRoot();
 
-            var col = UiKit.CenteredColumn(720f);
+            var col = UiKit.PageColumn(UiKit.WidthMedium);
             col.style.flexGrow = 1f;
             Root.Add(col);
 
-            _header = UiKit.Header(string.Empty);
-            _header.style.unityTextAlign = TextAnchor.MiddleCenter;
+            _header = UiKit.ScreenTitle(string.Empty);
             _header.style.marginBottom = UiKit.SpaceXs;
             col.Add(_header);
 
@@ -161,11 +154,7 @@ namespace Fts.Views
 
             col.Add(_bidPanel);
 
-            var footer = new VisualElement();
-            footer.style.flexDirection = FlexDirection.Row;
-            footer.style.justifyContent = Justify.Center;
-            footer.style.marginTop = UiKit.SpaceSm;
-            footer.style.flexShrink = 0f;
+            VisualElement footer = UiKit.FooterBar();
             footer.Add(FooterButton(tr("common.back"), () => BackClicked?.Invoke()));
             col.Add(footer);
 
@@ -326,15 +315,6 @@ namespace Fts.Views
             return button;
         }
 
-        private static Button FooterButton(string text, Action onClick)
-        {
-            var button = UiKit.MenuButton(text, onClick);
-            button.style.width = 150;
-            button.style.height = 44;
-            button.style.fontSize = 16;
-            button.style.marginLeft = 6;
-            button.style.marginRight = 6;
-            return button;
-        }
+        private static Button FooterButton(string text, Action onClick) => UiKit.FooterButton(text, onClick);
     }
 }

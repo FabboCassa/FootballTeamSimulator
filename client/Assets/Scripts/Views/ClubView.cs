@@ -40,45 +40,41 @@ namespace Fts.Views
 
         public ClubView(Func<string, string> tr)
         {
-            Root = new VisualElement();
-            Root.style.flexGrow = 1f;
-            Root.style.backgroundColor = UiKit.Background;
-            Root.style.paddingTop = UiKit.SpaceSm;
-            Root.style.paddingBottom = UiKit.SpaceSm;
-            Root.style.paddingLeft = UiKit.SpaceMd;
-            Root.style.paddingRight = UiKit.SpaceMd;
+            Root = UiKit.ScreenRoot();
 
-            var col = UiKit.CenteredColumn(760f);
+            var col = UiKit.PageColumn(UiKit.WidthWide);
             col.style.flexGrow = 1f;
             Root.Add(col);
 
-            _header = UiKit.Header(string.Empty);
-            _header.style.unityTextAlign = TextAnchor.MiddleCenter;
+            _header = UiKit.ScreenTitle(string.Empty);
             _header.style.marginBottom = UiKit.SpaceSm;
             col.Add(_header);
 
-            col.Add(SectionLabel(tr("club.finances_caption")));
-            var panel = UiKit.Card();
+            // ---- finances panel
+            VisualElement panel = UiKit.Panel();
+            Label financesCaption = SectionLabel(tr("club.finances_caption"));
+            financesCaption.style.marginTop = 0;
+            panel.Add(financesCaption);
             _balance = PanelLine(panel);
-            _balance.style.fontSize = 18;
+            _balance.style.fontSize = 22;
             _balance.style.unityFontStyleAndWeight = FontStyle.Bold;
-            _balance.style.marginBottom = 2;
+            _balance.style.color = UiKit.Accent;
+            _balance.style.marginBottom = UiKit.SpaceXs;
             _income = PanelLine(panel);
             _expense = PanelLine(panel);
             _net = PanelLine(panel);
             col.Add(panel);
 
-            col.Add(SectionLabel(tr("club.facilities_caption")));
-            _facilities = new ScrollView();
-            _facilities.style.flexGrow = 1f;
-            _facilities.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
-            col.Add(_facilities);
+            // ---- facilities fill the rest of the page
+            VisualElement facilitiesPanel = UiKit.Panel(grow: true);
+            Label facilitiesCaption = SectionLabel(tr("club.facilities_caption"));
+            facilitiesCaption.style.marginTop = 0;
+            facilitiesPanel.Add(facilitiesCaption);
+            _facilities = UiKit.ListScroll();
+            facilitiesPanel.Add(_facilities);
+            col.Add(facilitiesPanel);
 
-            var footer = new VisualElement();
-            footer.style.flexDirection = FlexDirection.Row;
-            footer.style.justifyContent = Justify.Center;
-            footer.style.marginTop = UiKit.SpaceSm;
-            footer.style.flexShrink = 0f;
+            VisualElement footer = UiKit.FooterBar();
             footer.Add(FooterButton(tr("common.back"), () => BackClicked?.Invoke()));
             col.Add(footer);
 
@@ -107,23 +103,13 @@ namespace Fts.Views
             {
                 int index = vm.Index;
 
-                var row = new VisualElement();
-                row.style.flexDirection = FlexDirection.Row;
-                row.style.alignItems = Align.Center;
-                row.style.minHeight = 62;
-                row.style.marginBottom = 6;
-                row.style.paddingLeft = 12;
-                row.style.paddingRight = 12;
-                row.style.paddingTop = 8;
-                row.style.paddingBottom = 8;
-                row.style.backgroundColor = UiKit.Surface;
-                UiKit.Round(row, UiKit.RadiusSm);
+                VisualElement row = UiKit.RowCard(64f);
 
                 var text = new VisualElement();
                 text.style.flexGrow = 1f;
                 text.style.flexShrink = 1f;
                 var name = new Label($"{vm.Name} · {vm.Tier}");
-                name.style.fontSize = 15;
+                name.style.fontSize = 16;
                 name.style.unityFontStyleAndWeight = FontStyle.Bold;
                 name.style.color = UiKit.TextPrimary;
                 name.style.marginBottom = 2;
@@ -135,12 +121,10 @@ namespace Fts.Views
                 text.Add(effect);
                 row.Add(text);
 
-                var upgrade = new Button(() => UpgradeClicked?.Invoke(index)) { text = vm.ActionLabel };
-                upgrade.style.width = 150;
+                Button upgrade = UiKit.SmallButton(vm.ActionLabel, () => UpgradeClicked?.Invoke(index), 168f);
                 upgrade.style.height = 40;
-                upgrade.style.fontSize = 13;
-                upgrade.style.flexShrink = 0f;
-                upgrade.style.marginLeft = UiKit.SpaceSm;
+                upgrade.style.marginLeft = UiKit.SpaceMd;
+                UiKit.SetSmallButtonAccent(upgrade, vm.CanUpgrade);
                 upgrade.SetEnabled(vm.CanUpgrade);
                 row.Add(upgrade);
 
@@ -150,32 +134,13 @@ namespace Fts.Views
 
         private static Label PanelLine(VisualElement parent)
         {
-            var label = new Label(string.Empty);
-            label.style.fontSize = 13;
-            label.style.color = Color.white;
+            Label label = UiKit.PanelLine();
             parent.Add(label);
             return label;
         }
 
-        private static Label SectionLabel(string caption)
-        {
-            var label = new Label(caption);
-            label.style.color = new Color(1f, 1f, 1f, 0.7f);
-            label.style.fontSize = 13;
-            label.style.marginTop = 8;
-            label.style.marginBottom = 4;
-            return label;
-        }
+        private static Label SectionLabel(string caption) => UiKit.SectionLabel(caption);
 
-        private static Button FooterButton(string text, Action onClick)
-        {
-            var button = UiKit.MenuButton(text, onClick);
-            button.style.width = 150;
-            button.style.height = 44;
-            button.style.fontSize = 16;
-            button.style.marginLeft = 6;
-            button.style.marginRight = 6;
-            return button;
-        }
+        private static Button FooterButton(string text, Action onClick) => UiKit.FooterButton(text, onClick);
     }
 }

@@ -39,20 +39,13 @@ namespace Fts.Views
         {
             // Task 6.9: shell-aligned — navy background, a centred capped-width column, a section
             // Header instead of the old giant Title, and the shared UiKit.Card for the info box.
-            Root = new VisualElement();
-            Root.style.flexGrow = 1f;
-            Root.style.backgroundColor = UiKit.Background;
-            Root.style.paddingTop = UiKit.SpaceSm;
-            Root.style.paddingBottom = UiKit.SpaceSm;
-            Root.style.paddingLeft = UiKit.SpaceMd;
-            Root.style.paddingRight = UiKit.SpaceMd;
+            Root = UiKit.ScreenRoot();
 
-            var col = UiKit.CenteredColumn(560f);
+            var col = UiKit.PageColumn(UiKit.WidthMedium);
             col.style.flexGrow = 1f;
             Root.Add(col);
 
             _title = UiKit.Header(tr("negotiation.title"));
-            _title.style.unityTextAlign = TextAnchor.MiddleCenter;
             _title.style.marginBottom = 8;
             col.Add(_title);
 
@@ -110,11 +103,7 @@ namespace Fts.Views
             _status.style.marginTop = 2;
             col.Add(_status);
 
-            var footer = new VisualElement();
-            footer.style.flexDirection = FlexDirection.Row;
-            footer.style.justifyContent = Justify.Center;
-            footer.style.marginTop = 6;
-            footer.style.flexShrink = 0f;
+            VisualElement footer = UiKit.FooterBar();
             var back = UiKit.MenuButton(tr("common.back"), () => BackClicked?.Invoke());
             back.style.width = 160;
             back.style.height = 44;
@@ -180,14 +169,7 @@ namespace Fts.Views
             return value;
         }
 
-        private static Label SectionLabel(string caption)
-        {
-            var label = new Label(caption);
-            label.style.color = new Color(1f, 1f, 1f, 0.7f);
-            label.style.fontSize = 13;
-            label.style.marginBottom = 4;
-            return label;
-        }
+        private static Label SectionLabel(string caption) => UiKit.SectionLabel(caption);
 
         private static Button StepButton(string text, Action onClick)
         {

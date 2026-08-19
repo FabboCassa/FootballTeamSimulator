@@ -78,13 +78,7 @@ namespace Fts.Views
 
         public SquadView(Func<string, string> tr)
         {
-            Root = new VisualElement();
-            Root.style.flexGrow = 1f;
-            Root.style.backgroundColor = UiKit.Background;
-            Root.style.paddingTop = 10;
-            Root.style.paddingBottom = 10;
-            Root.style.paddingLeft = 14;
-            Root.style.paddingRight = 14;
+            Root = UiKit.ScreenRoot();
 
             _header = UiKit.Subtitle(string.Empty);
             _header.style.marginBottom = 4;
@@ -140,10 +134,7 @@ namespace Fts.Views
             _benchColumn.Add(_benchList);
             _content.Add(_benchColumn);
 
-            var footer = new VisualElement();
-            footer.style.flexDirection = FlexDirection.Row;
-            footer.style.justifyContent = Justify.Center;
-            footer.style.marginTop = 8;
+            VisualElement footer = UiKit.FooterBar();
             footer.Add(FooterButton(tr("squad.auto_pick"), () => AutoClicked?.Invoke()));
             footer.Add(FooterButton(tr("squad.save_lineup"), () => SaveClicked?.Invoke()));
             footer.Add(FooterButton(tr("common.back"), () => BackClicked?.Invoke()));
@@ -387,15 +378,6 @@ namespace Fts.Views
             }
         }
 
-        private static Button FooterButton(string text, Action onClick)
-        {
-            var button = UiKit.MenuButton(text, onClick);
-            button.style.width = 140;
-            button.style.height = 42;
-            button.style.fontSize = 15;
-            button.style.marginLeft = 5;
-            button.style.marginRight = 5;
-            return button;
-        }
+        private static Button FooterButton(string text, Action onClick) => UiKit.FooterButton(text, onClick);
     }
 }

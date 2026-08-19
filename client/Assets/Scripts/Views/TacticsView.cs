@@ -35,24 +35,17 @@ namespace Fts.Views
 
         public TacticsView(Func<string, string> tr)
         {
-            Root = new VisualElement();
-            Root.style.flexGrow = 1f;
-            Root.style.backgroundColor = UiKit.Background;
-            Root.style.paddingLeft = UiKit.SpaceMd;
-            Root.style.paddingRight = UiKit.SpaceMd;
-            Root.style.paddingTop = UiKit.SpaceSm;
-            Root.style.paddingBottom = UiKit.SpaceSm;
+            Root = UiKit.ScreenRoot();
 
             var scroll = new ScrollView(ScrollViewMode.Vertical);
             scroll.style.flexGrow = 1f;
             scroll.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
             Root.Add(scroll);
 
-            var col = UiKit.CenteredColumn(640f);
+            var col = UiKit.PageColumn(UiKit.WidthMedium);
             scroll.Add(col);
 
             _header = UiKit.Caption(string.Empty);
-            _header.style.unityTextAlign = TextAnchor.MiddleCenter;
             _header.style.marginBottom = UiKit.SpaceSm;
             col.Add(_header);
 
@@ -80,12 +73,7 @@ namespace Fts.Views
             _familiarity.style.marginBottom = UiKit.SpaceSm;
             col.Add(_familiarity);
 
-            var footer = new VisualElement();
-            footer.style.flexDirection = FlexDirection.Row;
-            footer.style.justifyContent = Justify.Center;
-            footer.style.marginTop = UiKit.SpaceSm;
-            footer.style.marginBottom = UiKit.SpaceXs;
-            footer.style.flexShrink = 0f;
+            VisualElement footer = UiKit.FooterBar();
             footer.Add(FooterButton(tr("tactics.save"), () => SaveClicked?.Invoke()));
             footer.Add(FooterButton(tr("common.back"), () => BackClicked?.Invoke()));
             Root.Add(footer);
@@ -122,36 +110,10 @@ namespace Fts.Views
             return box;
         }
 
-        private static Label SectionLabel(string caption)
-        {
-            var label = new Label(caption);
-            label.style.color = UiKit.TextMuted;
-            label.style.fontSize = 13;
-            label.style.marginTop = UiKit.SpaceSm;
-            label.style.marginBottom = UiKit.SpaceXs;
-            return label;
-        }
+        private static Label SectionLabel(string caption) => UiKit.SectionLabel(caption);
 
-        private static Button CycleButton(Action onClick)
-        {
-            var button = new Button(onClick);
-            button.style.height = 42;
-            button.style.fontSize = 15;
-            button.style.unityTextAlign = TextAnchor.MiddleLeft;
-            button.style.marginBottom = UiKit.SpaceXs;
-            button.style.width = Length.Percent(100);
-            return button;
-        }
+        private static Button CycleButton(Action onClick) => UiKit.CycleButton(onClick);
 
-        private static Button FooterButton(string text, Action onClick)
-        {
-            var button = UiKit.MenuButton(text, onClick);
-            button.style.width = 160;
-            button.style.height = 44;
-            button.style.fontSize = 16;
-            button.style.marginLeft = 6;
-            button.style.marginRight = 6;
-            return button;
-        }
+        private static Button FooterButton(string text, Action onClick) => UiKit.FooterButton(text, onClick);
     }
 }

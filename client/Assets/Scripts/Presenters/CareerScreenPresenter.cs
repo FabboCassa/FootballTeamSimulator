@@ -57,15 +57,21 @@ namespace Fts.Presenters
             Club club = _career.GetUserClub();
             _view.SetHeader(_loc.Tr("career.header", club?.Name ?? string.Empty));
 
-            _view.SetObjective(_loc.Tr("career.objective", TierName(_service.Objective), _service.ObjectivePosition));
-            _view.SetPosition(_loc.Tr("career.position", _service.CurrentPosition(), _service.ClubCount));
-            _view.SetReputation(_loc.Tr("career.reputation", _service.Reputation));
+            // Short values: the caption ("Board objective", …) is baked into the tile, so the
+            // value line carries only the fact (task 6.12 stat tiles).
+            _view.SetObjective(_loc.Tr("career.objective_value", TierName(_service.Objective), _service.ObjectivePosition));
+            _view.SetPosition(_loc.Tr("career.position_value", _service.CurrentPosition(), _service.ClubCount));
+            _view.SetReputation(_loc.Tr("career.reputation_value", _service.Reputation));
 
             int band = _service.ConfidenceBand;
             string status = _loc.Tr(band <= 0 ? "career.confidence.risk" : band == 1 ? "career.confidence.warned" : "career.confidence.safe");
             _view.SetConfidence(_loc.Tr("career.confidence", _service.Confidence, status), _service.Confidence, band);
 
-            _view.SetHistory(BuildHistory());
+            List<string> history = BuildHistory();
+            if (history.Count == 0)
+                _view.SetHistoryEmpty(_loc.Tr("career.history_empty"));
+            else
+                _view.SetHistory(history);
         }
 
         private List<string> BuildHistory()
@@ -82,9 +88,7 @@ namespace Fts.Presenters
                 lines.Add(line);
             }
 
-            if (lines.Count == 0)
-                lines.Add(_loc.Tr("career.history_empty"));
-            return lines;
+            return lines; // empty → the view shows the illustrated empty state
         }
 
         private string TierName(ObjectiveTier tier)

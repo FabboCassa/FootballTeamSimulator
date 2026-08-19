@@ -67,19 +67,17 @@ namespace Fts.Views
 
         public OpponentReportView(Func<string, string> tr)
         {
-            Root = new VisualElement();
-            Root.style.flexGrow = 1f;
-            Root.style.backgroundColor = UiKit.Background;
-            Root.style.paddingTop = UiKit.SpaceSm;
-            Root.style.paddingBottom = UiKit.SpaceSm;
-            Root.style.paddingLeft = UiKit.SpaceMd;
-            Root.style.paddingRight = UiKit.SpaceMd;
+            Root = UiKit.ScreenRoot();
+
+            // Task 6.12: the report is a wide two-column layout, so it uses the same page column
+            // as the other list/table screens instead of sprawling edge to edge.
+            VisualElement page = UiKit.PageColumn(UiKit.WidthWide);
+            Root.Add(page);
 
             // Header: crest + opponent line, kept compact at the top so the body gets the room.
             var top = new VisualElement();
             top.style.flexDirection = FlexDirection.Row;
             top.style.alignItems = Align.Center;
-            top.style.justifyContent = Justify.Center;
             top.style.flexShrink = 0f;
             top.style.marginBottom = UiKit.SpaceSm;
 
@@ -89,21 +87,22 @@ namespace Fts.Views
             _crestSlot.style.marginRight = UiKit.SpaceSm;
             top.Add(_crestSlot);
 
-            _header = UiKit.Header(string.Empty);
+            _header = UiKit.ScreenTitle(string.Empty);
             _header.style.whiteSpace = WhiteSpace.Normal;
             _header.style.marginBottom = 0;
             top.Add(_header);
-            Root.Add(top);
+            page.Add(top);
 
             // Everything below the header lives in _body so the whole thing can be swapped
             // for a single "no upcoming match" line when the season is complete.
             _body = new VisualElement();
             _body.style.flexGrow = 1f;
-            Root.Add(_body);
+            _body.style.flexShrink = 1f;
+            page.Add(_body);
 
             _empty = UiKit.Subtitle(string.Empty);
             _empty.style.display = DisplayStyle.None;
-            Root.Add(_empty);
+            page.Add(_empty);
 
             // Intel card (full width): strength, formation, tactic, recent form.
             var card = UiKit.Card();
@@ -157,17 +156,9 @@ namespace Fts.Views
             _rightCol.Add(_roster);
             _bodyRow.Add(_rightCol);
 
-            var footer = new VisualElement();
-            footer.style.flexDirection = FlexDirection.Row;
-            footer.style.justifyContent = Justify.Center;
-            footer.style.flexShrink = 0f;
-            footer.style.marginTop = UiKit.SpaceSm;
-            var back = UiKit.MenuButton(tr("common.back"), () => BackClicked?.Invoke());
-            back.style.width = 150;
-            back.style.height = 44;
-            back.style.fontSize = 16;
-            footer.Add(back);
-            Root.Add(footer);
+            VisualElement footer = UiKit.FooterBar();
+            footer.Add(UiKit.FooterButton(tr("common.back"), () => BackClicked?.Invoke()));
+            page.Add(footer);
 
             Root.RegisterCallback<GeometryChangedEvent>(_ => ApplyResponsive(Root.resolvedStyle.width));
         }

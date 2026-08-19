@@ -48,10 +48,10 @@ namespace Fts.Views
             _tr = tr;
 
             Root = UiKit.Screen(UiKit.Background);
-            var col = UiKit.CenteredColumn(720f);
+            var col = UiKit.PageColumn(UiKit.WidthMedium);
             Root.Add(col);
 
-            _title = UiKit.Header(string.Empty);
+            _title = UiKit.ScreenTitle(string.Empty);
             col.Add(_title);
 
             var card = UiKit.Card();

@@ -37,15 +37,9 @@ namespace Fts.Views
         {
             // Task 6.9: aligned with the shell look — themed navy background, a centred capped-width
             // column, a section Header instead of the old giant Title, and a Card for the summary block.
-            Root = new VisualElement();
-            Root.style.flexGrow = 1f;
-            Root.style.backgroundColor = UiKit.Background;
-            Root.style.paddingTop = UiKit.SpaceSm;
-            Root.style.paddingBottom = UiKit.SpaceSm;
-            Root.style.paddingLeft = UiKit.SpaceMd;
-            Root.style.paddingRight = UiKit.SpaceMd;
+            Root = UiKit.ScreenRoot();
 
-            var col = UiKit.CenteredColumn(680f);
+            var col = UiKit.PageColumn(UiKit.WidthMedium);
             col.style.flexGrow = 1f;
             Root.Add(col);
 
@@ -90,11 +84,7 @@ namespace Fts.Views
             _offers.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
             col.Add(_offers);
 
-            var footer = new VisualElement();
-            footer.style.flexDirection = FlexDirection.Row;
-            footer.style.justifyContent = Justify.Center;
-            footer.style.marginTop = UiKit.SpaceSm;
-            footer.style.flexShrink = 0f;
+            VisualElement footer = UiKit.FooterBar();
             _stayButton = UiKit.MenuButton(tr("careerend.stay"), () => StayClicked?.Invoke());
             _stayButton.style.width = 220;
             _stayButton.style.height = 48;
@@ -103,15 +93,7 @@ namespace Fts.Views
             col.Add(footer);
         }
 
-        private static Label SectionLabel(string caption)
-        {
-            var label = new Label(caption);
-            label.style.color = new Color(1f, 1f, 1f, 0.7f);
-            label.style.fontSize = 13;
-            label.style.marginTop = 8;
-            label.style.marginBottom = 4;
-            return label;
-        }
+        private static Label SectionLabel(string caption) => UiKit.SectionLabel(caption);
 
         public void SetSummary(string text) => _summary.text = text;
         public void SetStanding(string text) => _standing.text = text;

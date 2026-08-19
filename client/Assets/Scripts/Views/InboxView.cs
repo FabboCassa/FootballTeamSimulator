@@ -41,15 +41,9 @@ namespace Fts.Views
         {
             // Task 6.9: shell-aligned — navy background, a centred capped-width column, and a section
             // Header instead of the old giant Title (the shell top bar already gives context).
-            Root = new VisualElement();
-            Root.style.flexGrow = 1f;
-            Root.style.backgroundColor = UiKit.Background;
-            Root.style.paddingTop = UiKit.SpaceSm;
-            Root.style.paddingBottom = UiKit.SpaceSm;
-            Root.style.paddingLeft = UiKit.SpaceMd;
-            Root.style.paddingRight = UiKit.SpaceMd;
+            Root = UiKit.ScreenRoot();
 
-            var col = UiKit.CenteredColumn(720f);
+            var col = UiKit.PageColumn(UiKit.WidthMedium);
             col.style.flexGrow = 1f;
             Root.Add(col);
 
@@ -96,11 +90,7 @@ namespace Fts.Views
             _empty.style.display = DisplayStyle.None;
             col.Add(_empty);
 
-            var footer = new VisualElement();
-            footer.style.flexDirection = FlexDirection.Row;
-            footer.style.justifyContent = Justify.Center;
-            footer.style.marginTop = 6;
-            footer.style.flexShrink = 0f;
+            VisualElement footer = UiKit.FooterBar();
             footer.Add(FooterButton(tr("common.back"), () => BackClicked?.Invoke()));
             col.Add(footer);
         }
@@ -184,15 +174,6 @@ namespace Fts.Views
             return button;
         }
 
-        private static Button FooterButton(string text, Action onClick)
-        {
-            var button = UiKit.MenuButton(text, onClick);
-            button.style.width = 150;
-            button.style.height = 44;
-            button.style.fontSize = 16;
-            button.style.marginLeft = 6;
-            button.style.marginRight = 6;
-            return button;
-        }
+        private static Button FooterButton(string text, Action onClick) => UiKit.FooterButton(text, onClick);
     }
 }

@@ -51,7 +51,7 @@ namespace Fts.Presenters
         {
             _view.PlayerSelected += OnPlayerSelected;
             _view.WatchToggleClicked += OnWatchToggle;
-            _view.RoleFilterClicked += OnRoleFilter;
+            _view.RoleFilterSelected += OnRoleFilter;
             _view.BackClicked += OnBack;
             Refresh();
         }
@@ -60,7 +60,7 @@ namespace Fts.Presenters
         {
             _view.PlayerSelected -= OnPlayerSelected;
             _view.WatchToggleClicked -= OnWatchToggle;
-            _view.RoleFilterClicked -= OnRoleFilter;
+            _view.RoleFilterSelected -= OnRoleFilter;
             _view.BackClicked -= OnBack;
         }
 
@@ -81,9 +81,10 @@ namespace Fts.Presenters
             Refresh();
         }
 
-        private void OnRoleFilter()
+        /// <summary>A role chip was picked (-1 = every role); the whole row stays visible.</summary>
+        private void OnRoleFilter(int role)
         {
-            _roleFilter = _roleFilter >= RoleMax ? -1 : _roleFilter + 1;
+            _roleFilter = role < 0 || role > RoleMax ? -1 : role;
             Refresh();
         }
 
@@ -93,7 +94,7 @@ namespace Fts.Presenters
         {
             _view.SetHeader(_loc.Tr("scouting.header",
                 _scouting.ScoutLevel(), _scouting.WatchCount(), _scouting.WatchCapacity()));
-            _view.SetRoleFilter(RoleFilterText());
+            _view.SetRoleFilters(BuildRoleFilters());
 
             // Every player outside the user's squad, with a scouted read.
             var entries = new List<Entry>();
@@ -171,8 +172,34 @@ namespace Fts.Presenters
                 ? _loc.Tr("scouting.ovr_known", report.Overall.Estimate)
                 : _loc.Tr("scouting.ovr_range", report.Overall.Min, report.Overall.Max);
 
-        private string RoleFilterText() =>
-            _roleFilter < 0 ? _loc.Tr("market.filter.all_roles") : RoleName((PositionRole)_roleFilter);
+        /// <summary>
+        /// The filter row: "all" plus every position role, each chip carrying its reparto group so
+        /// the selected one lights up in the same colour the role cells use in the list (6.12b).
+        /// </summary>
+        private List<FilterChipVm> BuildRoleFilters()
+        {
+            var chips = new List<FilterChipVm>
+            {
+                new FilterChipVm
+                {
+                    Value = -1,
+                    Label = _loc.Tr("filter.all_roles"),
+                    RoleGroup = -1,
+                    Selected = _roleFilter < 0
+                }
+            };
+            for (int role = 0; role <= RoleMax; role++)
+            {
+                chips.Add(new FilterChipVm
+                {
+                    Value = role,
+                    Label = RoleName((PositionRole)role),
+                    RoleGroup = RoleFormat.Group((PositionRole)role),
+                    Selected = _roleFilter == role
+                });
+            }
+            return chips;
+        }
 
         private string RoleName(PositionRole role) =>
             _loc.Tr("role." + role.ToString().ToLowerInvariant());

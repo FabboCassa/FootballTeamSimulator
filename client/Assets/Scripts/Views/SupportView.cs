@@ -33,6 +33,10 @@ namespace Fts.Views
     /// shared condition strip (so the effect is visible), and the action buttons grey out
     /// while on cooldown. Dumb view — the presenter owns the model, translates every label,
     /// and decides which actions are available; the view only emits events and renders.
+    ///
+    /// Layout (task 6.12): the wide page scaffold — a column header, a roster panel that fills
+    /// all remaining height, and a pinned action panel at the bottom that names the picked
+    /// player, so the screen is full at any window size instead of a narrow strip in the middle.
     /// </summary>
     public sealed class SupportView
     {
@@ -43,80 +47,73 @@ namespace Fts.Views
         public VisualElement Root { get; }
 
         private readonly Label _header;
-        private readonly Label _help;
         private readonly ScrollView _rosterList;
+        private readonly Label _rosterCaption;
         private readonly Label _selectedCaption;
         private readonly VisualElement _actionRow;
         private readonly Label _status;
+        private readonly string _rosterCaptionText;
 
         public SupportView(Func<string, string> tr)
         {
-            Root = new VisualElement();
-            Root.style.flexGrow = 1f;
-            Root.style.backgroundColor = UiKit.Background;
-            Root.style.paddingTop = UiKit.SpaceSm;
-            Root.style.paddingBottom = UiKit.SpaceSm;
-            Root.style.paddingLeft = UiKit.SpaceMd;
-            Root.style.paddingRight = UiKit.SpaceMd;
+            _rosterCaptionText = tr("support.roster_caption");
 
-            var col = UiKit.CenteredColumn(680f);
-            col.style.flexGrow = 1f;
+            Root = UiKit.ScreenRoot();
+
+            VisualElement col = UiKit.PageColumn(UiKit.WidthWide);
             Root.Add(col);
 
-            _header = UiKit.Header(string.Empty);
-            _header.style.unityTextAlign = TextAnchor.MiddleCenter;
-            _header.style.marginBottom = UiKit.SpaceXs;
+            _header = UiKit.ScreenTitle(string.Empty);
             col.Add(_header);
+            col.Add(UiKit.HelpText(tr("support.help")));
 
-            _help = new Label(tr("support.help"));
-            _help.style.color = UiKit.TextMuted;
-            _help.style.fontSize = 13;
-            _help.style.whiteSpace = WhiteSpace.Normal;
-            _help.style.unityTextAlign = TextAnchor.MiddleCenter;
-            _help.style.marginBottom = UiKit.SpaceSm;
-            col.Add(_help);
+            // ---- roster panel: fills every pixel left between the header and the action bar.
+            VisualElement listPanel = UiKit.Panel(grow: true);
+            listPanel.style.paddingTop = UiKit.SpaceSm;
+            listPanel.style.paddingBottom = UiKit.SpaceSm;
+            _rosterCaption = UiKit.SectionLabel(_rosterCaptionText);
+            _rosterCaption.style.marginTop = 0;
+            listPanel.Add(_rosterCaption);
+            _rosterList = UiKit.ListScroll();
+            listPanel.Add(_rosterList);
+            col.Add(listPanel);
 
-            col.Add(SectionLabel(tr("support.roster_caption")));
-            _rosterList = new ScrollView();
-            _rosterList.style.flexGrow = 1f;
-            _rosterList.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
-            col.Add(_rosterList);
-
-            _selectedCaption = SectionLabel(string.Empty);
-            _selectedCaption.style.flexShrink = 0f;
-            col.Add(_selectedCaption);
+            // ---- action panel: who is picked + what you can say to him.
+            VisualElement actionPanel = UiKit.Panel();
+            _selectedCaption = UiKit.SectionLabel(string.Empty);
+            _selectedCaption.style.marginTop = 0;
+            actionPanel.Add(_selectedCaption);
 
             _actionRow = new VisualElement();
             _actionRow.style.flexDirection = FlexDirection.Row;
             _actionRow.style.flexWrap = Wrap.Wrap;
-            _actionRow.style.justifyContent = Justify.Center;
+            _actionRow.style.alignItems = Align.Center;
             _actionRow.style.flexShrink = 0f;
-            col.Add(_actionRow);
+            actionPanel.Add(_actionRow);
 
             _status = UiKit.Caption(string.Empty);
-            _status.style.marginTop = UiKit.SpaceSm;
+            _status.style.marginTop = UiKit.SpaceXs;
             _status.style.whiteSpace = WhiteSpace.Normal;
-            _status.style.unityTextAlign = TextAnchor.MiddleCenter;
-            _status.style.alignSelf = Align.Center;
             _status.style.flexShrink = 0f;
-            col.Add(_status);
+            actionPanel.Add(_status);
+            col.Add(actionPanel);
 
-            var footer = new VisualElement();
-            footer.style.flexDirection = FlexDirection.Row;
-            footer.style.justifyContent = Justify.Center;
-            footer.style.marginTop = UiKit.SpaceSm;
-            footer.style.flexShrink = 0f;
-            footer.Add(FooterButton(tr("common.back"), () => BackClicked?.Invoke()));
+            VisualElement footer = UiKit.FooterBar();
+            footer.Add(UiKit.FooterButton(tr("common.back"), () => BackClicked?.Invoke()));
             col.Add(footer);
         }
 
         public void SetHeader(string text) => _header.text = text;
-        public void SetSelectedCaption(string text) => _selectedCaption.text = text;
+
+        public void SetSelectedCaption(string text) => _selectedCaption.text = text ?? string.Empty;
+
         public void SetStatus(string text) => _status.text = text;
 
         public void SetRoster(IReadOnlyList<SupportRowVm> rows)
         {
             _rosterList.Clear();
+            _rosterCaption.text = $"{_rosterCaptionText} · {rows.Count}";
+
             foreach (SupportRowVm vm in rows)
             {
                 int playerId = vm.PlayerId;
@@ -125,14 +122,16 @@ namespace Fts.Views
                 row.tooltip = vm.Tooltip ?? string.Empty;
                 row.RegisterCallback<ClickEvent>(_ => PlayerSelected?.Invoke(playerId));
 
-                // Name (its own cell, tinted when selected) · coloured role cell · condition cell.
+                // Coloured role cell first (the reparto colour bands the list), then the name,
+                // then a roomy condition cell so the bar/arrow/face never get clipped.
+                row.Add(PlayerRowKit.RoleChip(vm.RoleAbbr, vm.RoleGroup));
+
                 VisualElement nameCell = PlayerRowKit.TextCell(vm.Name, 0, TextAnchor.MiddleLeft, grow: true, bold: true);
                 PlayerRowKit.SetSelected(nameCell, vm.Selected);
                 row.Add(nameCell);
 
-                row.Add(PlayerRowKit.RoleChip(vm.RoleAbbr, vm.RoleGroup));
-
-                VisualElement condCell = PlayerRowKit.Cell(128f);
+                VisualElement condCell = PlayerRowKit.Cell(180f);
+                PlayerRowKit.SetSelected(condCell, vm.Selected);
                 ConditionStrip.Append(condCell, vm.FormArrow, vm.MoraleFace, vm.Fitness);
                 row.Add(condCell);
 
@@ -146,36 +145,15 @@ namespace Fts.Views
             foreach (SupportButtonVm vm in actions)
             {
                 int actionId = vm.ActionId;
-                var button = new Button(() => ActionClicked?.Invoke(actionId)) { text = vm.Text };
+                Button button = UiKit.SmallButton(vm.Text, () => ActionClicked?.Invoke(actionId), 120f);
                 button.style.height = 40;
-                button.style.fontSize = 13;
-                button.style.marginRight = 6;
+                button.style.marginLeft = 0;
+                button.style.marginRight = 8;
                 button.style.marginTop = 4;
-                button.style.minWidth = 96;
+                button.style.marginBottom = 4;
                 button.SetEnabled(vm.Enabled);
                 _actionRow.Add(button);
             }
-        }
-
-        private static Label SectionLabel(string caption)
-        {
-            var label = new Label(caption);
-            label.style.color = new Color(1f, 1f, 1f, 0.7f);
-            label.style.fontSize = 13;
-            label.style.marginTop = 8;
-            label.style.marginBottom = 4;
-            return label;
-        }
-
-        private static Button FooterButton(string text, Action onClick)
-        {
-            var button = UiKit.MenuButton(text, onClick);
-            button.style.width = 150;
-            button.style.height = 44;
-            button.style.fontSize = 16;
-            button.style.marginLeft = 6;
-            button.style.marginRight = 6;
-            return button;
         }
     }
 }

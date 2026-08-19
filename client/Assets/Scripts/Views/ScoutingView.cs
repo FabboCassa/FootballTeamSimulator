@@ -35,66 +35,53 @@ namespace Fts.Views
 
         public event Action<int> PlayerSelected;
         public event Action<int> WatchToggleClicked;
-        public event Action RoleFilterClicked;
+        /// <summary>A role filter chip was picked (-1 = every role).</summary>
+        public event Action<int> RoleFilterSelected;
         public event Action BackClicked;
 
         public VisualElement Root { get; }
 
         private readonly Label _header;
-        private readonly Button _roleFilterButton;
+        private readonly VisualElement _filterBar;
         private readonly ScrollView _list;
 
         public ScoutingView(Func<string, string> tr)
         {
-            Root = new VisualElement();
-            Root.style.flexGrow = 1f;
-            Root.style.backgroundColor = UiKit.Background;
-            Root.style.paddingTop = UiKit.SpaceSm;
-            Root.style.paddingBottom = UiKit.SpaceSm;
-            Root.style.paddingLeft = UiKit.SpaceMd;
-            Root.style.paddingRight = UiKit.SpaceMd;
+            Root = UiKit.ScreenRoot();
 
-            var col = UiKit.CenteredColumn(760f);
+            var col = UiKit.PageColumn(UiKit.WidthWide);
             col.style.flexGrow = 1f;
             Root.Add(col);
 
-            _header = UiKit.Header(string.Empty);
-            _header.style.unityTextAlign = TextAnchor.MiddleCenter;
+            _header = UiKit.ScreenTitle(string.Empty);
             _header.style.marginBottom = UiKit.SpaceXs;
             col.Add(_header);
 
-            var help = new Label(tr("scouting.help"));
-            help.style.color = UiKit.TextMuted;
-            help.style.fontSize = 13;
-            help.style.whiteSpace = WhiteSpace.Normal;
-            help.style.unityTextAlign = TextAnchor.MiddleCenter;
-            help.style.marginBottom = UiKit.SpaceSm;
-            col.Add(help);
+            col.Add(UiKit.HelpText(tr("scouting.help")));
 
-            var filterBar = new VisualElement();
-            filterBar.style.flexDirection = FlexDirection.Row;
-            filterBar.style.flexShrink = 0f;
-            filterBar.style.marginBottom = UiKit.SpaceXs;
-            _roleFilterButton = ChipButton(string.Empty, () => RoleFilterClicked?.Invoke());
-            filterBar.Add(_roleFilterButton);
-            col.Add(filterBar);
+            _filterBar = UiKit.Toolbar();
+            col.Add(_filterBar);
 
-            _list = new ScrollView();
-            _list.style.flexGrow = 1f;
-            _list.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
-            col.Add(_list);
+            VisualElement listPanel = UiKit.Panel(grow: true);
+            listPanel.style.paddingTop = UiKit.SpaceSm;
+            listPanel.style.paddingBottom = UiKit.SpaceSm;
+            _list = UiKit.ListScroll();
+            listPanel.Add(_list);
+            col.Add(listPanel);
 
-            var footer = new VisualElement();
-            footer.style.flexDirection = FlexDirection.Row;
-            footer.style.justifyContent = Justify.Center;
-            footer.style.flexShrink = 0f;
-            footer.style.marginTop = UiKit.SpaceSm;
+            VisualElement footer = UiKit.FooterBar();
             footer.Add(FooterButton(tr("common.back"), () => BackClicked?.Invoke()));
             col.Add(footer);
         }
 
         public void SetHeader(string text) => _header.text = text;
-        public void SetRoleFilter(string text) => _roleFilterButton.text = text;
+
+        /// <summary>
+        /// Rebuilds the role filter row: every role is a chip and the active one lights up in its
+        /// reparto colour (task 6.12b — it used to be one chip you clicked to cycle blindly).
+        /// </summary>
+        public void SetRoleFilters(IReadOnlyList<FilterChipVm> chips) =>
+            UiKit.FillFilterChips(_filterBar, chips, role => RoleFilterSelected?.Invoke(role));
 
         public void SetRows(IReadOnlyList<ScoutingRowVm> rows)
         {
@@ -126,13 +113,9 @@ namespace Fts.Views
                 knowCell.Add(pct);
                 row.Add(knowCell);
 
-                var toggle = new Button(() => WatchToggleClicked?.Invoke(playerId)) { text = vm.ToggleText };
-                toggle.style.width = 88;
+                Button toggle = UiKit.SmallButton(vm.ToggleText, () => WatchToggleClicked?.Invoke(playerId), 96f);
                 toggle.style.height = PlayerRowKit.RowHeight;
-                toggle.style.fontSize = 13;
-                toggle.style.marginLeft = 0;
-                toggle.style.marginRight = 0;
-                toggle.style.flexShrink = 0f;
+                UiKit.SetSmallButtonOn(toggle, vm.Watching);
                 toggle.SetEnabled(vm.ToggleEnabled);
                 // Don't let the toggle click bubble up to the row (which opens the profile).
                 toggle.RegisterCallback<ClickEvent>(e => e.StopPropagation());
@@ -167,26 +150,6 @@ namespace Fts.Views
             return track;
         }
 
-        private static Button ChipButton(string text, Action onClick)
-        {
-            var button = new Button(onClick) { text = text };
-            button.style.height = 30;
-            button.style.fontSize = 12;
-            button.style.marginRight = 6;
-            button.style.paddingLeft = 10;
-            button.style.paddingRight = 10;
-            return button;
-        }
-
-        private static Button FooterButton(string text, Action onClick)
-        {
-            var button = UiKit.MenuButton(text, onClick);
-            button.style.width = 150;
-            button.style.height = 44;
-            button.style.fontSize = 16;
-            button.style.marginLeft = 6;
-            button.style.marginRight = 6;
-            return button;
-        }
+        private static Button FooterButton(string text, Action onClick) => UiKit.FooterButton(text, onClick);
     }
 }

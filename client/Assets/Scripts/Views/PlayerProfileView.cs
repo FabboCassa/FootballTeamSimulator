@@ -61,15 +61,9 @@ namespace Fts.Views
 
         public PlayerProfileView(Func<string, string> tr)
         {
-            Root = new VisualElement();
-            Root.style.flexGrow = 1f;
-            Root.style.backgroundColor = UiKit.Background;
-            Root.style.paddingTop = UiKit.SpaceSm;
-            Root.style.paddingBottom = UiKit.SpaceSm;
-            Root.style.paddingLeft = UiKit.SpaceMd;
-            Root.style.paddingRight = UiKit.SpaceMd;
+            Root = UiKit.ScreenRoot();
 
-            var col = UiKit.CenteredColumn(680f);
+            var col = UiKit.PageColumn(UiKit.WidthMedium);
             col.style.flexGrow = 1f;
             Root.Add(col);
 
@@ -80,7 +74,7 @@ namespace Fts.Views
             _avatarSlot.style.marginBottom = 6;
             col.Add(_avatarSlot);
 
-            _name = UiKit.Header(string.Empty);
+            _name = UiKit.ScreenTitle(string.Empty);
             _name.style.unityTextAlign = TextAnchor.MiddleCenter;
             _name.style.marginBottom = 2;
             col.Add(_name);
@@ -118,10 +112,7 @@ namespace Fts.Views
             _seasonGoals.style.marginTop = 10;
             body.Add(_seasonGoals);
 
-            var footer = new VisualElement();
-            footer.style.flexDirection = FlexDirection.Row;
-            footer.style.justifyContent = Justify.Center;
-            footer.style.marginTop = 10;
+            VisualElement footer = UiKit.FooterBar();
             var back = UiKit.MenuButton(tr("common.back"), () => BackClicked?.Invoke());
             back.style.width = 150;
             back.style.height = 44;
@@ -184,15 +175,7 @@ namespace Fts.Views
             return label;
         }
 
-        private static Label SectionLabel(string caption)
-        {
-            var label = new Label(caption);
-            label.style.color = SectionColor;
-            label.style.fontSize = 13;
-            label.style.marginBottom = 4;
-            label.style.marginTop = 2;
-            return label;
-        }
+        private static Label SectionLabel(string caption) => UiKit.SectionLabel(caption);
 
         /// <summary>A row: attribute name on the left, a value/range text, then a 1-100 bar.</summary>
         private static VisualElement AttributeRow(string name, string text, int barValue)

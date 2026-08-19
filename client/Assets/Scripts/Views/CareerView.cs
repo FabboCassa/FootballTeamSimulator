@@ -10,6 +10,10 @@ namespace Fts.Views
     /// league position, the board-confidence meter (the sacking gauge), his reputation, and a scrolling
     /// career history. Dumb view: the presenter formats every label and passes a 0-100 confidence with a
     /// colour band; the view only renders strings/ints and emits Back. No Sim.Core references.
+    ///
+    /// Layout (task 6.12): the three headline facts are stat tiles across the top of the wide column,
+    /// the confidence gauge is a full-width meter under them and the history fills the rest of the
+    /// page — the screen no longer bottoms out into a huge empty area on a desktop window.
     /// </summary>
     public sealed class CareerView
     {
@@ -18,127 +22,124 @@ namespace Fts.Views
         public VisualElement Root { get; }
 
         private readonly Label _header;
-        private readonly Label _objective;
-        private readonly Label _position;
+        private readonly VisualElement _objectiveTile;
+        private readonly VisualElement _positionTile;
+        private readonly VisualElement _reputationTile;
         private readonly Label _confidenceLabel;
-        private readonly VisualElement _confidenceFill;
-        private readonly Label _reputation;
+        private readonly MeterBar _confidence;
+        private readonly Label _confidenceHint;
         private readonly ScrollView _history;
 
         public CareerView(Func<string, string> tr)
         {
-            Root = new VisualElement();
-            Root.style.flexGrow = 1f;
-            Root.style.backgroundColor = UiKit.Background;
-            Root.style.paddingTop = UiKit.SpaceSm;
-            Root.style.paddingBottom = UiKit.SpaceSm;
-            Root.style.paddingLeft = UiKit.SpaceMd;
-            Root.style.paddingRight = UiKit.SpaceMd;
+            Root = UiKit.ScreenRoot();
 
-            var col = UiKit.CenteredColumn(680f);
-            col.style.flexGrow = 1f;
+            VisualElement col = UiKit.PageColumn(UiKit.WidthWide);
             Root.Add(col);
 
-            _header = UiKit.Header(string.Empty);
-            _header.style.unityTextAlign = TextAnchor.MiddleCenter;
+            _header = UiKit.ScreenTitle(string.Empty);
             _header.style.marginBottom = UiKit.SpaceSm;
             col.Add(_header);
 
-            var panel = UiKit.Card();
-            _objective = PanelLine(panel);
-            _objective.style.fontSize = 16;
-            _objective.style.unityFontStyleAndWeight = FontStyle.Bold;
-            _objective.style.marginBottom = 2;
-            _position = PanelLine(panel);
-            _reputation = PanelLine(panel);
-            col.Add(panel);
+            // ---- headline tiles
+            VisualElement tiles = UiKit.TileRow();
+            _objectiveTile = UiKit.StatTile(tr("career.objective_caption"), string.Empty, null, 220f);
+            _positionTile = UiKit.StatTile(tr("career.position_caption"), string.Empty, null, 180f);
+            _reputationTile = UiKit.StatTile(tr("career.reputation_caption"), string.Empty, null, 180f);
+            tiles.Add(_objectiveTile);
+            tiles.Add(_positionTile);
+            tiles.Add(_reputationTile);
+            col.Add(tiles);
 
-            col.Add(SectionLabel(tr("career.confidence_caption")));
-            _confidenceLabel = PanelLine(col);
-            var track = new VisualElement();
-            track.style.height = 16;
-            track.style.marginBottom = UiKit.SpaceSm;
-            track.style.backgroundColor = new Color(1f, 1f, 1f, 0.12f);
-            UiKit.Round(track, UiKit.RadiusSm);
-            _confidenceFill = new VisualElement();
-            _confidenceFill.style.height = 16;
-            _confidenceFill.style.width = Length.Percent(50);
-            _confidenceFill.style.backgroundColor = new Color(0.3f, 0.7f, 0.35f);
-            UiKit.Round(_confidenceFill, UiKit.RadiusSm);
-            track.Add(_confidenceFill);
-            col.Add(track);
+            // ---- board confidence gauge
+            VisualElement confidencePanel = UiKit.Panel();
+            Label confidenceCaption = UiKit.SectionLabel(tr("career.confidence_caption"));
+            confidenceCaption.style.marginTop = 0;
+            confidencePanel.Add(confidenceCaption);
 
-            col.Add(SectionLabel(tr("career.history_caption")));
-            _history = new ScrollView();
-            _history.style.flexGrow = 1f;
-            _history.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
-            col.Add(_history);
+            _confidenceLabel = UiKit.PanelLine(string.Empty);
+            _confidenceLabel.style.fontSize = 18;
+            _confidenceLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
+            _confidenceLabel.style.marginBottom = UiKit.SpaceSm;
+            confidencePanel.Add(_confidenceLabel);
 
-            var footer = new VisualElement();
-            footer.style.flexDirection = FlexDirection.Row;
-            footer.style.justifyContent = Justify.Center;
-            footer.style.marginTop = UiKit.SpaceSm;
-            footer.style.flexShrink = 0f;
-            var back = UiKit.MenuButton(tr("common.back"), () => BackClicked?.Invoke());
-            back.style.width = 150;
-            back.style.height = 44;
-            back.style.fontSize = 16;
-            footer.Add(back);
+            _confidence = new MeterBar(18f);
+            confidencePanel.Add(_confidence.Root);
+
+            _confidenceHint = UiKit.Caption(string.Empty);
+            _confidenceHint.style.marginTop = UiKit.SpaceXs;
+            _confidenceHint.style.whiteSpace = WhiteSpace.Normal;
+            confidencePanel.Add(_confidenceHint);
+            col.Add(confidencePanel);
+
+            // ---- history fills whatever is left
+            VisualElement historyPanel = UiKit.Panel(grow: true);
+            Label historyCaption = UiKit.SectionLabel(tr("career.history_caption"));
+            historyCaption.style.marginTop = 0;
+            historyPanel.Add(historyCaption);
+            _history = UiKit.ListScroll();
+            historyPanel.Add(_history);
+            col.Add(historyPanel);
+
+            VisualElement footer = UiKit.FooterBar();
+            footer.Add(UiKit.FooterButton(tr("common.back"), () => BackClicked?.Invoke()));
             col.Add(footer);
         }
 
         public void SetHeader(string text) => _header.text = text;
-        public void SetObjective(string text) => _objective.text = text;
-        public void SetPosition(string text) => _position.text = text;
-        public void SetReputation(string text) => _reputation.text = text;
+
+        /// <summary>The board's objective, short form (e.g. "win the title (position 1)").</summary>
+        public void SetObjective(string text) => UiKit.SetStatTileValue(_objectiveTile, text);
+
+        /// <summary>The current league position, short form (e.g. "4 of 20").</summary>
+        public void SetPosition(string text) => UiKit.SetStatTileValue(_positionTile, text);
+
+        /// <summary>The manager's reputation, short form (e.g. "82/100").</summary>
+        public void SetReputation(string text) => UiKit.SetStatTileValue(_reputationTile, text);
 
         /// <summary>Confidence 0-100 with a colour band: 0 = red (sacking), 1 = amber (warned), 2 = green (safe).</summary>
         public void SetConfidence(string text, int percent, int band)
         {
+            Color color =
+                band <= 0 ? UiKit.Danger :
+                band == 1 ? UiKit.Warning :
+                            UiKit.Positive;
+
             _confidenceLabel.text = text;
-            _confidenceFill.style.width = Length.Percent(Mathf.Clamp(percent, 0, 100));
-            _confidenceFill.style.backgroundColor =
-                band <= 0 ? new Color(0.80f, 0.25f, 0.25f) :
-                band == 1 ? new Color(0.85f, 0.65f, 0.20f) :
-                            new Color(0.30f, 0.70f, 0.35f);
+            _confidenceLabel.style.color = color;
+            _confidence.Set(percent, color);
         }
+
+        /// <summary>An optional one-line explanation shown under the gauge.</summary>
+        public void SetConfidenceHint(string text) => _confidenceHint.text = text ?? string.Empty;
 
         public void SetHistory(IReadOnlyList<string> lines)
         {
             _history.Clear();
-            foreach (string line in lines)
+            for (int i = 0; i < lines.Count; i++)
             {
-                var label = new Label(line);
-                label.style.fontSize = 13;
-                label.style.color = Color.white;
+                var label = new Label(lines[i]);
+                label.style.fontSize = 14;
+                label.style.color = UiKit.TextPrimary;
                 label.style.whiteSpace = WhiteSpace.Normal;
-                label.style.marginBottom = 3;
-                label.style.paddingTop = 4;
-                label.style.paddingBottom = 4;
-                label.style.paddingLeft = 8;
-                label.style.paddingRight = 8;
-                label.style.backgroundColor = new Color(1f, 1f, 1f, 0.06f);
+                label.style.marginBottom = 4;
+                label.style.paddingTop = 10;
+                label.style.paddingBottom = 10;
+                label.style.paddingLeft = 12;
+                label.style.paddingRight = 12;
+                label.style.backgroundColor = (i % 2 == 0)
+                    ? new Color(1f, 1f, 1f, 0.06f)
+                    : new Color(1f, 1f, 1f, 0.03f);
+                UiKit.Round(label, UiKit.RadiusSm);
                 _history.Add(label);
             }
         }
 
-        private static Label PanelLine(VisualElement parent)
+        /// <summary>Shows the friendly illustration instead of a lone "nothing yet" line (task 6.12).</summary>
+        public void SetHistoryEmpty(string message)
         {
-            var label = new Label(string.Empty);
-            label.style.fontSize = 13;
-            label.style.color = Color.white;
-            parent.Add(label);
-            return label;
-        }
-
-        private static Label SectionLabel(string caption)
-        {
-            var label = new Label(caption);
-            label.style.color = new Color(1f, 1f, 1f, 0.7f);
-            label.style.fontSize = 13;
-            label.style.marginTop = 8;
-            label.style.marginBottom = 4;
-            return label;
+            _history.Clear();
+            _history.Add(EmptyState.Build("career", message));
         }
     }
 }

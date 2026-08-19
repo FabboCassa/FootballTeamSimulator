@@ -320,3 +320,208 @@ Button:disabled {
     color: var(--fts-text);
     -unity-font-style: bold;
 }
+
+
+/* ===========================================================================
+   Task 6.12 — shared page scaffold.
+
+   Every screen is now framed the same way: .fts-screen (page background +
+   margins) → .fts-col (centred column capped at one of the three width tiers)
+   → title / toolbar / .fts-panel blocks → .fts-footer.
+
+   IMPORTANT: colours for these components live HERE, not inline in C#. Inline
+   styles beat stylesheet rules in UI Toolkit, so anything the C# paints inline
+   can never light up on :hover. UiKit only writes the inline fallback when the
+   sheet failed to load (UiKit.StylesLoaded == false).
+   ========================================================================= */
+
+.fts-screen {
+    flex-grow: 1;
+    background-color: var(--fts-bg);
+}
+
+.fts-col {
+    width: 100%;
+    align-self: center;
+    flex-grow: 1;
+}
+
+.fts-screentitle {
+    font-size: 24px;
+    -unity-font-style: bold;
+    color: var(--fts-text);
+}
+
+.fts-section {
+    font-size: 12px;
+    -unity-font-style: bold;
+    color: rgba(244, 247, 251, 0.55);
+}
+
+.fts-help {
+    font-size: 13px;
+    color: var(--fts-text-muted);
+}
+
+/* ------------------------------------------------------------------ panels */
+
+.fts-panel {
+    background-color: var(--fts-surface);
+    border-width: 1px;
+    border-color: var(--fts-border);
+    border-radius: 14px;
+}
+
+.fts-rowcard {
+    background-color: var(--fts-surface);
+    border-radius: 8px;
+    transition-property: background-color;
+    transition-duration: 0.08s;
+}
+
+.fts-rowcard:hover { background-color: var(--fts-surface-alt); }
+.fts-rowcard--selected { background-color: #2C4573; }
+.fts-rowcard--selected:hover { background-color: #35528A; }
+
+/* ----------------------------------------------------------------- footer */
+
+.fts-footer {
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+    border-top-width: 1px;
+    border-top-color: var(--fts-border);
+}
+
+/* ------------------------------------------------------- segmented tabs */
+
+.fts-tabbtn {
+    background-color: var(--fts-surface-alt);
+    color: var(--fts-text-muted);
+    -unity-font-style: bold;
+    border-width: 0;
+    border-radius: 10px;
+    transition-property: background-color;
+    transition-duration: 0.08s;
+}
+
+.fts-tabbtn:hover { background-color: var(--fts-surface-hover); }
+.fts-tabbtn:disabled { background-color: var(--fts-surface); color: var(--fts-text-muted); }
+
+.fts-tabbtn--active {
+    background-color: #3D6DB0;
+    color: var(--fts-text);
+}
+
+.fts-tabbtn--active:hover { background-color: #4A7CC4; }
+
+/* -------------------------------------------------------------- filter chips */
+
+.fts-chip {
+    background-color: var(--fts-surface-alt);
+    color: var(--fts-text);
+    -unity-font-style: bold;
+    border-width: 0;
+    border-radius: 16px;
+    transition-property: background-color;
+    transition-duration: 0.08s;
+}
+
+.fts-chip:hover { background-color: var(--fts-surface-hover); }
+
+.fts-chip--active {
+    background-color: #3D6DB0;
+    color: var(--fts-text);
+}
+
+.fts-chip--active:hover { background-color: #4A7CC4; }
+
+/* --------------------------------------------------- inline row actions */
+
+.fts-smallbtn {
+    background-color: var(--fts-surface-alt);
+    color: var(--fts-text);
+    -unity-font-style: bold;
+    border-width: 0;
+    border-radius: 8px;
+    transition-property: background-color;
+    transition-duration: 0.08s;
+}
+
+.fts-smallbtn:hover { background-color: var(--fts-surface-hover); }
+.fts-smallbtn:active { background-color: var(--fts-border); }
+.fts-smallbtn:disabled { background-color: var(--fts-surface); color: var(--fts-text-muted); }
+
+.fts-smallbtn--accent {
+    background-color: var(--fts-accent);
+    color: var(--fts-on-accent);
+}
+
+.fts-smallbtn--accent:hover { background-color: #2ED494; }
+.fts-smallbtn--accent:disabled { background-color: var(--fts-surface); color: var(--fts-text-muted); }
+
+.fts-smallbtn--on {
+    background-color: #3D6DB0;
+    color: var(--fts-text);
+}
+
+.fts-smallbtn--on:hover { background-color: #4A7CC4; }
+
+/* ------------------------------------------------------- cycle controls */
+
+.fts-cycle {
+    background-color: var(--fts-surface-alt);
+    color: var(--fts-text);
+    -unity-font-style: bold;
+    border-width: 0;
+    border-radius: 8px;
+    -unity-text-align: middle-left;
+    transition-property: background-color;
+    transition-duration: 0.08s;
+}
+
+.fts-cycle:hover { background-color: var(--fts-surface-hover); }
+.fts-cycle:active { background-color: var(--fts-border); }
+
+/* ------------------------------------------------------------ stat tiles */
+
+.fts-stat {
+    background-color: var(--fts-surface);
+    border-width: 1px;
+    border-color: var(--fts-border);
+    border-radius: 14px;
+}
+
+.fts-stat__k {
+    font-size: 11px;
+    -unity-font-style: bold;
+    color: rgba(244, 247, 251, 0.52);
+}
+
+.fts-stat__v {
+    font-size: 20px;
+    -unity-font-style: bold;
+    color: var(--fts-text);
+}
+
+/* ------------------------------------------------------------ data tables */
+
+.fts-thead {
+    flex-direction: row;
+    align-items: center;
+    background-color: var(--fts-surface-alt);
+    border-radius: 8px;
+}
+
+.fts-trow {
+    flex-direction: row;
+    align-items: center;
+    border-radius: 6px;
+    transition-property: background-color;
+    transition-duration: 0.08s;
+}
+
+.fts-trow--zebra { background-color: rgba(255, 255, 255, 0.035); }
+.fts-trow--user { background-color: #1F4A34; }
+.fts-trow:hover { background-color: var(--fts-surface-alt); }
+.fts-trow--user:hover { background-color: #2A6146; }

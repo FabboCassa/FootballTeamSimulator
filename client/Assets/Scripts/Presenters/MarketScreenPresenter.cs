@@ -72,7 +72,7 @@ namespace Fts.Presenters
         public void Enter()
         {
             _view.TabSelected += OnTab;
-            _view.RoleFilterClicked += OnRoleFilter;
+            _view.RoleFilterSelected += OnRoleFilter;
             _view.SortClicked += OnSort;
             _view.ShortlistOnlyClicked += OnShortlistOnly;
             _view.RowActionA += OnRowActionA;
@@ -90,7 +90,7 @@ namespace Fts.Presenters
         public void Exit()
         {
             _view.TabSelected -= OnTab;
-            _view.RoleFilterClicked -= OnRoleFilter;
+            _view.RoleFilterSelected -= OnRoleFilter;
             _view.SortClicked -= OnSort;
             _view.ShortlistOnlyClicked -= OnShortlistOnly;
             _view.RowActionA -= OnRowActionA;
@@ -115,9 +115,10 @@ namespace Fts.Presenters
             Refresh();
         }
 
-        private void OnRoleFilter()
+        /// <summary>A role chip was picked (-1 = every role); the whole row stays visible.</summary>
+        private void OnRoleFilter(int role)
         {
-            _roleFilter = _roleFilter >= RoleMax ? -1 : _roleFilter + 1;
+            _roleFilter = role < 0 || role > RoleMax ? -1 : role;
             Refresh();
         }
 
@@ -220,7 +221,7 @@ namespace Fts.Presenters
             _view.SetWindow(windowLine, window.IsOpen);
 
             _view.SetActiveTab(_tab);
-            _view.SetFilterBar(_tab == 0, RoleFilterText(), SortText(), ShortlistOnlyText());
+            _view.SetFilterBar(_tab == 0, BuildRoleFilters(), SortText(), ShortlistOnlyText(), _shortlistOnly);
 
             _view.BeginContent();
             switch (_tab)
@@ -503,8 +504,34 @@ namespace Fts.Presenters
             return _loc.Tr("scouting.ovr_range", ovr.Min, ovr.Max);
         }
 
-        private string RoleFilterText() =>
-            _roleFilter < 0 ? _loc.Tr("market.filter.all_roles") : RoleName((PositionRole)_roleFilter);
+        /// <summary>
+        /// The role filter row: "all" plus every position role, each chip carrying its reparto
+        /// group so the picked one lights up in the colour the role cells use below (6.12b).
+        /// </summary>
+        private List<FilterChipVm> BuildRoleFilters()
+        {
+            var chips = new List<FilterChipVm>
+            {
+                new FilterChipVm
+                {
+                    Value = -1,
+                    Label = _loc.Tr("filter.all_roles"),
+                    RoleGroup = -1,
+                    Selected = _roleFilter < 0
+                }
+            };
+            for (int role = 0; role <= RoleMax; role++)
+            {
+                chips.Add(new FilterChipVm
+                {
+                    Value = role,
+                    Label = RoleName((PositionRole)role),
+                    RoleGroup = RoleFormat.Group((PositionRole)role),
+                    Selected = _roleFilter == role
+                });
+            }
+            return chips;
+        }
 
         private string SortText() =>
             _loc.Tr(_sort == 1 ? "market.sort.value" : _sort == 2 ? "market.sort.age" : "market.sort.overall");

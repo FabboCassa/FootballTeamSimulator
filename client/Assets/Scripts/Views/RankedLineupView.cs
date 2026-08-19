@@ -58,10 +58,10 @@ namespace Fts.Views
             _tr = tr;
 
             Root = UiKit.Screen(UiKit.Background);
-            var col = UiKit.CenteredColumn(600f);
+            var col = UiKit.PageColumn(UiKit.WidthMedium);
             Root.Add(col);
 
-            _title = UiKit.Header(string.Empty);
+            _title = UiKit.ScreenTitle(string.Empty);
             col.Add(_title);
 
             _formationButton = UiKit.PrimaryButton(string.Empty, () => FormationClicked?.Invoke());

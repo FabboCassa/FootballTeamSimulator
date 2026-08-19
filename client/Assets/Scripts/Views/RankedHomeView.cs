@@ -87,10 +87,10 @@ namespace Fts.Views
             _tr = tr;
 
             Root = UiKit.Screen(UiKit.Background);
-            var col = UiKit.CenteredColumn(620f);
+            var col = UiKit.PageColumn(UiKit.WidthMedium);
             Root.Add(col);
 
-            _title = UiKit.Header(string.Empty);
+            _title = UiKit.ScreenTitle(string.Empty);
             col.Add(_title);
             _subtitle = UiKit.Caption(string.Empty);
             _subtitle.style.whiteSpace = WhiteSpace.Normal;
