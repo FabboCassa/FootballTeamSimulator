@@ -126,7 +126,48 @@ Club ── Team ── Squad(Player[]) ── Player
 
 League ── Season ── Fixture[] ── MatchResult
 LeaguePyramid: promotion/relegation between divisions, fixed team counts
+
+World (task 11.1) ── Nation[] ── League[]           (tier 1 first, per nation)
+ ├─ Scope { Playable[{Code, Tiers}], DatabaseSize } immutable for the save
+ └─ BackgroundSeason ── Fixture[]                   (background leagues only)
+
+League.DetailLevel:
+  Playable    full match engine, fixtures in the CAREER season, tables, transfers, P/R
+  Background  own fixtures in World.BackgroundSeason, results from QuickResultResolver,
+              smaller squads, tables and P/R still real
+  DataOnly    clubs with a handful of key players, no fixtures, no season - scouting targets
 ```
+
+### 4.2b The world model (task 11.1)
+
+The world is **procedurally generated** and stays that way: real clubs and players are planned as
+player-made mods, so every input to `WorldGenerator` — the nation atlas (`NationDatabase`) and the
+naming pools (`CultureDatabase`) — is plain data passed in through `WorldGenerationOptions`. Sim.Core
+never loads a file; a mod loader deserialises its own atlas and hands it over.
+
+Rules that the rest of the game leans on:
+
+* **Ids are positional.** `WorldIds` reserves a fixed block per (nation index, tier), so a club has
+  the same id whether the player loaded a Small or a Large database. The nation order in
+  `NationDatabase` is therefore part of the save format: append only, never reorder.
+* **Scope is immutable per save** (Football Manager's rule). The world is a function of
+  (seed, scope); changing the scope mid-career would silently renumber the world.
+* **Two calendars.** Playable fixtures live in the career `Season` the host owns — untouched from
+  before 11.1 — and background fixtures in `World.BackgroundSeason`, so the daily loop never walks
+  tens of thousands of matches the player cannot see. Big divisions play more rounds, so the world's
+  season can end after the career's: `BackgroundLeagueProgressor.LastDay` is how the host knows.
+* **The save holds the world, the career holds a view of it** (task 11.1b). `CareerState.World` is
+  the graph; `CareerState.Leagues` is a read-only projection of its PLAYABLE divisions, which is why
+  every service and screen written against the old flat list still works. Save version 16. A pre-11.1
+  save is migrated rather than broken: `Generation.LegacyWorld` wraps its divisions in a single
+  invented nation, keeping every id, squad and result, and leaves their `NationCode` EMPTY — the
+  marker that routes them back to the pre-11.1 fixture stream so an in-progress career keeps the
+  calendar it already had.
+* **Promotion/relegation is per nation**, down each pyramid, and crosses detail levels: a club coming
+  up from a background tier into a playable one is topped up to a full squad by `WorldRollover`, with
+  ids from a dynamic block above every generated one. Every table is computed BEFORE anything moves —
+  computing them tier by tier while clubs are already swapping relegates the newly-demoted clubs
+  twice in one rollover.
 
 ### 4.3 Match engine (v1 — simple, top-down)
 
@@ -274,3 +315,6 @@ Navigation = a `ScreenNavigator` managing a stack of UI Toolkit screens (cheap, 
 | 7 | No injuries; fatigue/form with capped maluses | "Challenge, not chaos" design pillar |
 | 8 | Offline-first SP (no account needed) | SP must work without servers; servers added in later phases |
 | 9 | Localization: flat key→text JSON per language in `Resources/Localization/`; views get a translate delegate from presenters | Translator-friendly files; views stay dumb without referencing Services; missing keys fall back to EN then render the key (visible in playtests) |
+| 10 | World stays procedurally generated; real names arrive as player mods (nation atlas + naming cultures are injectable data) | No licensing exposure, determinism kept, and modding is a feature rather than a fork |
+| 11 | Three league detail levels (Playable / Background / DataOnly) with a cheap non-engine resolver for background results | A 26k-player world cannot run thousands of full simulations a matchday on a phone; measured at ~0.5s for a whole world season |
+| 12 | World scope (playable nations + database size) is fixed at career creation | The world is a function of (seed, scope); expanding it mid-save would renumber clubs and players |

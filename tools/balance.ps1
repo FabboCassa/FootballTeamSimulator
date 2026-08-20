@@ -3,7 +3,7 @@
     Balance harness (Phase 10.1) - measures the game's balance by simulating it.
 
 .DESCRIPTION
-    Builds and runs tools/BalanceHarness, which measures four things and prints a
+    Builds and runs tools/BalanceHarness, which measures five things and prints a
     PASS/FAIL block (exit code 0 only if every check passes):
 
       tactics     the 81-combo instruction field and the 6-shape formation field played
@@ -15,13 +15,17 @@
       ladder      the ranked pyramid driven by the server's own Elo model, swept over
                   seat occupancy (promotion needs a FREE seat, so a full pyramid can
                   freeze - that is measured, not assumed).
+      world       task 11.1's database presets: generation time, club/player counts,
+                  managed heap, save size (raw and gzipped) and the cost of a whole
+                  world season at Small / Medium / Large, plus how closely the cheap
+                  background resolver tracks the real match engine.
 
     Nothing here talks to a server or a database: it runs Sim.Core and the server's
     rating maths in-process, so it is safe to run any time and it replays exactly for
     a given seed.
 
 .PARAMETER Scenario
-    all | tactics | economy | difficulty | ladder. Default all.
+    all | tactics | economy | difficulty | ladder | world. Default all.
 
 .PARAMETER Seed
     Root seed. Default 20260803. Same seed = same numbers.
@@ -37,7 +41,7 @@
 
 [CmdletBinding()]
 param(
-    [ValidateSet("all", "tactics", "economy", "difficulty", "ladder")]
+    [ValidateSet("all", "tactics", "economy", "difficulty", "ladder", "world")]
     [string]$Scenario = "all",
     [long]$Seed = 20260803,
     [switch]$Long

@@ -6,7 +6,7 @@ namespace Fts.BalanceHarness;
 /// </summary>
 internal sealed class HarnessOptions
 {
-    /// <summary>tactics | economy | difficulty | ladder | all</summary>
+    /// <summary>tactics | economy | difficulty | ladder | world | all</summary>
     public string Scenario { get; private set; } = "all";
 
     /// <summary>Root seed. Every world/match seed in the run is derived from it, so a run replays exactly.</summary>
@@ -48,6 +48,14 @@ internal sealed class HarnessOptions
     /// quarter of it). 400 puts the best coaches roughly a class above the worst.</summary>
     public int LadderSkillSpread { get; private set; } = 400;
 
+    // --- world (task 11.1) --------------------------------------------------------------------
+
+    /// <summary>Nation code played in full detail while the presets are measured around it.</summary>
+    public string WorldNation { get; private set; } = "ITA";
+
+    /// <summary>How many of that nation's tiers run at full detail.</summary>
+    public int WorldTiers { get; private set; } = 3;
+
     public bool Long { get; private set; }
 
     public static HarnessOptions Parse(string[] args)
@@ -70,6 +78,8 @@ internal sealed class HarnessOptions
                 case "--difficulty-seasons" when value is not null: o.DifficultySeasons = int.Parse(value); i++; break;
                 case "--ladder-seasons" when value is not null: o.LadderSeasons = int.Parse(value); i++; break;
                 case "--ladder-skill-spread" when value is not null: o.LadderSkillSpread = int.Parse(value); i++; break;
+                case "--world-nation" when value is not null: o.WorldNation = value.ToUpperInvariant(); i++; break;
+                case "--world-tiers" when value is not null: o.WorldTiers = int.Parse(value); i++; break;
                 case "--ladder-fill" when value is not null:
                     o.LadderFillPercents = ParseInts(value); i++; break;
                 case "--long":
@@ -112,7 +122,7 @@ internal sealed class HarnessOptions
     public const string Usage = """
         fts-balance - Phase 10.1 balance harness
 
-          --scenario <tactics|economy|difficulty|ladder|all>   what to measure (default: all)
+          --scenario <tactics|economy|difficulty|ladder|world|all>   what to measure (default: all)
           --seed <n>                    root seed (default 20260803); a run replays exactly
           --long                        the roadmap-sized run (slower, tighter numbers)
 
@@ -125,6 +135,8 @@ internal sealed class HarnessOptions
           --ladder-seasons <n>          ranked seasons simulated (default 24)
           --ladder-fill <a,b,c>         seat occupancy percentages to sweep (default 50,75,100)
           --ladder-skill-spread <n>     latent coach-skill spread in Elo points (default 400)
+          --world-nation <CODE>         nation played in full detail by the world bench (default ITA)
+          --world-tiers <n>             tiers of it at full detail (default 3)
 
         Exit code 0 when every check passes, 1 otherwise.
         """;

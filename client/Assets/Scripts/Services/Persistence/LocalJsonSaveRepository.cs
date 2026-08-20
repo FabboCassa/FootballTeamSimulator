@@ -16,7 +16,7 @@ namespace Fts.Services.Persistence
     /// </summary>
     public sealed class LocalJsonSaveRepository : ISaveRepository
     {
-        private const int CurrentSaveVersion = 15;
+        private const int CurrentSaveVersion = 16;
         private const string FileName = "career.sav";
 
         private static string SavePath => Path.Combine(Application.persistentDataPath, FileName);
@@ -64,11 +64,19 @@ namespace Fts.Services.Persistence
                 }
 
                 var loaded = JsonConvert.DeserializeObject<CareerState>(json);
-                if (loaded == null || loaded.Leagues == null || loaded.Leagues.Count == 0 || loaded.GetUserClub() == null)
+                if (loaded == null)
                     return SaveLoadStatus.Corrupted;
 
                 if (loaded.SaveVersion > CurrentSaveVersion)
                     return SaveLoadStatus.IncompatibleVersion;
+
+                // Task 11.1b: a pre-v16 save stored a flat "Leagues" array. Lift it into a world
+                // BEFORE anything else looks at it — every migration step below reads state.Leagues,
+                // which is now a projection of the world rather than a stored field.
+                loaded.EnsureWorld();
+
+                if (loaded.Leagues.Count == 0 || loaded.GetUserClub() == null)
+                    return SaveLoadStatus.Corrupted;
 
                 Migrate(loaded);
 
@@ -126,7 +134,7 @@ namespace Fts.Services.Persistence
                     FirstPlayerId = CareerFactory.Div2FirstPlayerId
                 }, config).Generate(new Sim.Core.Random.Pcg32(state.Seed, CareerFactory.Div2GenSequence));
 
-                state.Leagues.Add(div2);
+                state.AddLegacyLeague(div2);
 
                 int maxFixtureId = 0;
                 foreach (Sim.Core.Domain.Fixture f in state.Season.Fixtures)
@@ -296,6 +304,22 @@ namespace Fts.Services.Persistence
                 state.OnboardingDone = true;
                 state.SaveVersion = 15;
                 Debug.Log("[Save] Migrated save v14 -> v15 (onboarding flag; existing saves marked done).");
+            }
+
+            // v15 -> v16 (task 11.1b): the multi-nation world. The heavy lifting already happened in
+            // CareerState.EnsureWorld, called before this chain: the save's divisions were lifted into
+            // a single invented nation, keeping every club id, player id, squad and result. Nothing is
+            // regenerated — an upgraded career has the same world it had, now wrapped in a World with
+            // an empty scope (WorldScope.IsLegacy), no foreign nations and no background season. Its
+            // leagues keep an empty NationCode, which is what makes WorldRollover go on scheduling
+            // them off the pre-11.1 fixture stream, so the calendar does not shift under a career in
+            // progress. Phase 11 features that need a real world (area scouting, the world database)
+            // will simply find one nation here.
+            if (state.SaveVersion < 16)
+            {
+                state.World.InvalidateIndex();
+                state.SaveVersion = 16;
+                Debug.Log($"[Save] Migrated save v15 -> v16 (world model; {state.Leagues.Count} divisions wrapped in a legacy nation).");
             }
         }
 

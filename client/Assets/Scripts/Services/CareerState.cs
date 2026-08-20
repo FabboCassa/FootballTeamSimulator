@@ -62,7 +62,17 @@ namespace Fts.Services
         /// v15 (task 6.2): onboarding — OnboardingDone flag (the guided first-run tutorial shows once
         /// per career while false). Additive; the migration marks existing saves done so a veteran
         /// player isn't shown the tutorial, while a fresh career starts false and sees it.
-        public int SaveVersion { get; set; } = 15;
+        /// v16 (task 11.1b): the multi-nation world. THE ONE BREAKING SHAPE CHANGE SINCE v3 — the flat
+        /// `Leagues` list is replaced by a whole <see cref="Sim.Core.Domain.World"/> (nations, detail
+        /// levels, the background season and the immutable scope the career was created with).
+        /// <see cref="Leagues"/> survives as a read-only projection of the world's PLAYABLE divisions,
+        /// so every screen and service that walked it still does. A v15 save is migrated, never
+        /// discarded: its divisions are lifted into a single invented nation
+        /// (<see cref="Sim.Core.Generation.LegacyWorld"/>) with the same club and player ids, the same
+        /// squads and the same table — the career carries on unchanged, it just now has a world around
+        /// it. Migrated leagues keep an empty NationCode, which is what makes the rollover go on
+        /// generating their fixtures off the pre-11.1 stream so the calendar does not shift.
+        public int SaveVersion { get; set; } = 16;
 
         /// <summary>Seed used to generate the world (kept for debugging/replays).</summary>
         public ulong Seed { get; set; }
@@ -80,8 +90,22 @@ namespace Fts.Services
         /// <summary>Creation timestamp, metadata only (never used by sim logic).</summary>
         public string CreatedUtc { get; set; } = string.Empty;
 
-        /// <summary>All divisions, top first.</summary>
-        public List<League> Leagues { get; set; } = new List<League>();
+        /// <summary>
+        /// The whole generated world (task 11.1): every nation loaded for this save, at the detail
+        /// level its scope asked for, plus the background season the cheap resolver plays out.
+        /// This is the career's world graph — <see cref="Leagues"/> is a view onto part of it.
+        /// </summary>
+        public World World { get; set; } = new World();
+
+        /// <summary>
+        /// The divisions the career actually plays, top first — the user's own pyramid.
+        /// A projection of <see cref="World"/>, not stored: the world owns the leagues, and the
+        /// playable set is fixed for the life of the save (the scope is immutable), so this returns
+        /// the same cached list every call. Read-only by design; clubs move between divisions at
+        /// rollover, the set of divisions never changes.
+        /// </summary>
+        [JsonIgnore]
+        public List<League> Leagues => World.PlayableLeagues();
 
         public Season Season { get; set; } = new Season();
 
@@ -241,6 +265,14 @@ namespace Fts.Services
         /// </summary>
         public bool OnboardingDone { get; set; }
 
+        /// <summary>
+        /// Divisions read from a pre-v16 save, before they are lifted into a <see cref="World"/>.
+        /// Never serialized (a v16 save stores the world instead) and cleared by
+        /// <see cref="EnsureWorld"/> the moment the world is built.
+        /// </summary>
+        [JsonIgnore]
+        public List<League> PendingLegacyLeagues { get; private set; }
+
         /// <summary>Write-only adapter for v2 saves, which stored a single "League".</summary>
         [JsonProperty("League")]
         private League LegacyLeague
@@ -248,9 +280,50 @@ namespace Fts.Services
             set
             {
                 if (value != null)
-                    Leagues = new List<League> { value };
+                    PendingLegacyLeagues = new List<League> { value };
             }
         }
+
+        /// <summary>
+        /// Write-only adapter for v3..v15 saves, which stored a flat "Leagues" array (task 11.1b).
+        /// Kept private and write-only so a v16 save never writes the old key back out: the world is
+        /// the source of truth from here on.
+        /// </summary>
+        [JsonProperty("Leagues")]
+        private List<League> LegacyLeagues
+        {
+            set
+            {
+                if (value != null && value.Count > 0)
+                    PendingLegacyLeagues = value;
+            }
+        }
+
+        /// <summary>
+        /// Lifts a pre-v16 save's divisions into a world, once. A v16 save deserialises its world
+        /// directly and this does nothing. Called by the save repository BEFORE the migration chain,
+        /// because every migration step from v1 onward reads <see cref="Leagues"/>.
+        /// </summary>
+        public void EnsureWorld()
+        {
+            if (World != null && World.Nations.Count > 0)
+            {
+                PendingLegacyLeagues = null;
+                return;
+            }
+
+            if (PendingLegacyLeagues == null || PendingLegacyLeagues.Count == 0)
+                return;
+
+            World = Sim.Core.Generation.LegacyWorld.Wrap(PendingLegacyLeagues);
+            PendingLegacyLeagues = null;
+        }
+
+        /// <summary>
+        /// Adds a division to a migrated (pre-11.1) world. Only the old save migrations need this —
+        /// a generated world's divisions are fixed by its scope.
+        /// </summary>
+        public void AddLegacyLeague(League league) => Sim.Core.Generation.LegacyWorld.AddLeague(World, league);
 
         public Club GetUserClub() => FindClub(UserClubId);
 
@@ -289,5 +362,16 @@ namespace Fts.Services
 
             return null;
         }
+
+        /// <summary>
+        /// Looks a club up anywhere in the world, background and data-only leagues included
+        /// (task 11.1). <see cref="FindClub"/> deliberately stays limited to the player's own
+        /// divisions: the career loop, the market and the squad screens all mean "a club I can
+        /// actually play against", and widening that silently would change their behaviour.
+        /// </summary>
+        public Club FindClubInWorld(int clubId) => World.FindClub(clubId);
+
+        /// <summary>Looks a player up anywhere in the world (task 11.1). Indexed; see FindClubInWorld.</summary>
+        public Player FindPlayerInWorld(int playerId) => World.FindPlayer(playerId);
     }
 }

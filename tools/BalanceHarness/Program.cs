@@ -23,6 +23,7 @@ if (all || options.Scenario == "tactics") TacticsScenario.Run(options, config, c
 if (all || options.Scenario == "economy") EconomyScenario.Run(options, config, checks);
 if (all || options.Scenario == "difficulty") DifficultyScenario.Run(options, config, checks);
 if (all || options.Scenario == "ladder") LadderScenario.Run(options, checks);
+if (all || options.Scenario == "world") WorldScenario.Run(options, config, checks);
 
 if (checks.Count == 0)
 {

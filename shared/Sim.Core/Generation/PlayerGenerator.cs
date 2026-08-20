@@ -12,11 +12,27 @@ namespace Sim.Core.Generation
     public sealed class PlayerGenerator
     {
         private readonly GenerationBalance _cfg;
+        private readonly string[] _firstNames;
+        private readonly string[] _lastNames;
 
-        public PlayerGenerator(GenerationBalance cfg)
+        /// <summary>
+        /// <paramref name="culture"/> (task 11.1) swaps the name pools for a nation's flavour. Null =
+        /// the original embedded pools, drawn in exactly the same order and count as before, so the
+        /// two-division world and every golden master stay byte-identical.
+        /// </summary>
+        public PlayerGenerator(GenerationBalance cfg, NameCulture? culture = null)
         {
             _cfg = cfg;
+            bool usable = culture != null && culture.IsUsable;
+            _firstNames = usable ? culture!.FirstNames : NameDatabase.FirstNames;
+            _lastNames = usable ? culture!.LastNames : NameDatabase.LastNames;
         }
+
+        /// <summary>The first-name pool in use (the caller re-rolls duplicates from it).</summary>
+        public string[] FirstNames => _firstNames;
+
+        /// <summary>The last-name pool in use.</summary>
+        public string[] LastNames => _lastNames;
 
         public Player Generate(int id, PositionRole role, int targetOverall, IRandomSource rng)
         {
@@ -25,8 +41,8 @@ namespace Sim.Core.Generation
             var player = new Player
             {
                 Id = id,
-                FirstName = NameDatabase.FirstNames[rng.NextInt(0, NameDatabase.FirstNames.Length)],
-                LastName = NameDatabase.LastNames[rng.NextInt(0, NameDatabase.LastNames.Length)],
+                FirstName = _firstNames[rng.NextInt(0, _firstNames.Length)],
+                LastName = _lastNames[rng.NextInt(0, _lastNames.Length)],
                 Age = age,
                 Role = role
             };

@@ -5,6 +5,7 @@ using Fts.Services.Localization;
 using Fts.Services.Navigation;
 using Fts.Views;
 using Sim.Core.Career;
+using Sim.Core.Domain;
 using UnityEngine.UIElements;
 
 namespace Fts.Presenters
@@ -63,7 +64,17 @@ namespace Fts.Presenters
 
         private void OnContinue() => _navigator.Pop();
 
-        private string ClubName(int clubId) => _career.FindClub(clubId)?.Name ?? $"Club {clubId}";
+        /// <summary>
+        /// A club relegated out of the player's lowest playable tier now lands in a BACKGROUND
+        /// division (task 11.1), so it is no longer in CareerState.Leagues — look it up in the whole
+        /// world before giving up, or the season-end screen would print a bare id for exactly the
+        /// clubs the player most wants to read about.
+        /// </summary>
+        private string ClubName(int clubId)
+        {
+            Club club = _career.FindClub(clubId) ?? _career.FindClubInWorld(clubId);
+            return club?.Name ?? $"Club {clubId}";
+        }
 
         private string JoinNames(List<int> clubIds)
         {

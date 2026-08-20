@@ -26,6 +26,62 @@ namespace Sim.Core.Config
         public DifficultyBalance Difficulty { get; set; } = new DifficultyBalance();
         public IdentityBalance Identity { get; set; } = new IdentityBalance();
         public PositioningBalance Positioning { get; set; } = new PositioningBalance();
+        public WorldBalance World { get; set; } = new WorldBalance();
+    }
+
+    /// <summary>
+    /// Tunables for the multi-nation world (task 11.1): how a nation's reputation becomes club
+    /// strength, how many foreigners a league imports, and the cheap resolver that plays out the
+    /// BACKGROUND leagues without the match engine.
+    /// </summary>
+    public sealed class WorldBalance
+    {
+        // --- Nation strength ---
+        /// <summary>Reputation that maps to the baseline strengths in GenerationBalance (no offset).</summary>
+        public int ReputationPivot { get; set; } = 75;
+
+        /// <summary>Tenths of a strength point per reputation point away from the pivot. 4 => a 100-rep nation is +10, a 50-rep one -10.</summary>
+        public int StrengthPerReputationPoint { get; set; } = 4;
+
+        /// <summary>Extra strength given to a DATA-ONLY club's handful of players: they are the club's notable ones, not its average.</summary>
+        public int DataOnlyKeyPlayerBonus { get; set; } = 6;
+
+        // --- Nationality mix ---
+        /// <summary>Foreign share (percent) = nation reputation - this, clamped below.</summary>
+        public int ForeignShareBase { get; set; } = 45;
+        public int ForeignShareMin { get; set; } = 5;
+        public int ForeignShareMax { get; set; } = 55;
+        /// <summary>Of the foreign players, the percent drawn from the same continent.</summary>
+        public int SameContinentForeignPercent { get; set; } = 60;
+
+        // --- Quick resolver (background leagues) ---
+        /// <summary>
+        /// Expected goals for an evenly-matched side. The four numbers below were fitted against the
+        /// real engine over a full two-division season (760 matches): the engine gives 2.54 goals a
+        /// game and a 45.7 / 21.7 / 32.6 home-draw-away split, this resolver gives 2.57 and
+        /// 45.7 / 23.7 / 30.7 — close enough that a background league's table looks like a league.
+        /// </summary>
+        public double QuickBaseGoals { get; set; } = 1.29;
+
+        /// <summary>Expected goals gained per point of strength advantage (as a fraction of the base).</summary>
+        public double QuickStrengthFactor { get; set; } = 0.022;
+
+        /// <summary>
+        /// Flat strength points added to the home side, ON TOP of MatchBalance.HomeAdvantagePercent.
+        /// The percentage alone under-produces home wins here because the cheap model has no shots,
+        /// no momentum and no fatigue to compound it.
+        /// </summary>
+        public int QuickHomeAdvantageStrength { get; set; } = 2;
+
+        public double QuickMinExpectedGoals { get; set; } = 0.20;
+        public double QuickMaxExpectedGoals { get; set; } = 4.0;
+
+        /// <summary>
+        /// Bernoulli trials the goal count is drawn from (a binomial standing in for a Poisson).
+        /// Deterministic, integer-friendly and free of Math.Exp, which the determinism rules forbid.
+        /// Fourteen trials matches the engine's draw rate and costs 28 draws a match.
+        /// </summary>
+        public int QuickGoalTrials { get; set; } = 14;
     }
 
     /// <summary>

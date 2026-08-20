@@ -12,6 +12,9 @@ using EntClub = Fts.Infrastructure.Persistence.Entities.Club;
 using EntLeague = Fts.Infrastructure.Persistence.Entities.League;
 using EntPlayer = Fts.Infrastructure.Persistence.Entities.Player;
 using EntCoach = Fts.Infrastructure.Persistence.Entities.Coach;
+// Task 11.1 added Sim.Core.Domain.World, so the bare name is now ambiguous with the EF entity this
+// file builds. The alias pins it to the entity, in the same spirit as the Sim*/Ent* pairs above.
+using World = Fts.Infrastructure.Persistence.Entities.World;
 
 namespace Fts.Infrastructure.Leagues;
 

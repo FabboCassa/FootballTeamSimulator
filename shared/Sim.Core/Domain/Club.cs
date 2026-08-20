@@ -9,6 +9,16 @@ namespace Sim.Core.Domain
         public string Name { get; set; } = string.Empty;
         public string ShortName { get; set; } = string.Empty;
 
+        /// <summary>
+        /// The club's generated strength baseline on the attribute scale (task 11.1): roughly the
+        /// overall of its average first-team player before per-player noise. Set once at world
+        /// generation and kept as data so a BACKGROUND league can be resolved
+        /// (<see cref="Career.QuickResultResolver"/>) without aggregating a lineup, and so a
+        /// DATA-ONLY club — which has no real squad — still has a meaningful size for scouting.
+        /// Additive — defaults 0, in which case callers fall back to rating the squad.
+        /// </summary>
+        public int Strength { get; set; }
+
         public Squad Squad { get; set; } = new Squad();
         public Coach Coach { get; set; } = new Coach();
 

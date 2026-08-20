@@ -9,6 +9,13 @@ namespace Sim.Core.Domain
         public int Age { get; set; }
         public PositionRole Role { get; set; }
 
+        /// <summary>
+        /// Nation code the player is generated as, e.g. "BRA" (task 11.1). Normally the nation of
+        /// the club that generated him, occasionally a foreign one. Empty on pre-11.1 saves.
+        /// Scouting filters (task 11.2) search on this.
+        /// </summary>
+        public string Nationality { get; set; } = string.Empty;
+
         public PlayerAttributes Attributes { get; set; } = new PlayerAttributes();
         public PlayerCondition Condition { get; set; } = new PlayerCondition();
         public PlayerDevelopment Development { get; set; } = new PlayerDevelopment();

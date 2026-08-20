@@ -57,6 +57,12 @@ namespace Fts.Services
         // Pure/integer, no RNG, never read by the engine — golden masters stay safe.
         private readonly BalanceConfig _config = new BalanceConfig();
         private readonly FinanceProgressor _finance = new FinanceProgressor(new BalanceConfig());
+        // The rest of the planet (task 11.1): every league the player is NOT in is resolved by the
+        // cheap resolver instead of the match engine — no lineups, no events, ~0.002ms a match — so a
+        // 26,000-player world costs a few tens of milliseconds across an entire season. Its fixtures
+        // live in World.BackgroundSeason, apart from the career season, so this loop never touches
+        // them and the daily tick above stays exactly as expensive as it was before 11.1.
+        private readonly BackgroundLeagueProgressor _background = new BackgroundLeagueProgressor(new BalanceConfig());
 
         /// <summary>
         /// Stride for folding the season year into the per-week development RNG. The
@@ -153,6 +159,11 @@ namespace Fts.Services
                     userMatchPlayed = true;
                 }
             }
+
+            // Play out the rest of the world for the day just advanced (task 11.1). Idempotent and
+            // independent of how many days are advanced at once: a background result depends only on
+            // (world seed, fixture id), never on when it was resolved.
+            _background.AdvanceTo(_career.World, _career.Season.CurrentDay, _career.Seed);
 
             // Credit gate receipts to the home club of every fixture played today (task 5.5).
             // Mutates only Finances.Balance, never attributes/condition — the user-match re-sim
