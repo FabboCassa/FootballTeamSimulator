@@ -4,6 +4,7 @@ using Sim.Core.Development;
 using Sim.Core.Difficulty;
 using Sim.Core.Domain;
 using Sim.Core.Match;
+using Sim.Core.Scouting;
 using Sim.Core.Tactics;
 
 namespace Fts.Services
@@ -72,7 +73,17 @@ namespace Fts.Services
         /// squads and the same table — the career carries on unchanged, it just now has a world around
         /// it. Migrated leagues keep an empty NationCode, which is what makes the rollover go on
         /// generating their fixtures off the pre-11.1 stream so the calendar does not shift.
-        public int SaveVersion { get; set; } = 16;
+        /// v17 (task 11.2): the scouting network. Scouts are sent to AREAS — a club, a nation, a
+        /// continent — with filters, and come back with a shortlist. Four additive fields:
+        /// <see cref="ScoutBriefs"/> (the department's assignments, which supersede the flat
+        /// <see cref="ScoutAssignments"/> id list without replacing it), <see cref="ScoutAreaKnowledge"/>
+        /// (the FM-style per-region meter), <see cref="ScoutReports"/> (the shortlist the Reports tab
+        /// shows) and <see cref="ScoutDepartmentClubId"/> (which club the three belong to, so a
+        /// manager who changes club starts with a fresh department instead of inheriting the last
+        /// one's reports). An old save loads with all three empty and its existing named watches are
+        /// lifted into Player-kind briefs on first load — the watch list, the accumulated knowledge
+        /// and the ranges a v16 career had are all preserved exactly.
+        public int SaveVersion { get; set; } = 17;
 
         /// <summary>Seed used to generate the world (kept for debugging/replays).</summary>
         public ulong Seed { get; set; }
@@ -232,6 +243,43 @@ namespace Fts.Services
         /// in the Scouting screen.
         /// </summary>
         public List<int> ScoutAssignments { get; set; } = new List<int>();
+
+        /// <summary>
+        /// The user club's scouting department in full (task 11.2): one brief per scout out in the
+        /// field — a named target, a club, a nation or a continent, each with the filters we gave
+        /// him and how many weeks he has been there. Supersedes <see cref="ScoutAssignments"/>,
+        /// which is kept in sync so nothing that still reads the flat id list breaks; a save with
+        /// briefs is the source of truth and the flat list is derived from it.
+        /// Persists across seasons — a scout does not come home in June.
+        /// </summary>
+        public List<ScoutingAssignment> ScoutBriefs { get; set; } = new List<ScoutingAssignment>();
+
+        /// <summary>
+        /// How well the user's club knows each AREA (task 11.2), keyed by
+        /// <see cref="ScoutingArea.Key"/> ("C:401", "N:ITA", "K:1"). Seasons spent working a region
+        /// raise the ceiling on how sharply anything there can be read, for every future report by
+        /// any scout — the reward for leaving a scout somewhere instead of hopping him about.
+        /// Persists across seasons; you do not forget a country.
+        /// </summary>
+        public Dictionary<string, int> ScoutAreaKnowledge { get; set; } = new Dictionary<string, int>();
+
+        /// <summary>
+        /// The shortlist the scouts have brought back (task 11.2) — what the Reports tab shows.
+        /// Only the identity of each find is stored (who, from which brief, which week); the NUMBERS
+        /// are re-read from <see cref="ScoutKnowledge"/> every time the screen opens, so a report
+        /// sharpens as the scout keeps working instead of freezing at the moment of discovery.
+        /// Bounded by ScoutingBalance.MaxReportsPerArea / MaxReportsPerClub, so it stays small.
+        /// </summary>
+        public List<ScoutReportEntry> ScoutReports { get; set; } = new List<ScoutReportEntry>();
+
+        /// <summary>
+        /// Which club the three fields above belong to (task 11.2). A manager who changes club
+        /// (task 5.6's carousel) inherits his new employer's scouting department, not his old one's
+        /// briefs and shortlist, so <see cref="ScoutingService"/> drops them when this no longer
+        /// matches <see cref="UserClubId"/>. The accumulated per-player knowledge is NOT dropped:
+        /// that one is already keyed by club and belongs to whoever paid for it.
+        /// </summary>
+        public int ScoutDepartmentClubId { get; set; }
 
         /// <summary>
         /// Whether the coach-career season-end evaluation (prize money, confidence/reputation moves,

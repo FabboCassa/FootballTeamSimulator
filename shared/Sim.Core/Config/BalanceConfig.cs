@@ -242,6 +242,60 @@ namespace Sim.Core.Config
         // --- Estimate bias (how off-centre a scout's number can be) ---
         /// <summary>Percent of the available slack (half-width − min half-width) the estimate may sit off the true value (100 = full slack, so two clubs see different numbers; the band still always contains the truth, and the bias shrinks to 0 at full knowledge). Set 0 for centred (band-midpoint = truth) estimates.</summary>
         public int EstimateBiasPercent { get; set; } = 100;
+
+        // ============================================================ task 11.2: the scouting network
+        //
+        // A scout is now SENT SOMEWHERE — a club, a nation, a continent — instead of pointed at one
+        // man, and the trade is precision for reach. Three families of tunable, all indexed by the
+        // brief's breadth (the ScoutingAreaKind value: 0 player, 1 club, 2 nation, 3 continent):
+        //
+        //   AreaKnowledgeCapPercent — the CEILING on how well any one player can be read from that
+        //     brief. This is the mechanism, not a flavour knob: a continental scout saturates at a
+        //     rough guess however many seasons he spends, which is what stops "send one man to South
+        //     America and read the whole continent perfectly" from being the dominant strategy.
+        //   AreaGainPercent — how fast he gets there.
+        //   AreaCandidatesPerWeek — how many new names he surfaces. Wider ⇒ MORE names, and by the
+        //     ceiling above, vaguer ones. That is the shape of the whole feature in three numbers.
+        //
+        // On top sits the per-area knowledge meter, which is the reward for patience: seasons spent
+        // in one region lift that region's ceiling toward the club-level one, for every future
+        // report from there, by any scout.
+
+        // --- Area knowledge meter (how well a club knows a region) ---
+        /// <summary>Full knowledge of an AREA. A club at this level reads that region as well as the breadth cap plus the lift allow.</summary>
+        public int MaxAreaKnowledge { get; set; } = 100;
+        /// <summary>Area knowledge gained per week per scout level while a brief runs there. Deliberately a fraction of the per-player rate: a level-3 scout fills a region in roughly a season (~34 weeks), against ~7 weeks to learn one player.</summary>
+        public int AreaKnowledgePerScoutLevelPerWeek { get; set; } = 1;
+        /// <summary>Percent of the gap between a breadth's base ceiling and full knowledge that FULL area knowledge closes. 60 turns a continent's 30% ceiling into 72%.</summary>
+        public int AreaKnowledgeLiftPercent { get; set; } = 60;
+
+        // --- Precision vs breadth (indexed by ScoutingAreaKind: player, club, nation, continent) ---
+        /// <summary>Ceiling on per-player knowledge from a brief of each breadth, as a percent of MaxKnowledge, BEFORE the area-knowledge lift. A named target has no ceiling; a continent saturates at a rough read.</summary>
+        public int[] AreaKnowledgeCapPercent { get; set; } = { 100, 85, 55, 30 };
+        /// <summary>Percent of the normal weekly knowledge gain a brief of each breadth earns on a player. Wider ⇒ slower as well as shallower.</summary>
+        public int[] AreaGainPercent { get; set; } = { 100, 70, 40, 20 };
+        /// <summary>New names a brief of each breadth surfaces per week. A named target discovers nobody (you already chose him); a continent throws up the longest list.</summary>
+        public int[] AreaCandidatesPerWeek { get; set; } = { 0, 2, 3, 4 };
+
+        // --- The individual scout (his three attributes → the percentages ScoutQuality uses) ---
+        /// <summary>The scout attribute value that resolves to 100% of everything, i.e. the pre-11.2 department. Kept in sync with Domain.Scout.NeutralAttribute, which is the field default.</summary>
+        public int NeutralScoutAttribute { get; set; } = Domain.Scout.NeutralAttribute;
+        /// <summary>Knowledge multiplier (percent) of a scout whose judging attribute is 0 — a poor judge reads a player as if he had watched him for a fraction of the time.</summary>
+        public int ScoutJudgingBasePercent { get; set; } = 60;
+        /// <summary>Knowledge multiplier (percent) of a scout whose judging attribute is 100. Paired with the base so the neutral attribute lands exactly on 100.</summary>
+        public int ScoutJudgingMaxPercent { get; set; } = 140;
+        /// <summary>Weekly area-gain multiplier (percent) of a scout with 0 adaptability.</summary>
+        public int ScoutAdaptabilityBasePercent { get; set; } = 75;
+        /// <summary>Weekly area-gain multiplier (percent) of a scout with 100 adaptability.</summary>
+        public int ScoutAdaptabilityMaxPercent { get; set; } = 125;
+
+        // --- The reports the manager actually reads ---
+        /// <summary>Names one brief may hold. A FULL shortlist stops taking new ones instead of rolling, so the gem found in week 3 is never quietly evicted by week 40's journeyman — dismiss a report to make room.</summary>
+        public int MaxReportsPerArea { get; set; } = 25;
+        /// <summary>Last-resort ceiling on a club's whole shortlist across every brief, evicting oldest-first, so no combination of assignments can grow the save without limit.</summary>
+        public int MaxReportsPerClub { get; set; } = 120;
+        /// <summary>Seasons remaining at or below which the "expiring contract" filter considers a player available.</summary>
+        public int ExpiringContractSeasons { get; set; } = 1;
     }
 
     /// <summary>

@@ -16,7 +16,7 @@ namespace Fts.Services.Persistence
     /// </summary>
     public sealed class LocalJsonSaveRepository : ISaveRepository
     {
-        private const int CurrentSaveVersion = 16;
+        private const int CurrentSaveVersion = 17;
         private const string FileName = "career.sav";
 
         private static string SavePath => Path.Combine(Application.persistentDataPath, FileName);
@@ -320,6 +320,35 @@ namespace Fts.Services.Persistence
                 state.World.InvalidateIndex();
                 state.SaveVersion = 16;
                 Debug.Log($"[Save] Migrated save v15 -> v16 (world model; {state.Leagues.Count} divisions wrapped in a legacy nation).");
+            }
+
+            // v16 -> v17 (task 11.2): the scouting network. Purely additive — the four new fields
+            // start empty and ScoutingService lifts the save's existing named watches
+            // (ScoutAssignments) into Player-kind briefs on its first rehydrate, giving each one a
+            // scout of the department. Nothing is regenerated and nothing is lost: the accumulated
+            // per-(club, player) knowledge in ScoutKnowledge is untouched, so every range an
+            // in-progress career had reads exactly as it did before the upgrade. All the migration
+            // owes is non-null collections and a department that belongs to the current club.
+            if (state.SaveVersion < 17)
+            {
+                if (state.ScoutBriefs == null)
+                    state.ScoutBriefs = new System.Collections.Generic.List<Sim.Core.Scouting.ScoutingAssignment>();
+                if (state.ScoutAreaKnowledge == null)
+                    state.ScoutAreaKnowledge = new System.Collections.Generic.Dictionary<string, int>();
+                if (state.ScoutReports == null)
+                    state.ScoutReports = new System.Collections.Generic.List<Sim.Core.Scouting.ScoutReportEntry>();
+
+                state.ScoutDepartmentClubId = state.UserClubId;
+
+                // The scouting facility tier is the source of truth for the department (task 5.5);
+                // re-applying it now gives the club's existing scouts their new 11.2 attributes
+                // instead of leaving them at the struct defaults.
+                Sim.Core.Domain.Club userClub = state.GetUserClub();
+                if (userClub != null)
+                    FacilitySync.ApplyScoutingTier(userClub, userClub.Facilities.Scouting, config);
+
+                state.SaveVersion = 17;
+                Debug.Log($"[Save] Migrated save v16 -> v17 (scouting network; {state.ScoutAssignments.Count} named watches carried over).");
             }
         }
 

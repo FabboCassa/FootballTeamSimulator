@@ -42,6 +42,7 @@ namespace Sim.Core.Domain
         private Dictionary<int, League>? _clubLeagueIndex;
         private List<League>? _playableCache;
         private Dictionary<int, Player>? _playerIndex;
+        private Dictionary<int, Club>? _playerClubIndex;
 
         /// <summary>Every league of every nation, nations in registry order and tiers top-first.</summary>
         public List<League> AllLeagues()
@@ -124,25 +125,45 @@ namespace Sim.Core.Domain
         /// </summary>
         public Player? FindPlayer(int playerId)
         {
-            if (_playerIndex == null)
+            BuildPlayerIndex();
+            return _playerIndex!.TryGetValue(playerId, out Player? found) ? found : null;
+        }
+
+        /// <summary>
+        /// The club a player currently belongs to, anywhere in the world (task 11.2). Rides the same
+        /// index as <see cref="FindPlayer"/> and is resolved LIVE rather than stored, so a scouting
+        /// report on a player who has since been sold shows his new club rather than a stale one.
+        /// </summary>
+        public Club? ClubOfPlayer(int playerId)
+        {
+            BuildPlayerIndex();
+            return _playerClubIndex!.TryGetValue(playerId, out Club? club) ? club : null;
+        }
+
+        private void BuildPlayerIndex()
+        {
+            if (_playerIndex != null && _playerClubIndex != null)
+                return;
+
+            var players = new Dictionary<int, Player>();
+            var clubs = new Dictionary<int, Club>();
+            foreach (Nation nation in Nations)
             {
-                var index = new Dictionary<int, Player>();
-                foreach (Nation nation in Nations)
+                foreach (League league in nation.Leagues)
                 {
-                    foreach (League league in nation.Leagues)
+                    foreach (Club club in league.Clubs)
                     {
-                        foreach (Club club in league.Clubs)
+                        foreach (Player player in club.Squad.Players)
                         {
-                            foreach (Player player in club.Squad.Players)
-                                index[player.Id] = player;
+                            players[player.Id] = player;
+                            clubs[player.Id] = club;
                         }
                     }
                 }
-
-                _playerIndex = index;
             }
 
-            return _playerIndex.TryGetValue(playerId, out Player? found) ? found : null;
+            _playerIndex = players;
+            _playerClubIndex = clubs;
         }
 
         /// <summary>The league a club currently plays in (null if the club is unknown).</summary>
@@ -177,6 +198,7 @@ namespace Sim.Core.Domain
             _clubLeagueIndex = null;
             _playableCache = null;
             _playerIndex = null;
+            _playerClubIndex = null;
         }
 
         public int ClubCount()

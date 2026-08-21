@@ -228,9 +228,13 @@ namespace Fts.Services
                 _development.EvolveWeek(_career.Leagues, plans, contexts, _career.Seed, rngWeek);
 
                 // Scout the whole world this week on the same cadence (task 5.4b): the user club
-                // follows its assignments, every other club the default policy. Pure/no-RNG, never
-                // read by the engine, so attributes the re-sim relies on are unaffected.
-                _scouting.EvolveWeek();
+                // follows its named targets, every other club the default policy — and since task
+                // 11.2 the user's scouts also work their AREA briefs, deepening what they have found
+                // and filing a few new names. `rngWeek` is the career-long week counter (it already
+                // mixes the season year), so it stamps each report with when it arrived and keeps
+                // rising across seasons. Pure/no-RNG, never read by the engine, so attributes the
+                // re-sim relies on are unaffected.
+                _scouting.EvolveWeek(rngWeek);
 
                 // Settle one week of the whole world's finances on the same cadence (task 5.5):
                 // sponsor income in, the wage bill out (scaled by each club's current standing),
