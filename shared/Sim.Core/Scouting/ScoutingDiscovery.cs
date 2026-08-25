@@ -21,7 +21,8 @@ namespace Sim.Core.Scouting
     ///   • Public facts (role, age, nationality, contract, value, wage) are tested FIRST, because
     ///     they cost nothing; only survivors pay for two estimate bands. A continental scan over a
     ///     Large world touches ~26k players a week, and this is what keeps that cheap enough. Task
-    ///     11.3 replaces the walk itself with an index.
+    ///     11.3 replaced the walk itself with <see cref="WorldPlayerIndex"/>, which the host passes
+    ///     in; without one the original walk still runs, unchanged.
     /// </summary>
     public static class ScoutingDiscovery
     {
@@ -45,6 +46,18 @@ namespace Sim.Core.Scouting
         public static List<Candidate> Scan(World world, ScoutingAssignment assignment, KnowledgeStore knowledge,
                                            ulong worldSeed, int observerClubId, ScoutQuality quality,
                                            int maxResults, ScoutingBalance cfg)
+            => Scan(world, assignment, knowledge, worldSeed, observerClubId, quality, maxResults, cfg, null);
+
+        /// <summary>
+        /// The same scan, run over the flattened <see cref="WorldPlayerIndex"/> when the host has one
+        /// (task 11.3). Same predicate, same order, same result — the index only changes HOW the
+        /// area's players are reached: a start and a count into one array instead of a walk down
+        /// nations, leagues, clubs and squads. Pass null and the walk is used, which is what keeps
+        /// every task 11.2 call site and test byte-identical.
+        /// </summary>
+        public static List<Candidate> Scan(World world, ScoutingAssignment assignment, KnowledgeStore knowledge,
+                                           ulong worldSeed, int observerClubId, ScoutQuality quality,
+                                           int maxResults, ScoutingBalance cfg, WorldPlayerIndex? index)
         {
             var found = new List<Candidate>();
             if (world == null || assignment == null || maxResults <= 0)
@@ -52,30 +65,60 @@ namespace Sim.Core.Scouting
 
             ScoutingFilters filters = assignment.Filters ?? new ScoutingFilters();
 
-            foreach (Club club in assignment.Area.Clubs(world))
+            // A NAMED target is not a place to go looking: the walk yields no clubs for it, and the
+            // index must not quietly start returning the man himself as a "discovery".
+            // (No null test on Area: it is a non-nullable property, and testing it here would make
+            // the compiler treat every later Area access as maybe-null — CS8602 under our
+            // TreatWarningsAsErrors.)
+            if (assignment.Area.Kind == ScoutingAreaKind.Player)
+                return found;
+
+            if (index != null && index.World == world)
             {
-                if (club.Id == observerClubId)
-                    continue;
-
-                foreach (Player player in club.Squad.Players)
+                List<int> bounds = index.Bounds(assignment.Area);
+                for (int b = 0; b < bounds.Count; b += 2)
                 {
-                    if (!filters.MatchesFacts(player, cfg))
-                        continue;
-
-                    int known = knowledge != null ? knowledge.Get(observerClubId, player.Id) : 0;
-                    ScoutedRange overall = ScoutingModel.OverallOf(player, known, worldSeed, observerClubId, cfg, quality);
-                    ScoutedRange potential = ScoutingModel.PotentialOf(player, known, worldSeed, observerClubId, cfg, quality);
-
-                    if (!filters.MatchesEstimates(overall, potential))
-                        continue;
-
-                    found.Add(new Candidate
+                    for (int slot = bounds[b]; slot < bounds[b + 1]; slot++)
                     {
-                        PlayerId = player.Id,
-                        ClubId = club.Id,
-                        EstimatedOverall = overall.Estimate,
-                        EstimatedPotential = potential.Estimate
-                    });
+                        if (index.ClubAt(slot) == observerClubId)
+                            continue;
+
+                        // The cheap rejections come off the primitive arrays; anything that survives
+                        // pays for the object and the full public-fact test, exactly as in the walk.
+                        if (filters.Role >= 0 && index.RoleAt(slot) != filters.Role)
+                            continue;
+
+                        int age = index.AgeAt(slot);
+                        if (filters.MinAge > 0 && age < filters.MinAge)
+                            continue;
+                        if (filters.MaxAge > 0 && age > filters.MaxAge)
+                            continue;
+
+                        Player? indexed = index.PlayerAt(slot);
+                        if (indexed == null)
+                            continue;
+
+                        Candidate? candidate = Judge(indexed, index.ClubAt(slot), filters, knowledge,
+                                                     worldSeed, observerClubId, quality, cfg);
+                        if (candidate != null)
+                            found.Add(candidate);
+                    }
+                }
+            }
+            else
+            {
+                foreach (Club club in assignment.Area.Clubs(world))
+                {
+                    if (club.Id == observerClubId)
+                        continue;
+
+                    foreach (Player player in club.Squad.Players)
+                    {
+                        Candidate? candidate = Judge(player, club.Id, filters, knowledge,
+                                                     worldSeed, observerClubId, quality, cfg);
+                        if (candidate != null)
+                            found.Add(candidate);
+                    }
                 }
             }
 
@@ -86,6 +129,33 @@ namespace Sim.Core.Scouting
                 found.RemoveRange(maxResults, found.Count - maxResults);
 
             return found;
+        }
+
+        /// <summary>
+        /// The one place a candidate is judged, shared by the walk and the indexed scan so the two
+        /// can never drift apart. Returns null when he does not match the brief.
+        /// </summary>
+        private static Candidate? Judge(Player player, int clubId, ScoutingFilters filters,
+                                        KnowledgeStore knowledge, ulong worldSeed, int observerClubId,
+                                        ScoutQuality quality, ScoutingBalance cfg)
+        {
+            if (!filters.MatchesFacts(player, cfg))
+                return null;
+
+            int known = knowledge != null ? knowledge.Get(observerClubId, player.Id) : 0;
+            ScoutedRange overall = ScoutingModel.OverallOf(player, known, worldSeed, observerClubId, cfg, quality);
+            ScoutedRange potential = ScoutingModel.PotentialOf(player, known, worldSeed, observerClubId, cfg, quality);
+
+            if (!filters.MatchesEstimates(overall, potential))
+                return null;
+
+            return new Candidate
+            {
+                PlayerId = player.Id,
+                ClubId = clubId,
+                EstimatedOverall = overall.Estimate,
+                EstimatedPotential = potential.Estimate
+            };
         }
 
         /// <summary>
@@ -103,6 +173,10 @@ namespace Sim.Core.Scouting
 
             return total;
         }
+
+        /// <summary>The same count, off the index when the host has one (task 11.3).</summary>
+        public static int AreaPlayerCount(World world, ScoutingArea area, WorldPlayerIndex? index)
+            => index != null && index.World == world ? index.AreaPlayerCount(area) : AreaPlayerCount(world, area);
 
         private static int Compare(Candidate a, Candidate b)
         {

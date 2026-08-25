@@ -56,6 +56,22 @@ namespace Fts.Views
     }
 
     /// <summary>
+    /// The state of the search tab's controls (task 11.3). Rebuilt on every refresh EXCEPT the text
+    /// field, which is only synced when it differs — recreating it under the player's fingers would
+    /// steal focus on every keystroke.
+    /// </summary>
+    public sealed class SearchPanelVm
+    {
+        public string Text;                               // what is currently typed
+        public string Placeholder;                        // caption above the field
+        public IReadOnlyList<FilterChipVm> RoleChips;     // role filter, "all" included
+        public IReadOnlyList<FilterLineVm> Options;       // where / age / fame / sort / scouted-only / clear
+        public string Summary;                            // "21–40 of 3,412 · page 2/171"
+        public bool HasPrevious;
+        public bool HasNext;
+    }
+
+    /// <summary>
     /// The Scouting screen (task 11.2) — an assignment board, not a list of every player in the
     /// world. Two tabs:
     ///
@@ -95,6 +111,15 @@ namespace Fts.Views
         public event Action CancelClicked;
         public event Action BackClicked;
 
+        /// <summary>The search box changed (task 11.3). Fired per keystroke; the presenter re-queries.</summary>
+        public event Action<string> SearchTextChanged;
+        /// <summary>A search option row was tapped — cycle it.</summary>
+        public event Action<int> SearchOptionClicked;
+        /// <summary>A role chip was picked in the search tab (-1 = every role).</summary>
+        public event Action<int> SearchRoleClicked;
+        /// <summary>Page the results: -1 back, +1 forward.</summary>
+        public event Action<int> SearchPageClicked;
+
         public VisualElement Root { get; }
 
         private readonly Func<string, string> _tr;
@@ -103,8 +128,16 @@ namespace Fts.Views
         private readonly VisualElement _tabs;
         private readonly Button _tabAssignments;
         private readonly Button _tabReports;
+        private readonly Button _tabSearch;
         private readonly ScrollView _list;
         private readonly VisualElement _actionBar;
+
+        // Task 11.3 — the search tab's controls. Built once and kept: the text field must survive a
+        // refresh with its focus and caret intact.
+        private readonly VisualElement _searchPanel;
+        private readonly TextField _searchField;
+        private readonly VisualElement _searchChips;
+        private readonly VisualElement _searchOptions;
 
         public ScoutingView(Func<string, string> tr)
         {
@@ -130,10 +163,34 @@ namespace Fts.Views
             _tabs.style.marginBottom = UiKit.SpaceSm;
             _tabAssignments = UiKit.TabButton(tr("scouting.tab.assignments"), () => TabSelected?.Invoke(0));
             _tabReports = UiKit.TabButton(tr("scouting.tab.reports"), () => TabSelected?.Invoke(1));
-            _tabReports.style.marginRight = 0;
+            _tabSearch = UiKit.TabButton(tr("scouting.tab.search"), () => TabSelected?.Invoke(2));
+            _tabSearch.style.marginRight = 0;
             _tabs.Add(_tabAssignments);
             _tabs.Add(_tabReports);
+            _tabs.Add(_tabSearch);
             col.Add(_tabs);
+
+            // --- the search controls (task 11.3), hidden unless the search tab is open ---------
+            _searchPanel = new VisualElement();
+            _searchPanel.style.flexShrink = 0f;
+            _searchPanel.style.marginBottom = UiKit.SpaceSm;
+            _searchPanel.style.display = DisplayStyle.None;
+            col.Add(_searchPanel);
+
+            _searchField = new TextField { maxLength = 40 };
+            _searchField.style.minHeight = 36;
+            _searchField.style.marginBottom = UiKit.SpaceXs;
+            _searchField.RegisterValueChangedCallback(e => SearchTextChanged?.Invoke(e.newValue ?? string.Empty));
+            _searchPanel.Add(_searchField);
+
+            _searchChips = UiKit.Row();
+            _searchChips.style.flexWrap = Wrap.Wrap;
+            _searchChips.style.marginBottom = UiKit.SpaceXs;
+            _searchPanel.Add(_searchChips);
+
+            _searchOptions = UiKit.Row();
+            _searchOptions.style.flexWrap = Wrap.Wrap;
+            _searchPanel.Add(_searchOptions);
 
             VisualElement listPanel = UiKit.Panel(grow: true);
             listPanel.style.paddingTop = UiKit.SpaceSm;
@@ -166,6 +223,7 @@ namespace Fts.Views
             _tabs.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
             UiKit.SetTabActive(_tabAssignments, active == 0);
             UiKit.SetTabActive(_tabReports, active == 1);
+            UiKit.SetTabActive(_tabSearch, active == 2);
         }
 
         // ------------------------------------------------------------------ the assignment board
@@ -173,6 +231,7 @@ namespace Fts.Views
         public void ShowAssignments(IReadOnlyList<ScoutRowVm> rows, string emptyMessage)
         {
             _list.Clear();
+            HideSearchPanel();
             HideActionBar();
 
             if (rows == null || rows.Count == 0)
@@ -254,6 +313,7 @@ namespace Fts.Views
         public void ShowReports(IReadOnlyList<ScoutingRowVm> rows, string emptyMessage)
         {
             _list.Clear();
+            HideSearchPanel();
             HideActionBar();
 
             if (rows == null || rows.Count == 0)
@@ -262,6 +322,15 @@ namespace Fts.Views
                 return;
             }
 
+            FillPlayerRows(rows);
+        }
+
+        /// <summary>
+        /// One player row per name, shared by the Reports tab and the search tab (task 11.3) — the
+        /// two lists say the same things about a player, so they are rendered by the same code.
+        /// </summary>
+        private void FillPlayerRows(IReadOnlyList<ScoutingRowVm> rows)
+        {
             foreach (ScoutingRowVm vm in rows)
             {
                 int playerId = vm.PlayerId;
@@ -327,6 +396,7 @@ namespace Fts.Views
         public void ShowPicker(IReadOnlyList<PickerOptionVm> options, string emptyMessage)
         {
             _list.Clear();
+            HideSearchPanel();
             ShowActionBar(null, _tr("common.back"));
 
             if (options == null || options.Count == 0)
@@ -372,6 +442,7 @@ namespace Fts.Views
         public void ShowFilters(IReadOnlyList<FilterLineVm> lines, string confirmText)
         {
             _list.Clear();
+            HideSearchPanel();
             ShowActionBar(confirmText, _tr("common.back"));
 
             if (lines == null)
@@ -402,6 +473,82 @@ namespace Fts.Views
                 _list.Add(row);
             }
         }
+
+        // ------------------------------------------------------------------ the world search (task 11.3)
+
+        /// <summary>
+        /// The search tab: the controls on top, one page of players in the middle, the pager below.
+        /// The list holds AT MOST one page — a world of 26,000 players is never turned into 26,000
+        /// rows, which is the whole reason paging exists here rather than a scroll and a prayer.
+        /// </summary>
+        public void ShowSearch(SearchPanelVm panel, IReadOnlyList<ScoutingRowVm> rows, string emptyMessage)
+        {
+            _list.Clear();
+            _searchPanel.style.display = DisplayStyle.Flex;
+
+            if (panel != null)
+            {
+                // Only ever push text INTO the field when it really differs: assigning while the
+                // player is typing would move the caret to the end on every keystroke.
+                string text = panel.Text ?? string.Empty;
+                if (_searchField.value != text)
+                    _searchField.SetValueWithoutNotify(text);
+
+                if (!string.IsNullOrEmpty(panel.Placeholder))
+                    _searchField.label = panel.Placeholder;
+
+                if (panel.RoleChips != null)
+                    UiKit.FillFilterChips(_searchChips, panel.RoleChips, role => SearchRoleClicked?.Invoke(role));
+
+                _searchOptions.Clear();
+                if (panel.Options != null)
+                {
+                    foreach (FilterLineVm option in panel.Options)
+                    {
+                        int id = option.Id;
+                        Button button = UiKit.SmallButton(
+                            $"{option.Label}: {option.Value}", () => SearchOptionClicked?.Invoke(id), 132f);
+                        button.style.marginRight = 6;
+                        button.style.marginBottom = 4;
+                        _searchOptions.Add(button);
+                    }
+                }
+
+                ShowPager(panel);
+            }
+
+            if (rows == null || rows.Count == 0)
+            {
+                _list.Add(EmptyState.Build("scouting", emptyMessage));
+                return;
+            }
+
+            FillPlayerRows(rows);
+        }
+
+        /// <summary>The bar under the list: back a page, where you are, forward a page.</summary>
+        private void ShowPager(SearchPanelVm panel)
+        {
+            _actionBar.Clear();
+            _actionBar.style.display = DisplayStyle.Flex;
+
+            Button previous = UiKit.SmallButton("\u25C0", () => SearchPageClicked?.Invoke(-1), 72f);
+            previous.SetEnabled(panel.HasPrevious);
+            _actionBar.Add(previous);
+
+            var summary = new Label(panel.Summary ?? string.Empty);
+            summary.style.flexGrow = 1f;
+            summary.style.fontSize = 12;
+            summary.style.color = UiKit.TextMuted;
+            summary.style.unityTextAlign = TextAnchor.MiddleCenter;
+            _actionBar.Add(summary);
+
+            Button next = UiKit.SmallButton("\u25B6", () => SearchPageClicked?.Invoke(+1), 72f);
+            next.SetEnabled(panel.HasNext);
+            _actionBar.Add(next);
+        }
+
+        private void HideSearchPanel() => _searchPanel.style.display = DisplayStyle.None;
 
         // ------------------------------------------------------------------ chrome
 

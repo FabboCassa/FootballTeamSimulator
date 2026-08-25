@@ -6,6 +6,7 @@ using Fts.Services.Localization;
 using Fts.Services.Navigation;
 using Fts.Services.Online;
 using Fts.Views;
+using Sim.Core.Domain;
 using UnityEngine.UIElements;
 
 namespace Fts.Presenters
@@ -18,6 +19,14 @@ namespace Fts.Presenters
     /// </summary>
     public sealed class RankedMarketScreenPresenter : IScreenPresenter
     {
+        /// <summary>The server's own bid floor (5% of the standing bid, never below this).</summary>
+        private const long MinIncrementFloor = 25_000;
+
+        /// <summary>The integrity band a direct offer has to sit in, mirroring the server's Phase 9.5
+        /// guard: below 40% of market value is a gift, above 250% is a bribe — both refused.</summary>
+        private const int MinFeePercentOfValue = 40;
+        private const int MaxFeePercentOfValue = 250;
+
         private const int TabAuctions = 0;
         private const int TabOffers = 1;
         private const int TabBrowse = 2;
@@ -52,7 +61,7 @@ namespace Fts.Presenters
             _navigator = navigator;
             _loc = loc;
             _ranked = ranked;
-            _view = new RankedMarketView(loc.Tr);
+            _view = new RankedMarketView(loc.Tr, MoneyFormat.Short);
         }
 
         public void Enter()
@@ -142,9 +151,13 @@ namespace Fts.Presenters
                     rows.Add(new RankedMarketView.RowVm
                     {
                         Title = _loc.Tr("ranked.market.lot_title", lot.playerName, lot.overall, lot.age),
+                        RoleGroup = RoleFormat.Group((PositionRole)lot.role),
+                        RoleAbbr = RoleName(lot.role),
+                        Badge = lot.youAreLeading ? _loc.Tr("auction.badge_leading") : null,
+                        BadgeKind = lot.youAreLeading ? 1 : 0,
                         Detail = lot.highBid > 0
                             ? _loc.Tr("ranked.market.lot_bid", MoneyFormat.Short(lot.highBid),
-                                lot.youAreLeading ? _loc.Tr("ranked.market.you") : (lot.highBidClubExternalId?.ToString() ?? "?"),
+                                lot.youAreLeading ? _loc.Tr("ranked.market.you") : ClubName(lot.highBidClubExternalId),
                                 MoneyFormat.Short(lot.minNextBid))
                             : _loc.Tr("ranked.market.lot_base", MoneyFormat.Short(lot.startPrice)),
                         PrimaryLabel = lot.youAreLeading ? null : _loc.Tr("ranked.market.bid"),
@@ -155,6 +168,19 @@ namespace Fts.Presenters
             }
             _view.SetRows(rows);
         }
+
+        /// <summary>Names the club that holds a lot — the standings we already fetched are the group's
+        /// club directory, so a bid can say WHO made it instead of showing a bare id.</summary>
+        private string ClubName(int? clubExternalId)
+        {
+            if (!clubExternalId.HasValue) return "?";
+            foreach (var c in _clubs)
+                if (c.clubExternalId == clubExternalId.Value) return c.clubName;
+            return "#" + clubExternalId.Value;
+        }
+
+        private string RoleName(int role) =>
+            _loc.Tr("role." + ((PositionRole)role).ToString().ToLowerInvariant());
 
         private void RenderOffers()
         {
@@ -234,6 +260,8 @@ namespace Fts.Presenters
                 rows.Add(new RankedMarketView.RowVm
                 {
                     Title = _loc.Tr("ranked.market.lot_title", p.name, p.overall, p.age),
+                    RoleGroup = RoleFormat.Group((PositionRole)p.role),
+                    RoleAbbr = RoleName(p.role),
                     Detail = _loc.Tr("ranked.market.value", MoneyFormat.Short(p.marketValue)),
                     PrimaryLabel = _browsedSquad.isHuman ? _loc.Tr("ranked.market.offer") : null,
                     PrimaryAction = () => OnOfferForPlayer(pid),
@@ -271,7 +299,26 @@ namespace Fts.Presenters
             if (lot == null) return;
             _pendingBidLotId = lotId;
             _pendingOfferPlayerId = -1;
-            _view.ShowAmountPanel(_loc.Tr("ranked.market.bid_for", lot.playerName), lot.minNextBid);
+
+            long current = lot.highBid > 0 ? lot.highBid : lot.startPrice;
+            long available = _auctions?.available ?? 0;
+            _view.ShowAmountPanel(new BidPanelVm
+            {
+                Id = lotId,
+                Title = _loc.Tr("ranked.market.bid_for", lot.playerName),
+                RoleGroup = RoleFormat.Group((PositionRole)lot.role),
+                RoleAbbr = RoleName(lot.role),
+                Subtitle = _loc.Tr("auction.min_info",
+                    MoneyFormat.Short(lot.minNextBid), MoneyFormat.Short(available)),
+                Min = lot.minNextBid,
+                Max = available,
+                Steps = BidSteps.For(current, System.Math.Max(MinIncrementFloor, current / 20)),
+                ConfirmFormat = _loc.Tr("auction.confirm_amount"),
+                MinLabel = _loc.Tr("auction.set_min"),
+                MaxLabel = _loc.Tr("auction.set_max"),
+                CancelLabel = _loc.Tr("ranked.market.cancel"),
+                OverBudget = _loc.Tr("auction.over_budget"),
+            });
         }
 
         private void OnClubSelected(int clubExternalId) => BrowseAsync(clubExternalId).Forget();
@@ -297,8 +344,29 @@ namespace Fts.Presenters
             if (p == null) return;
             _pendingOfferPlayerId = playerExternalId;
             _pendingBidLotId = null;
-            // Suggest the player's market value as the opening fee.
-            _view.ShowAmountPanel(_loc.Tr("ranked.market.offer_for", p.name), p.marketValue);
+
+            // The fee has to sit inside the integrity band (a gift and a bribe are both refused server-side,
+            // Phase 9.5), so the control opens on the market value and cannot leave the legal range.
+            long budget = _offers?.yourBudget ?? 0;
+            long floor = p.marketValue * MinFeePercentOfValue / 100;
+            long ceiling = System.Math.Min(budget, p.marketValue * MaxFeePercentOfValue / 100);
+            _view.ShowAmountPanel(new BidPanelVm
+            {
+                Id = playerExternalId.ToString(),
+                Title = _loc.Tr("ranked.market.offer_for", p.name),
+                RoleGroup = RoleFormat.Group((PositionRole)p.role),
+                RoleAbbr = RoleName(p.role),
+                Subtitle = _loc.Tr("ranked.market.fee_band",
+                    MoneyFormat.Short(p.marketValue), MoneyFormat.Short(floor), MoneyFormat.Short(ceiling)),
+                Min = floor,
+                Max = ceiling,
+                Steps = BidSteps.For(p.marketValue, System.Math.Max(MinIncrementFloor, p.marketValue / 50)),
+                ConfirmFormat = _loc.Tr("ranked.market.offer_amount"),
+                MinLabel = _loc.Tr("auction.set_min"),
+                MaxLabel = _loc.Tr("auction.set_max"),
+                CancelLabel = _loc.Tr("ranked.market.cancel"),
+                OverBudget = _loc.Tr("ranked.market.cannot_afford"),
+            });
         }
 
         private void OnAmountCancel()

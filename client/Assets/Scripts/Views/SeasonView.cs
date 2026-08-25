@@ -5,39 +5,12 @@ using UnityEngine.UIElements;
 
 namespace Fts.Views
 {
-    /// <summary>A standings row, preformatted by the presenter (task 8.3b).</summary>
-    public sealed class StandingRowVm
-    {
-        public int Pos;
-        public string ClubName;
-        public int Played, Won, Drawn, Lost, GoalDifference, Points;
-        public bool IsYours;
-    }
-
-    /// <summary>A fixture row: id (for the replay), the two clubs, and the score once played.</summary>
-    public sealed class SeasonFixtureRowVm
-    {
-        public string FixtureId;
-        public string HomeName;
-        public string AwayName;
-        public bool Played;
-        public int HomeGoals, AwayGoals;
-        public bool IsYours;
-        /// <summary>Your unplayed fixture in the current round — tappable to open the live match (8.6b).</summary>
-        public bool CanPlayLive;
-    }
-
-    /// <summary>A matchday: a label + its fixtures.</summary>
-    public sealed class FixtureGroupVm
-    {
-        public string RoundLabel;
-        public IReadOnlyList<SeasonFixtureRowVm> Rows;
-    }
-
     /// <summary>
-    /// Dumb view for a private league's season (task 8.3b): a state banner, the ready/advance/refresh
-    /// actions, the standings table and the full schedule (played fixtures are tappable to open the
-    /// replay). No logic — the presenter fills it from the season DTO and drives the API.
+    /// Dumb view for a private league's season (task 8.3b), rebuilt on the shared page scaffold so the
+    /// ONLINE league reads like the single-player league screen: a status panel with the matchday + the
+    /// round actions, two segmented tabs (standings / schedule) each filling the page in their own panel,
+    /// and one footer. Played fixtures open the replay; your current-round fixture opens the live match.
+    /// No logic — the presenter fills it from the season DTO and drives the API.
     /// </summary>
     public sealed class SeasonView
     {
@@ -63,13 +36,13 @@ namespace Fts.Views
         private readonly Button _editButton;
         private readonly Button _refreshButton;
         private readonly Button _seasonEndButton;
-        private readonly Label _stateHashCaption;
         private readonly Label _stateHashValue;
         private readonly Button _verifyButton;
-        private readonly Label _standingsCaption;
-        private readonly VisualElement _standings;
-        private readonly Label _scheduleCaption;
-        private readonly VisualElement _schedule;
+        private readonly Button[] _tabs;
+        private readonly VisualElement[] _sections;
+        private readonly VisualElement _standingsHeader;
+        private readonly ScrollView _standings;
+        private readonly ScrollView _schedule;
         private readonly Label _status;
         private readonly Button _backButton;
 
@@ -77,81 +50,123 @@ namespace Fts.Views
         {
             _tr = tr;
 
-            Root = UiKit.Screen(UiKit.Background);
-            var col = UiKit.PageColumn(UiKit.WidthWide);
+            Root = UiKit.ScreenRoot();
+            VisualElement col = UiKit.PageColumn(UiKit.WidthWide);
             Root.Add(col);
 
             _title = UiKit.ScreenTitle(string.Empty);
+            _title.style.marginBottom = UiKit.SpaceSm;
             col.Add(_title);
 
-            var card = UiKit.Card();
-            col.Add(card);
-            _banner = UiKit.Subtitle(string.Empty);
-            _banner.style.whiteSpace = WhiteSpace.Normal;
-            card.Add(_banner);
+            // ---- status + round actions ------------------------------------------------------
+            VisualElement head = UiKit.Panel();
+            col.Add(head);
 
-            var actions = UiKit.Row();
-            actions.style.flexWrap = Wrap.Wrap;
-            actions.style.marginTop = UiKit.SpaceXs;
-            card.Add(actions);
-            _readyButton = UiKit.PrimaryButton(string.Empty, () => ReadyToggleClicked?.Invoke());
+            _banner = UiKit.PanelLine(string.Empty);
+            _banner.style.fontSize = 15;
+            _banner.style.unityFontStyleAndWeight = FontStyle.Bold;
+            _banner.style.marginBottom = UiKit.SpaceSm;
+            head.Add(_banner);
+
+            VisualElement actions = UiKit.Toolbar();
+            actions.style.marginBottom = 0;
+            head.Add(actions);
+
+            _readyButton = UiKit.SmallButton(string.Empty, () => ReadyToggleClicked?.Invoke(), 150f);
+            _readyButton.style.marginLeft = 0;
+            _readyButton.style.marginRight = 6;
+            _readyButton.style.marginBottom = 4;
+            UiKit.SetSmallButtonAccent(_readyButton, true);
             actions.Add(_readyButton);
-            _advanceButton = UiKit.MenuButton(string.Empty, () => AdvanceClicked?.Invoke());
-            _advanceButton.style.marginLeft = UiKit.SpaceXs;
-            actions.Add(_advanceButton);
-            _editButton = UiKit.MenuButton(string.Empty, () => EditLineupClicked?.Invoke());
-            _editButton.style.marginLeft = UiKit.SpaceXs;
-            actions.Add(_editButton);
-            _refreshButton = UiKit.MenuButton(string.Empty, () => RefreshClicked?.Invoke());
-            _refreshButton.style.marginLeft = UiKit.SpaceXs;
-            actions.Add(_refreshButton);
-            // Appears only when the season is over (8.7b) → the summary + awards screen.
-            _seasonEndButton = UiKit.PrimaryButton(string.Empty, () => SeasonEndClicked?.Invoke());
-            _seasonEndButton.style.marginLeft = UiKit.SpaceXs;
+
+            _advanceButton = Action(actions, () => AdvanceClicked?.Invoke());
+            _editButton = Action(actions, () => EditLineupClicked?.Invoke());
+            _refreshButton = Action(actions, () => RefreshClicked?.Invoke());
+
+            _seasonEndButton = Action(actions, () => SeasonEndClicked?.Invoke());
+            UiKit.SetSmallButtonAccent(_seasonEndButton, true);
             _seasonEndButton.style.display = DisplayStyle.None;
-            actions.Add(_seasonEndButton);
 
-            // State-hash agreement panel (8.4b): the server's canonical whole-world hash. It CHANGES
-            // after a round of play (condition + development evolved) — the client↔server ✅.
-            var hashCard = UiKit.Card();
-            hashCard.style.marginTop = UiKit.SpaceMd;
-            col.Add(hashCard);
-            _stateHashCaption = UiKit.Caption(string.Empty);
-            _stateHashCaption.style.color = UiKit.TextMuted;
-            hashCard.Add(_stateHashCaption);
+            // State-hash agreement line (8.4b): the server's canonical whole-world hash, kept as one
+            // quiet diagnostic line under the actions instead of a card of its own.
+            VisualElement hashRow = UiKit.Row();
+            hashRow.style.marginTop = UiKit.SpaceSm;
+            head.Add(hashRow);
             _stateHashValue = UiKit.Caption(string.Empty);
-            _stateHashValue.style.whiteSpace = WhiteSpace.Normal;
-            _stateHashValue.style.marginTop = UiKit.SpaceXs;
-            hashCard.Add(_stateHashValue);
-            _verifyButton = UiKit.MenuButton(string.Empty, () => VerifyStateClicked?.Invoke());
-            _verifyButton.style.marginTop = UiKit.SpaceXs;
-            hashCard.Add(_verifyButton);
+            _stateHashValue.style.fontSize = 11;
+            _stateHashValue.style.flexGrow = 1f;
+            _stateHashValue.style.flexShrink = 1f;
+            _stateHashValue.style.overflow = Overflow.Hidden;
+            _stateHashValue.style.textOverflow = TextOverflow.Ellipsis;
+            _stateHashValue.style.whiteSpace = WhiteSpace.NoWrap;
+            hashRow.Add(_stateHashValue);
+            _verifyButton = UiKit.SmallButton(string.Empty, () => VerifyStateClicked?.Invoke(), 100f);
+            hashRow.Add(_verifyButton);
 
-            _standingsCaption = UiKit.Subtitle(string.Empty);
-            _standingsCaption.style.marginTop = UiKit.SpaceMd;
-            col.Add(_standingsCaption);
-            _standings = new VisualElement();
-            col.Add(_standings);
+            // ---- tabs -------------------------------------------------------------------------
+            VisualElement tabRow = UiKit.Toolbar();
+            string[] tabKeys = { "league.tab.table", "league.tab.fixtures" };
+            _tabs = new Button[tabKeys.Length];
+            for (int i = 0; i < tabKeys.Length; i++)
+            {
+                int index = i;
+                _tabs[i] = UiKit.TabButton(_tr(tabKeys[i]), () => ShowTab(index));
+                tabRow.Add(_tabs[i]);
+            }
+            _tabs[_tabs.Length - 1].style.marginRight = 0;
+            col.Add(tabRow);
 
-            _scheduleCaption = UiKit.Subtitle(string.Empty);
-            _scheduleCaption.style.marginTop = UiKit.SpaceMd;
-            col.Add(_scheduleCaption);
-            _schedule = new VisualElement();
-            col.Add(_schedule);
+            // ---- standings --------------------------------------------------------------------
+            VisualElement standingsSection = UiKit.Panel(grow: true);
+            _standingsHeader = new VisualElement();
+            _standingsHeader.style.flexShrink = 0f;
+            standingsSection.Add(_standingsHeader);
+            _standings = UiKit.ListScroll();
+            standingsSection.Add(_standings);
+
+            // ---- schedule ---------------------------------------------------------------------
+            VisualElement scheduleSection = UiKit.Panel(grow: true);
+            _schedule = UiKit.ListScroll();
+            scheduleSection.Add(_schedule);
+
+            _sections = new[] { standingsSection, scheduleSection };
+            foreach (VisualElement section in _sections)
+                col.Add(section);
 
             _status = UiKit.Caption(string.Empty);
-            _status.style.marginTop = UiKit.SpaceSm;
+            _status.style.marginTop = UiKit.SpaceXs;
             _status.style.whiteSpace = WhiteSpace.Normal;
+            _status.style.flexShrink = 0f;
             _status.style.display = DisplayStyle.None;
             col.Add(_status);
 
-            _backButton = UiKit.MenuButton(string.Empty, () => BackClicked?.Invoke());
-            _backButton.style.marginTop = UiKit.SpaceMd;
-            col.Add(_backButton);
+            VisualElement footer = UiKit.FooterBar();
+            _backButton = UiKit.FooterButton(string.Empty, () => BackClicked?.Invoke());
+            footer.Add(_backButton);
+            col.Add(footer);
 
+            RebuildStandingsHeader();
+            ShowTab(0);
             UpdateTexts();
-            _standingsCaption.text = _tr("season.standings");
-            _scheduleCaption.text = _tr("season.schedule");
+        }
+
+        private static Button Action(VisualElement parent, Action onClick)
+        {
+            Button button = UiKit.SmallButton(string.Empty, onClick, 140f);
+            button.style.marginLeft = 0;
+            button.style.marginRight = 6;
+            button.style.marginBottom = 4;
+            parent.Add(button);
+            return button;
+        }
+
+        private void ShowTab(int index)
+        {
+            for (int i = 0; i < _sections.Length; i++)
+            {
+                _sections[i].style.display = i == index ? DisplayStyle.Flex : DisplayStyle.None;
+                UiKit.SetTabActive(_tabs[i], i == index);
+            }
         }
 
         public void SetHeader(string text) => _title.text = text;
@@ -189,25 +204,29 @@ namespace Fts.Views
         public void SetStandings(IReadOnlyList<StandingRowVm> rows)
         {
             _standings.Clear();
-            _standings.Add(StandingHeader());
             if (rows == null) return;
-            foreach (StandingRowVm vm in rows)
-                _standings.Add(StandingRow(vm));
+            for (int i = 0; i < rows.Count; i++)
+                _standings.Add(OnlineTableKit.StandingsRow(rows[i], i));
         }
 
         public void SetFixtures(IReadOnlyList<FixtureGroupVm> groups)
         {
             _schedule.Clear();
             if (groups == null) return;
-            foreach (FixtureGroupVm g in groups)
+
+            int index = 0;
+            for (int g = 0; g < groups.Count; g++)
             {
-                var header = UiKit.Caption(g.RoundLabel);
-                header.style.marginTop = UiKit.SpaceSm;
-                header.style.color = UiKit.TextMuted;
-                _schedule.Add(header);
-                if (g.Rows == null) continue;
-                foreach (SeasonFixtureRowVm r in g.Rows)
-                    _schedule.Add(FixtureRow(r));
+                FixtureGroupVm group = groups[g];
+                _schedule.Add(OnlineTableKit.RoundHeader(group.RoundLabel, g == 0));
+                if (group.Rows == null) continue;
+                foreach (SeasonFixtureRowVm r in group.Rows)
+                {
+                    _schedule.Add(OnlineTableKit.FixtureRow(
+                        r, index++, _tr("season.vs"), _tr("season.play_live"),
+                        id => FixtureClicked?.Invoke(id),
+                        id => PlayLiveClicked?.Invoke(id)));
+                }
             }
         }
 
@@ -236,114 +255,17 @@ namespace Fts.Views
             _editButton.text = _tr("season.edit_lineup");
             _refreshButton.text = _tr("season.refresh");
             _seasonEndButton.text = _tr("season.season_end");
-            _stateHashCaption.text = _tr("season.state_hash_caption");
             _verifyButton.text = _tr("season.verify_state");
             _backButton.text = _tr("common.back");
+            for (int i = 0; i < _tabs.Length; i++)
+                _tabs[i].text = _tr(i == 0 ? "league.tab.table" : "league.tab.fixtures");
+            RebuildStandingsHeader();
         }
 
-        // --- rows -------------------------------------------------------------------------------
-
-        private VisualElement StandingHeader()
+        private void RebuildStandingsHeader()
         {
-            var row = TableRow(false);
-            row.Add(Cell("#", 24, TextAnchor.MiddleLeft, UiKit.TextMuted, bold: true));
-            row.Add(Cell(_tr("season.col_club"), 0, TextAnchor.MiddleLeft, UiKit.TextMuted, bold: true, grow: true));
-            row.Add(Cell(_tr("season.col_p"), 24, TextAnchor.MiddleRight, UiKit.TextMuted, bold: true));
-            row.Add(Cell(_tr("season.col_w"), 22, TextAnchor.MiddleRight, UiKit.TextMuted, bold: true));
-            row.Add(Cell(_tr("season.col_d"), 22, TextAnchor.MiddleRight, UiKit.TextMuted, bold: true));
-            row.Add(Cell(_tr("season.col_l"), 22, TextAnchor.MiddleRight, UiKit.TextMuted, bold: true));
-            row.Add(Cell(_tr("season.col_gd"), 30, TextAnchor.MiddleRight, UiKit.TextMuted, bold: true));
-            row.Add(Cell(_tr("season.col_pts"), 30, TextAnchor.MiddleRight, UiKit.TextMuted, bold: true));
-            return row;
+            _standingsHeader.Clear();
+            _standingsHeader.Add(OnlineTableKit.StandingsHeader(_tr));
         }
-
-        private VisualElement StandingRow(StandingRowVm vm)
-        {
-            var row = TableRow(vm.IsYours);
-            row.Add(Cell(vm.Pos.ToString(), 24, TextAnchor.MiddleLeft, UiKit.TextMuted));
-            row.Add(Cell(vm.ClubName, 0, TextAnchor.MiddleLeft, UiKit.TextPrimary, grow: true));
-            row.Add(Cell(vm.Played.ToString(), 24, TextAnchor.MiddleRight, UiKit.TextPrimary));
-            row.Add(Cell(vm.Won.ToString(), 22, TextAnchor.MiddleRight, UiKit.TextMuted));
-            row.Add(Cell(vm.Drawn.ToString(), 22, TextAnchor.MiddleRight, UiKit.TextMuted));
-            row.Add(Cell(vm.Lost.ToString(), 22, TextAnchor.MiddleRight, UiKit.TextMuted));
-            row.Add(Cell(Signed(vm.GoalDifference), 30, TextAnchor.MiddleRight, UiKit.TextMuted));
-            row.Add(Cell(vm.Points.ToString(), 30, TextAnchor.MiddleRight, UiKit.TextPrimary, bold: true));
-            return row;
-        }
-
-        private VisualElement FixtureRow(SeasonFixtureRowVm vm)
-        {
-            var row = TableRow(vm.IsYours);
-            if (vm.Played || vm.CanPlayLive) UiKit.EnsureTapTarget(row);
-
-            var home = Cell(vm.HomeName, 0, TextAnchor.MiddleRight, UiKit.TextPrimary, grow: true);
-            row.Add(home);
-
-            string mid = vm.Played ? $"{vm.HomeGoals}–{vm.AwayGoals}" : _tr("season.vs");
-            var score = Cell(mid, 52, TextAnchor.MiddleCenter, vm.Played ? UiKit.TextPrimary : UiKit.TextMuted, bold: vm.Played);
-            row.Add(score);
-
-            var away = Cell(vm.AwayName, 0, TextAnchor.MiddleLeft, UiKit.TextPrimary, grow: true);
-            row.Add(away);
-
-            // A live "▶" hint sits after the away name on your current-round unplayed fixture.
-            if (vm.CanPlayLive)
-            {
-                var live = Cell(_tr("season.play_live"), 64, TextAnchor.MiddleRight, UiKit.Accent, bold: true);
-                row.Add(live);
-            }
-
-            if (vm.Played && !string.IsNullOrEmpty(vm.FixtureId))
-            {
-                string id = vm.FixtureId;
-                row.RegisterCallback<ClickEvent>(_ => FixtureClicked?.Invoke(id));
-            }
-            else if (vm.CanPlayLive && !string.IsNullOrEmpty(vm.FixtureId))
-            {
-                string id = vm.FixtureId;
-                row.RegisterCallback<ClickEvent>(_ => PlayLiveClicked?.Invoke(id));
-            }
-            return row;
-        }
-
-        private static VisualElement TableRow(bool highlight)
-        {
-            var row = new VisualElement();
-            row.style.flexDirection = FlexDirection.Row;
-            row.style.alignItems = Align.Center;
-            row.style.height = 28;
-            row.style.marginBottom = 2;
-            row.style.paddingLeft = 8;
-            row.style.paddingRight = 8;
-            row.style.backgroundColor = highlight ? UiKit.SurfaceAlt : new Color(1f, 1f, 1f, 0.04f);
-            UiKit.Round(row, 6);
-            return row;
-        }
-
-        private static Label Cell(string text, float width, TextAnchor align, Color color, bool bold = false, bool grow = false)
-        {
-            var label = new Label(text);
-            label.style.fontSize = 12;
-            label.style.color = color;
-            label.style.unityTextAlign = align;
-            if (bold) label.style.unityFontStyleAndWeight = FontStyle.Bold;
-            if (grow)
-            {
-                label.style.flexGrow = 1f;
-                label.style.flexShrink = 1f;
-                label.style.overflow = Overflow.Hidden;
-                label.style.textOverflow = TextOverflow.Ellipsis;
-                label.style.whiteSpace = WhiteSpace.NoWrap;
-            }
-            else
-            {
-                label.style.width = width;
-                label.style.flexShrink = 0f;
-            }
-            label.pickingMode = PickingMode.Ignore; // the row handles the click
-            return label;
-        }
-
-        private static string Signed(int v) => v > 0 ? "+" + v : v.ToString();
     }
 }

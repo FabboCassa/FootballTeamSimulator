@@ -205,6 +205,38 @@ Anti-frustration principles baked into the math:
 - **Single player:** AI clubs with personalities (seller/hoarder/youth-focused), budgets, squad needs; negotiation = offer/counteroffer rounds. Scouting reveals attribute ranges with accuracy based on scout level (uncertainty lives in *knowledge*, not in the sim).
 - **Online:** no duplicate players within a competition. Market = **fixed auction windows** (season start + mid-season) with English auctions, server-resolved, push notifications on outbid. Free-agent pool + waiver rules handled server-side using the same `ValuationModel` for minimum prices.
 
+### 4.7b Scouting: knowledge, briefs and public reputation (tasks 5.4 · 11.2 · 11.3)
+
+Everything the player is told about someone else's footballer is a **read at a knowledge level**, never
+a number. `ScoutingModel` turns (true value, knowledge) into a band that always contains the truth and
+collapses onto it at full knowledge — uncertainty lives in knowledge, not in the simulation.
+
+Three dials sit on top of that one function, and they are deliberately independent:
+
+* **The scout** (`ScoutQuality`, task 11.2) — judging ability and judging potential shift the knowledge
+  the two kinds of band are built at, separately; adaptability scales how fast he learns away from home.
+* **The brief's breadth** (`ScoutingModel.KnowledgeCap`, task 11.2) — a continental assignment saturates
+  at a rough read however long it runs, and the club's accumulated knowledge OF THAT AREA lifts that
+  ceiling. Reach is traded for precision, in balance tables indexed by breadth.
+* **Public reputation** (`PublicKnowledge`, task 11.3) — a FLOOR on knowledge that costs nothing.
+  Fame is derived from public facts only (ability, nation reputation, division tier, club stature,
+  age), never from potential, and it is derived rather than stored, so it follows a transfer or a
+  promotion by itself and needs no save field. The floor never caps anything: a club that has actually
+  scouted a famous player keeps its own, better read.
+
+That third dial is what makes a world-wide **search** compatible with a scouting network. The manager
+may look at any of the ~26,000 players in a Large database, but what he reads is knowledge-bound: the
+anonymous majority shows a name, a role and a useless band, while the continent's best striker reads
+nearly as well as a scouted player — because in football he would. Finding the unknown 18-year-old is
+still, structurally, a scout's job: nothing public correlates with potential.
+
+The search itself runs on `WorldPlayerIndex`: the world flattened once into parallel primitive arrays
+in world order, with contiguous slices per club and per nation (a continent is a handful of slices) and
+the public-knowledge floor precomputed. It is a snapshot holding live references — rebuilt when the
+world moves (the client stamps it with the career day), never patched — and it is optional everywhere:
+`ScoutingDiscovery` takes one if the host has built one and walks the object graph if not, which is why
+turning it on changed no result anywhere.
+
 ---
 
 ## 5. Unity Client Architecture
@@ -318,3 +350,7 @@ Navigation = a `ScreenNavigator` managing a stack of UI Toolkit screens (cheap, 
 | 10 | World stays procedurally generated; real names arrive as player mods (nation atlas + naming cultures are injectable data) | No licensing exposure, determinism kept, and modding is a feature rather than a fork |
 | 11 | Three league detail levels (Playable / Background / DataOnly) with a cheap non-engine resolver for background results | A 26k-player world cannot run thousands of full simulations a matchday on a phone; measured at ~0.5s for a whole world season |
 | 12 | World scope (playable nations + database size) is fixed at career creation | The world is a function of (seed, scope); expanding it mid-save would renumber clubs and players |
+| 13 | A player's public reputation grants free knowledge (a floor, never a ceiling), derived from public facts and never from potential | Lets the manager browse a 26k-player world without replacing his scouts: everyone knows roughly how good the famous are, nobody has heard of the rest, and the unknown wonderkid still has to be found |
+| 14 | World-wide search runs on a flat, rebuildable index (`WorldPlayerIndex`), never on a walk of the object graph, and is always PAGED | A keystroke that walks nations → leagues → clubs → squads is unusable on a phone; and 26,000 rows must never be built as UI |
+| 15 | Auctions are the RANKED mode's market mechanic; a private league trades like single player, and its free agents are signed by agreeing terms with the player — first come first served | One market model per mode instead of two half-markets: friends negotiate, the ladder bids. Decided with the user 2026-08-25 (Roadmap 12.1/12.2) |
+| 16 | A ranked world carries its own IANA time zone and every matchday kicks off at 21:00 local to that zone; clients always render the instant in the device's zone | One memorable appointment per day for the region the world serves (an Italian world at 21:00 reads 20:00 in the UK), and nobody on a US server is asked to turn up at 05:00. Storing the zone rather than a UTC offset keeps DST honest. Decided with the user 2026-08-25 (Roadmap 12.3) |

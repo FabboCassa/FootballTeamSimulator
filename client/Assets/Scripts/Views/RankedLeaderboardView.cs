@@ -8,8 +8,8 @@ namespace Fts.Views
     /// <summary>
     /// Dumb view for the ladder's ranking screen (Phase 9.3): two tabs — the global LEADERBOARD (every coach
     /// by rating) and the caller's PALMARÈS (rating, career best, seasons played and the award history).
-    /// Same shape as the ranked market screen: the presenter formats every string and hands over rows; the
-    /// view only emits events and renders. No Sim.Core or Services references — primitives only.
+    /// On the shared page scaffold: segmented tabs, one panel of striped rows filling the page, and
+    /// Back / Refresh in the footer. No Sim.Core or Services references — primitives only.
     /// </summary>
     public sealed class RankedLeaderboardView
     {
@@ -45,65 +45,56 @@ namespace Fts.Views
             _tr = tr;
 
             Root = UiKit.ScreenRoot();
-
-            var col = UiKit.PageColumn(UiKit.WidthWide);
-            col.style.flexGrow = 1f;
+            VisualElement col = UiKit.PageColumn(UiKit.WidthWide);
             Root.Add(col);
 
             _header = UiKit.ScreenTitle(string.Empty);
             col.Add(_header);
 
-            _summary = UiKit.Caption(string.Empty);
-            _summary.style.unityTextAlign = TextAnchor.MiddleCenter;
-            _summary.style.whiteSpace = WhiteSpace.Normal;
+            _summary = UiKit.HelpText(string.Empty);
             col.Add(_summary);
 
-            var tabs = new VisualElement();
-            tabs.style.flexDirection = FlexDirection.Row;
-            tabs.style.justifyContent = Justify.Center;
-            tabs.style.flexShrink = 0f;
-            tabs.style.marginTop = UiKit.SpaceXs;
-            _tabBoard = TabButton(() => TabSelected?.Invoke(0));
-            _tabPalmares = TabButton(() => TabSelected?.Invoke(1));
-            _refreshButton = TabButton(() => RefreshClicked?.Invoke());
+            VisualElement tabs = UiKit.Toolbar();
+            _tabBoard = UiKit.TabButton(string.Empty, () => TabSelected?.Invoke(0));
+            _tabPalmares = UiKit.TabButton(string.Empty, () => TabSelected?.Invoke(1));
+            _tabPalmares.style.marginRight = 0;
             tabs.Add(_tabBoard);
             tabs.Add(_tabPalmares);
-            tabs.Add(_refreshButton);
             col.Add(tabs);
 
-            _list = new ScrollView();
-            _list.style.flexGrow = 1f;
-            _list.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
-            col.Add(_list);
+            VisualElement panel = UiKit.Panel(grow: true);
+            col.Add(panel);
+            _list = UiKit.ListScroll();
+            panel.Add(_list);
 
             _status = UiKit.Caption(string.Empty);
+            _status.style.marginTop = UiKit.SpaceXs;
             _status.style.whiteSpace = WhiteSpace.Normal;
+            _status.style.flexShrink = 0f;
             _status.style.display = DisplayStyle.None;
             col.Add(_status);
 
-            _backButton = UiKit.MenuButton(string.Empty, () => BackClicked?.Invoke());
-            _backButton.style.marginTop = UiKit.SpaceSm;
-            col.Add(_backButton);
+            VisualElement footer = UiKit.FooterBar();
+            _backButton = UiKit.FooterButton(string.Empty, () => BackClicked?.Invoke());
+            footer.Add(_backButton);
+            _refreshButton = UiKit.FooterButton(string.Empty, () => RefreshClicked?.Invoke());
+            footer.Add(_refreshButton);
+            col.Add(footer);
 
+            SetActiveTab(0);
             UpdateTexts();
         }
 
-        private static Button TabButton(Action onClick)
+        public void SetSummary(string text)
         {
-            var b = UiKit.MenuButton(string.Empty, onClick);
-            b.style.marginLeft = 4;
-            b.style.marginRight = 4;
-            b.style.paddingLeft = UiKit.SpaceSm;
-            b.style.paddingRight = UiKit.SpaceSm;
-            return b;
+            _summary.text = text ?? string.Empty;
+            _summary.style.display = string.IsNullOrEmpty(text) ? DisplayStyle.None : DisplayStyle.Flex;
         }
-
-        public void SetSummary(string text) => _summary.text = text;
 
         public void SetActiveTab(int tab)
         {
-            _tabBoard.style.backgroundColor = tab == 0 ? UiKit.AccentDark : UiKit.SurfaceAlt;
-            _tabPalmares.style.backgroundColor = tab == 1 ? UiKit.AccentDark : UiKit.SurfaceAlt;
+            UiKit.SetTabActive(_tabBoard, tab == 0);
+            UiKit.SetTabActive(_tabPalmares, tab == 1);
         }
 
         public void SetRows(IReadOnlyList<RowVm> rows)
@@ -111,27 +102,51 @@ namespace Fts.Views
             _list.Clear();
             if (rows == null || rows.Count == 0)
             {
-                _list.Add(UiKit.Caption(_tr("ranked.board.empty")));
+                Label empty = UiKit.PanelLine(_tr("ranked.board.empty"));
+                empty.style.color = UiKit.TextMuted;
+                _list.Add(empty);
                 return;
             }
 
-            foreach (var row in rows)
+            for (int i = 0; i < rows.Count; i++)
             {
-                var card = UiKit.Card();
+                RowVm vm = rows[i];
 
-                var title = UiKit.Caption(row.Title);
+                var row = new VisualElement();
+                row.style.flexDirection = FlexDirection.Row;
+                row.style.alignItems = Align.Center;
+                row.style.minHeight = 38;
+                row.style.flexShrink = 0f;
+                row.style.paddingLeft = UiKit.SpaceSm;
+                row.style.paddingRight = UiKit.SpaceSm;
+                row.style.paddingTop = 4;
+                row.style.paddingBottom = 4;
+                OnlineTableKit.Stripe(row, vm.Highlight, i);
+
+                var title = new Label(vm.Title ?? string.Empty);
+                title.style.fontSize = 14;
+                title.style.unityFontStyleAndWeight = FontStyle.Bold;
+                title.style.color = vm.Highlight ? UiKit.Accent : vm.Trophy ? UiKit.Positive : UiKit.TextPrimary;
+                title.style.flexGrow = 1f;
+                title.style.flexShrink = 1f;
+                title.style.minWidth = 0f;
                 title.style.whiteSpace = WhiteSpace.Normal;
-                title.style.color = row.Highlight ? UiKit.Accent : row.Trophy ? UiKit.Positive : UiKit.TextPrimary;
-                card.Add(title);
+                row.Add(title);
 
-                if (!string.IsNullOrEmpty(row.Detail))
+                if (!string.IsNullOrEmpty(vm.Detail))
                 {
-                    var detail = UiKit.Caption(row.Detail);
+                    var detail = new Label(vm.Detail);
+                    detail.style.fontSize = 13;
+                    detail.style.color = UiKit.TextMuted;
+                    detail.style.unityTextAlign = TextAnchor.MiddleRight;
+                    detail.style.flexShrink = 1f;
+                    detail.style.maxWidth = Length.Percent(45);
                     detail.style.whiteSpace = WhiteSpace.Normal;
-                    card.Add(detail);
+                    detail.style.marginLeft = UiKit.SpaceSm;
+                    row.Add(detail);
                 }
 
-                _list.Add(card);
+                _list.Add(row);
             }
         }
 

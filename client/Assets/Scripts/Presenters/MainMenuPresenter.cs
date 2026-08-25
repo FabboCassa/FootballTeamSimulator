@@ -42,6 +42,7 @@ namespace Fts.Presenters
             _view.AccountClicked += OnAccount;
             _view.OnlineLeaguesClicked += OnOnlineLeagues;
             _view.RankedClicked += OnRanked;
+            _view.WorldBenchClicked += OnWorldBench;
             _view.LanguageClicked += OnLanguage;
             Refresh();
         }
@@ -53,6 +54,7 @@ namespace Fts.Presenters
             _view.AccountClicked -= OnAccount;
             _view.OnlineLeaguesClicked -= OnOnlineLeagues;
             _view.RankedClicked -= OnRanked;
+            _view.WorldBenchClicked -= OnWorldBench;
             _view.LanguageClicked -= OnLanguage;
         }
 
@@ -61,6 +63,7 @@ namespace Fts.Presenters
         private void Refresh()
         {
             _view.SetContinueVisible(_saveRepository.HasSave);
+            _view.SetWorldBenchVisible(DevFlags.WorldBench);
             _view.SetLanguageLabel(_loc.Tr("mainmenu.language", _loc.CurrentLanguage.ToUpperInvariant()));
             _view.HideError();
         }
@@ -105,6 +108,10 @@ namespace Fts.Presenters
             else
                 _navigator.Push<LoginScreenPresenter>();
         }
+
+        // Task 11.3: the database bench, which is how Small / Medium / Large get measured on the
+        // targets that decide the shipped default (WebGL, mid-range Android) instead of on a desktop.
+        private void OnWorldBench() => _navigator.Push<WorldBenchScreenPresenter>();
 
         private void OnLanguage()
         {

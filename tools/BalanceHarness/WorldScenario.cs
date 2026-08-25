@@ -7,6 +7,7 @@ using Sim.Core.Config;
 using Sim.Core.Domain;
 using Sim.Core.Generation;
 using Sim.Core.Random;
+using Sim.Core.Scouting;
 
 namespace Fts.BalanceHarness;
 
@@ -58,6 +59,17 @@ internal static class WorldScenario
                 $"season={Fmt.N(m.SeasonMs, 0)}ms ({m.EngineMatches} engine in {Fmt.N(m.EngineMs, 0)}ms + {m.QuickMatches} quick in {Fmt.N(m.BackgroundMs, 0)}ms)");
         }
 
+        Console.WriteLine();
+        foreach (Measurement m in measured)
+        {
+            Console.WriteLine(
+                $"[world-search] {m.Players,6} players: index {Fmt.N(m.IndexMs, 1)}ms (best of 3) / {Fmt.N(m.IndexBytes / 1048576.0, 1)}MB · " +
+                $"whole world {Fmt.N(m.WorldSearchMs, 1)}ms ({m.SearchTotal} hits) · " +
+                $"young strikers {Fmt.N(m.FilteredSearchMs, 1)}ms ({m.FilteredTotal} hits) · " +
+                $"continental scan walk {Fmt.N(m.WalkScanMs, 2)}ms vs index {Fmt.N(m.IndexScanMs, 2)}ms (avg of 20) · " +
+                $"publicly known {m.PubliclyKnown} ({Fmt.Pct(m.Players == 0 ? 0 : (double)m.PubliclyKnown / m.Players)})");
+        }
+
         Measurement large = measured[^1];
         Measurement small = measured[0];
 
@@ -88,6 +100,20 @@ internal static class WorldScenario
         checks.Check("world/save-size",
             large.GzipBytes <= LargeSaveBudgetBytes,
             $"Large save is {Fmt.N(large.GzipBytes / 1048576.0, 2)}MB gzipped against a {LargeSaveBudgetBytes / 1048576}MB budget");
+
+        // --- task 11.3: searching the big database ----------------------------------------------
+
+        checks.Check("world/search-fast",
+            large.WorldSearchMs < 250,
+            $"a query across the whole {large.Players}-player world returns in {Fmt.N(large.WorldSearchMs, 1)}ms (avg of 20) (budget 250ms, the \u2705 asks for under a second)");
+
+        checks.Check("world/search-index-agrees",
+            large.ScanAgrees,
+            "the indexed discovery scan returns exactly what the task 11.2 walk returned, in the same order");
+
+        checks.Info($"the search index costs {Fmt.N(large.IndexMs, 1)}ms and {Fmt.N(large.IndexBytes / 1048576.0, 1)}MB on a Large world - paid once, when the search tab is first opened");
+        checks.Info($"a continental scouting scan costs {Fmt.N(large.WalkScanMs, 2)}ms walking the world against {Fmt.N(large.IndexScanMs, 2)}ms through the index (average of 20 warmed runs) - that is the weekly tick, once per scout");
+        checks.Info($"public knowledge (task 11.3): {Fmt.Pct(large.Players == 0 ? 0 : (double)large.PubliclyKnown / large.Players)} of a Large world is famous enough to read without a scout at all");
 
         // --- the cheap resolver against the real engine -----------------------------------------
 
@@ -120,6 +146,12 @@ internal static class WorldScenario
         public double GenerationMs, SeasonMs, EngineMs, BackgroundMs;
         public long HeapBytes, JsonBytes, GzipBytes;
         public bool Deterministic, UniqueIds, SeasonComplete;
+
+        // --- task 11.3: the search index -------------------------------------------------------
+        public double IndexMs, WorldSearchMs, FilteredSearchMs, WalkScanMs, IndexScanMs;
+        public long IndexBytes;
+        public int SearchTotal, FilteredTotal, PubliclyKnown;
+        public bool ScanAgrees;
     }
 
     private static WorldGenerationOptions Options(DatabaseSize size, HarnessOptions opt)
@@ -156,6 +188,8 @@ internal static class WorldScenario
         m.JsonBytes = json.Length;
         m.GzipBytes = GzipSize(json);
 
+        MeasureSearch(m, world, opt, cfg);
+
         // A whole world season: the player's divisions through the real engine, the rest cheaply.
         Season season = FirstSeason(world, opt.Seed, cfg);
         var progressor = new SeasonProgressor(cfg);
@@ -190,6 +224,100 @@ internal static class WorldScenario
         m.SeasonComplete = season.Fixtures.All(f => f.Played) && world.BackgroundSeason.Fixtures.All(f => f.Played);
 
         return m;
+    }
+
+    /// <summary>
+    /// Task 11.3: what it costs to SEARCH the database that task 11.1 made big.
+    ///
+    /// Three numbers matter here. How long the flat index takes to build and what it weighs (the
+    /// client pays that once, when the search tab is first opened). How long a whole-world query
+    /// takes — the ✅ says "under a second", and the honest target is a fraction of a frame, since
+    /// this runs on every keystroke. And the walk-versus-index comparison on a continental scouting
+    /// scan, which is the weekly cost task 11.2 left behind and 11.3 was meant to remove.
+    /// </summary>
+    private static void MeasureSearch(Measurement m, World world, HarnessOptions opt, BalanceConfig cfg)
+    {
+        ScoutingBalance scouting = cfg.Scouting;
+
+        // Everything here runs in single-digit milliseconds, which is exactly the range where a
+        // single shot measures the JIT and the garbage collector instead of the code. The first run
+        // of this bench proved it: the walk-versus-index comparison came out 2.5 vs 0.1 on Small,
+        // 0.1 vs 2.7 on Medium and 0.4 vs 0.3 on Large - noise, in three different directions. So
+        // every timing below is warmed first and then averaged over Repeats runs, and the index
+        // build - too allocation-heavy to repeat many times - is the best of three.
+        const int Repeats = 20;
+        const int Builds = 3;
+
+        long baseline = GC.GetTotalMemory(true);
+        WorldPlayerIndex index = WorldPlayerIndex.Build(world, scouting);
+        m.IndexBytes = Math.Max(0, GC.GetTotalMemory(true) - baseline);
+
+        double bestBuild = double.MaxValue;
+        for (int i = 0; i < Builds; i++)
+        {
+            var buildClock = Stopwatch.StartNew();
+            WorldPlayerIndex.Build(world, scouting);
+            buildClock.Stop();
+            bestBuild = Math.Min(bestBuild, buildClock.Elapsed.TotalMilliseconds);
+        }
+
+        m.IndexMs = bestBuild;
+
+        for (int slot = 0; slot < index.Count; slot++)
+        {
+            if (index.FloorAt(slot) > 0)
+                m.PubliclyKnown++;
+        }
+
+        var everyone = new PlayerSearchQuery { PageSize = 20, ExcludeOwnClub = false };
+        var wonderkids = new PlayerSearchQuery
+        {
+            Filters = new ScoutingFilters { Role = (int)PositionRole.Striker, MaxAge = 23 },
+            Sort = PlayerSearchSort.Potential,
+            PageSize = 20,
+            ExcludeOwnClub = false
+        };
+
+        // The weekly continental scan, both ways. Same brief, same knowledge, same everything - the
+        // only difference is whether the area is reached through the index or by walking the graph.
+        var knowledge = new KnowledgeStore();
+        var brief = new ScoutingAssignment
+        {
+            ScoutId = 1,
+            Area = ScoutingArea.ForContinent(Continent.Europe),
+            Filters = new ScoutingFilters { Role = (int)PositionRole.Striker, MaxAge = 24 }
+        };
+
+        // Warm every path before any of them is timed.
+        m.SearchTotal = index.Search(everyone, null, opt.Seed, ScoutQuality.Neutral).Total;
+        m.FilteredTotal = index.Search(wonderkids, null, opt.Seed, ScoutQuality.Neutral).Total;
+        List<ScoutingDiscovery.Candidate> walked =
+            ScoutingDiscovery.Scan(world, brief, knowledge, opt.Seed, 0, ScoutQuality.Neutral, 10, scouting);
+        List<ScoutingDiscovery.Candidate> indexed =
+            ScoutingDiscovery.Scan(world, brief, knowledge, opt.Seed, 0, ScoutQuality.Neutral, 10, scouting, index);
+
+        m.ScanAgrees = walked.Count == indexed.Count;
+        for (int i = 0; m.ScanAgrees && i < walked.Count; i++)
+            m.ScanAgrees = walked[i].PlayerId == indexed[i].PlayerId
+                           && walked[i].EstimatedOverall == indexed[i].EstimatedOverall;
+
+        m.WorldSearchMs = Average(Repeats, () => index.Search(everyone, null, opt.Seed, ScoutQuality.Neutral));
+        m.FilteredSearchMs = Average(Repeats, () => index.Search(wonderkids, null, opt.Seed, ScoutQuality.Neutral));
+        m.WalkScanMs = Average(Repeats, () =>
+            ScoutingDiscovery.Scan(world, brief, knowledge, opt.Seed, 0, ScoutQuality.Neutral, 10, scouting));
+        m.IndexScanMs = Average(Repeats, () =>
+            ScoutingDiscovery.Scan(world, brief, knowledge, opt.Seed, 0, ScoutQuality.Neutral, 10, scouting, index));
+    }
+
+    /// <summary>Milliseconds per run, averaged over <paramref name="repeats"/> warmed runs.</summary>
+    private static double Average(int repeats, Func<object> work)
+    {
+        var clock = Stopwatch.StartNew();
+        for (int i = 0; i < repeats; i++)
+            work();
+
+        clock.Stop();
+        return clock.Elapsed.TotalMilliseconds / Math.Max(1, repeats);
     }
 
     /// <summary>The career season the host builds for the playable leagues (mirrors task 11.1b).</summary>

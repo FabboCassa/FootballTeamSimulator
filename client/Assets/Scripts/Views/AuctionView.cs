@@ -5,24 +5,46 @@ using UnityEngine.UIElements;
 
 namespace Fts.Views
 {
-    /// <summary>One auction lot row as the view renders it — the presenter formats every string.</summary>
+    /// <summary>One auction lot row as the view renders it — the presenter formats every string and
+    /// resolves the reparto colour group.</summary>
     public sealed class AuctionRowVm
     {
         public string AuctionId;
-        public string Title;      // "Sandro Roversi · ST · OVR 78"
+        public int PlayerExternalId;
+        public string PlayerName;
+        /// <summary>0 GK · 1 def · 2 mid · 3 att → the role chip's colour.</summary>
+        public int RoleGroup;
+        public string RoleAbbr;
+        public int Age;
+        public int Overall;
         public string PriceInfo;  // "Base €300k · Offerta €1.1M"
-        public string LeaderInfo; // "Leader: Milano FC" / "—"
+        public string LeaderInfo; // "Offerta di Milano FC" / "Nessuna offerta"
         public string Countdown;  // "0:45" / "chiuso"
-        public bool CanBid;       // window open AND lot still open
+        /// <summary>Short badge on the right of the name: leading / outbid / won. Null = none.</summary>
+        public string Badge;
+        /// <summary>0 none · 1 you lead (green) · 2 you were outbid (red) · 3 you won him (accent).</summary>
+        public int BadgeKind;
+        public bool CanBid;       // window open AND lot still open AND you are not already leading
         public bool Dimmed;       // settled / unsold → greyed
+        public bool Favorite;     // starred: followed without necessarily having bid
+        public bool CanFavorite = true;
+    }
+
+    /// <summary>A block of lots under a caption (used by the "my bids" tab: leading / outbid / bought).</summary>
+    public sealed class AuctionGroupVm
+    {
+        public string Caption;
+        public IReadOnlyList<AuctionRowVm> Rows;
+        /// <summary>Shown when the block has no rows (null = hide the block entirely).</summary>
+        public string EmptyText;
     }
 
     /// <summary>
-    /// Online auction screen (task 8.5b): the current window's free-agent lots, the caller's budget, the
-    /// creator's open/close controls, and an inline bid panel. Dumb view — the presenter owns all state,
-    /// runs the ~1s polling refresh, formats every label, and validates bids server-side; the view only
-    /// emits events and renders the strings it is handed. Reached from the league lobby when the season is
-    /// active.
+    /// Online auction screen (task 8.5b), reworked so the room is readable: the budget picture as tiles
+    /// (total · committed on lots you lead · what is actually left to bid), three tabs — every LOT, YOUR
+    /// activity (leading / outbid / bought) and your FOLLOWED players — rows that carry the reparto colour
+    /// and say plainly who bid and how much, and a bid control that raises in round steps instead of asking
+    /// for a figure to the euro. Dumb view: the presenter owns all state, polls, and validates server-side.
     /// </summary>
     public sealed class AuctionView
     {
@@ -30,146 +52,140 @@ namespace Fts.Views
         public event Action CloseWindowClicked;
         public event Action RefreshClicked;
         public event Action BotBidClicked; // dev-only
+        public event Action<int> TabSelected;                 // 0 lots, 1 mine, 2 followed
         public event Action<string> BidClicked;               // auctionId to bid on
+        public event Action<int> FavoriteToggled;             // player external id
         public event Action<string, long> BidConfirmClicked;  // auctionId, amount
         public event Action BidCancelClicked;
         public event Action BackClicked;
 
         public VisualElement Root { get; }
 
+        private readonly Func<string, string> _tr;
+
         private readonly Label _header;
-        private readonly Label _budget;
+        private readonly VisualElement _budgetTile;
+        private readonly VisualElement _committedTile;
+        private readonly VisualElement _availableTile;
         private readonly Label _banner;
         private readonly Button _openButton;
         private readonly Button _closeButton;
         private readonly Button _refreshButton;
         private readonly Button _botBidButton; // dev-only
+        private readonly Button[] _tabs;
         private readonly ScrollView _lotList;
+        private readonly BidPanel _bid;
         private readonly Label _status;
+        private readonly Button _backButton;
 
-        // Inline bid panel.
-        private readonly VisualElement _bidPanel;
-        private readonly Label _bidTitle;
-        private readonly Label _bidInfo;
-        private readonly TextField _bidField;
-        private readonly Button _bidConfirm;
-        private readonly Func<string, string> _tr;
-
-        private string _bidAuctionId;
-        private long _bidStep = 25_000;
-
-        public AuctionView(Func<string, string> tr)
+        public AuctionView(Func<string, string> tr, Func<long, string> money)
         {
             _tr = tr;
 
             Root = UiKit.ScreenRoot();
-
-            var col = UiKit.PageColumn(UiKit.WidthMedium);
-            col.style.flexGrow = 1f;
+            VisualElement col = UiKit.PageColumn(UiKit.WidthWide);
             Root.Add(col);
 
             _header = UiKit.ScreenTitle(string.Empty);
-            _header.style.marginBottom = UiKit.SpaceXs;
+            _header.style.marginBottom = UiKit.SpaceSm;
             col.Add(_header);
 
-            _budget = new Label(string.Empty);
-            _budget.style.unityTextAlign = TextAnchor.MiddleCenter;
-            _budget.style.fontSize = 14;
-            _budget.style.marginBottom = 4;
-            col.Add(_budget);
+            // ---- budget: the answer to "how much can I actually bid?" ---------------------------
+            VisualElement tiles = UiKit.TileRow();
+            _budgetTile = UiKit.StatTile(tr("auction.tile_budget"), string.Empty, null, 180f);
+            _committedTile = UiKit.StatTile(tr("auction.tile_committed"), string.Empty, UiKit.Warning, 180f);
+            _availableTile = UiKit.StatTile(tr("auction.tile_available"), string.Empty, UiKit.Accent, 180f);
+            tiles.Add(_budgetTile);
+            tiles.Add(_committedTile);
+            tiles.Add(_availableTile);
+            col.Add(tiles);
 
-            _banner = new Label(string.Empty);
-            _banner.style.unityTextAlign = TextAnchor.MiddleCenter;
-            _banner.style.fontSize = 13;
-            _banner.style.color = UiKit.TextMuted;
-            _banner.style.marginBottom = UiKit.SpaceXs;
-            col.Add(_banner);
+            // ---- window state + controls ---------------------------------------------------------
+            VisualElement head = UiKit.Panel();
+            col.Add(head);
+            _banner = UiKit.PanelLine(string.Empty);
+            _banner.style.fontSize = 15;
+            _banner.style.unityFontStyleAndWeight = FontStyle.Bold;
+            head.Add(_banner);
 
-            // Creator / refresh controls.
-            var controls = new VisualElement();
-            controls.style.flexDirection = FlexDirection.Row;
-            controls.style.justifyContent = Justify.Center;
-            controls.style.marginBottom = UiKit.SpaceXs;
-            controls.style.flexShrink = 0f;
-            _openButton = ControlButton(tr("auction.open_window"), () => OpenWindowClicked?.Invoke());
-            _closeButton = ControlButton(tr("auction.close_window"), () => CloseWindowClicked?.Invoke());
-            _refreshButton = ControlButton(tr("auction.refresh"), () => RefreshClicked?.Invoke());
-            _botBidButton = ControlButton(tr("auction.bot_bid"), () => BotBidClicked?.Invoke());
+            VisualElement controls = UiKit.Toolbar();
+            controls.style.marginTop = UiKit.SpaceSm;
+            controls.style.marginBottom = 0;
+            head.Add(controls);
+            _openButton = Control(controls, () => OpenWindowClicked?.Invoke(), 160f);
+            UiKit.SetSmallButtonAccent(_openButton, true);
+            _closeButton = Control(controls, () => CloseWindowClicked?.Invoke(), 160f);
+            _refreshButton = Control(controls, () => RefreshClicked?.Invoke(), 120f);
+            _botBidButton = Control(controls, () => BotBidClicked?.Invoke(), 150f);
             _botBidButton.style.display = DisplayStyle.None; // dev-only, shown by the presenter
-            controls.Add(_openButton);
-            controls.Add(_closeButton);
-            controls.Add(_refreshButton);
-            controls.Add(_botBidButton);
-            col.Add(controls);
 
-            _lotList = new ScrollView();
-            _lotList.style.flexGrow = 1f;
-            _lotList.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
-            col.Add(_lotList);
+            // ---- tabs -----------------------------------------------------------------------------
+            VisualElement tabRow = UiKit.Toolbar();
+            string[] tabKeys = { "auction.tab_lots", "auction.tab_mine", "auction.tab_followed" };
+            _tabs = new Button[tabKeys.Length];
+            for (int i = 0; i < tabKeys.Length; i++)
+            {
+                int index = i;
+                _tabs[i] = UiKit.TabButton(tr(tabKeys[i]), () => TabSelected?.Invoke(index));
+                tabRow.Add(_tabs[i]);
+            }
+            _tabs[_tabs.Length - 1].style.marginRight = 0;
+            col.Add(tabRow);
 
-            // Inline bid panel (hidden until a lot is chosen).
-            _bidPanel = new VisualElement();
-            _bidPanel.style.display = DisplayStyle.None;
-            _bidPanel.style.marginTop = UiKit.SpaceXs;
-            _bidPanel.style.paddingTop = UiKit.SpaceSm;
-            _bidPanel.style.paddingBottom = UiKit.SpaceSm;
-            _bidPanel.style.paddingLeft = UiKit.SpaceSm;
-            _bidPanel.style.paddingRight = UiKit.SpaceSm;
-            _bidPanel.style.backgroundColor = UiKit.Surface;
-            _bidPanel.style.flexShrink = 0f;
-            UiKit.Round(_bidPanel, UiKit.RadiusSm);
+            VisualElement listPanel = UiKit.Panel(grow: true);
+            col.Add(listPanel);
+            _lotList = UiKit.ListScroll();
+            listPanel.Add(_lotList);
 
-            _bidTitle = new Label(string.Empty);
-            _bidTitle.style.fontSize = 14;
-            _bidTitle.style.unityFontStyleAndWeight = FontStyle.Bold;
-            _bidPanel.Add(_bidTitle);
-
-            _bidInfo = new Label(string.Empty);
-            _bidInfo.style.fontSize = 12;
-            _bidInfo.style.color = UiKit.TextMuted;
-            _bidInfo.style.marginBottom = 4;
-            _bidPanel.Add(_bidInfo);
-
-            var amountRow = new VisualElement();
-            amountRow.style.flexDirection = FlexDirection.Row;
-            amountRow.style.alignItems = Align.Center;
-            amountRow.Add(StepButton("-", () => Nudge(-1)));
-            _bidField = new TextField();
-            _bidField.style.flexGrow = 1f;
-            _bidField.style.marginLeft = 4;
-            _bidField.style.marginRight = 4;
-            _bidField.RegisterValueChangedCallback(OnBidFieldChanged);
-            amountRow.Add(_bidField);
-            amountRow.Add(StepButton("+", () => Nudge(1)));
-            _bidPanel.Add(amountRow);
-
-            var bidButtons = new VisualElement();
-            bidButtons.style.flexDirection = FlexDirection.Row;
-            bidButtons.style.justifyContent = Justify.Center;
-            bidButtons.style.marginTop = 6;
-            _bidConfirm = ControlButton(tr("auction.confirm_bid"), OnConfirm);
-            bidButtons.Add(_bidConfirm);
-            bidButtons.Add(ControlButton(tr("auction.cancel"), () => { HideBidPanel(); BidCancelClicked?.Invoke(); }));
-            _bidPanel.Add(bidButtons);
-
-            col.Add(_bidPanel);
-
-            VisualElement footer = UiKit.FooterBar();
-            footer.Add(FooterButton(tr("common.back"), () => BackClicked?.Invoke()));
-            col.Add(footer);
+            // ---- bid control ------------------------------------------------------------------------
+            _bid = new BidPanel(money);
+            _bid.Confirmed += (id, amount) => BidConfirmClicked?.Invoke(id, amount);
+            _bid.Cancelled += () => BidCancelClicked?.Invoke();
+            col.Add(_bid.Root);
 
             _status = UiKit.Caption(string.Empty);
             _status.style.marginTop = UiKit.SpaceXs;
-            _status.style.alignSelf = Align.Center;
+            _status.style.whiteSpace = WhiteSpace.Normal;
             _status.style.flexShrink = 0f;
             col.Add(_status);
+
+            VisualElement footer = UiKit.FooterBar();
+            _backButton = UiKit.FooterButton(tr("common.back"), () => BackClicked?.Invoke());
+            footer.Add(_backButton);
+            col.Add(footer);
+
+            SetActiveTab(0);
+            UpdateTexts();
+        }
+
+        private static Button Control(VisualElement parent, Action onClick, float minWidth)
+        {
+            Button b = UiKit.SmallButton(string.Empty, onClick, minWidth);
+            b.style.marginLeft = 0;
+            b.style.marginRight = 6;
+            b.style.marginBottom = 4;
+            parent.Add(b);
+            return b;
         }
 
         // --- presenter API -------------------------------------------------------------------------
 
         public void SetHeader(string text) => _header.text = text;
-        public void SetBudget(string text) => _budget.text = text;
         public void SetStatus(string text) => _status.text = text;
+
+        /// <summary>The three budget figures, already formatted.</summary>
+        public void SetBudget(string budget, string committed, string available)
+        {
+            UiKit.SetStatTileValue(_budgetTile, budget);
+            UiKit.SetStatTileValue(_committedTile, committed, UiKit.Warning);
+            UiKit.SetStatTileValue(_availableTile, available, UiKit.Accent);
+        }
+
+        public void SetActiveTab(int index)
+        {
+            for (int i = 0; i < _tabs.Length; i++)
+                UiKit.SetTabActive(_tabs[i], i == index);
+        }
 
         /// <summary>Shows the dev-only "bots bid" button (DevFlags-gated by the presenter).</summary>
         public void SetDevToolsVisible(bool visible) =>
@@ -179,142 +195,177 @@ namespace Fts.Views
         public void SetWindow(string banner, bool creator, bool windowOpen)
         {
             _banner.text = banner;
+            _banner.style.color = windowOpen ? UiKit.Positive : UiKit.TextMuted;
             _openButton.style.display = creator && !windowOpen ? DisplayStyle.Flex : DisplayStyle.None;
             _closeButton.style.display = creator && windowOpen ? DisplayStyle.Flex : DisplayStyle.None;
         }
 
-        public void SetLots(IReadOnlyList<AuctionRowVm> lots)
+        /// <summary>Renders the current tab as one or more captioned blocks of lots.</summary>
+        public void SetGroups(IReadOnlyList<AuctionGroupVm> groups)
         {
             _lotList.Clear();
-            foreach (AuctionRowVm vm in lots) _lotList.Add(BuildRow(vm));
+            if (groups == null) return;
+
+            int index = 0;
+            for (int g = 0; g < groups.Count; g++)
+            {
+                AuctionGroupVm group = groups[g];
+                bool empty = group.Rows == null || group.Rows.Count == 0;
+                if (empty && string.IsNullOrEmpty(group.EmptyText)) continue;
+
+                if (!string.IsNullOrEmpty(group.Caption))
+                {
+                    Label caption = UiKit.SectionLabel(group.Caption);
+                    caption.style.marginTop = g == 0 ? 0 : UiKit.SpaceSm;
+                    _lotList.Add(caption);
+                }
+
+                if (empty)
+                {
+                    Label none = UiKit.PanelLine(group.EmptyText);
+                    none.style.color = UiKit.TextMuted;
+                    none.style.marginBottom = UiKit.SpaceXs;
+                    _lotList.Add(none);
+                    continue;
+                }
+
+                foreach (AuctionRowVm vm in group.Rows)
+                    _lotList.Add(BuildRow(vm, index++));
+            }
         }
 
-        /// <summary>Opens the inline bid panel for a lot. <paramref name="suggested"/> pre-fills the field
-        /// (the minimum legal bid); <paramref name="step"/> is the +/- increment.</summary>
-        public void ShowBidPanel(string auctionId, string title, string info, long suggested, long step)
+        /// <summary>Opens the bid control for a lot.</summary>
+        public void ShowBidPanel(BidPanelVm vm) => _bid.Show(vm);
+
+        public void HideBidPanel() => _bid.Hide();
+
+        public bool BidPanelOpen => _bid.IsOpen;
+
+        public void SetBusy(bool busy)
         {
-            _bidAuctionId = auctionId;
-            _bidStep = step > 0 ? step : 25_000;
-            _bidTitle.text = title;
-            _bidInfo.text = info;
-            _bidField.SetValueWithoutNotify(suggested.ToString());
-            _bidPanel.style.display = DisplayStyle.Flex;
+            _refreshButton.SetEnabled(!busy);
+            _openButton.SetEnabled(!busy);
+            _closeButton.SetEnabled(!busy);
+            _botBidButton.SetEnabled(!busy);
+            _bid.SetBusy(busy);
         }
 
-        public void HideBidPanel()
+        public void UpdateTexts()
         {
-            _bidAuctionId = null;
-            _bidPanel.style.display = DisplayStyle.None;
+            _openButton.text = _tr("auction.open_window");
+            _closeButton.text = _tr("auction.close_window");
+            _refreshButton.text = _tr("auction.refresh");
+            _botBidButton.text = _tr("auction.bot_bid");
+            _backButton.text = _tr("common.back");
+            for (int i = 0; i < _tabs.Length; i++)
+                _tabs[i].text = _tr(i == 0 ? "auction.tab_lots" : i == 1 ? "auction.tab_mine" : "auction.tab_followed");
         }
 
-        // --- internals -----------------------------------------------------------------------------
+        // --- rows ------------------------------------------------------------------------------------
 
-        private VisualElement BuildRow(AuctionRowVm vm)
+        private VisualElement BuildRow(AuctionRowVm vm, int index)
         {
             string auctionId = vm.AuctionId;
 
             var row = new VisualElement();
             row.style.flexDirection = FlexDirection.Row;
             row.style.alignItems = Align.Center;
-            row.style.marginBottom = 4;
-            row.style.paddingLeft = 10;
-            row.style.paddingRight = 6;
-            row.style.paddingTop = 6;
-            row.style.paddingBottom = 6;
-            row.style.backgroundColor = UiKit.Surface;
-            row.style.opacity = vm.Dimmed ? 0.55f : 1f;
-            UiKit.Round(row, UiKit.RadiusSm);
+            row.style.minHeight = 56;
+            row.style.flexShrink = 0f;
+            row.style.paddingLeft = UiKit.SpaceSm;
+            row.style.paddingRight = UiKit.SpaceSm;
+            row.style.paddingTop = 5;
+            row.style.paddingBottom = 5;
+            OnlineTableKit.Stripe(row, vm.BadgeKind == 1 || vm.BadgeKind == 3, index);
+            if (vm.Dimmed) row.style.opacity = 0.55f;
+
+            // Reparto colour first: the list reads as a squad, not as a spreadsheet.
+            VisualElement chip = PlayerRowKit.RoleChip(vm.RoleAbbr, vm.RoleGroup, 46f);
+            chip.style.height = 30;
+            chip.style.marginRight = UiKit.SpaceSm;
+            chip.pickingMode = PickingMode.Ignore;
+            row.Add(chip);
 
             var info = new VisualElement();
             info.style.flexGrow = 1f;
-            var title = new Label(vm.Title);
-            title.style.fontSize = 13;
-            title.style.unityFontStyleAndWeight = FontStyle.Bold;
-            info.Add(title);
-            var price = new Label(vm.PriceInfo);
-            price.style.fontSize = 12;
-            price.style.color = UiKit.TextMuted;
-            info.Add(price);
-            var leader = new Label(vm.LeaderInfo);
-            leader.style.fontSize = 12;
-            leader.style.color = UiKit.TextMuted;
-            info.Add(leader);
+            info.style.flexShrink = 1f;
+            info.style.minWidth = 0f;
             row.Add(info);
 
+            VisualElement nameRow = UiKit.Row();
+            info.Add(nameRow);
+            var name = new Label(vm.PlayerName ?? string.Empty);
+            name.style.fontSize = 14;
+            name.style.unityFontStyleAndWeight = FontStyle.Bold;
+            name.style.color = UiKit.TextPrimary;
+            name.style.flexShrink = 1f;
+            name.style.whiteSpace = WhiteSpace.NoWrap;
+            name.style.overflow = Overflow.Hidden;
+            name.style.textOverflow = TextOverflow.Ellipsis;
+            nameRow.Add(name);
+
+            var meta = new Label(string.Format(_tr("auction.row_meta"), vm.Age, vm.Overall));
+            meta.style.fontSize = 12;
+            meta.style.color = UiKit.TextMuted;
+            meta.style.marginLeft = UiKit.SpaceSm;
+            meta.style.flexShrink = 0f;
+            nameRow.Add(meta);
+
+            if (!string.IsNullOrEmpty(vm.Badge))
+            {
+                Color background =
+                    vm.BadgeKind == 1 ? UiKit.AccentDark :
+                    vm.BadgeKind == 2 ? UiKit.Danger :
+                    vm.BadgeKind == 3 ? UiKit.Accent : UiKit.SurfaceAlt;
+                Label badge = UiKit.Pill(vm.Badge, background, UiKit.TextPrimary);
+                badge.style.fontSize = 11;
+                badge.style.marginLeft = UiKit.SpaceSm;
+                badge.style.flexShrink = 0f;
+                nameRow.Add(badge);
+            }
+
+            var price = new Label(vm.PriceInfo ?? string.Empty);
+            price.style.fontSize = 13;
+            price.style.color = UiKit.TextPrimary;
+            info.Add(price);
+
+            var leader = new Label(vm.LeaderInfo ?? string.Empty);
+            leader.style.fontSize = 12;
+            leader.style.color = vm.BadgeKind == 1 ? UiKit.Positive : UiKit.TextMuted;
+            info.Add(leader);
+
+            // Right-hand column: the clock, then the actions.
             var right = new VisualElement();
             right.style.alignItems = Align.FlexEnd;
             right.style.flexShrink = 0f;
-            var clock = new Label(vm.Countdown);
-            clock.style.fontSize = 12;
-            clock.style.marginBottom = 2;
-            right.Add(clock);
-            if (vm.CanBid)
-            {
-                var bid = new Button(() => BidClicked?.Invoke(auctionId)) { text = _tr("auction.bid") };
-                bid.style.height = 30;
-                bid.style.width = 96;
-                bid.style.fontSize = 13;
-                right.Add(bid);
-            }
             row.Add(right);
+
+            var clock = new Label(vm.Countdown ?? string.Empty);
+            clock.style.fontSize = 12;
+            clock.style.color = UiKit.TextMuted;
+            clock.style.marginBottom = 3;
+            right.Add(clock);
+
+            VisualElement actions = UiKit.Row();
+            right.Add(actions);
+
+            if (vm.CanFavorite)
+            {
+                int playerId = vm.PlayerExternalId;
+                Button star = UiKit.SmallButton(vm.Favorite ? "★" : "☆", () => FavoriteToggled?.Invoke(playerId), 44f);
+                star.tooltip = _tr(vm.Favorite ? "auction.unfollow" : "auction.follow");
+                UiKit.SetSmallButtonOn(star, vm.Favorite);
+                actions.Add(star);
+            }
+
+            if (vm.CanBid && !string.IsNullOrEmpty(auctionId))
+            {
+                Button bid = UiKit.SmallButton(_tr("auction.bid"), () => BidClicked?.Invoke(auctionId), 96f);
+                UiKit.SetSmallButtonAccent(bid, true);
+                actions.Add(bid);
+            }
 
             return row;
         }
-
-        private void Nudge(int direction)
-        {
-            long current = ParseAmount();
-            long next = current + direction * _bidStep;
-            if (next < 0) next = 0;
-            _bidField.SetValueWithoutNotify(next.ToString());
-        }
-
-        private void OnConfirm()
-        {
-            if (string.IsNullOrEmpty(_bidAuctionId)) return;
-            BidConfirmClicked?.Invoke(_bidAuctionId, ParseAmount());
-        }
-
-        private long ParseAmount()
-        {
-            long value = 0;
-            string t = _bidField.value;
-            if (!string.IsNullOrEmpty(t))
-                foreach (char c in t)
-                    if (c >= '0' && c <= '9') value = value * 10 + (c - '0');
-            return value;
-        }
-
-        // Keep the field digits-only without fighting the caret.
-        private void OnBidFieldChanged(ChangeEvent<string> evt)
-        {
-            string cleaned = string.Empty;
-            if (!string.IsNullOrEmpty(evt.newValue))
-                foreach (char c in evt.newValue)
-                    if (c >= '0' && c <= '9') cleaned += c;
-            if (cleaned != evt.newValue) _bidField.SetValueWithoutNotify(cleaned);
-        }
-
-        private static Button ControlButton(string text, Action onClick)
-        {
-            var button = UiKit.MenuButton(text, onClick);
-            button.style.height = 38;
-            button.style.minWidth = 120;
-            button.style.fontSize = 14;
-            button.style.marginLeft = 4;
-            button.style.marginRight = 4;
-            return button;
-        }
-
-        private static Button StepButton(string text, Action onClick)
-        {
-            var button = new Button(onClick) { text = text };
-            button.style.width = 40;
-            button.style.height = 34;
-            button.style.fontSize = 18;
-            return button;
-        }
-
-        private static Button FooterButton(string text, Action onClick) => UiKit.FooterButton(text, onClick);
     }
 }

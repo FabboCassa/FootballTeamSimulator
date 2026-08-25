@@ -163,6 +163,8 @@ namespace Fts.Presenters
                     Won = row.won,
                     Drawn = row.drawn,
                     Lost = row.lost,
+                    GoalsFor = row.goalsFor,
+                    GoalsAgainst = row.goalsAgainst,
                     GoalDifference = row.goalDifference,
                     Points = row.points,
                     IsYours = _yourClub.HasValue && row.clubExternalId == _yourClub.Value,

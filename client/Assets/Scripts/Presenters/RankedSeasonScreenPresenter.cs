@@ -191,15 +191,26 @@ namespace Fts.Presenters
 
         private void RenderStandings(List<RankedStandingDto> standings)
         {
-            var rows = new List<RankedSeasonView.StandingRow>();
+            var rows = new List<StandingRowVm>();
             if (standings != null)
             {
                 for (int i = 0; i < standings.Count; i++)
                 {
                     var s = standings[i];
-                    string text = _loc.Tr("ranked.standing_row",
-                        i + 1, s.clubName, s.played, s.won, s.drawn, s.lost, Signed(s.goalDifference), s.points);
-                    rows.Add(new RankedSeasonView.StandingRow(text, s.isYou));
+                    rows.Add(new StandingRowVm
+                    {
+                        Pos = i + 1,
+                        ClubName = s.clubName,
+                        Played = s.played,
+                        Won = s.won,
+                        Drawn = s.drawn,
+                        Lost = s.lost,
+                        GoalsFor = s.goalsFor,
+                        GoalsAgainst = s.goalsAgainst,
+                        GoalDifference = s.goalDifference,
+                        Points = s.points,
+                        IsYours = s.isYou,
+                    });
                 }
             }
             _view.SetStandings(rows);
@@ -208,32 +219,35 @@ namespace Fts.Presenters
         private void RenderSchedule(List<RankedFixtureDto> fixtures)
         {
             _fixtureNames.Clear();
-            var lines = new List<RankedSeasonView.ScheduleLine>();
+            var groups = new List<FixtureGroupVm>();
             if (fixtures != null)
             {
                 int lastRound = -1;
+                List<SeasonFixtureRowVm> rows = null;
                 foreach (var f in fixtures)
                 {
-                    if (f.round != lastRound)
+                    if (f.round != lastRound || rows == null)
                     {
                         lastRound = f.round;
-                        lines.Add(new RankedSeasonView.ScheduleLine(_loc.Tr("ranked.round", f.round), isHeader: true));
+                        rows = new List<SeasonFixtureRowVm>();
+                        groups.Add(new FixtureGroupVm { RoundLabel = _loc.Tr("ranked.round", f.round), Rows = rows });
                     }
-                    if (f.played)
+                    // Played fixtures are tappable → the replay.
+                    if (f.played) _fixtureNames[f.id] = (f.homeClubName, f.awayClubName);
+                    rows.Add(new SeasonFixtureRowVm
                     {
-                        // Played fixtures are tappable → the replay.
-                        _fixtureNames[f.id] = (f.homeClubName, f.awayClubName);
-                        string text = _loc.Tr("ranked.fixture_played", f.homeClubName, f.homeGoals, f.awayGoals, f.awayClubName);
-                        lines.Add(new RankedSeasonView.ScheduleLine(text, isHeader: false, fixtureId: f.id));
-                    }
-                    else
-                    {
-                        string text = _loc.Tr("ranked.fixture_scheduled", f.homeClubName, f.awayClubName);
-                        lines.Add(new RankedSeasonView.ScheduleLine(text, isHeader: false));
-                    }
+                        FixtureId = f.id,
+                        HomeName = f.homeClubName,
+                        AwayName = f.awayClubName,
+                        Played = f.played,
+                        HomeGoals = f.homeGoals,
+                        AwayGoals = f.awayGoals,
+                        IsYours = f.isYours,
+                        CanPlayLive = false, // the ladder resolves its matchdays on the server clock
+                    });
                 }
             }
-            _view.SetSchedule(lines);
+            _view.SetSchedule(groups);
         }
 
         private void OnLineup() => _navigator.Push<RankedLineupScreenPresenter>();

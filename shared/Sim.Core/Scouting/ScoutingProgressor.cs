@@ -83,10 +83,15 @@ namespace Sim.Core.Scouting
         ///
         /// Returns how many NEW names were filed this week, so the host can badge the Reports tab.
         /// Deterministic: no RNG, and both the area walk and the ranking are totally ordered.
+        ///
+        /// <paramref name="index"/> is task 11.3's flattened world: pass one and the discovery scan
+        /// reads an array slice instead of walking the object graph. It is optional and changes
+        /// nothing about the result — the same names come back in the same order.
         /// </summary>
         public int EvolveAreaWeek(World world, Club club, ScoutingAssignmentBook assignments,
                                   KnowledgeStore knowledge, AreaKnowledgeStore? areaKnowledge,
-                                  ScoutingReportBook? reports, ulong worldSeed, int week)
+                                  ScoutingReportBook? reports, ulong worldSeed, int week,
+                                  WorldPlayerIndex? index = null)
         {
             if (world == null || club == null || assignments == null || knowledge == null)
                 return 0;
@@ -149,7 +154,7 @@ namespace Sim.Core.Scouting
                 // player is only ever reported once — cannot hide the next new one.
                 int scan = reports.Count(clubId) + wanted;
                 List<ScoutingDiscovery.Candidate> candidates = ScoutingDiscovery.Scan(
-                    world, assignment, knowledge, worldSeed, clubId, quality, scan, _cfg);
+                    world, assignment, knowledge, worldSeed, clubId, quality, scan, _cfg, index);
 
                 int added = 0;
                 foreach (ScoutingDiscovery.Candidate candidate in candidates)

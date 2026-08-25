@@ -1,13 +1,15 @@
 using System;
 using System.Collections.Generic;
+using UnityEngine;
 using UnityEngine.UIElements;
 
 namespace Fts.Views
 {
     /// <summary>
-    /// Dumb view for a league lobby (task 8.1b): the league name, the invite code to share, the member
-    /// list, the generated squads (one collapsible foldout per club), and a Leave button. No logic —
-    /// the presenter fills it from the league detail and drives the API.
+    /// Dumb view for a league lobby (task 8.1b), on the shared page scaffold: the invite code to share,
+    /// the draft panel while the league is forming, one row of compact actions once it is active, the
+    /// member list and the generated squads (a foldout per club), with Back / Leave in the footer.
+    /// No logic — the presenter fills it from the league detail and drives the API.
     /// </summary>
     public sealed class LeagueLobbyView
     {
@@ -34,6 +36,7 @@ namespace Fts.Views
         private readonly Label _startHint;
         private readonly VisualElement _pickContainer;
         private readonly Button _refreshButton;
+        private readonly VisualElement _actionsCard;
         private readonly Button _seasonButton;
         private readonly Button _trainingButton;
         private readonly Button _auctionButton;
@@ -44,6 +47,9 @@ namespace Fts.Views
         private readonly Button _leaveButton;
         private readonly Label _status;
         private readonly Button _backButton;
+
+        // Which of the active-league actions are on offer — the plate hides itself when none are.
+        private bool _seasonVisible, _trainingVisible, _auctionsVisible;
 
         /// <summary>A club and its squad, both preformatted by the presenter.</summary>
         public readonly struct ClubVm
@@ -65,88 +71,114 @@ namespace Fts.Views
         {
             _tr = tr;
 
-            Root = UiKit.Screen(UiKit.Background);
-            var col = UiKit.PageColumn(UiKit.WidthMedium);
+            Root = UiKit.ScreenRoot();
+            VisualElement col = UiKit.PageColumn(UiKit.WidthMedium);
             Root.Add(col);
 
             _title = UiKit.ScreenTitle(string.Empty);
+            _title.style.marginBottom = UiKit.SpaceSm;
             col.Add(_title);
 
-            var inviteCard = UiKit.Card();
-            col.Add(inviteCard);
-            _inviteCaption = UiKit.Caption(string.Empty);
-            inviteCard.Add(_inviteCaption);
-            _inviteValue = UiKit.Title(string.Empty);
-            _inviteValue.style.color = UiKit.Accent;
-            inviteCard.Add(_inviteValue);
+            ScrollView body = UiKit.ListScroll();
+            col.Add(body);
 
-            // --- draft (8.2b): shown while forming/drafting; hidden once the season is active ---
-            _draftCard = UiKit.Card();
-            _draftCard.style.marginTop = UiKit.SpaceMd;
-            col.Add(_draftCard);
-            _draftCaption = UiKit.Subtitle(string.Empty);
+            // ---- invite code --------------------------------------------------------------------
+            VisualElement invitePanel = UiKit.Panel();
+            body.Add(invitePanel);
+            _inviteCaption = UiKit.SectionLabel(string.Empty);
+            _inviteCaption.style.marginTop = 0;
+            invitePanel.Add(_inviteCaption);
+            _inviteValue = new Label(string.Empty);
+            _inviteValue.style.fontSize = 26;
+            _inviteValue.style.unityFontStyleAndWeight = FontStyle.Bold;
+            _inviteValue.style.color = UiKit.Accent;
+            invitePanel.Add(_inviteValue);
+
+            // ---- draft (8.2b) --------------------------------------------------------------------
+            _draftCard = UiKit.Panel();
+            body.Add(_draftCard);
+            _draftCaption = UiKit.SectionLabel(string.Empty);
+            _draftCaption.style.marginTop = 0;
             _draftCard.Add(_draftCaption);
-            _draftBanner = UiKit.Caption(string.Empty);
-            _draftBanner.style.whiteSpace = WhiteSpace.Normal;
+            _draftBanner = UiKit.PanelLine(string.Empty);
             _draftBanner.style.marginBottom = UiKit.SpaceXs;
             _draftCard.Add(_draftBanner);
-            _startButton = UiKit.PrimaryButton(string.Empty, () => StartDraftClicked?.Invoke());
-            _draftCard.Add(_startButton);
-            _startHint = UiKit.Caption(string.Empty);
-            _startHint.style.whiteSpace = WhiteSpace.Normal;
+
+            VisualElement draftActions = UiKit.Toolbar();
+            draftActions.style.marginBottom = 0;
+            _draftCard.Add(draftActions);
+            _startButton = Compact(draftActions, () => StartDraftClicked?.Invoke(), 170f);
+            UiKit.SetSmallButtonAccent(_startButton, true);
+            _refreshButton = Compact(draftActions, () => RefreshClicked?.Invoke(), 130f);
+
+            _startHint = UiKit.HelpText(string.Empty);
+            _startHint.style.marginTop = UiKit.SpaceXs;
+            _startHint.style.marginBottom = 0;
             _draftCard.Add(_startHint);
+
             _pickContainer = new VisualElement();
-            _pickContainer.style.marginTop = UiKit.SpaceXs;
+            _pickContainer.style.marginTop = UiKit.SpaceSm;
             _draftCard.Add(_pickContainer);
-            _refreshButton = UiKit.MenuButton(string.Empty, () => RefreshClicked?.Invoke());
-            _refreshButton.style.marginTop = UiKit.SpaceXs;
-            _draftCard.Add(_refreshButton);
 
-            // Season (8.3b): opens the schedule/standings/advance screen once the league is active.
-            _seasonButton = UiKit.PrimaryButton(string.Empty, () => SeasonClicked?.Invoke());
-            _seasonButton.style.marginTop = UiKit.SpaceMd;
+            // ---- active-league actions ------------------------------------------------------------
+            _actionsCard = UiKit.Panel();
+            _actionsCard.style.display = DisplayStyle.None;
+            body.Add(_actionsCard);
+            VisualElement actions = UiKit.Toolbar();
+            actions.style.marginBottom = 0;
+            _actionsCard.Add(actions);
+            _seasonButton = Compact(actions, () => SeasonClicked?.Invoke(), 160f);
+            UiKit.SetSmallButtonAccent(_seasonButton, true);
             _seasonButton.style.display = DisplayStyle.None;
-            col.Add(_seasonButton);
-
-            // Training (8.4b): opens the online training editor for your drafted club once active.
-            _trainingButton = UiKit.MenuButton(string.Empty, () => TrainingClicked?.Invoke());
-            _trainingButton.style.marginTop = UiKit.SpaceXs;
+            _trainingButton = Compact(actions, () => TrainingClicked?.Invoke(), 150f);
             _trainingButton.style.display = DisplayStyle.None;
-            col.Add(_trainingButton);
-
-            // Auctions (8.5b): opens the live free-agent auction screen once active.
-            _auctionButton = UiKit.MenuButton(string.Empty, () => AuctionsClicked?.Invoke());
-            _auctionButton.style.marginTop = UiKit.SpaceXs;
+            _auctionButton = Compact(actions, () => AuctionsClicked?.Invoke(), 150f);
             _auctionButton.style.display = DisplayStyle.None;
-            col.Add(_auctionButton);
 
-            _membersCaption = UiKit.Subtitle(string.Empty);
-            _membersCaption.style.marginTop = UiKit.SpaceMd;
-            col.Add(_membersCaption);
+            // ---- members ---------------------------------------------------------------------------
+            VisualElement membersPanel = UiKit.Panel();
+            body.Add(membersPanel);
+            _membersCaption = UiKit.SectionLabel(string.Empty);
+            _membersCaption.style.marginTop = 0;
+            membersPanel.Add(_membersCaption);
             _membersContainer = new VisualElement();
-            col.Add(_membersContainer);
+            membersPanel.Add(_membersContainer);
 
-            _clubsCaption = UiKit.Subtitle(string.Empty);
-            _clubsCaption.style.marginTop = UiKit.SpaceMd;
-            col.Add(_clubsCaption);
+            // ---- clubs -----------------------------------------------------------------------------
+            VisualElement clubsPanel = UiKit.Panel();
+            body.Add(clubsPanel);
+            _clubsCaption = UiKit.SectionLabel(string.Empty);
+            _clubsCaption.style.marginTop = 0;
+            clubsPanel.Add(_clubsCaption);
             _clubsContainer = new VisualElement();
-            col.Add(_clubsContainer);
-
-            _leaveButton = UiKit.PrimaryButton(string.Empty, () => LeaveClicked?.Invoke());
-            _leaveButton.style.marginTop = UiKit.SpaceMd;
-            col.Add(_leaveButton);
+            clubsPanel.Add(_clubsContainer);
 
             _status = UiKit.Caption(string.Empty);
-            _status.style.marginTop = UiKit.SpaceSm;
+            _status.style.marginTop = UiKit.SpaceXs;
             _status.style.whiteSpace = WhiteSpace.Normal;
+            _status.style.flexShrink = 0f;
             _status.style.display = DisplayStyle.None;
             col.Add(_status);
 
-            _backButton = UiKit.MenuButton(string.Empty, () => BackClicked?.Invoke());
-            _backButton.style.marginTop = UiKit.SpaceMd;
-            col.Add(_backButton);
+            VisualElement footer = UiKit.FooterBar();
+            _backButton = UiKit.FooterButton(string.Empty, () => BackClicked?.Invoke());
+            footer.Add(_backButton);
+            _leaveButton = UiKit.FooterButton(string.Empty, () => LeaveClicked?.Invoke());
+            _leaveButton.style.color = UiKit.Danger;
+            footer.Add(_leaveButton);
+            col.Add(footer);
 
             UpdateTexts();
+        }
+
+        private static Button Compact(VisualElement parent, Action onClick, float minWidth)
+        {
+            Button b = UiKit.SmallButton(string.Empty, onClick, minWidth);
+            b.style.marginLeft = 0;
+            b.style.marginRight = 6;
+            b.style.marginBottom = 4;
+            parent.Add(b);
+            return b;
         }
 
         public void SetHeader(string name) => _title.text = name;
@@ -157,11 +189,27 @@ namespace Fts.Views
         {
             _membersContainer.Clear();
             if (members == null) return;
-            foreach (var m in members)
+            for (int i = 0; i < members.Count; i++)
             {
-                var label = UiKit.Caption(m);
-                label.style.marginBottom = UiKit.SpaceXs;
-                _membersContainer.Add(label);
+                var row = new VisualElement();
+                row.style.flexDirection = FlexDirection.Row;
+                row.style.alignItems = Align.Center;
+                row.style.minHeight = 30;
+                row.style.flexShrink = 0f;
+                row.style.paddingLeft = UiKit.SpaceSm;
+                row.style.paddingRight = UiKit.SpaceSm;
+                OnlineTableKit.Stripe(row, false, i);
+
+                var label = new Label(members[i] ?? string.Empty);
+                label.style.fontSize = 14;
+                label.style.color = UiKit.TextPrimary;
+                label.style.flexGrow = 1f;
+                label.style.flexShrink = 1f;
+                label.style.minWidth = 0f;
+                label.style.whiteSpace = WhiteSpace.Normal;
+                row.Add(label);
+
+                _membersContainer.Add(row);
             }
         }
 
@@ -169,15 +217,16 @@ namespace Fts.Views
         {
             _clubsContainer.Clear();
             if (clubs == null) return;
-            foreach (var club in clubs)
+            foreach (ClubVm club in clubs)
             {
                 var foldout = new Foldout { text = club.Header, value = false };
                 foldout.style.marginBottom = UiKit.SpaceXs;
                 if (club.Players != null)
                 {
-                    foreach (var p in club.Players)
+                    foreach (string p in club.Players)
                     {
-                        var label = UiKit.Caption(p);
+                        Label label = UiKit.Caption(p);
+                        label.style.marginBottom = 1;
                         foldout.Add(label);
                     }
                 }
@@ -212,36 +261,66 @@ namespace Fts.Views
             _refreshButton.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
 
         /// <summary>Shows the "open season" button once the league is active (8.3b).</summary>
-        public void SetSeasonButtonVisible(bool visible) =>
+        public void SetSeasonButtonVisible(bool visible)
+        {
+            _seasonVisible = visible;
             _seasonButton.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+            RefreshActionsVisibility();
+        }
 
         /// <summary>Shows the "training" button once the league is active (8.4b).</summary>
-        public void SetTrainingButtonVisible(bool visible) =>
+        public void SetTrainingButtonVisible(bool visible)
+        {
+            _trainingVisible = visible;
             _trainingButton.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+            RefreshActionsVisibility();
+        }
 
         /// <summary>Shows the "auctions" button once the league is active (8.5b).</summary>
-        public void SetAuctionsButtonVisible(bool visible) =>
+        public void SetAuctionsButtonVisible(bool visible)
+        {
+            _auctionsVisible = visible;
             _auctionButton.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+            RefreshActionsVisibility();
+        }
+
+        /// <summary>The actions plate only exists while it has something on it.</summary>
+        private void RefreshActionsVisibility()
+        {
+            bool any = _seasonVisible || _trainingVisible || _auctionsVisible;
+            _actionsCard.style.display = any ? DisplayStyle.Flex : DisplayStyle.None;
+        }
 
         public void SetPickList(IReadOnlyList<PickVm> picks)
         {
             _pickContainer.Clear();
             if (picks == null) return;
-            foreach (var p in picks)
+            for (int i = 0; i < picks.Count; i++)
             {
+                PickVm p = picks[i];
+
                 var row = new VisualElement();
                 row.style.flexDirection = FlexDirection.Row;
                 row.style.alignItems = Align.Center;
-                row.style.marginBottom = UiKit.SpaceXs;
+                row.style.minHeight = 40;
+                row.style.flexShrink = 0f;
+                row.style.paddingLeft = UiKit.SpaceSm;
+                row.style.paddingRight = UiKit.SpaceSm;
+                OnlineTableKit.Stripe(row, false, i);
 
-                var label = UiKit.Caption(p.Label);
-                label.style.flexGrow = 1;
+                var label = new Label(p.Label ?? string.Empty);
+                label.style.fontSize = 14;
+                label.style.color = UiKit.TextPrimary;
+                label.style.flexGrow = 1f;
+                label.style.flexShrink = 1f;
+                label.style.minWidth = 0f;
                 label.style.whiteSpace = WhiteSpace.Normal;
                 row.Add(label);
 
                 int id = p.ExternalId;
-                var btn = new Button(() => PickClicked?.Invoke(id)) { text = _tr("lobby.pick_button") };
-                row.Add(btn);
+                Button pick = UiKit.SmallButton(_tr("lobby.pick_button"), () => PickClicked?.Invoke(id), 90f);
+                UiKit.SetSmallButtonAccent(pick, true);
+                row.Add(pick);
 
                 _pickContainer.Add(row);
             }

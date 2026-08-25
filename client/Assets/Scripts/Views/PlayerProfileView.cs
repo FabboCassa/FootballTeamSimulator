@@ -48,11 +48,16 @@ namespace Fts.Views
 
         public event Action BackClicked;
 
+        /// <summary>"Put him under observation" / "call the scout off" (task 11.3).</summary>
+        public event Action WatchClicked;
+
         public VisualElement Root { get; }
 
         private readonly Label _name;
         private readonly Label _subline;
         private readonly Label _potential;
+        private readonly Label _reputation;
+        private readonly Button _watchButton;
         private readonly Label _seasonGoals;
         private readonly VisualElement _avatarSlot;
         private readonly VisualElement _conditionSection;
@@ -89,6 +94,26 @@ namespace Fts.Views
             _potential.style.unityTextAlign = TextAnchor.MiddleCenter;
             _potential.style.marginBottom = 10;
             col.Add(_potential);
+
+            // Task 11.3: where he plays and how publicly known he is — the line that explains why a
+            // player nobody has scouted can still be readable (or hopelessly vague).
+            _reputation = new Label(string.Empty);
+            _reputation.style.color = SectionColor;
+            _reputation.style.fontSize = 12;
+            _reputation.style.unityTextAlign = TextAnchor.MiddleCenter;
+            _reputation.style.whiteSpace = WhiteSpace.Normal;
+            _reputation.style.marginBottom = 8;
+            _reputation.style.display = DisplayStyle.None;
+            col.Add(_reputation);
+
+            // Task 11.3: the roadmap's "browsing a squad gains a put-under-observation action".
+            // It lives on the profile because every list in the game — a club's squad, the market,
+            // the search tab — opens it, so one button covers all of them.
+            _watchButton = UiKit.SmallButton(string.Empty, () => WatchClicked?.Invoke(), 240f);
+            _watchButton.style.alignSelf = Align.Center;
+            _watchButton.style.marginBottom = 10;
+            _watchButton.style.display = DisplayStyle.None;
+            col.Add(_watchButton);
 
             var body = new ScrollView();
             body.style.flexGrow = 1f;
@@ -137,6 +162,22 @@ namespace Fts.Views
         }
 
         public void SetSeasonGoals(string text) => _seasonGoals.text = text;
+
+        /// <summary>The club / division / fame line; empty hides it.</summary>
+        public void SetReputation(string text)
+        {
+            _reputation.text = text ?? string.Empty;
+            _reputation.style.display = string.IsNullOrEmpty(text) ? DisplayStyle.None : DisplayStyle.Flex;
+        }
+
+        /// <summary>The observation button: hidden for your own players, lit when a scout is already on him.</summary>
+        public void SetWatchAction(string text, bool visible, bool enabled, bool on)
+        {
+            _watchButton.text = text ?? string.Empty;
+            _watchButton.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+            _watchButton.SetEnabled(enabled);
+            UiKit.SetSmallButtonOn(_watchButton, on);
+        }
 
         /// <summary>Hides the condition section for non-owned players (you don't know an opponent's form/morale exactly).</summary>
         public void SetConditionVisible(bool visible) =>

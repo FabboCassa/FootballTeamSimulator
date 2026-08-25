@@ -25,6 +25,12 @@ namespace Fts.Presenters
     ///     the scouted overall as a narrowing range and the brief that produced him. Tapping a row
     ///     opens his profile, where every attribute range and the potential band reflect the same
     ///     knowledge.
+    ///   • SEARCH (task 11.3) — the whole database, paged. The manager may look anywhere: at the
+    ///     third division of Argentina, at a club he has never heard of. What he READS is still
+    ///     knowledge-bound, so most of what he finds is a name, a role and a useless band — unless
+    ///     the player is FAMOUS, in which case the world already knows roughly how good he is
+    ///     (Sim.Core's PublicKnowledge). Anything he likes he can put under observation from the
+    ///     row itself, which is the "start from where you actually are" the roadmap asks for.
     ///
     /// Reads everything live from <see cref="ScoutingService"/>; owns no state but the flow it is
     /// currently in.
@@ -42,6 +48,17 @@ namespace Fts.Presenters
         private const int LineExpiring = 5;
         private const int LineReset = 6;
 
+        // Search option ids (task 11.3). A separate space from the brief lines above: they arrive on
+        // a different event, so the two never meet.
+        private const int SearchWhere = 0;
+        private const int SearchMinAge = 1;
+        private const int SearchMaxAge = 2;
+        private const int SearchFame = 3;
+        private const int SearchSort = 4;
+        private const int SearchScouted = 5;
+        private const int SearchClear = 6;
+
+
         private static readonly int[] MinAgeCycle = { 0, 16, 18, 20, 22, 24, 26, 28, 30 };
         private static readonly int[] MaxAgeCycle = { 0, 20, 22, 24, 26, 28, 30, 34 };
         private static readonly int[] AbilityCycle = { 0, 40, 50, 55, 60, 65, 70, 75, 80 };
@@ -52,6 +69,7 @@ namespace Fts.Presenters
         {
             Assignments,
             Reports,
+            Search,
             PickKind,
             PickNation,
             PickDivision,
@@ -78,6 +96,12 @@ namespace Fts.Presenters
         private int _pendingClubId;
         private ScoutingArea _pendingArea;
         private ScoutingFilters _pendingFilters = new ScoutingFilters();
+
+        // The search tab (task 11.3). The query is kept between visits — coming back from a profile
+        // must land on the same page of the same search, not on a reset screen.
+        private readonly PlayerSearchQuery _search = new PlayerSearchQuery();
+        private int _searchScope;   // index into the scope list built by BuildScopes()
+        private int _searchFame;    // index into FameCycle
 
         public VisualElement View => _view.Root;
 
@@ -107,6 +131,10 @@ namespace Fts.Presenters
             _view.ConfirmClicked += OnConfirm;
             _view.CancelClicked += OnCancel;
             _view.BackClicked += OnBack;
+            _view.SearchTextChanged += OnSearchText;
+            _view.SearchOptionClicked += OnSearchOption;
+            _view.SearchRoleClicked += OnSearchRole;
+            _view.SearchPageClicked += OnSearchPage;
             Refresh();
         }
 
@@ -121,6 +149,10 @@ namespace Fts.Presenters
             _view.ConfirmClicked -= OnConfirm;
             _view.CancelClicked -= OnCancel;
             _view.BackClicked -= OnBack;
+            _view.SearchTextChanged -= OnSearchText;
+            _view.SearchOptionClicked -= OnSearchOption;
+            _view.SearchRoleClicked -= OnSearchRole;
+            _view.SearchPageClicked -= OnSearchPage;
         }
 
         public void Reveal()
@@ -135,7 +167,7 @@ namespace Fts.Presenters
 
         private void OnTab(int tab)
         {
-            _mode = tab == 1 ? Mode.Reports : Mode.Assignments;
+            _mode = tab == 2 ? Mode.Search : tab == 1 ? Mode.Reports : Mode.Assignments;
             Refresh();
         }
 
@@ -165,14 +197,90 @@ namespace Fts.Presenters
             Refresh();
         }
 
-        /// <summary>A report row's action: stop a direct observation, or dismiss a filed report.</summary>
+        /// <summary>
+        /// A row's action button. On the Reports tab it stops a direct observation or dismisses a
+        /// filed report; in the SEARCH tab (task 11.3) it is the "put him under observation" the
+        /// roadmap asks for — the same named-target brief the drill-down creates, started from
+        /// wherever the manager happens to be looking.
+        /// </summary>
         private void OnRowAction(int playerId)
         {
             if (_scouting.IsWatching(playerId))
                 _scouting.Unwatch(playerId);
+            else if (_mode == Mode.Search)
+                _scouting.Watch(playerId);
             else
                 _scouting.DismissReport(playerId);
 
+            Refresh();
+        }
+
+        // ------------------------------------------------------------------ the search tab (task 11.3)
+
+        private void OnSearchText(string text)
+        {
+            _search.Text = text ?? string.Empty;
+            _search.Page = 0;
+            Refresh();
+        }
+
+        private void OnSearchRole(int role)
+        {
+            _search.Filters.Role = role;
+            _search.Page = 0;
+            Refresh();
+        }
+
+        private void OnSearchPage(int delta)
+        {
+            _search.Page += delta;
+            if (_search.Page < 0)
+                _search.Page = 0;
+            Refresh();
+        }
+
+        private void OnSearchOption(int option)
+        {
+            switch (option)
+            {
+                case SearchWhere:
+                {
+                    List<SearchScope> scopes = BuildScopes();
+                    _searchScope = scopes.Count == 0 ? 0 : (_searchScope + 1) % scopes.Count;
+                    break;
+                }
+
+                case SearchMinAge:
+                    _search.Filters.MinAge = Next(MinAgeCycle, _search.Filters.MinAge);
+                    break;
+                case SearchMaxAge:
+                    _search.Filters.MaxAge = Next(MaxAgeCycle, _search.Filters.MaxAge);
+                    break;
+                case SearchFame:
+                    // Four steps (anyone / known / well known / famous), and the fame each one means
+                    // is asked of the model — never hardcoded here, or the label and the filter would
+                    // drift apart the first time the balance number moves.
+                    _searchFame = (_searchFame + 1) % 4;
+                    _search.MinFame = _scouting.FameFloorOfTier(_searchFame);
+                    break;
+                case SearchSort:
+                    _search.Sort = (PlayerSearchSort)(((int)_search.Sort + 1) % 6);
+                    break;
+                case SearchScouted:
+                    _search.ScoutedOnly = !_search.ScoutedOnly;
+                    break;
+                case SearchClear:
+                    _search.Filters = new ScoutingFilters();
+                    _search.Text = string.Empty;
+                    _search.MinFame = 0;
+                    _search.ScoutedOnly = false;
+                    _search.Sort = PlayerSearchSort.Fame;
+                    _searchFame = 0;
+                    _searchScope = 0;
+                    break;
+            }
+
+            _search.Page = 0;
             Refresh();
         }
 
@@ -315,10 +423,14 @@ namespace Fts.Presenters
 
         private void Refresh()
         {
-            _view.SetTabs(_mode == Mode.Reports ? 1 : 0, !IsFlow(_mode));
+            _view.SetTabs(_mode == Mode.Search ? 2 : _mode == Mode.Reports ? 1 : 0, !IsFlow(_mode));
 
             switch (_mode)
             {
+                case Mode.Search:
+                    RefreshSearch();
+                    break;
+
                 case Mode.Reports:
                     _view.SetHeader(_loc.Tr("scouting.reports_header", _scouting.Reports().Count));
                     _view.SetHelp(_loc.Tr("scouting.help.reports"));
@@ -496,6 +608,242 @@ namespace Fts.Presenters
                 ToggleText = _loc.Tr(direct ? "scouting.stop" : "scouting.dismiss"),
                 ToggleEnabled = true
             };
+        }
+
+        // ------------------------------------------------------------------ the search tab (task 11.3)
+
+        /// <summary>Where a search looks: the whole world, your own nation, or one continent.</summary>
+        private struct SearchScope
+        {
+            public ScoutingArea Area;
+            public string Label;
+        }
+
+        private void RefreshSearch()
+        {
+            List<SearchScope> scopes = BuildScopes();
+            if (_searchScope < 0 || _searchScope >= scopes.Count)
+                _searchScope = 0;
+
+            _search.Area = scopes.Count > 0 ? scopes[_searchScope].Area : null;
+            _search.PageSize = _scouting.SearchPageSize;
+
+            PlayerSearchPage page = _scouting.Search(_search);
+            _search.Page = page.Page; // the search clamps the page; keep the two in step
+
+            _view.SetHeader(_loc.Tr("scouting.search_header", page.Total, _scouting.WorldPlayerCount()));
+            _view.SetHelp(_loc.Tr("scouting.help.search"));
+            _view.ShowSearch(BuildSearchPanel(page, scopes), BuildSearchRows(page),
+                             _loc.Tr("scouting.search.empty"));
+        }
+
+        /// <summary>
+        /// The scopes the picker cycles through: the whole world first (the point of the feature),
+        /// then the nation you actually manage in, then every continent the world loaded. Continents
+        /// with no nations are left out — an empty scope would just look broken.
+        /// </summary>
+        private List<SearchScope> BuildScopes()
+        {
+            var scopes = new List<SearchScope>
+            {
+                new SearchScope { Area = null, Label = _loc.Tr("scouting.search.where_world") }
+            };
+
+            League userLeague = _career.GetUserLeague();
+            if (userLeague != null && !string.IsNullOrEmpty(userLeague.NationCode))
+            {
+                Nation home = _career.World.FindNation(userLeague.NationCode);
+                if (home != null)
+                {
+                    scopes.Add(new SearchScope
+                    {
+                        Area = ScoutingArea.ForNation(home.Code),
+                        Label = home.Name
+                    });
+                }
+            }
+
+            for (int c = 0; c <= (int)Continent.Oceania; c++)
+            {
+                var continent = (Continent)c;
+                bool any = false;
+                foreach (Nation nation in _career.World.Nations)
+                {
+                    if (nation.Continent == continent)
+                    {
+                        any = true;
+                        break;
+                    }
+                }
+
+                if (!any)
+                    continue;
+
+                scopes.Add(new SearchScope
+                {
+                    Area = ScoutingArea.ForContinent(continent),
+                    Label = ContinentName(continent)
+                });
+            }
+
+            return scopes;
+        }
+
+        private SearchPanelVm BuildSearchPanel(PlayerSearchPage page, List<SearchScope> scopes)
+        {
+            int pageSize = _scouting.SearchPageSize;
+            int from = page.Total == 0 ? 0 : page.Page * pageSize + 1;
+            int to = page.Total == 0 ? 0 : from + page.Hits.Count - 1;
+
+            return new SearchPanelVm
+            {
+                Text = _search.Text,
+                Placeholder = _loc.Tr("scouting.search.field"),
+                RoleChips = BuildRoleChips(),
+                Options = BuildSearchOptions(scopes),
+                Summary = page.Total == 0
+                    ? _loc.Tr("scouting.search.none")
+                    : _loc.Tr("scouting.search.summary", from, to, page.Total, page.Page + 1, page.PageCount),
+                HasPrevious = page.Page > 0,
+                HasNext = page.Page + 1 < page.PageCount
+            };
+        }
+
+        private List<FilterChipVm> BuildRoleChips()
+        {
+            var chips = new List<FilterChipVm>
+            {
+                new FilterChipVm
+                {
+                    Value = -1,
+                    Label = _loc.Tr("scouting.filter.any"),
+                    RoleGroup = -1,
+                    Selected = _search.Filters.Role < 0
+                }
+            };
+
+            for (int role = 0; role <= RoleMax; role++)
+            {
+                chips.Add(new FilterChipVm
+                {
+                    Value = role,
+                    Label = RoleName((PositionRole)role),
+                    RoleGroup = RoleFormat.Group((PositionRole)role),
+                    Selected = _search.Filters.Role == role
+                });
+            }
+
+            return chips;
+        }
+
+        private List<FilterLineVm> BuildSearchOptions(List<SearchScope> scopes)
+        {
+            string any = _loc.Tr("scouting.filter.any");
+
+            return new List<FilterLineVm>
+            {
+                new FilterLineVm
+                {
+                    Id = SearchWhere,
+                    Label = _loc.Tr("scouting.search.where"),
+                    Value = scopes.Count > 0 ? scopes[_searchScope].Label : any
+                },
+                new FilterLineVm
+                {
+                    Id = SearchMinAge,
+                    Label = _loc.Tr("scouting.filter.min_age"),
+                    Value = _search.Filters.MinAge <= 0 ? any : _search.Filters.MinAge.ToString(CultureInfo.InvariantCulture)
+                },
+                new FilterLineVm
+                {
+                    Id = SearchMaxAge,
+                    Label = _loc.Tr("scouting.filter.max_age"),
+                    Value = _search.Filters.MaxAge <= 0 ? any : _search.Filters.MaxAge.ToString(CultureInfo.InvariantCulture)
+                },
+                new FilterLineVm
+                {
+                    Id = SearchFame,
+                    Label = _loc.Tr("scouting.search.fame"),
+                    Value = _loc.Tr("scouting.fame." + _searchFame.ToString(CultureInfo.InvariantCulture))
+                },
+                new FilterLineVm
+                {
+                    Id = SearchSort,
+                    Label = _loc.Tr("scouting.search.sort"),
+                    Value = _loc.Tr("scouting.sort." + ((int)_search.Sort).ToString(CultureInfo.InvariantCulture))
+                },
+                new FilterLineVm
+                {
+                    Id = SearchScouted,
+                    Label = _loc.Tr("scouting.search.scouted_only"),
+                    Value = _loc.Tr(_search.ScoutedOnly ? "scouting.filter.on" : "scouting.filter.off")
+                },
+                new FilterLineVm
+                {
+                    Id = SearchClear,
+                    Label = _loc.Tr("scouting.search.clear"),
+                    Value = _loc.Tr("scouting.search.clear_value")
+                }
+            };
+        }
+
+        /// <summary>
+        /// One row per hit. The numbers come from the search itself — they are already built at the
+        /// knowledge the club reads him at, fame included — so the row never re-derives them and can
+        /// never disagree with what the query filtered on.
+        /// </summary>
+        private List<ScoutingRowVm> BuildSearchRows(PlayerSearchPage page)
+        {
+            var rows = new List<ScoutingRowVm>();
+            int max = _scouting.MaxKnowledge;
+
+            foreach (PlayerSearchHit hit in page.Hits)
+            {
+                Player player = hit.Player;
+                bool watching = _scouting.IsWatching(hit.PlayerId);
+                int percent = max > 0 ? hit.Knowledge * 100 / max : 0;
+
+                rows.Add(new ScoutingRowVm
+                {
+                    PlayerId = hit.PlayerId,
+                    Name = hit.Club != null ? $"{player.FullName} — {hit.Club.Name}" : player.FullName,
+                    RoleAbbr = RoleName(player.Role),
+                    RoleGroup = RoleFormat.Group(player.Role),
+                    Age = player.Age.ToString(CultureInfo.InvariantCulture),
+                    OvrText = hit.Knowledge >= max
+                        ? _loc.Tr("scouting.ovr_known", hit.Overall.Estimate)
+                        : _loc.Tr("scouting.ovr_range", hit.Overall.Min, hit.Overall.Max),
+                    KnowledgePercent = percent,
+                    KnowledgeText = hit.Knowledge <= 0
+                        ? _loc.Tr("scouting.unscouted")
+                        : hit.Knowledge >= max
+                            ? _loc.Tr("scouting.known")
+                            : _loc.Tr("scouting.percent", percent),
+                    Source = SearchSource(hit),
+                    Watching = watching,
+                    ToggleText = _loc.Tr(watching ? "scouting.stop" : "scouting.watch"),
+                    ToggleEnabled = watching || _scouting.HasFreeSlot()
+                });
+            }
+
+            return rows;
+        }
+
+        /// <summary>The line under the name: where he plays and how well known he is.</summary>
+        private string SearchSource(PlayerSearchHit hit)
+        {
+            string fame = _loc.Tr("scouting.fame_tier." + hit.FameTier.ToString(CultureInfo.InvariantCulture));
+
+            if (hit.League == null)
+                return fame;
+
+            Nation nation = string.IsNullOrEmpty(hit.League.NationCode)
+                ? null
+                : _career.World.FindNation(hit.League.NationCode);
+
+            return nation != null
+                ? _loc.Tr("scouting.search.source", nation.Name, hit.League.Name, fame)
+                : _loc.Tr("scouting.search.source_league", hit.League.Name, fame);
         }
 
         // ------------------------------------------------------------------ the pickers
@@ -787,7 +1135,8 @@ namespace Fts.Presenters
         private string RoleName(PositionRole role) =>
             _loc.Tr("role." + role.ToString().ToLowerInvariant());
 
-        private static bool IsFlow(Mode mode) => mode != Mode.Assignments && mode != Mode.Reports;
+        private static bool IsFlow(Mode mode)
+            => mode != Mode.Assignments && mode != Mode.Reports && mode != Mode.Search;
 
         /// <summary>Next value in a cycle, wrapping; an unknown current value restarts the cycle.</summary>
         private static int Next(int[] cycle, int current)

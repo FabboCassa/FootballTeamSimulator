@@ -34,6 +34,12 @@ namespace Fts.Services
         private readonly AreaKnowledgeStore _areaKnowledge = new AreaKnowledgeStore();
         private readonly ScoutingReportBook _reports = new ScoutingReportBook();
 
+        // Task 11.3: the flattened world the search screen reads. Built on demand — a career that
+        // never opens the search tab never pays for it — and rebuilt when the world has moved
+        // (a transfer, a promotion, a birthday all change what the index holds).
+        private WorldPlayerIndex _index;
+        private int _indexStamp = int.MinValue;
+
         public ScoutingService(CareerState career, ISaveRepository saveRepository)
         {
             _career = career;
@@ -44,8 +50,51 @@ namespace Fts.Services
 
         // ------------------------------------------------------------------ reading a player
 
-        /// <summary>The user club's current knowledge of a player (0 = unscouted).</summary>
-        public int KnowledgeOf(int playerId) => _knowledge.Get(_career.UserClubId, playerId);
+        /// <summary>
+        /// How well the user club reads this player: the better of what its own scouts have learned
+        /// and what the whole world already knows about him (task 11.3's public knowledge — the more
+        /// famous a player is, the more public his numbers are). Every screen goes through here, so
+        /// a famous player reads the same in the search list, in his profile and on the market.
+        /// </summary>
+        public int KnowledgeOf(int playerId)
+            => PublicKnowledge.Effective(_knowledge.Get(_career.UserClubId, playerId), PublicFloorOf(playerId));
+
+        /// <summary>
+        /// What the club's OWN scouts have accumulated, ignoring fame — "weeks of work" rather than
+        /// "what we know". The screens show the effective figure (fame included, since that is what
+        /// the manager can actually read); this is here for the places that need to say whether
+        /// anybody has actually been to watch him.
+        /// </summary>
+        public int ScoutedKnowledgeOf(int playerId) => _knowledge.Get(_career.UserClubId, playerId);
+
+        /// <summary>How publicly known a player is, 0..100 (task 11.3).</summary>
+        public int FameOf(int playerId)
+        {
+            if (_index != null && _index.Holds(playerId))
+                return _index.FameOf(playerId);
+
+            Player player = _career.FindPlayerInWorld(playerId);
+            return player != null ? PublicKnowledge.FameInWorld(_career.World, player, _cfg) : 0;
+        }
+
+        /// <summary>His fame as a coarse band 0..3, which the UI turns into a word.</summary>
+        public int FameTierOf(int playerId) => PublicKnowledge.Tier(FameOf(playerId), _cfg);
+
+        /// <summary>
+        /// The lowest fame that reads as this band — what the search screen's reputation filter
+        /// steps through. Asking the model rather than hardcoding the steps means the filter and its
+        /// label move together when the balance number moves.
+        /// </summary>
+        public int FameFloorOfTier(int tier) => PublicKnowledge.TierFloor(tier, _cfg);
+
+        /// <summary>The free knowledge his fame is worth (0 for the anonymous majority of the database).</summary>
+        public int PublicFloorOf(int playerId)
+        {
+            if (_index != null && _index.Holds(playerId))
+                return _index.FloorOf(playerId);
+
+            return PublicKnowledge.Floor(FameOf(playerId), _cfg);
+        }
 
         /// <summary>True if the user's scouts are watching this player BY NAME (a direct assignment).</summary>
         public bool IsWatching(int playerId) => _assignments.IsWatching(_career.UserClubId, playerId);
@@ -212,7 +261,66 @@ namespace Fts.Services
         }
 
         /// <summary>How many players an area holds at all — so an empty result reads as "nobody here matches".</summary>
-        public int AreaPlayerCount(ScoutingArea area) => ScoutingDiscovery.AreaPlayerCount(_career.World, area);
+        public int AreaPlayerCount(ScoutingArea area)
+            => ScoutingDiscovery.AreaPlayerCount(_career.World, area, FreshIndex());
+
+        // ------------------------------------------------------------------ the world search (task 11.3)
+
+        /// <summary>Rows a search page holds by default.</summary>
+        public int SearchPageSize => _cfg.SearchPageSize > 0 ? _cfg.SearchPageSize : 20;
+
+        /// <summary>How many players the world holds in total (the number the search header prints).</summary>
+        public int WorldPlayerCount() => Index().Count;
+
+        /// <summary>
+        /// Searches the whole world — every nation, every division, the data-only clubs included.
+        /// The manager may LOOK anywhere; what he READS is still knowledge-bound, which is why the
+        /// hits carry bands rather than numbers and why an anonymous player's band is useless until
+        /// somebody goes and watches him.
+        ///
+        /// The bands are built at the DEPARTMENT's neutral quality, not through one particular
+        /// scout's eyes: the list is what the club as a whole believes. A player's own profile,
+        /// which knows who is responsible for him, is where his scout's judgement shows up.
+        /// </summary>
+        public PlayerSearchPage Search(PlayerSearchQuery query)
+        {
+            if (query == null)
+                return new PlayerSearchPage();
+
+            query.ObserverClubId = _career.UserClubId;
+            if (query.PageSize <= 0)
+                query.PageSize = SearchPageSize;
+
+            return Index().Search(query, _knowledge, _career.Seed, ScoutQuality.Neutral);
+        }
+
+        /// <summary>The search index, built if this is the first time anybody asked for it.</summary>
+        private WorldPlayerIndex Index()
+        {
+            int stamp = WorldStamp();
+            if (_index == null || _indexStamp != stamp || _index.World != _career.World)
+            {
+                _index = WorldPlayerIndex.Build(_career.World, _cfg);
+                _indexStamp = stamp;
+            }
+
+            return _index;
+        }
+
+        /// <summary>
+        /// The index ONLY if it is already built and still current — never builds one. The weekly
+        /// tick uses this: a career that never opens the search tab must not start paying for an
+        /// index it does not use, while one that has it gets the faster discovery scan for free.
+        /// </summary>
+        private WorldPlayerIndex FreshIndex()
+            => _index != null && _indexStamp == WorldStamp() && _index.World == _career.World ? _index : null;
+
+        /// <summary>
+        /// Changes to the world that invalidate the index. Day granularity is the right unit:
+        /// transfers settle on a day boundary, ages and squads change at the rollover, and nothing
+        /// moves players between clubs in the middle of a day.
+        /// </summary>
+        private int WorldStamp() => _career.Season.Year * 1000 + _career.Season.CurrentDay;
 
         // ------------------------------------------------------------------ the weekly tick
 
@@ -232,7 +340,7 @@ namespace Fts.Services
             {
                 filed = _progressor.EvolveAreaWeek(
                     _career.World, userClub, _assignments, _knowledge, _areaKnowledge, _reports,
-                    _career.Seed, careerWeek);
+                    _career.Seed, careerWeek, FreshIndex());
             }
 
             WriteBack();

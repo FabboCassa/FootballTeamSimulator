@@ -14,5 +14,18 @@ namespace Fts.Services
 #else
             false;
 #endif
+
+        /// <summary>
+        /// Shows the database bench on the main menu (task 11.3). It is what measures Small / Medium
+        /// / Large on the device that actually decides the shipped default — a WebGL build and a
+        /// mid-range Android phone — so it has to be flippable in a DEVELOPMENT build, not only in
+        /// the Editor. Off in release.
+        /// </summary>
+        public static bool WorldBench =
+#if DEVELOPMENT_BUILD || UNITY_EDITOR
+            true;
+#else
+            false;
+#endif
     }
 }

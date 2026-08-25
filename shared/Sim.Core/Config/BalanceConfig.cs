@@ -296,6 +296,47 @@ namespace Sim.Core.Config
         public int MaxReportsPerClub { get; set; } = 120;
         /// <summary>Seasons remaining at or below which the "expiring contract" filter considers a player available.</summary>
         public int ExpiringContractSeasons { get; set; } = 1;
+
+        // ============================================================ task 11.3: public knowledge (fame)
+        //
+        // The manager may browse the whole world now, but what he READS without a scout is governed
+        // by how famous a player is: everybody knows roughly how good the continent's best striker
+        // is, nobody has heard of the 19-year-old in a Chilean second division. Fame is DERIVED from
+        // public facts only (ability, his nation, his division, his club, his age) — never from
+        // potential, which is why finding the next great player before anyone else is still the
+        // scouts' job and cannot be done from the search screen.
+        //
+        // See Scouting.PublicKnowledge: fame turns into a FLOOR on knowledge, never a ceiling, so
+        // scouting a famous player still takes him from "roughly known" to exact.
+
+        /// <summary>Weight of the player's own ability in his fame, against FameSpotlightWeight. Ability DOMINATES on purpose: a great player is talked about wherever he plays, while a squad filler in a famous league is still nobody.</summary>
+        public int FameAbilityWeight { get; set; } = 3;
+        /// <summary>Weight of the SPOTLIGHT he plays in (nation + division + club) against his ability.</summary>
+        public int FameSpotlightWeight { get; set; } = 1;
+        /// <summary>Share of the spotlight that comes from his nation's reputation.</summary>
+        public int FameNationWeight { get; set; } = 3;
+        /// <summary>Share of the spotlight that comes from how high his division is.</summary>
+        public int FameDivisionWeight { get; set; } = 4;
+        /// <summary>Share of the spotlight that comes from his club's stature.</summary>
+        public int FameClubWeight { get; set; } = 3;
+        /// <summary>Visibility lost per tier below the top flight (tier 1 = 100, tier 2 = 78, tier 3 = 56 at the default).</summary>
+        public int FameDivisionDropPerTier { get; set; } = 22;
+        /// <summary>Visibility of the deepest division: even the bottom of a pyramid is not invisible.</summary>
+        public int FameDivisionFloor { get; set; } = 20;
+        /// <summary>Age below which reputation lags talent — a teenager is not a household name yet.</summary>
+        public int FameYouthAge { get; set; } = 21;
+        /// <summary>Fame points lost per year of age under FameYouthAge.</summary>
+        public int FameYouthDropPerYear { get; set; } = 6;
+        /// <summary>Nation reputation assumed when a league carries no nation (a migrated pre-11.1 world).</summary>
+        public int FameDefaultNationReputation { get; set; } = 60;
+        /// <summary>Club stature assumed when a club has neither a generated strength nor a squad to average.</summary>
+        public int FameDefaultClubStrength { get; set; } = 50;
+        /// <summary>Fame below which a player is publicly anonymous — most of a big database sits here, which is what keeps the search screen from replacing the scouts. MEASURED, not guessed: at 55 two thirds of a shipped world came out readable for free (`none 57 / faint 835 / known 1809 / household 29` over 2,730 players on 2026-08-21), i.e. the exception had become the rule. At 66 a player needs roughly 78 overall in a top flight, or 91 in a weak third tier, before anyone outside his club has a useful opinion of him.</summary>
+        public int PublicFameThreshold { get; set; } = 66;
+        /// <summary>Percent of full knowledge that fame 100 grants for free. Deliberately short of 100: the most famous player alive is "known", not "measured".</summary>
+        public int PublicMaxKnowledgePercent { get; set; } = 60;
+        /// <summary>Rows per page on the world search screen (task 11.3) — paging is what keeps a 26,000-player result set from ever being built as UI.</summary>
+        public int SearchPageSize { get; set; } = 20;
     }
 
     /// <summary>

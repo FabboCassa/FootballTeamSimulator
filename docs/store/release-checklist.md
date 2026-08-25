@@ -46,6 +46,20 @@ Most of this section is now MACHINE-CHECKED. Stand the production stack up per
 Exit code 0 or the launch does not happen. What it cannot settle it prints as a MANUAL list rather
 than passing quietly — the boxes below marked *(preflight)* are the ones it settles.
 
+- [ ] **The shipped database size is decided by a MEASUREMENT, not a judgement** (Roadmap 11.1 →
+      11.3). `DatabaseSizePreset.For`'s default is Medium because desktop numbers say it is
+      comfortable — but the weakest targets decide it, and nobody has measured them. The tool
+      exists and ships in development builds: **main menu → "Database bench (dev)"**
+      (`DevFlags.WorldBench`), one preset per tap, printing generation time, managed heap, gzip
+      save size, search-index build and a whole-world query, on screen and to the player log.
+      Run it on a **WebGL build** and on a **mid-range Android phone**, for Small, Medium and
+      Large, and compare against the desktop harness figures
+      (`.\tools\balance.ps1 -Scenario world`: gen 2 / 7 / 20ms, save 186 / 559 / 1,372KB, a
+      whole-world search 1.2 / 3.7 / 11.4ms). Two decisions come out of it: the default preset,
+      and whether the search box needs a debounce (11.4ms per keystroke on desktop is 35-70ms on
+      WebGL at Large). If a preset cannot be loaded on the weakest target, it must not be OFFERED
+      there — a career's scope is immutable, so a player who picks Large on a phone is stuck with it.
+
 - [x] **Account deletion** — in-app (Account → Delete account) and the public page
       `web/delete-account.html`, both on `POST /auth/account/delete` (Roadmap 10.2a).
       Still to do at deploy time: publish the page and set `Cors__AllowedOrigins__0` to the

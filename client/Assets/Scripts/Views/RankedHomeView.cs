@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using UnityEngine;
 using UnityEngine.UIElements;
 
 namespace Fts.Views
@@ -18,9 +19,9 @@ namespace Fts.Views
     /// "what do I need to do today?" — your standing, the last result, the next kickoff, whether your inputs
     /// are ready, the market, and a short prioritised to-do list with a one-tap "confirm matchday".
     ///
-    /// Still the entry point for someone who has never joined (the enrol button) and the hub for the other
-    /// ranked screens (season, lineup, training, market, leaderboard). No logic, no Sim.Core, no Services:
-    /// events + a translate delegate, driven by <c>RankedHomeScreenPresenter</c>.
+    /// Rebuilt on the shared page scaffold (UI pass on the online flow): the digest is a scrolling stack of
+    /// panels, the navigation is one wrapping row of compact buttons instead of a column of full-width
+    /// menu bars, and Back / Refresh / Enrol live in the footer like every other screen.
     /// </summary>
     public sealed class RankedHomeView
     {
@@ -70,6 +71,8 @@ namespace Fts.Views
         private readonly Label _budgetLine;
         private readonly Label _offersLine;
 
+        private readonly VisualElement _navCard;
+        private readonly Label _navCaption;
         private readonly Button _enrolButton;
         private readonly Button _seasonButton;
         private readonly Button _lineupButton;
@@ -82,118 +85,139 @@ namespace Fts.Views
         private readonly Button _fillDevButton;    // dev-only
         private readonly Button _backButton;
 
+        // What the navigation plate currently offers — the plate hides itself when nothing is on it.
+        private bool _navActionsVisible;
+        private bool _autoEnrolVisible;
+        private bool _devToolsVisible;
+
         public RankedHomeView(Func<string, string> tr)
         {
             _tr = tr;
 
-            Root = UiKit.Screen(UiKit.Background);
-            var col = UiKit.PageColumn(UiKit.WidthMedium);
+            Root = UiKit.ScreenRoot();
+            VisualElement col = UiKit.PageColumn(UiKit.WidthMedium);
             Root.Add(col);
 
             _title = UiKit.ScreenTitle(string.Empty);
             col.Add(_title);
-            _subtitle = UiKit.Caption(string.Empty);
-            _subtitle.style.whiteSpace = WhiteSpace.Normal;
+            _subtitle = UiKit.HelpText(string.Empty);
             col.Add(_subtitle);
 
-            // Info / not-enrolled card.
-            _infoCard = UiKit.Card();
-            col.Add(_infoCard);
-            _info = UiKit.Caption(string.Empty);
-            _info.style.whiteSpace = WhiteSpace.Normal;
+            ScrollView body = UiKit.ListScroll();
+            col.Add(body);
+
+            // Info / not-enrolled panel.
+            _infoCard = UiKit.Panel();
+            body.Add(_infoCard);
+            _info = UiKit.PanelLine(string.Empty);
             _infoCard.Add(_info);
 
             // --- your day -------------------------------------------------------------------
-            _todayCard = UiKit.Card();
+            _todayCard = UiKit.Panel();
             _todayCard.style.display = DisplayStyle.None;
-            col.Add(_todayCard);
-            _todayCaption = UiKit.Subtitle(string.Empty);
-            _todayCard.Add(_todayCaption);
-            _position = UiKit.Caption(string.Empty);
-            _todayCard.Add(_position);
-            _lastResult = UiKit.Caption(string.Empty);
-            _todayCard.Add(_lastResult);
-            _nextMatch = UiKit.Caption(string.Empty);
-            _nextMatch.style.whiteSpace = WhiteSpace.Normal;
-            _todayCard.Add(_nextMatch);
-            _countdown = UiKit.Caption(string.Empty);
+            body.Add(_todayCard);
+            _todayCaption = Caption(_todayCard);
+            _position = Line(_todayCard);
+            _position.style.fontSize = 16;
+            _position.style.unityFontStyleAndWeight = FontStyle.Bold;
+            _lastResult = Line(_todayCard);
+            _nextMatch = Line(_todayCard);
+            _countdown = Line(_todayCard);
             _countdown.style.color = UiKit.Amber;
-            _todayCard.Add(_countdown);
+            _countdown.style.unityFontStyleAndWeight = FontStyle.Bold;
 
             // --- to do ----------------------------------------------------------------------
-            _todoCard = UiKit.Card();
+            _todoCard = UiKit.Panel();
             _todoCard.style.display = DisplayStyle.None;
-            col.Add(_todoCard);
-            _todoCaption = UiKit.Subtitle(string.Empty);
-            _todoCard.Add(_todoCaption);
+            body.Add(_todoCard);
+            _todoCaption = Caption(_todoCard);
             _todoList = new VisualElement();
             _todoCard.Add(_todoList);
-            _confirmButton = UiKit.PrimaryButton(string.Empty, () => ConfirmClicked?.Invoke());
+            _confirmButton = UiKit.SmallButton(string.Empty, () => ConfirmClicked?.Invoke(), 220f);
+            _confirmButton.style.marginLeft = 0;
             _confirmButton.style.marginTop = UiKit.SpaceSm;
+            _confirmButton.style.alignSelf = Align.FlexStart;
+            UiKit.SetSmallButtonAccent(_confirmButton, true);
             _confirmButton.style.display = DisplayStyle.None;
             _todoCard.Add(_confirmButton);
 
             // --- your inputs ----------------------------------------------------------------
-            _inputsCard = UiKit.Card();
+            _inputsCard = UiKit.Panel();
             _inputsCard.style.display = DisplayStyle.None;
-            col.Add(_inputsCard);
-            _inputsCaption = UiKit.Subtitle(string.Empty);
-            _inputsCard.Add(_inputsCaption);
-            _lineupLine = UiKit.Caption(string.Empty);
-            _inputsCard.Add(_lineupLine);
-            _trainingLine = UiKit.Caption(string.Empty);
-            _inputsCard.Add(_trainingLine);
+            body.Add(_inputsCard);
+            _inputsCaption = Caption(_inputsCard);
+            _lineupLine = Line(_inputsCard);
+            _trainingLine = Line(_inputsCard);
 
             // --- market ---------------------------------------------------------------------
-            _marketCard = UiKit.Card();
+            _marketCard = UiKit.Panel();
             _marketCard.style.display = DisplayStyle.None;
-            col.Add(_marketCard);
-            _marketCaption = UiKit.Subtitle(string.Empty);
-            _marketCard.Add(_marketCaption);
-            _windowLine = UiKit.Caption(string.Empty);
-            _marketCard.Add(_windowLine);
-            _budgetLine = UiKit.Caption(string.Empty);
-            _marketCard.Add(_budgetLine);
-            _offersLine = UiKit.Caption(string.Empty);
-            _offersLine.style.whiteSpace = WhiteSpace.Normal;
-            _marketCard.Add(_offersLine);
+            body.Add(_marketCard);
+            _marketCaption = Caption(_marketCard);
+            _windowLine = Line(_marketCard);
+            _budgetLine = Line(_marketCard);
+            _offersLine = Line(_marketCard);
 
-            // --- actions --------------------------------------------------------------------
-            _enrolButton = UiKit.PrimaryButton(string.Empty, () => EnrolClicked?.Invoke());
-            col.Add(_enrolButton);
+            // --- navigation -----------------------------------------------------------------
+            _navCard = UiKit.Panel();
+            body.Add(_navCard);
+            _navCaption = Caption(_navCard);
+            VisualElement nav = UiKit.Toolbar();
+            nav.style.marginBottom = 0;
+            _navCard.Add(nav);
 
-            _seasonButton = Nav(col, () => SeasonClicked?.Invoke());
-            _lineupButton = Nav(col, () => LineupClicked?.Invoke());
-            _trainingButton = Nav(col, () => TrainingClicked?.Invoke());
-            _marketButton = Nav(col, () => MarketClicked?.Invoke());
-            _leaderboardButton = Nav(col, () => LeaderboardClicked?.Invoke());
-
-            _autoEnrolButton = Nav(col, () => AutoEnrolClicked?.Invoke());
-            _refreshButton = Nav(col, () => RefreshClicked?.Invoke());
+            _seasonButton = Nav(nav, () => SeasonClicked?.Invoke());
+            UiKit.SetSmallButtonAccent(_seasonButton, true);
+            _lineupButton = Nav(nav, () => LineupClicked?.Invoke());
+            _trainingButton = Nav(nav, () => TrainingClicked?.Invoke());
+            _marketButton = Nav(nav, () => MarketClicked?.Invoke());
+            _leaderboardButton = Nav(nav, () => LeaderboardClicked?.Invoke());
+            _autoEnrolButton = Nav(nav, () => AutoEnrolClicked?.Invoke());
+            // Dev-only: fill the placement group with bots + start the season (hidden unless DevFlags).
+            _fillDevButton = Nav(nav, () => FillDevClicked?.Invoke());
+            _navCard.style.display = DisplayStyle.None;
 
             _status = UiKit.Caption(string.Empty);
-            _status.style.marginTop = UiKit.SpaceSm;
+            _status.style.marginTop = UiKit.SpaceXs;
             _status.style.whiteSpace = WhiteSpace.Normal;
+            _status.style.flexShrink = 0f;
             _status.style.display = DisplayStyle.None;
             col.Add(_status);
 
-            // Dev-only: fill the placement group with bots + start the season (hidden unless DevFlags).
-            _fillDevButton = UiKit.MenuButton(string.Empty, () => FillDevClicked?.Invoke());
-            _fillDevButton.style.marginTop = UiKit.SpaceMd;
-            _fillDevButton.style.display = DisplayStyle.None;
-            col.Add(_fillDevButton);
-
-            _backButton = UiKit.MenuButton(string.Empty, () => BackClicked?.Invoke());
-            _backButton.style.marginTop = UiKit.SpaceSm;
-            col.Add(_backButton);
+            VisualElement footer = UiKit.FooterBar();
+            _backButton = UiKit.FooterButton(string.Empty, () => BackClicked?.Invoke());
+            footer.Add(_backButton);
+            _refreshButton = UiKit.FooterButton(string.Empty, () => RefreshClicked?.Invoke());
+            _refreshButton.style.display = DisplayStyle.None;
+            footer.Add(_refreshButton);
+            _enrolButton = UiKit.FooterPrimaryButton(string.Empty, () => EnrolClicked?.Invoke());
+            footer.Add(_enrolButton);
+            col.Add(footer);
 
             UpdateTexts();
         }
 
+        private static Label Caption(VisualElement parent)
+        {
+            Label label = UiKit.SectionLabel(string.Empty);
+            label.style.marginTop = 0;
+            parent.Add(label);
+            return label;
+        }
+
+        private static Label Line(VisualElement parent)
+        {
+            Label label = UiKit.PanelLine(string.Empty);
+            parent.Add(label);
+            return label;
+        }
+
         private static Button Nav(VisualElement parent, Action onClick)
         {
-            var b = UiKit.MenuButton(string.Empty, onClick);
-            b.style.marginTop = UiKit.SpaceXs;
+            Button b = UiKit.SmallButton(string.Empty, onClick, 150f);
+            b.style.marginLeft = 0;
+            b.style.marginRight = 6;
+            b.style.marginBottom = 4;
             b.style.display = DisplayStyle.None;
             parent.Add(b);
             return b;
@@ -201,7 +225,11 @@ namespace Fts.Views
 
         // --- content ---------------------------------------------------------------------------
 
-        public void SetSubtitle(string text) => _subtitle.text = text;
+        public void SetSubtitle(string text)
+        {
+            _subtitle.text = text ?? string.Empty;
+            _subtitle.style.display = string.IsNullOrEmpty(text) ? DisplayStyle.None : DisplayStyle.Flex;
+        }
 
         public void SetInfo(string text)
         {
@@ -209,7 +237,7 @@ namespace Fts.Views
             _infoCard.style.display = string.IsNullOrEmpty(text) ? DisplayStyle.None : DisplayStyle.Flex;
         }
 
-        /// <summary>The "your day" card: where you stand, how the last match went, who is next and when.
+        /// <summary>The "your day" panel: where you stand, how the last match went, who is next and when.
         /// Any empty string hides that line.</summary>
         public void SetToday(bool visible, string position, string lastResult, string nextMatch, string countdown)
         {
@@ -228,28 +256,38 @@ namespace Fts.Views
 
             if (rows == null || rows.Count == 0)
             {
-                var done = UiKit.Caption(allDoneText);
+                Label done = UiKit.PanelLine(allDoneText);
                 done.style.color = UiKit.Positive;
-                done.style.whiteSpace = WhiteSpace.Normal;
                 _todoList.Add(done);
                 return;
             }
 
-            foreach (RankedTodoRowVm row in rows)
+            for (int i = 0; i < rows.Count; i++)
             {
-                var line = UiKit.Row();
-                line.style.marginTop = UiKit.SpaceXs;
+                RankedTodoRowVm row = rows[i];
 
-                var label = UiKit.Caption(row.Label);
+                var line = new VisualElement();
+                line.style.flexDirection = FlexDirection.Row;
+                line.style.alignItems = Align.Center;
+                line.style.minHeight = 38;
+                line.style.flexShrink = 0f;
+                line.style.paddingLeft = UiKit.SpaceSm;
+                line.style.paddingRight = UiKit.SpaceSm;
+                OnlineTableKit.Stripe(line, false, i);
+
+                var label = new Label(row.Label ?? string.Empty);
+                label.style.fontSize = 14;
+                label.style.color = UiKit.TextPrimary;
                 label.style.flexGrow = 1f;
+                label.style.flexShrink = 1f;
+                label.style.minWidth = 0f;
                 label.style.whiteSpace = WhiteSpace.Normal;
                 line.Add(label);
 
                 if (!string.IsNullOrEmpty(row.ActionLabel))
                 {
                     int kind = row.Kind;
-                    var go = UiKit.MenuButton(row.ActionLabel, () => TodoClicked?.Invoke(kind));
-                    go.style.marginLeft = UiKit.SpaceSm;
+                    Button go = UiKit.SmallButton(row.ActionLabel, () => TodoClicked?.Invoke(kind), 90f);
                     line.Add(go);
                 }
 
@@ -264,7 +302,7 @@ namespace Fts.Views
             _confirmButton.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
         }
 
-        /// <summary>The stored-inputs card: lineup readiness (green when confirmed) + training focus.</summary>
+        /// <summary>The stored-inputs panel: lineup readiness (green when confirmed) + training focus.</summary>
         public void SetInputs(bool visible, string lineupLine, bool lineupConfirmed, string trainingLine)
         {
             _inputsCard.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
@@ -273,7 +311,7 @@ namespace Fts.Views
             _trainingLine.text = trainingLine;
         }
 
-        /// <summary>The market card: window state (green open / muted shut), budget, offers + lots.</summary>
+        /// <summary>The market panel: window state (green open / muted shut), budget, offers + lots.</summary>
         public void SetMarket(bool visible, string windowLine, bool windowOpen, string budgetLine, string offersLine)
         {
             _marketCard.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
@@ -290,19 +328,31 @@ namespace Fts.Views
         /// refresh) — hidden until the caller is enrolled.</summary>
         public void SetActionsVisible(bool visible)
         {
-            var display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+            _navActionsVisible = visible;
+            DisplayStyle display = visible ? DisplayStyle.Flex : DisplayStyle.None;
             _seasonButton.style.display = display;
             _lineupButton.style.display = display;
             _trainingButton.style.display = display;
             _marketButton.style.display = display;
             _leaderboardButton.style.display = display;
             _refreshButton.style.display = display;
+            RefreshNavVisibility();
         }
 
         public void SetAutoEnrol(bool visible, string label)
         {
+            _autoEnrolVisible = visible;
             _autoEnrolButton.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
             _autoEnrolButton.text = label;
+            RefreshNavVisibility();
+        }
+
+        /// <summary>The navigation panel disappears entirely when it has nothing to offer (not enrolled yet,
+        /// dev tools off) instead of leaving an empty plate on the page.</summary>
+        private void RefreshNavVisibility()
+        {
+            bool any = _navActionsVisible || _autoEnrolVisible || _devToolsVisible;
+            _navCard.style.display = any ? DisplayStyle.Flex : DisplayStyle.None;
         }
 
         public void ShowStatus(string message, bool isError)
@@ -329,8 +379,12 @@ namespace Fts.Views
         }
 
         /// <summary>Shows the dev-only "fill with bots" button (DevFlags-gated by the presenter).</summary>
-        public void SetDevToolsVisible(bool visible) =>
+        public void SetDevToolsVisible(bool visible)
+        {
+            _devToolsVisible = visible;
             _fillDevButton.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+            RefreshNavVisibility();
+        }
 
         public void UpdateTexts()
         {
@@ -339,6 +393,7 @@ namespace Fts.Views
             _todoCaption.text = _tr("ranked.today.todo_caption");
             _inputsCaption.text = _tr("ranked.today.inputs_caption");
             _marketCaption.text = _tr("ranked.today.market_caption");
+            _navCaption.text = _tr("ranked.nav_caption");
             _enrolButton.text = _tr("ranked.enrol");
             _seasonButton.text = _tr("ranked.open_season");
             _lineupButton.text = _tr("ranked.lineup.open");

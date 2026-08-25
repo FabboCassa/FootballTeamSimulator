@@ -10,6 +10,9 @@ namespace Fts.Views
     /// (incoming/outgoing), and BROWSE (a rival club's squad, to offer for a player). The presenter formats
     /// every string, owns the state, polls, and validates server-side; the view only emits events and renders
     /// the rows it is handed. An inline amount panel serves both bidding and offering.
+    ///
+    /// On the shared page scaffold: a status panel, segmented tabs, one panel of striped rows filling the
+    /// page, the inline panels above the footer, and Back / Refresh in the footer.
     /// </summary>
     public sealed class RankedMarketView
     {
@@ -42,12 +45,8 @@ namespace Fts.Views
         private readonly Label _status;
         private readonly Button _backButton;
 
-        // Inline amount panel (bid or offer).
-        private readonly VisualElement _amountPanel;
-        private readonly Label _amountTitle;
-        private readonly TextField _amountField;
-        private readonly Button _amountConfirm;
-        private readonly Button _amountCancel;
+        // Inline bid/offer control: round raises sized to the lot, never a figure to the euro.
+        private readonly BidPanel _bid;
 
         // Inline report panel (Phase 9.5): pick a reason, no keyboard.
         private readonly VisualElement _reportPanel;
@@ -71,6 +70,13 @@ namespace Fts.Views
         {
             public string Title;
             public string Detail;
+            /// <summary>0 GK · 1 def · 2 mid · 3 att → the reparto colour chip; -1 = no chip.</summary>
+            public int RoleGroup = -1;
+            public string RoleAbbr;
+            /// <summary>Short state badge next to the title (leading / outbid / pending). Null = none.</summary>
+            public string Badge;
+            /// <summary>0 neutral · 1 good (green) · 2 bad (red) · 3 accent.</summary>
+            public int BadgeKind;
             public string PrimaryLabel;      // null = no primary action
             public Action PrimaryAction;
             public string SecondaryLabel;    // null = no secondary action
@@ -78,127 +84,102 @@ namespace Fts.Views
             public bool Dimmed;
         }
 
-        public RankedMarketView(Func<string, string> tr)
+        public RankedMarketView(Func<string, string> tr, Func<long, string> money)
         {
             _tr = tr;
 
             Root = UiKit.ScreenRoot();
-
-            var col = UiKit.PageColumn(UiKit.WidthWide);
-            col.style.flexGrow = 1f;
+            VisualElement col = UiKit.PageColumn(UiKit.WidthWide);
             Root.Add(col);
 
             _header = UiKit.ScreenTitle(string.Empty);
+            _header.style.marginBottom = UiKit.SpaceSm;
             col.Add(_header);
 
-            _budget = UiKit.Caption(string.Empty);
-            _budget.style.unityTextAlign = TextAnchor.MiddleCenter;
-            col.Add(_budget);
-
+            // ---- budget + window ----------------------------------------------------------------
+            VisualElement head = UiKit.Panel();
+            col.Add(head);
+            _budget = UiKit.PanelLine(string.Empty);
+            _budget.style.fontSize = 15;
+            _budget.style.unityFontStyleAndWeight = FontStyle.Bold;
+            head.Add(_budget);
             _banner = UiKit.Caption(string.Empty);
-            _banner.style.unityTextAlign = TextAnchor.MiddleCenter;
             _banner.style.whiteSpace = WhiteSpace.Normal;
-            col.Add(_banner);
+            head.Add(_banner);
 
-            // Tabs.
-            var tabs = new VisualElement();
-            tabs.style.flexDirection = FlexDirection.Row;
-            tabs.style.justifyContent = Justify.Center;
-            tabs.style.flexShrink = 0f;
-            tabs.style.marginTop = UiKit.SpaceXs;
-            _tabAuctions = TabButton(() => TabSelected?.Invoke(0));
-            _tabOffers = TabButton(() => TabSelected?.Invoke(1));
-            _tabBrowse = TabButton(() => TabSelected?.Invoke(2));
+            VisualElement controls = UiKit.Toolbar();
+            controls.style.marginTop = UiKit.SpaceSm;
+            controls.style.marginBottom = 0;
+            head.Add(controls);
+            _botButton = UiKit.SmallButton(string.Empty, () => BotMarketClicked?.Invoke(), 160f);
+            _botButton.style.marginLeft = 0;
+            _botButton.style.display = DisplayStyle.None; // dev-only
+            controls.Add(_botButton);
+
+            // ---- tabs -----------------------------------------------------------------------------
+            VisualElement tabs = UiKit.Toolbar();
+            _tabAuctions = UiKit.TabButton(string.Empty, () => TabSelected?.Invoke(0));
+            _tabOffers = UiKit.TabButton(string.Empty, () => TabSelected?.Invoke(1));
+            _tabBrowse = UiKit.TabButton(string.Empty, () => TabSelected?.Invoke(2));
+            _tabBrowse.style.marginRight = 0;
             tabs.Add(_tabAuctions);
             tabs.Add(_tabOffers);
             tabs.Add(_tabBrowse);
             col.Add(tabs);
 
-            // Controls.
-            var controls = new VisualElement();
-            controls.style.flexDirection = FlexDirection.Row;
-            controls.style.justifyContent = Justify.Center;
-            controls.style.flexShrink = 0f;
-            _refreshButton = TabButton(() => RefreshClicked?.Invoke());
-            _botButton = TabButton(() => BotMarketClicked?.Invoke());
-            _botButton.style.display = DisplayStyle.None; // dev-only
-            controls.Add(_refreshButton);
-            controls.Add(_botButton);
-            col.Add(controls);
+            VisualElement listPanel = UiKit.Panel(grow: true);
+            col.Add(listPanel);
+            _list = UiKit.ListScroll();
+            listPanel.Add(_list);
 
-            _list = new ScrollView();
-            _list.style.flexGrow = 1f;
-            _list.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
-            col.Add(_list);
+            // ---- inline bid/offer control -----------------------------------------------------------
+            _bid = new BidPanel(money);
+            _bid.Confirmed += (_, amount) => AmountConfirmClicked?.Invoke(amount);
+            _bid.Cancelled += () => AmountCancelClicked?.Invoke();
+            col.Add(_bid.Root);
 
-            // Inline amount panel.
-            _amountPanel = UiKit.Card();
-            _amountPanel.style.display = DisplayStyle.None;
-            col.Add(_amountPanel);
-            _amountTitle = UiKit.Caption(string.Empty);
-            _amountTitle.style.whiteSpace = WhiteSpace.Normal;
-            _amountPanel.Add(_amountTitle);
-            _amountField = new TextField { maxLength = 12 };
-            _amountField.style.minHeight = 40;
-            _amountPanel.Add(_amountField);
-            var amountRow = new VisualElement();
-            amountRow.style.flexDirection = FlexDirection.Row;
-            _amountPanel.Add(amountRow);
-            _amountConfirm = UiKit.MenuButton(string.Empty, () =>
-            {
-                long.TryParse(DigitsOnly(_amountField.value), out long amount);
-                AmountConfirmClicked?.Invoke(amount);
-            });
-            _amountCancel = UiKit.MenuButton(string.Empty, () => AmountCancelClicked?.Invoke());
-            amountRow.Add(_amountConfirm);
-            amountRow.Add(_amountCancel);
-
-            // Inline report panel (Phase 9.5): one tap per reason, deliberately keyboard-free so it works
-            // the same on a phone as on a desktop.
-            _reportPanel = UiKit.Card();
+            // ---- inline report panel (Phase 9.5) ----------------------------------------------------
+            // One tap per reason, deliberately keyboard-free so it works the same on a phone as on a desktop.
+            _reportPanel = UiKit.Panel();
             _reportPanel.style.display = DisplayStyle.None;
             col.Add(_reportPanel);
-            _reportTitle = UiKit.Caption(string.Empty);
-            _reportTitle.style.whiteSpace = WhiteSpace.Normal;
+            _reportTitle = UiKit.PanelLine(string.Empty);
             _reportPanel.Add(_reportTitle);
+            VisualElement reasons = UiKit.Toolbar();
+            reasons.style.marginTop = UiKit.SpaceXs;
+            reasons.style.marginBottom = 0;
+            _reportPanel.Add(reasons);
             for (int i = 0; i < ReasonKeys.Length; i++)
             {
                 int reason = i;
-                var b = UiKit.MenuButton(string.Empty, () => ReportReasonClicked?.Invoke(reason));
+                Button b = UiKit.SmallButton(string.Empty, () => ReportReasonClicked?.Invoke(reason), 130f);
+                b.style.marginLeft = 0;
+                b.style.marginRight = 6;
+                b.style.marginBottom = 4;
                 _reportReasons.Add(b);
-                _reportPanel.Add(b);
+                reasons.Add(b);
             }
-            _reportCancel = UiKit.MenuButton(string.Empty, () => ReportCancelClicked?.Invoke());
-            _reportPanel.Add(_reportCancel);
+            _reportCancel = UiKit.SmallButton(string.Empty, () => ReportCancelClicked?.Invoke(), 110f);
+            _reportCancel.style.marginLeft = 0;
+            _reportCancel.style.marginBottom = 4;
+            reasons.Add(_reportCancel);
 
             _status = UiKit.Caption(string.Empty);
+            _status.style.marginTop = UiKit.SpaceXs;
             _status.style.whiteSpace = WhiteSpace.Normal;
+            _status.style.flexShrink = 0f;
             _status.style.display = DisplayStyle.None;
             col.Add(_status);
 
-            _backButton = UiKit.MenuButton(string.Empty, () => BackClicked?.Invoke());
-            _backButton.style.marginTop = UiKit.SpaceSm;
-            col.Add(_backButton);
+            VisualElement footer = UiKit.FooterBar();
+            _backButton = UiKit.FooterButton(string.Empty, () => BackClicked?.Invoke());
+            footer.Add(_backButton);
+            _refreshButton = UiKit.FooterButton(string.Empty, () => RefreshClicked?.Invoke());
+            footer.Add(_refreshButton);
+            col.Add(footer);
 
+            SetActiveTab(0);
             UpdateTexts();
-        }
-
-        private static Button TabButton(Action onClick)
-        {
-            var b = UiKit.MenuButton(string.Empty, onClick);
-            b.style.marginLeft = 4;
-            b.style.marginRight = 4;
-            b.style.paddingLeft = UiKit.SpaceSm;
-            b.style.paddingRight = UiKit.SpaceSm;
-            return b;
-        }
-
-        private static string DigitsOnly(string s)
-        {
-            if (string.IsNullOrEmpty(s)) return string.Empty;
-            var sb = new System.Text.StringBuilder();
-            foreach (char c in s) if (c >= '0' && c <= '9') sb.Append(c);
-            return sb.ToString();
         }
 
         public void SetHeader(string text) => _header.text = text;
@@ -212,9 +193,9 @@ namespace Fts.Views
 
         public void SetActiveTab(int tab)
         {
-            _tabAuctions.style.backgroundColor = tab == 0 ? UiKit.AccentDark : UiKit.SurfaceAlt;
-            _tabOffers.style.backgroundColor = tab == 1 ? UiKit.AccentDark : UiKit.SurfaceAlt;
-            _tabBrowse.style.backgroundColor = tab == 2 ? UiKit.AccentDark : UiKit.SurfaceAlt;
+            UiKit.SetTabActive(_tabAuctions, tab == 0);
+            UiKit.SetTabActive(_tabOffers, tab == 1);
+            UiKit.SetTabActive(_tabBrowse, tab == 2);
         }
 
         public void SetRows(IReadOnlyList<RowVm> rows)
@@ -222,57 +203,105 @@ namespace Fts.Views
             _list.Clear();
             if (rows == null || rows.Count == 0)
             {
-                _list.Add(UiKit.Caption(_tr("ranked.market.empty")));
+                Label empty = UiKit.PanelLine(_tr("ranked.market.empty"));
+                empty.style.color = UiKit.TextMuted;
+                _list.Add(empty);
                 return;
             }
 
-            foreach (var row in rows)
+            for (int i = 0; i < rows.Count; i++)
             {
-                var card = UiKit.Card();
-                if (row.Dimmed) card.style.opacity = 0.6f;
+                RowVm vm = rows[i];
 
-                var title = UiKit.Caption(row.Title);
-                title.style.whiteSpace = WhiteSpace.Normal;
-                title.style.color = UiKit.TextPrimary;
-                card.Add(title);
+                var row = new VisualElement();
+                row.style.flexDirection = FlexDirection.Row;
+                row.style.alignItems = Align.Center;
+                row.style.minHeight = 46;
+                row.style.flexShrink = 0f;
+                row.style.paddingLeft = UiKit.SpaceSm;
+                row.style.paddingRight = UiKit.SpaceSm;
+                row.style.paddingTop = 4;
+                row.style.paddingBottom = 4;
+                OnlineTableKit.Stripe(row, vm.BadgeKind == 1, i);
+                if (vm.Dimmed) row.style.opacity = 0.6f;
 
-                if (!string.IsNullOrEmpty(row.Detail))
+                // Reparto colour first, same language as every other player list in the game.
+                if (vm.RoleGroup >= 0)
                 {
-                    var detail = UiKit.Caption(row.Detail);
-                    detail.style.whiteSpace = WhiteSpace.Normal;
-                    card.Add(detail);
+                    VisualElement chip = PlayerRowKit.RoleChip(vm.RoleAbbr, vm.RoleGroup, 46f);
+                    chip.style.height = 30;
+                    chip.style.marginRight = UiKit.SpaceSm;
+                    row.Add(chip);
                 }
 
-                if (row.PrimaryLabel != null || row.SecondaryLabel != null)
+                var text = new VisualElement();
+                text.style.flexGrow = 1f;
+                text.style.flexShrink = 1f;
+                text.style.minWidth = 0f;
+                row.Add(text);
+
+                VisualElement titleRow = UiKit.Row();
+                text.Add(titleRow);
+                var title = new Label(vm.Title ?? string.Empty);
+                title.style.fontSize = 14;
+                title.style.unityFontStyleAndWeight = FontStyle.Bold;
+                title.style.color = UiKit.TextPrimary;
+                title.style.flexShrink = 1f;
+                title.style.whiteSpace = WhiteSpace.Normal;
+                titleRow.Add(title);
+
+                if (!string.IsNullOrEmpty(vm.Badge))
+                {
+                    Color background =
+                        vm.BadgeKind == 1 ? UiKit.AccentDark :
+                        vm.BadgeKind == 2 ? UiKit.Danger :
+                        vm.BadgeKind == 3 ? UiKit.Accent : UiKit.SurfaceAlt;
+                    Label badge = UiKit.Pill(vm.Badge, background, UiKit.TextPrimary);
+                    badge.style.fontSize = 11;
+                    badge.style.marginLeft = UiKit.SpaceSm;
+                    badge.style.flexShrink = 0f;
+                    titleRow.Add(badge);
+                }
+
+                if (!string.IsNullOrEmpty(vm.Detail))
+                {
+                    var detail = new Label(vm.Detail);
+                    detail.style.fontSize = 13;
+                    detail.style.color = UiKit.TextMuted;
+                    detail.style.whiteSpace = WhiteSpace.Normal;
+                    text.Add(detail);
+                }
+
+                if (vm.PrimaryLabel != null || vm.SecondaryLabel != null)
                 {
                     var actions = new VisualElement();
                     actions.style.flexDirection = FlexDirection.Row;
-                    card.Add(actions);
-                    if (row.PrimaryLabel != null)
+                    actions.style.alignItems = Align.Center;
+                    actions.style.flexShrink = 0f;
+                    row.Add(actions);
+
+                    if (vm.PrimaryLabel != null)
                     {
-                        var p = row.PrimaryAction;
-                        actions.Add(UiKit.MenuButton(row.PrimaryLabel, () => p?.Invoke()));
+                        Action p = vm.PrimaryAction;
+                        Button b = UiKit.SmallButton(vm.PrimaryLabel, () => p?.Invoke(), 100f);
+                        UiKit.SetSmallButtonAccent(b, true);
+                        actions.Add(b);
                     }
-                    if (row.SecondaryLabel != null)
+                    if (vm.SecondaryLabel != null)
                     {
-                        var s = row.SecondaryAction;
-                        actions.Add(UiKit.MenuButton(row.SecondaryLabel, () => s?.Invoke()));
+                        Action s = vm.SecondaryAction;
+                        actions.Add(UiKit.SmallButton(vm.SecondaryLabel, () => s?.Invoke(), 100f));
                     }
                 }
 
-                _list.Add(card);
+                _list.Add(row);
             }
         }
 
-        /// <summary>Opens the inline amount panel (bidding or offering), pre-filled with a suggestion.</summary>
-        public void ShowAmountPanel(string title, long suggested)
-        {
-            _amountTitle.text = title;
-            _amountField.SetValueWithoutNotify(suggested.ToString());
-            _amountPanel.style.display = DisplayStyle.Flex;
-        }
+        /// <summary>Opens the inline bid/offer control on a lot or a player.</summary>
+        public void ShowAmountPanel(BidPanelVm vm) => _bid.Show(vm);
 
-        public void HideAmountPanel() => _amountPanel.style.display = DisplayStyle.None;
+        public void HideAmountPanel() => _bid.Hide();
 
         /// <summary>Opens the report panel for one club (Phase 9.5). <paramref name="title"/> already names
         /// the club, so the panel needs no other context.</summary>
@@ -297,8 +326,8 @@ namespace Fts.Views
         {
             _refreshButton.SetEnabled(!busy);
             _botButton.SetEnabled(!busy);
-            _amountConfirm.SetEnabled(!busy);
-            foreach (var b in _reportReasons) b.SetEnabled(!busy);
+            _bid.SetBusy(busy);
+            foreach (Button b in _reportReasons) b.SetEnabled(!busy);
         }
 
         /// <summary>Shows the dev-only "bots react" button (DevFlags-gated by the presenter).</summary>
@@ -313,8 +342,6 @@ namespace Fts.Views
             _tabBrowse.text = _tr("ranked.market.tab_browse");
             _refreshButton.text = _tr("ranked.refresh");
             _botButton.text = _tr("ranked.market.dev_bots");
-            _amountConfirm.text = _tr("ranked.market.confirm");
-            _amountCancel.text = _tr("ranked.market.cancel");
             for (int i = 0; i < _reportReasons.Count; i++) _reportReasons[i].text = _tr(ReasonKeys[i]);
             _reportCancel.text = _tr("ranked.market.cancel");
             _backButton.text = _tr("common.back");

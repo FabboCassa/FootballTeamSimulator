@@ -57,21 +57,45 @@ namespace Fts.Presenters
         public void Enter()
         {
             _view.BackClicked += OnBack;
+            _view.WatchClicked += OnWatch;
             Render();
         }
 
         public void Exit()
         {
             _view.BackClicked -= OnBack;
+            _view.WatchClicked -= OnWatch;
         }
 
         private void OnBack() => _navigator.Pop();
 
+        /// <summary>
+        /// Task 11.3 — put this player under observation, or call the scout off. This is the
+        /// roadmap's "direct assignments start from where you actually are": the profile is reached
+        /// from a club's squad, from the market and from the world search, so one button serves all
+        /// three without any of them having to know what a scouting brief is.
+        /// </summary>
+        private void OnWatch()
+        {
+            int playerId = _target.PlayerId;
+            if (_scouting.IsWatching(playerId))
+                _scouting.Unwatch(playerId);
+            else
+                _scouting.Watch(playerId);
+
+            Render();
+        }
+
         private void Render()
         {
-            Player player = _career.FindPlayer(_target.PlayerId);
+            // Task 11.3: resolve him ANYWHERE in the world, not only in the divisions the career
+            // plays. Since 11.1 a scouting report can name a player from a data-only club in Brazil,
+            // and until now opening that report landed on "unknown player".
+            Player player = _career.FindPlayer(_target.PlayerId) ?? _career.FindPlayerInWorld(_target.PlayerId);
             if (player == null)
             {
+                _view.SetReputation(string.Empty);
+                _view.SetWatchAction(string.Empty, false, false, false);
                 _view.SetAvatar(null);
                 _view.SetIdentity(_loc.Tr("profile.unknown_player"), string.Empty, string.Empty);
                 _view.SetConditionVisible(false);
@@ -85,6 +109,7 @@ namespace Fts.Presenters
 
             // Portrait placeholder in his club's kit colours (task 6.8).
             int clubId = ClubIdOf(player.Id);
+            RenderReputation(player, clubId, owned);
             if (clubId >= 0)
                 _view.SetAvatar(Crests.Avatar(_identity.Visual(clubId), 72f, player.FullName));
             else
@@ -202,15 +227,54 @@ namespace Fts.Presenters
         private string RoleName(PositionRole role) =>
             _loc.Tr("role." + role.ToString().ToLowerInvariant());
 
-        /// <summary>The id of the club that holds this player, or -1 if he's a free agent / not found.</summary>
+        /// <summary>
+        /// The id of the club that holds this player, or -1 if he's a free agent / not found. Rides
+        /// the world's player index (task 11.1/11.3) rather than walking the playable divisions, so
+        /// it answers for a club anywhere in the world and costs a dictionary probe.
+        /// </summary>
         private int ClubIdOf(int playerId)
         {
-            foreach (League league in _career.Leagues)
-                foreach (Club club in league.Clubs)
-                    foreach (Player p in club.Squad.Players)
-                        if (p.Id == playerId)
-                            return club.Id;
-            return -1;
+            Club club = _career.World != null ? _career.World.ClubOfPlayer(playerId) : null;
+            return club != null ? club.Id : -1;
+        }
+
+        /// <summary>
+        /// The line under the potential band: where he plays and how publicly known he is (task
+        /// 11.3). Your own players do not get it — you do not read your own squad off the news.
+        /// </summary>
+        private void RenderReputation(Player player, int clubId, bool owned)
+        {
+            if (owned)
+            {
+                _view.SetReputation(string.Empty);
+                _view.SetWatchAction(string.Empty, false, false, false);
+                return;
+            }
+
+            Club club = clubId >= 0 ? _career.World.FindClub(clubId) : null;
+            League league = clubId >= 0 ? _career.World.LeagueOf(clubId) : null;
+            Nation nation = league != null && !string.IsNullOrEmpty(league.NationCode)
+                ? _career.World.FindNation(league.NationCode)
+                : null;
+
+            string where = club != null && league != null
+                ? (nation != null
+                    ? _loc.Tr("profile.where", club.Name, nation.Name, league.Name)
+                    : _loc.Tr("profile.where_league", club.Name, league.Name))
+                : club != null ? club.Name : string.Empty;
+
+            string fame = _loc.Tr("profile.fame",
+                _loc.Tr("scouting.fame_tier." + _scouting.FameTierOf(player.Id).ToString(
+                    System.Globalization.CultureInfo.InvariantCulture)));
+
+            _view.SetReputation(string.IsNullOrEmpty(where) ? fame : where + " · " + fame);
+
+            bool watching = _scouting.IsWatching(player.Id);
+            _view.SetWatchAction(
+                _loc.Tr(watching ? "profile.stop_watching" : "profile.watch"),
+                true,
+                watching || _scouting.HasFreeSlot(),
+                watching);
         }
     }
 }

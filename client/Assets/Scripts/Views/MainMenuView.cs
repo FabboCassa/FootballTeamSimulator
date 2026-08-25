@@ -17,6 +17,8 @@ namespace Fts.Views
         public event Action OnlineLeaguesClicked;
         public event Action RankedClicked;
         public event Action LanguageClicked;
+        /// <summary>Dev only (task 11.3): the database bench.</summary>
+        public event Action WorldBenchClicked;
 
         public VisualElement Root { get; }
 
@@ -28,6 +30,7 @@ namespace Fts.Views
         private readonly Button _accountButton;
         private readonly Button _onlineButton;
         private readonly Button _rankedButton;
+        private readonly Button _benchButton;
         private readonly Button _languageButton;
         private readonly Label _errorLabel;
 
@@ -51,6 +54,9 @@ namespace Fts.Views
             Root.Add(_onlineButton);
             _rankedButton = UiKit.MenuButton(string.Empty, () => RankedClicked?.Invoke());
             Root.Add(_rankedButton);
+            _benchButton = UiKit.MenuButton(string.Empty, () => WorldBenchClicked?.Invoke());
+            _benchButton.style.display = DisplayStyle.None;
+            Root.Add(_benchButton);
             _languageButton = UiKit.MenuButton(string.Empty, () => LanguageClicked?.Invoke());
             Root.Add(_languageButton);
 
@@ -73,9 +79,16 @@ namespace Fts.Views
             _accountButton.text = _tr("mainmenu.account");
             _onlineButton.text = _tr("mainmenu.online_leagues");
             _rankedButton.text = _tr("mainmenu.ranked");
+            _benchButton.text = _tr("mainmenu.world_bench");
         }
 
         public void SetLanguageLabel(string text) => _languageButton.text = text;
+
+        /// <summary>Dev only: the database bench button is hidden in a release build.</summary>
+        public void SetWorldBenchVisible(bool visible)
+        {
+            _benchButton.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+        }
 
         public void SetContinueVisible(bool visible)
         {
