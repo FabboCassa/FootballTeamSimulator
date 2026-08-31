@@ -147,6 +147,21 @@ public sealed class RankedTodayService : IRankedTodayService
                 bool home = upcoming.HomeClubId == myClubId;
                 Guid oppId = home ? upcoming.AwayClubId : upcoming.HomeClubId;
                 var opp = clubById.TryGetValue(oppId, out var o) ? o : null;
+                // TASK 12.3 — the appointment. The door opens shortly before kick-off and shuts when the
+                // calendar stops waiting; both instants are computed HERE, against the server's clock, so a
+                // device that is a few minutes out never offers (or hides) the match at the wrong moment.
+                DateTime liveOpensUtc = upcoming.KickoffUtc.AddSeconds(-Math.Max(0, _opt.LiveOpensBeforeSeconds));
+                DateTime liveClosesUtc = upcoming.KickoffUtc.AddSeconds(Math.Max(0, _opt.LiveGraceSeconds));
+                bool liveOpen = _opt.LiveMatchesEnabled
+                                && upcoming.Round == nextRound
+                                && now >= liveOpensUtc && now < liveClosesUtc;
+                Fts.Application.Leagues.LiveMatchStatus? liveStatus = _opt.LiveMatchesEnabled
+                    ? await _db.RankedLiveMatches
+                        .Where(l => l.FixtureId == upcoming.Id)
+                        .Select(l => (Fts.Application.Leagues.LiveMatchStatus?)l.Status)
+                        .FirstOrDefaultAsync(ct)
+                    : null;
+
                 nextMatch = new RankedTodayNextMatchDto(
                     FixtureId: upcoming.Id,
                     Round: upcoming.Round,
@@ -154,7 +169,11 @@ public sealed class RankedTodayService : IRankedTodayService
                     SecondsToKickoff: (int)Math.Max(0, Math.Round((upcoming.KickoffUtc - now).TotalSeconds)),
                     YouAreHome: home,
                     OpponentClubExternalId: opp?.ExternalId ?? 0,
-                    OpponentClubName: opp?.Name ?? string.Empty);
+                    OpponentClubName: opp?.Name ?? string.Empty,
+                    LiveOpen: liveOpen,
+                    LiveOpensUtc: liveOpensUtc,
+                    SecondsToLiveOpen: (int)Math.Max(0, Math.Round((liveOpensUtc - now).TotalSeconds)),
+                    LiveStatus: liveStatus);
             }
 
             var played = mine.LastOrDefault(f => f.IsPlayed);
@@ -229,6 +248,12 @@ public sealed class RankedTodayService : IRankedTodayService
                  && a.HighBidUserId == coach.UserId, ct);
 
         // --- the to-do list (prioritised: answer people first, then your own inputs) --------
+        // TASK 12.3 — the match being played RIGHT NOW goes to the top, ahead of everything, because it is
+        // the only item on this list that expires. An unanswered offer is still there tomorrow; a 21:00
+        // kick-off is not, and a digest that buried it under "conferma la formazione" would be describing
+        // the day rather than helping with it.
+        if (nextMatch is { LiveOpen: true })
+            todo.Add(new RankedTodoDto(RankedTodoKind.WatchLive, 1, 0));
         if (incoming > 0) todo.Add(new RankedTodoDto(RankedTodoKind.RespondOffer, incoming, 1));
         if (!seasonComplete && nextRound is not null && !lineupConfirmed)
             todo.Add(new RankedTodoDto(RankedTodoKind.ConfirmMatchday, 1, 2));

@@ -14,6 +14,7 @@ using Fts.Api.Simulation;
 using Fts.Application.Admin;
 using Fts.Application.Balance;
 using Fts.Application.Leagues;
+using Fts.Application.Ranked;
 using Fts.Application.Simulation;
 using Fts.Infrastructure;
 using Fts.Infrastructure.Admin;
@@ -56,6 +57,11 @@ builder.Services.AddScoped<IAuctionBroadcaster, SignalRAuctionBroadcaster>();
 // Live match control (Phase 8.6): the real MatchHub broadcaster (replaces the Infrastructure no-op). The
 // REST endpoints stay authoritative; this is the live push layer over the second SignalR hub.
 builder.Services.AddScoped<ILiveMatchBroadcaster, SignalRMatchBroadcaster>();
+
+// Live RANKED match control (task 12.3): the same MatchHub, a second payload shape. Replaces the
+// Infrastructure no-op so a coach attending his 21:00 fixture sees the opponent's substitution pushed
+// rather than waiting for his next poll.
+builder.Services.AddScoped<IRankedLiveBroadcaster, SignalRRankedLiveBroadcaster>();
 
 // JWT bearer authentication — validation parameters mirror the JwtTokenService signing settings.
 var jwt = builder.Configuration.GetSection("Jwt");
@@ -245,8 +251,13 @@ if (servesApi)
     // Private-league lifecycle (Phase 8.1): create/join/leave/list, JWT-protected. Always mapped.
     app.MapLeagueEndpoints();
 
+    // Private-league transfer market (Phase 12.1): browse squads, offer/counter, transfer-list your own,
+    // sign free agents — JWT-protected. Always mapped.
+    app.MapLeagueMarketEndpoints();
+
     // Online auctions (Phase 8.5): open/close a window, read lots, bid — JWT-protected. Plus the live
-    // AuctionHub for real-time bid pushes. Always mapped.
+    // AuctionHub for real-time bid pushes. Always mapped. RETIRING: 12.1 replaces the private-league
+    // free-agent auction with direct terms negotiation; the endpoints stay until the client moves over.
     app.MapAuctionEndpoints();
     app.MapHub<AuctionHub>("/hubs/auction");
 
@@ -258,6 +269,10 @@ if (servesApi)
     // Public ranked ladder (Phase 9.1): enrol, read your ladder state / a group's fixed-size seat list,
     // toggle auto re-enrolment — JWT-protected. Always mapped.
     app.MapRankedEndpoints();
+
+    // Live ranked matches (task 12.3): open/watch/change/finish the matchday fixture you are playing, on the
+    // calendar's own kick-off. JWT-protected, always mapped; the pushes go over the MatchHub above.
+    app.MapRankedLiveEndpoints();
 
     // Live ops (Phase 10.3): metrics, worlds, accounts and the balance push. Mapped in EVERY environment,
     // Production included — this is the surface an operator needs precisely when things are live. It is gated

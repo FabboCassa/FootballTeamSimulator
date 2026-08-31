@@ -6,8 +6,10 @@ using UnityEngine.UIElements;
 namespace Fts.Views
 {
     /// <summary>
-    /// Dumb view for the ranked market (Phase 9.2b): three tabs — free-agent AUCTIONS (bid), direct OFFERS
-    /// (incoming/outgoing), and BROWSE (a rival club's squad, to offer for a player). The presenter formats
+    /// Dumb view for the ranked market (Phase 9.2b): direct OFFERS (incoming/outgoing) and BROWSE (a rival
+    /// club's squad, to offer for a player). The AUCTIONS left this screen in task 12.2 — a board where you
+    /// can also SELL, on a timer of your own, needed the auction room the private leagues already had, so
+    /// the tab became a button that opens it. The presenter formats
     /// every string, owns the state, polls, and validates server-side; the view only emits events and renders
     /// the rows it is handed. An inline amount panel serves both bidding and offering.
     ///
@@ -18,7 +20,9 @@ namespace Fts.Views
     {
         // Per-row actions (bid / offer / accept / reject / withdraw / view squad) are carried by
         // <see cref="RowVm"/> callbacks, so the view only needs the screen-level events here.
-        public event Action<int> TabSelected;          // 0 auctions, 1 offers, 2 browse
+        public event Action<int> TabSelected;          // 0 offers, 1 browse
+        /// <summary>Task 12.2 — open the auction board (its own screen since the lots got their own timers).</summary>
+        public event Action AuctionsClicked;
         public event Action RefreshClicked;
         public event Action BotMarketClicked;          // dev-only
         public event Action BackClicked;
@@ -36,9 +40,9 @@ namespace Fts.Views
         private readonly Label _header;
         private readonly Label _budget;
         private readonly Label _banner;
-        private readonly Button _tabAuctions;
         private readonly Button _tabOffers;
         private readonly Button _tabBrowse;
+        private readonly Button _auctionsButton;
         private readonly Button _refreshButton;
         private readonly Button _botButton; // dev-only
         private readonly ScrollView _list;
@@ -111,18 +115,20 @@ namespace Fts.Views
             controls.style.marginTop = UiKit.SpaceSm;
             controls.style.marginBottom = 0;
             head.Add(controls);
+            // The way into the auction room (task 12.2): the lots are no longer a list on this screen.
+            _auctionsButton = UiKit.SmallButton(string.Empty, () => AuctionsClicked?.Invoke(), 160f);
+            _auctionsButton.style.marginLeft = 0;
+            UiKit.SetSmallButtonAccent(_auctionsButton, true);
+            controls.Add(_auctionsButton);
             _botButton = UiKit.SmallButton(string.Empty, () => BotMarketClicked?.Invoke(), 160f);
-            _botButton.style.marginLeft = 0;
             _botButton.style.display = DisplayStyle.None; // dev-only
             controls.Add(_botButton);
 
             // ---- tabs -----------------------------------------------------------------------------
             VisualElement tabs = UiKit.Toolbar();
-            _tabAuctions = UiKit.TabButton(string.Empty, () => TabSelected?.Invoke(0));
-            _tabOffers = UiKit.TabButton(string.Empty, () => TabSelected?.Invoke(1));
-            _tabBrowse = UiKit.TabButton(string.Empty, () => TabSelected?.Invoke(2));
+            _tabOffers = UiKit.TabButton(string.Empty, () => TabSelected?.Invoke(0));
+            _tabBrowse = UiKit.TabButton(string.Empty, () => TabSelected?.Invoke(1));
             _tabBrowse.style.marginRight = 0;
-            tabs.Add(_tabAuctions);
             tabs.Add(_tabOffers);
             tabs.Add(_tabBrowse);
             col.Add(tabs);
@@ -193,9 +199,8 @@ namespace Fts.Views
 
         public void SetActiveTab(int tab)
         {
-            UiKit.SetTabActive(_tabAuctions, tab == 0);
-            UiKit.SetTabActive(_tabOffers, tab == 1);
-            UiKit.SetTabActive(_tabBrowse, tab == 2);
+            UiKit.SetTabActive(_tabOffers, tab == 0);
+            UiKit.SetTabActive(_tabBrowse, tab == 1);
         }
 
         public void SetRows(IReadOnlyList<RowVm> rows)
@@ -326,6 +331,7 @@ namespace Fts.Views
         {
             _refreshButton.SetEnabled(!busy);
             _botButton.SetEnabled(!busy);
+            _auctionsButton.SetEnabled(!busy);
             _bid.SetBusy(busy);
             foreach (Button b in _reportReasons) b.SetEnabled(!busy);
         }
@@ -337,7 +343,7 @@ namespace Fts.Views
         public void UpdateTexts()
         {
             _header.text = _tr("ranked.market.title");
-            _tabAuctions.text = _tr("ranked.market.tab_auctions");
+            _auctionsButton.text = _tr("ranked.market.open_auctions");
             _tabOffers.text = _tr("ranked.market.tab_offers");
             _tabBrowse.text = _tr("ranked.market.tab_browse");
             _refreshButton.text = _tr("ranked.refresh");

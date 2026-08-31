@@ -50,7 +50,11 @@ namespace Sim.Core.Career
         public SeasonProgressor(BalanceConfig? config = null, bool applyCondition = false, bool applyMatchFatigue = false, bool applyPositioning = false)
         {
             BalanceConfig cfg = config ?? new BalanceConfig();
-            _engine = new MatchEngine(cfg, applyCondition, applyMatchFatigue, applyPositioning);
+            // No position stream here: AdvanceDay resolves the AI fixtures nobody watches,
+            // hundreds a matchday, and each match is handed its own RNG — so skipping the
+            // movement layer (13.1) is free of any effect on the results, and saves building
+            // a stream per fixture that is thrown away a line later.
+            _engine = new MatchEngine(cfg, applyCondition, applyMatchFatigue, applyPositioning, generatePositions: false);
             _conditionProgressor = new ConditionProgressor(cfg.Condition);
             _familiarityMax = cfg.Tactics.FamiliarityMax;
         }

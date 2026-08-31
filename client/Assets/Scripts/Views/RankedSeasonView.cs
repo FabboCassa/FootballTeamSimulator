@@ -19,6 +19,10 @@ namespace Fts.Views
         public event Action AdvanceDevClicked; // dev-only
         public event Action BackClicked;
         public event Action<string> FixtureSelected; // a played fixture tapped → its id
+        /// <summary>Task 12.3: an unplayed fixture of yours whose live door is open, tapped → its id. A
+        /// separate event from <see cref="FixtureSelected"/> because the two go to different screens and
+        /// mean opposite things — one is a match to attend, the other one you already missed.</summary>
+        public event Action<string> LiveSelected;
 
         public VisualElement Root { get; }
 
@@ -199,8 +203,9 @@ namespace Fts.Views
                 foreach (SeasonFixtureRowVm r in group.Rows)
                 {
                     _schedule.Add(OnlineTableKit.FixtureRow(
-                        r, index++, _tr("season.vs"), null,
-                        id => FixtureSelected?.Invoke(id), null));
+                        r, index++, _tr("season.vs"), _tr("ranked.live_badge"),
+                        id => FixtureSelected?.Invoke(id),
+                        id => LiveSelected?.Invoke(id)));
                 }
             }
         }

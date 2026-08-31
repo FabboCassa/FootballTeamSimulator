@@ -2,6 +2,7 @@
     "name": "FTS.MatchView",
     "rootNamespace": "Fts.MatchView",
     "references": [
+        "FTS.Views",
         "UniTask"
     ],
     "includePlatforms": [],

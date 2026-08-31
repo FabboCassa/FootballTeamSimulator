@@ -111,8 +111,13 @@ namespace Fts.Services.Online
             if (!IsSuccess(status, network))
                 return RankedApiResult<MatchReport>.Fail(MapError(status, text, network));
             var report = TryParse<MatchReport>(text);
-            return report?.Positions == null
-                ? RankedApiResult<MatchReport>.Fail(RankedApiError.Server)
+            if (report?.Positions == null)
+                return RankedApiResult<MatchReport>.Fail(RankedApiError.Server);
+
+            // A replay stored before the movement model changed (13.1) carries a stream this
+            // build cannot draw. Say so rather than rendering an empty pitch.
+            return report.EngineVersion != MatchEngine.Version
+                ? RankedApiResult<MatchReport>.Fail(RankedApiError.ReplayTooOld)
                 : RankedApiResult<MatchReport>.Ok(report);
         }
 
@@ -217,24 +222,57 @@ namespace Fts.Services.Online
         {
             if (!_api.IsSignedIn) return RankedApiResult<RankedAuctionsDto>.Fail(RankedApiError.NotSignedIn);
             var (status, text, network) = await _api.SendAuthedAsync("GET", "/ranked/auctions");
+            return ParseAuctions(status, text, network);
+        }
+
+        /// <summary>Place an ascending bid on a lot (requires an open window + available budget). The
+        /// result says whether the bid landed inside the anti-snipe window and pushed that lot's end back
+        /// (task 12.2), which is the one thing the screen cannot work out on its own.</summary>
+        public async UniTask<RankedApiResult<RankedBidResultDto>> PlaceBidAsync(string auctionId, long amount)
+        {
+            if (!_api.IsSignedIn) return RankedApiResult<RankedBidResultDto>.Fail(RankedApiError.NotSignedIn);
+            var body = new PlaceRankedBidBody { amount = amount };
+            var (status, text, network) = await _api.SendAuthedAsync(
+                "POST", "/ranked/auctions/" + auctionId + "/bid", body);
+            if (!IsSuccess(status, network))
+                return RankedApiResult<RankedBidResultDto>.Fail(MapError(status, text, network));
+            var dto = TryParse<RankedBidResultDto>(text);
+            return RankedApiResult<RankedBidResultDto>.Ok(dto ?? new RankedBidResultDto());
+        }
+
+        /// <summary>Put one of your own players up for auction (task 12.2): a reserve (0 = "price him for
+        /// me") and a timer inside the board's own min/max. Comes back with the refreshed board.</summary>
+        public async UniTask<RankedApiResult<RankedAuctionsDto>> ListLotAsync(
+            int playerExternalId, long reserve, int durationSeconds)
+        {
+            if (!_api.IsSignedIn) return RankedApiResult<RankedAuctionsDto>.Fail(RankedApiError.NotSignedIn);
+            var body = new ListRankedLotBody
+            {
+                playerExternalId = playerExternalId,
+                reserve = reserve,
+                durationSeconds = durationSeconds,
+            };
+            var (status, text, network) = await _api.SendAuthedAsync("POST", "/ranked/auctions/list", body);
+            return ParseAuctions(status, text, network);
+        }
+
+        /// <summary>Pull one of your own lots off the board — only while nobody has bid on it.</summary>
+        public async UniTask<RankedApiResult<RankedAuctionsDto>> UnlistLotAsync(string auctionId)
+        {
+            if (!_api.IsSignedIn) return RankedApiResult<RankedAuctionsDto>.Fail(RankedApiError.NotSignedIn);
+            var (status, text, network) = await _api.SendAuthedAsync(
+                "POST", "/ranked/auctions/" + auctionId + "/unlist");
+            return ParseAuctions(status, text, network);
+        }
+
+        private static RankedApiResult<RankedAuctionsDto> ParseAuctions(long status, string text, bool network)
+        {
             if (!IsSuccess(status, network))
                 return RankedApiResult<RankedAuctionsDto>.Fail(MapError(status, text, network));
             var dto = TryParse<RankedAuctionsDto>(text);
             return dto?.lots == null
                 ? RankedApiResult<RankedAuctionsDto>.Fail(RankedApiError.Server)
                 : RankedApiResult<RankedAuctionsDto>.Ok(dto);
-        }
-
-        /// <summary>Place an ascending bid on a lot (requires an open window + available budget).</summary>
-        public async UniTask<RankedApiResult<bool>> PlaceBidAsync(string auctionId, long amount)
-        {
-            if (!_api.IsSignedIn) return RankedApiResult<bool>.Fail(RankedApiError.NotSignedIn);
-            var body = new PlaceRankedBidBody { amount = amount };
-            var (status, text, network) = await _api.SendAuthedAsync(
-                "POST", "/ranked/auctions/" + auctionId + "/bid", body);
-            return IsSuccess(status, network)
-                ? RankedApiResult<bool>.Ok(true)
-                : RankedApiResult<bool>.Fail(MapError(status, text, network));
         }
 
         private static RankedApiResult<RankedOffersDto> ParseOffers(long status, string text, bool network)
@@ -245,6 +283,72 @@ namespace Fts.Services.Online
             return dto == null
                 ? RankedApiResult<RankedOffersDto>.Fail(RankedApiError.Server)
                 : RankedApiResult<RankedOffersDto>.Ok(dto);
+        }
+
+        // ---------------------------------------------------------------- live matches (task 12.3)
+
+        /// <summary>
+        /// Open (or rejoin) the live session for one of your own fixtures — the server marks you present and,
+        /// once the CALENDAR's kick-off has arrived, the match is under way whether or not the opponent is
+        /// there. Refused outside the window around kick-off, for a fixture that is not yours, and once the
+        /// matchday has been resolved.
+        /// </summary>
+        public async UniTask<RankedApiResult<RankedLiveStateDto>> OpenLiveAsync(string fixtureId)
+        {
+            if (!_api.IsSignedIn) return RankedApiResult<RankedLiveStateDto>.Fail(RankedApiError.NotSignedIn);
+            var (status, text, network) = await _api.SendAuthedAsync(
+                "POST", "/ranked/live/" + fixtureId + "/open");
+            return ParseLive(status, text, network);
+        }
+
+        /// <summary>The current live state — the poll the screen runs while the match plays out.</summary>
+        public async UniTask<RankedApiResult<RankedLiveStateDto>> GetLiveAsync(string fixtureId)
+        {
+            if (!_api.IsSignedIn) return RankedApiResult<RankedLiveStateDto>.Fail(RankedApiError.NotSignedIn);
+            var (status, text, network) = await _api.SendAuthedAsync("GET", "/ranked/live/" + fixtureId);
+            return ParseLive(status, text, network);
+        }
+
+        /// <summary>A pause-point change for your own side (a substitution and/or an instruction change). The
+        /// server appends it to the authoritative plan, re-runs the 90' from the fixture seed and returns the
+        /// new state, so the caller simply adopts what comes back.</summary>
+        public async UniTask<RankedApiResult<RankedLiveStateDto>> SubmitLiveChangeAsync(
+            string fixtureId, int fromMinute, object lineup, object tactic)
+        {
+            if (!_api.IsSignedIn) return RankedApiResult<RankedLiveStateDto>.Fail(RankedApiError.NotSignedIn);
+            var body = new SubmitRankedLiveChangeBody { fromMinute = fromMinute, lineup = lineup, tactic = tactic };
+            var (status, text, network) = await _api.SendAuthedAsync(
+                "POST", "/ranked/live/" + fixtureId + "/change", body);
+            return ParseLive(status, text, network);
+        }
+
+        /// <summary>Step away — the match plays on from your stored orders, exactly as an AI seat's does.</summary>
+        public async UniTask<RankedApiResult<RankedLiveStateDto>> LeaveLiveAsync(string fixtureId)
+        {
+            if (!_api.IsSignedIn) return RankedApiResult<RankedLiveStateDto>.Fail(RankedApiError.NotSignedIn);
+            var (status, text, network) = await _api.SendAuthedAsync(
+                "POST", "/ranked/live/" + fixtureId + "/leave");
+            return ParseLive(status, text, network);
+        }
+
+        /// <summary>Confirm full time: the stored report is what the matchday consumes, and the calendar
+        /// stops waiting for this fixture.</summary>
+        public async UniTask<RankedApiResult<RankedLiveStateDto>> FinishLiveAsync(string fixtureId)
+        {
+            if (!_api.IsSignedIn) return RankedApiResult<RankedLiveStateDto>.Fail(RankedApiError.NotSignedIn);
+            var (status, text, network) = await _api.SendAuthedAsync(
+                "POST", "/ranked/live/" + fixtureId + "/finish");
+            return ParseLive(status, text, network);
+        }
+
+        private static RankedApiResult<RankedLiveStateDto> ParseLive(long status, string text, bool network)
+        {
+            if (!IsSuccess(status, network))
+                return RankedApiResult<RankedLiveStateDto>.Fail(MapError(status, text, network));
+            var dto = TryParse<RankedLiveStateDto>(text);
+            return dto == null
+                ? RankedApiResult<RankedLiveStateDto>.Fail(RankedApiError.Server)
+                : RankedApiResult<RankedLiveStateDto>.Ok(dto);
         }
 
         // ---------------------------------------------------------------- ranking (9.3)
@@ -344,6 +448,39 @@ namespace Fts.Services.Online
             return IsSuccess(status, network);
         }
 
+        /// <summary>
+        /// DEV ONLY (task 12.3): pull the running ladder's next matchday forward to <paramref name="seconds"/>
+        /// from now. A ranked match kicks off at 21:00 of its world's evening, which is right for players and
+        /// useless for a solo tester at 15:40 — this is how he gets a live match to attend without waiting.
+        /// The whole calendar shifts together (season start, remaining kickoffs, open lots), so it is time
+        /// travel rather than a special code path.
+        /// </summary>
+        public async UniTask<bool> KickoffNowDevAsync(int seconds = 5)
+        {
+            if (!_api.IsSignedIn) return false;
+            var (status, _, network) = await _api.SendAuthedAsync(
+                "POST", "/internal/ranked/kickoff-now?seconds=" + seconds);
+            return IsSuccess(status, network);
+        }
+
+        /// <summary>
+        /// DEV ONLY (task 12.3): simulate the OPPONENT of a live ranked match — he opens the session (so you
+        /// see him arrive), optionally makes a legal substitution at <paramref name="minute"/>, and optionally
+        /// confirms full time. It drives the real use cases with every guard intact, so what it proves is the
+        /// feature and not a bypass. Against a vacant AI seat it declines: that side is already playing its
+        /// stored orders and there is no account to act as.
+        /// </summary>
+        public async UniTask<bool> BotLiveDevAsync(string fixtureId, bool sub, int minute, bool finish = false)
+        {
+            if (!_api.IsSignedIn) return false;
+            string path = "/internal/dev/ranked/live/" + fixtureId + "/bot"
+                          + "?sub=" + (sub ? "true" : "false")
+                          + "&minute=" + minute
+                          + "&finish=" + (finish ? "true" : "false");
+            var (status, _, network) = await _api.SendAuthedAsync("POST", path);
+            return IsSuccess(status, network);
+        }
+
         // ---------------------------------------------------------------- helpers
 
         private static RankedApiResult<RankedStateDto> ParseState(long status, string text, bool network)
@@ -364,13 +501,17 @@ namespace Fts.Services.Online
             return status switch
             {
                 401 => RankedApiError.NotSignedIn,
-                403 => RankedApiError.Forbidden,
+                403 => body != null && body.Contains("not_your_match") ? RankedApiError.NotYourMatch
+                     : RankedApiError.Forbidden,
                 404 => body != null && body.Contains("not_enrolled") ? RankedApiError.NotEnrolled
                      : body != null && body.Contains("fixture_not_found") ? RankedApiError.FixtureNotFound
                      : body != null && body.Contains("auction_not_found") ? RankedApiError.AuctionNotFound
+                     : body != null && body.Contains("live_not_found") ? RankedApiError.LiveNotFound
                      : RankedApiError.NotFound,
                 400 => body != null && body.Contains("insufficient_budget") ? RankedApiError.InsufficientBudget
                      : body != null && body.Contains("bid_too_low") ? RankedApiError.BidTooLow
+                     : body != null && body.Contains("lot_duration_invalid") ? RankedApiError.LotDurationInvalid
+                     : body != null && body.Contains("invalid_live_change") ? RankedApiError.InvalidLiveChange
                      : RankedApiError.Validation,
                 409 => body != null && body.Contains("replay_not_ready") ? RankedApiError.ReplayNotReady
                      : body != null && body.Contains("auction_closed") ? RankedApiError.AuctionClosed
@@ -378,6 +519,12 @@ namespace Fts.Services.Online
                      // Phase 9.5 integrity guards.
                      : body != null && body.Contains("integrity_blocked") ? RankedApiError.IntegrityBlocked
                      : body != null && body.Contains("deadline_passed") ? RankedApiError.DeadlinePassed
+                     // Task 12.2 seller lots.
+                     : body != null && body.Contains("squad_too_small") ? RankedApiError.SquadTooSmall
+                     : body != null && body.Contains("player_unavailable") ? RankedApiError.PlayerUnavailable
+                     // Task 12.3 live matches.
+                     : body != null && body.Contains("live_already_finished") ? RankedApiError.LiveAlreadyFinished
+                     : body != null && body.Contains("live_not_open") ? RankedApiError.LiveNotOpen
                      : RankedApiError.WrongPhase,
                 429 => RankedApiError.RateLimited,
                 >= 500 => RankedApiError.Server,

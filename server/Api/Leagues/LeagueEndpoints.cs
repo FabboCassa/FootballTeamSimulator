@@ -204,6 +204,14 @@ public static class LeagueEndpoints
         LeagueError.LiveMatchNotLive => Results.Conflict(new { error = "live_match_not_live", message }),
         LeagueError.LiveMatchAlreadyFinished => Results.Conflict(new { error = "live_match_already_finished", message }),
         LeagueError.InvalidLiveChange => Results.BadRequest(new { error = "invalid_live_change", message }),
+
+        LeagueError.MarketClosed => Results.Conflict(new { error = "market_closed", message }),
+        LeagueError.OfferNotFound => Results.NotFound(new { error = "offer_not_found", message }),
+        LeagueError.OfferResolved => Results.Conflict(new { error = "offer_resolved", message }),
+        LeagueError.PlayerUnavailable => Results.Conflict(new { error = "player_unavailable", message }),
+        LeagueError.SquadTooSmall => Results.Conflict(new { error = "squad_too_small", message }),
+        LeagueError.SquadFull => Results.Conflict(new { error = "squad_full", message }),
+        LeagueError.IntegrityBlocked => Results.Conflict(new { error = "integrity_blocked", message }),
         LeagueError.Forbidden => Results.Json(
             new { error = "forbidden", message }, statusCode: StatusCodes.Status403Forbidden),
         _ => Results.BadRequest(new { error = "league_error", message }),

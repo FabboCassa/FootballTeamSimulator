@@ -36,17 +36,37 @@ namespace Sim.Core.Match
             if (stream != null)
             {
                 h = Mix(h, stream.TicksPerMinute);
-                h = Mix(h, stream.Frames.Count);
-                foreach (PositionFrame f in stream.Frames)
+                h = Mix(h, stream.PlayerCount);
+                h = Mix(h, stream.LastTick);
+
+                h = MixAll(h, stream.BallXY);
+                h = MixAll(h, stream.HomeXY);
+                h = MixAll(h, stream.AwayXY);
+                h = MixAll(h, stream.Owner);
+                h = MixAll(h, stream.HomePlayerIds);
+                h = MixAll(h, stream.AwayPlayerIds);
+                h = MixAll(h, stream.HomeShirts);
+                h = MixAll(h, stream.AwayShirts);
+
+                h = Mix(h, stream.Actions.Count);
+                foreach (BallAction a in stream.Actions)
                 {
-                    h = Mix(h, f.Tick);
-                    h = Mix(h, f.Ball.X);
-                    h = Mix(h, f.Ball.Y);
-                    foreach (PitchPoint p in f.Home) { h = Mix(h, p.X); h = Mix(h, p.Y); }
-                    foreach (PitchPoint p in f.Away) { h = Mix(h, p.X); h = Mix(h, p.Y); }
+                    h = Mix(h, a.Tick);
+                    h = Mix(h, (int)a.Kind);
+                    h = Mix(h, a.Home ? 1 : 0);
+                    h = Mix(h, a.Slot);
+                    h = Mix(h, a.TargetSlot);
                 }
             }
 
+            return h;
+        }
+
+        /// <summary>Folds a whole coordinate array in, length first.</summary>
+        private static ulong MixAll(ulong h, int[] values)
+        {
+            h = Mix(h, values.Length);
+            for (int i = 0; i < values.Length; i++) h = Mix(h, values[i]);
             return h;
         }
 

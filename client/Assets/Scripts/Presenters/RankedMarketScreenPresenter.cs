@@ -12,10 +12,16 @@ using UnityEngine.UIElements;
 namespace Fts.Presenters
 {
     /// <summary>
-    /// The ranked market screen (Phase 9.2b): three tabs — free-agent AUCTIONS (place ascending bids),
-    /// direct OFFERS (incoming to answer / outgoing to withdraw), and BROWSE (pick a rival club, then offer
-    /// for one of its players). Everything is gated server-side to an open market window; the screen just
-    /// reports what the server says. Reached from the ranked season screen.
+    /// The ranked market screen (Phase 9.2b): direct OFFERS (incoming to answer / outgoing to withdraw) and
+    /// BROWSE (pick a rival club, then offer for one of its players). Everything is gated server-side to an
+    /// open market window; the screen just reports what the server says. Reached from the ranked season
+    /// screen.
+    ///
+    /// The AUCTIONS were a third tab here until task 12.2. They moved to their own screen
+    /// (<see cref="RankedAuctionScreenPresenter"/>) when the lots got their own timers and a coach could
+    /// start selling: a board you can sell into needs the auction room, not a list. What stayed behind is
+    /// the way in — and the banner, which now says WHEN the window shuts and when the next one opens,
+    /// because "when do auctions come back?" used to be unanswerable inside the app.
     /// </summary>
     public sealed class RankedMarketScreenPresenter : IScreenPresenter
     {
@@ -27,16 +33,15 @@ namespace Fts.Presenters
         private const int MinFeePercentOfValue = 40;
         private const int MaxFeePercentOfValue = 250;
 
-        private const int TabAuctions = 0;
-        private const int TabOffers = 1;
-        private const int TabBrowse = 2;
+        private const int TabOffers = 0;
+        private const int TabBrowse = 1;
 
         private readonly ScreenNavigator _navigator;
         private readonly ILocalizationService _loc;
         private readonly RankedApiService _ranked;
         private readonly RankedMarketView _view;
 
-        private int _tab = TabAuctions;
+        private int _tab = TabOffers;
         private bool _busy;
         private string _groupId;
         private int _myClubExt = -1;
@@ -46,8 +51,8 @@ namespace Fts.Presenters
         private List<RankedStandingDto> _clubs = new List<RankedStandingDto>();
         private RankedSquadDto _browsedSquad;
 
-        // What the inline amount panel is currently for.
-        private string _pendingBidLotId;
+        // What the inline amount panel is currently for (offers only since task 12.2 — the bidding lives
+        // on the auction screen now).
         private int _pendingOfferPlayerId = -1;
 
         // Which club the report panel is open for (Phase 9.5), -1 = closed.
@@ -67,6 +72,7 @@ namespace Fts.Presenters
         public void Enter()
         {
             _view.TabSelected += OnTab;
+            _view.AuctionsClicked += OnAuctions;
             _view.RefreshClicked += OnRefresh;
             _view.BotMarketClicked += OnBotMarket;
             _view.AmountConfirmClicked += OnAmountConfirm;
@@ -82,6 +88,7 @@ namespace Fts.Presenters
         public void Exit()
         {
             _view.TabSelected -= OnTab;
+            _view.AuctionsClicked -= OnAuctions;
             _view.RefreshClicked -= OnRefresh;
             _view.BotMarketClicked -= OnBotMarket;
             _view.AmountConfirmClicked -= OnAmountConfirm;
@@ -129,54 +136,27 @@ namespace Fts.Presenters
             bool open = (_offers?.marketOpen ?? false) || (_auctions?.windowOpen ?? false);
 
             _view.SetBudget(_loc.Tr("ranked.market.budget", MoneyFormat.Short(budget)));
-            _view.SetBanner(_loc.Tr(open ? "ranked.market.window_open" : "ranked.market.window_closed"), open);
+
+            // TASK 12.2: say WHEN. A calendar-driven window with no clock on screen was the one question
+            // the app could not answer — the instants come from the auction board and are shown in the
+            // device's own time.
+            string banner;
+            if (open)
+                banner = string.IsNullOrEmpty(_auctions?.windowClosesUtc)
+                    ? _loc.Tr("ranked.market.window_open")
+                    : _loc.Tr("ranked.market.window_open_until", FormatTime(_auctions.windowClosesUtc));
+            else
+                banner = string.IsNullOrEmpty(_auctions?.nextWindowOpensUtc)
+                    ? _loc.Tr("ranked.market.window_closed")
+                    : _loc.Tr("ranked.market.window_closed_next", FormatTime(_auctions.nextWindowOpensUtc));
+            _view.SetBanner(banner, open);
             _view.SetActiveTab(_tab);
 
             switch (_tab)
             {
-                case TabOffers: RenderOffers(); break;
                 case TabBrowse: RenderBrowse(); break;
-                default: RenderAuctions(); break;
+                default: RenderOffers(); break;
             }
-        }
-
-        private void RenderAuctions()
-        {
-            var rows = new List<RankedMarketView.RowVm>();
-            if (_auctions?.lots != null)
-            {
-                foreach (var lot in _auctions.lots.OrderByDescending(l => l.overall))
-                {
-                    string id = lot.id;
-                    rows.Add(new RankedMarketView.RowVm
-                    {
-                        Title = _loc.Tr("ranked.market.lot_title", lot.playerName, lot.overall, lot.age),
-                        RoleGroup = RoleFormat.Group((PositionRole)lot.role),
-                        RoleAbbr = RoleName(lot.role),
-                        Badge = lot.youAreLeading ? _loc.Tr("auction.badge_leading") : null,
-                        BadgeKind = lot.youAreLeading ? 1 : 0,
-                        Detail = lot.highBid > 0
-                            ? _loc.Tr("ranked.market.lot_bid", MoneyFormat.Short(lot.highBid),
-                                lot.youAreLeading ? _loc.Tr("ranked.market.you") : ClubName(lot.highBidClubExternalId),
-                                MoneyFormat.Short(lot.minNextBid))
-                            : _loc.Tr("ranked.market.lot_base", MoneyFormat.Short(lot.startPrice)),
-                        PrimaryLabel = lot.youAreLeading ? null : _loc.Tr("ranked.market.bid"),
-                        PrimaryAction = () => OnBid(id),
-                        Dimmed = lot.youAreLeading,
-                    });
-                }
-            }
-            _view.SetRows(rows);
-        }
-
-        /// <summary>Names the club that holds a lot — the standings we already fetched are the group's
-        /// club directory, so a bid can say WHO made it instead of showing a bare id.</summary>
-        private string ClubName(int? clubExternalId)
-        {
-            if (!clubExternalId.HasValue) return "?";
-            foreach (var c in _clubs)
-                if (c.clubExternalId == clubExternalId.Value) return c.clubName;
-            return "#" + clubExternalId.Value;
         }
 
         private string RoleName(int role) =>
@@ -293,32 +273,17 @@ namespace Fts.Presenters
 
         private void OnRefresh() => LoadAsync().Forget();
 
-        private void OnBid(string lotId)
-        {
-            var lot = _auctions?.lots?.FirstOrDefault(l => l.id == lotId);
-            if (lot == null) return;
-            _pendingBidLotId = lotId;
-            _pendingOfferPlayerId = -1;
+        /// <summary>Task 12.2 — the lots live on their own screen now (they have their own timers, and you
+        /// can put your own players on the board).</summary>
+        private void OnAuctions() => _navigator.Push<RankedAuctionScreenPresenter>();
 
-            long current = lot.highBid > 0 ? lot.highBid : lot.startPrice;
-            long available = _auctions?.available ?? 0;
-            _view.ShowAmountPanel(new BidPanelVm
-            {
-                Id = lotId,
-                Title = _loc.Tr("ranked.market.bid_for", lot.playerName),
-                RoleGroup = RoleFormat.Group((PositionRole)lot.role),
-                RoleAbbr = RoleName(lot.role),
-                Subtitle = _loc.Tr("auction.min_info",
-                    MoneyFormat.Short(lot.minNextBid), MoneyFormat.Short(available)),
-                Min = lot.minNextBid,
-                Max = available,
-                Steps = BidSteps.For(current, System.Math.Max(MinIncrementFloor, current / 20)),
-                ConfirmFormat = _loc.Tr("auction.confirm_amount"),
-                MinLabel = _loc.Tr("auction.set_min"),
-                MaxLabel = _loc.Tr("auction.set_max"),
-                CancelLabel = _loc.Tr("ranked.market.cancel"),
-                OverBudget = _loc.Tr("auction.over_budget"),
-            });
+        /// <summary>Best-effort local time from the server's ISO instant.</summary>
+        private static string FormatTime(string isoUtc)
+        {
+            return System.DateTime.TryParse(
+                isoUtc, null, System.Globalization.DateTimeStyles.RoundtripKind, out var dt)
+                ? dt.ToLocalTime().ToString("g")
+                : isoUtc;
         }
 
         private void OnClubSelected(int clubExternalId) => BrowseAsync(clubExternalId).Forget();
@@ -343,7 +308,6 @@ namespace Fts.Presenters
             var p = _browsedSquad?.players?.FirstOrDefault(x => x.externalId == playerExternalId);
             if (p == null) return;
             _pendingOfferPlayerId = playerExternalId;
-            _pendingBidLotId = null;
 
             // The fee has to sit inside the integrity band (a gift and a bribe are both refused server-side,
             // Phase 9.5), so the control opens on the market value and cannot leave the legal range.
@@ -371,7 +335,6 @@ namespace Fts.Presenters
 
         private void OnAmountCancel()
         {
-            _pendingBidLotId = null;
             _pendingOfferPlayerId = -1;
             _view.HideAmountPanel();
         }
@@ -386,12 +349,7 @@ namespace Fts.Presenters
 
             RankedApiError error = RankedApiError.None;
             bool ok;
-            if (_pendingBidLotId != null)
-            {
-                var res = await _ranked.PlaceBidAsync(_pendingBidLotId, amount);
-                ok = res.Success; error = res.Error;
-            }
-            else if (_pendingOfferPlayerId >= 0)
+            if (_pendingOfferPlayerId >= 0)
             {
                 var res = await _ranked.MakeOfferAsync(_pendingOfferPlayerId, amount);
                 ok = res.Success; error = res.Error;
@@ -406,7 +364,6 @@ namespace Fts.Presenters
                 return;
             }
 
-            _pendingBidLotId = null;
             _pendingOfferPlayerId = -1;
             _view.HideAmountPanel();
             _view.ShowStatus(_loc.Tr("ranked.market.done"), isError: false);

@@ -184,7 +184,12 @@ public class RankedTodayTests : RankedSeasonTestBase
         {
             Assert.That(sellerDay.IncomingOffers, Is.EqualTo(1));
             Assert.That(HasTodo(sellerDay, RankedTodoKind.RespondOffer), Is.True);
-            Assert.That(sellerDay.Todo.First().Kind, Is.EqualTo(RankedTodoKind.RespondOffer),
+            // The top CHORE, which is what this test is about. Since task 12.3 a matchday being played right
+            // now can sit above every chore — it is the one item on the list that EXPIRES — and on this
+            // fixture's compressed calendar the kick-off is always moments away, so the live door is always
+            // open. Skipping past it keeps the assertion measuring what it was written to measure.
+            Assert.That(sellerDay.Todo.First(t => t.Kind != RankedTodoKind.WatchLive).Kind,
+                Is.EqualTo(RankedTodoKind.RespondOffer),
                 "answering another coach outranks your own housekeeping");
             Assert.That(buyerDay.OutgoingOffers, Is.EqualTo(1));
             Assert.That(HasTodo(buyerDay, RankedTodoKind.RespondOffer), Is.False, "your own offer is not your chore");

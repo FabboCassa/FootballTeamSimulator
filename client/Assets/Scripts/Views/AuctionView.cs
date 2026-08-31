@@ -28,6 +28,10 @@ namespace Fts.Views
         public bool Dimmed;       // settled / unsold → greyed
         public bool Favorite;     // starred: followed without necessarily having bid
         public bool CanFavorite = true;
+        /// <summary>Task 12.2 — a second action carried by the row itself ("put him up" on your own squad,
+        /// "take it back" on a lot of yours nobody has bid on). Null = no action.</summary>
+        public string ActionLabel;
+        public Action RowAction;
     }
 
     /// <summary>A block of lots under a caption (used by the "my bids" tab: leading / outbid / bought).</summary>
@@ -57,6 +61,9 @@ namespace Fts.Views
         public event Action<int> FavoriteToggled;             // player external id
         public event Action<string, long> BidConfirmClicked;  // auctionId, amount
         public event Action BidCancelClicked;
+        /// <summary>Task 12.2 — a value was tapped in the one-tap choice row (the auction's duration).</summary>
+        public event Action<int> ChoiceClicked;
+        public event Action ChoiceCancelClicked;
         public event Action BackClicked;
 
         public VisualElement Root { get; }
@@ -73,14 +80,29 @@ namespace Fts.Views
         private readonly Button _refreshButton;
         private readonly Button _botBidButton; // dev-only
         private readonly Button[] _tabs;
+        private readonly string[] _tabKeys;
         private readonly ScrollView _lotList;
         private readonly BidPanel _bid;
         private readonly Label _status;
         private readonly Button _backButton;
 
-        public AuctionView(Func<string, string> tr, Func<long, string> money)
+        // Task 12.2: the one-tap choice row (how long the auction runs). Keyboard-free, like the ranked
+        // report panel and the private-league contract-length picker.
+        private readonly VisualElement _choicePanel;
+        private readonly Label _choiceTitle;
+        private readonly VisualElement _choiceRow;
+        private readonly List<Button> _choiceButtons = new List<Button>();
+        private readonly Button _choiceCancel;
+
+        /// <summary>The tabs, as loc keys. The private-league board has three (all lots / my bids /
+        /// followed); the ranked board adds a fourth for selling your own players (task 12.2). The view
+        /// only knows how many there are and what they are called.</summary>
+        public AuctionView(Func<string, string> tr, Func<long, string> money, string[] tabKeys = null)
         {
             _tr = tr;
+            _tabKeys = tabKeys != null && tabKeys.Length > 0
+                ? tabKeys
+                : new[] { "auction.tab_lots", "auction.tab_mine", "auction.tab_followed" };
 
             Root = UiKit.ScreenRoot();
             VisualElement col = UiKit.PageColumn(UiKit.WidthWide);
@@ -121,12 +143,11 @@ namespace Fts.Views
 
             // ---- tabs -----------------------------------------------------------------------------
             VisualElement tabRow = UiKit.Toolbar();
-            string[] tabKeys = { "auction.tab_lots", "auction.tab_mine", "auction.tab_followed" };
-            _tabs = new Button[tabKeys.Length];
-            for (int i = 0; i < tabKeys.Length; i++)
+            _tabs = new Button[_tabKeys.Length];
+            for (int i = 0; i < _tabKeys.Length; i++)
             {
                 int index = i;
-                _tabs[i] = UiKit.TabButton(tr(tabKeys[i]), () => TabSelected?.Invoke(index));
+                _tabs[i] = UiKit.TabButton(tr(_tabKeys[i]), () => TabSelected?.Invoke(index));
                 tabRow.Add(_tabs[i]);
             }
             _tabs[_tabs.Length - 1].style.marginRight = 0;
@@ -142,6 +163,22 @@ namespace Fts.Views
             _bid.Confirmed += (id, amount) => BidConfirmClicked?.Invoke(id, amount);
             _bid.Cancelled += () => BidCancelClicked?.Invoke();
             col.Add(_bid.Root);
+
+            // ---- one-tap choice row (task 12.2: the auction's duration) -----------------------------
+            _choicePanel = UiKit.Panel();
+            _choicePanel.style.display = DisplayStyle.None;
+            _choicePanel.style.flexShrink = 0f;
+            col.Add(_choicePanel);
+            _choiceTitle = UiKit.PanelLine(string.Empty);
+            _choiceTitle.style.whiteSpace = WhiteSpace.Normal;
+            _choicePanel.Add(_choiceTitle);
+            _choiceRow = UiKit.Toolbar();
+            _choiceRow.style.marginTop = UiKit.SpaceXs;
+            _choiceRow.style.marginBottom = 0;
+            _choicePanel.Add(_choiceRow);
+            _choiceCancel = UiKit.SmallButton(string.Empty, () => ChoiceCancelClicked?.Invoke(), 110f);
+            _choiceCancel.style.marginLeft = 0;
+            _choiceCancel.style.marginBottom = 4;
 
             _status = UiKit.Caption(string.Empty);
             _status.style.marginTop = UiKit.SpaceXs;
@@ -235,11 +272,42 @@ namespace Fts.Views
         }
 
         /// <summary>Opens the bid control for a lot.</summary>
-        public void ShowBidPanel(BidPanelVm vm) => _bid.Show(vm);
+        public void ShowBidPanel(BidPanelVm vm)
+        {
+            HideChoicePanel();
+            _bid.Show(vm);
+        }
 
         public void HideBidPanel() => _bid.Hide();
 
         public bool BidPanelOpen => _bid.IsOpen;
+
+        /// <summary>Opens the one-tap choice row (task 12.2). <paramref name="values"/> and
+        /// <paramref name="labels"/> are parallel: the tapped value comes back on
+        /// <see cref="ChoiceClicked"/>.</summary>
+        public void ShowChoicePanel(string title, IReadOnlyList<int> values, IReadOnlyList<string> labels,
+            string cancelLabel)
+        {
+            HideBidPanel();
+            _choiceTitle.text = title;
+            _choiceRow.Clear();
+            _choiceButtons.Clear();
+            for (int i = 0; i < values.Count; i++)
+            {
+                int value = values[i];
+                Button b = UiKit.SmallButton(labels[i], () => ChoiceClicked?.Invoke(value), 90f);
+                b.style.marginLeft = 0;
+                b.style.marginRight = 6;
+                b.style.marginBottom = 4;
+                _choiceButtons.Add(b);
+                _choiceRow.Add(b);
+            }
+            _choiceCancel.text = cancelLabel;
+            _choiceRow.Add(_choiceCancel);
+            _choicePanel.style.display = DisplayStyle.Flex;
+        }
+
+        public void HideChoicePanel() => _choicePanel.style.display = DisplayStyle.None;
 
         public void SetBusy(bool busy)
         {
@@ -248,6 +316,8 @@ namespace Fts.Views
             _closeButton.SetEnabled(!busy);
             _botBidButton.SetEnabled(!busy);
             _bid.SetBusy(busy);
+            foreach (Button b in _choiceButtons) b.SetEnabled(!busy);
+            _choiceCancel.SetEnabled(!busy);
         }
 
         public void UpdateTexts()
@@ -257,8 +327,7 @@ namespace Fts.Views
             _refreshButton.text = _tr("auction.refresh");
             _botBidButton.text = _tr("auction.bot_bid");
             _backButton.text = _tr("common.back");
-            for (int i = 0; i < _tabs.Length; i++)
-                _tabs[i].text = _tr(i == 0 ? "auction.tab_lots" : i == 1 ? "auction.tab_mine" : "auction.tab_followed");
+            for (int i = 0; i < _tabs.Length; i++) _tabs[i].text = _tr(_tabKeys[i]);
         }
 
         // --- rows ------------------------------------------------------------------------------------
@@ -363,6 +432,16 @@ namespace Fts.Views
                 Button bid = UiKit.SmallButton(_tr("auction.bid"), () => BidClicked?.Invoke(auctionId), 96f);
                 UiKit.SetSmallButtonAccent(bid, true);
                 actions.Add(bid);
+            }
+
+            // Task 12.2: the row's own action — "put him up" on the sell tab, "take it back" on a lot of
+            // yours nobody has bid on yet.
+            if (!string.IsNullOrEmpty(vm.ActionLabel))
+            {
+                Action act = vm.RowAction;
+                Button b = UiKit.SmallButton(vm.ActionLabel, () => act?.Invoke(), 120f);
+                UiKit.SetSmallButtonAccent(b, !vm.CanBid);
+                actions.Add(b);
             }
 
             return row;

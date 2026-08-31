@@ -402,7 +402,9 @@ namespace Fts.Presenters
             _renderer.MinuteChanged += OnMinuteChanged;
             _renderer.EventReached += OnEventReached;
             _renderer.Finished += OnFinished;
+            _renderer.ActionReached += OnActionReached;
             _view.PitchContainer.Insert(0, _renderer); // behind the toast overlay
+            _view.ClearActions();
 
             _renderer.SetSpeed(_speed);
             _view.SetFinished(false);
@@ -427,9 +429,42 @@ namespace Fts.Presenters
             _renderer.MinuteChanged -= OnMinuteChanged;
             _renderer.EventReached -= OnEventReached;
             _renderer.Finished -= OnFinished;
+            _renderer.ActionReached -= OnActionReached;
             if (_renderer.parent != null)
                 _renderer.RemoveFromHierarchy();
             _renderer = null;
+        }
+
+        /// <summary>
+        /// Running commentary (task 13.1). In the career the stream's player ids resolve to
+        /// real names off the squads; anyone it cannot find falls back to a shirt number.
+        /// </summary>
+        private void OnActionReached(BallAction action)
+        {
+            if (_speed > 1f && !MatchCommentary.IsMajor(action.Kind))
+                return; // at 2x/4x a line per touch is a blur; keep the moments that matter
+
+            _view.PushAction(MatchCommentary.Describe(action, _loc.Tr, NameOfSlot));
+        }
+
+        private string NameOfSlot(bool home, int slot)
+        {
+            if (_renderer == null || _context == null) return string.Empty;
+
+            int[] ids = home ? _renderer.HomePlayerIds : _renderer.AwayPlayerIds;
+            int[] shirts = home ? _renderer.HomeShirts : _renderer.AwayShirts;
+            if (slot < 0 || slot >= ids.Length) return string.Empty;
+
+            Club club = _career.FindClub(home ? _context.Fixture.HomeClubId : _context.Fixture.AwayClubId);
+            if (club != null)
+            {
+                foreach (Player p in club.Squad.Players)
+                {
+                    if (p.Id == ids[slot]) return p.LastName;
+                }
+            }
+
+            return slot < shirts.Length ? "#" + shirts[slot] : string.Empty;
         }
 
         private void RecomputeScoreUpTo(MatchReport report, int minute)

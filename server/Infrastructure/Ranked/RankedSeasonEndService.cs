@@ -208,6 +208,12 @@ public sealed class RankedSeasonEndService : IRankedSeasonEndService
         // default for every human seat, and a coach's focus is re-chosen on the squad they actually have.
         await _db.RankedTrainings.Where(t => t.RankedGroupId == group.Id).ExecuteDeleteAsync(ct);
         await _db.RankedFixtures.Where(f => f.RankedGroupId == group.Id).ExecuteDeleteAsync(ct);
+        // Live sessions go with the fixtures they belong to (task 12.3). Round numbers repeat every season,
+        // so a leftover session from last year's matchday 3 would be a session the calendar has to reason
+        // about on THIS year's matchday 3 — it cannot be consumed (its fixture id is gone with the schedule)
+        // but it could still hold the round back for a grace period. The schedule and its live sessions are
+        // one season's worth of state and they are cleared together.
+        await _db.RankedLiveMatches.Where(l => l.RankedGroupId == group.Id).ExecuteDeleteAsync(ct);
 
         bool equalised = false;
         if (_opt.ResetSquadsBetweenSeasons && group.WorldId is not null && clubs.Count > 0)

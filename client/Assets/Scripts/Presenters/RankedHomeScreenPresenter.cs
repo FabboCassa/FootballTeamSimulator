@@ -29,15 +29,20 @@ namespace Fts.Presenters
 
         private bool _busy;
         private RankedTodayDto _today;
+        /// <summary>Task 12.3: the hand-off to the live screen, when the digest's top item is an
+        /// appointment that is happening right now.</summary>
+        private readonly RankedLiveTarget _liveTarget;
 
         public VisualElement View => _view.Root;
 
         public RankedHomeScreenPresenter(
-            ScreenNavigator navigator, ILocalizationService loc, RankedApiService ranked)
+            ScreenNavigator navigator, ILocalizationService loc, RankedApiService ranked,
+            RankedLiveTarget liveTarget)
         {
             _navigator = navigator;
             _loc = loc;
             _ranked = ranked;
+            _liveTarget = liveTarget;
             _view = new RankedHomeView(loc.Tr);
         }
 
@@ -173,9 +178,16 @@ namespace Fts.Presenters
             {
                 next = _loc.Tr(d.nextMatch.youAreHome ? "ranked.today.next_home" : "ranked.today.next_away",
                     d.nextMatch.opponentClubName, d.nextMatch.round);
-                countdown = d.nextMatch.secondsToKickoff > 0
-                    ? _loc.Tr("ranked.today.kickoff_in", Countdown(d.nextMatch.secondsToKickoff))
-                    : _loc.Tr("ranked.today.kickoff_now");
+                // TASK 12.3 — while the door is open the line stops counting down and says the thing that
+                // matters: it is on NOW, and you can be there. The countdown before it runs to the DOOR
+                // rather than to the kick-off, because the door is when a coach can actually do something.
+                countdown = d.nextMatch.liveOpen
+                    ? _loc.Tr("ranked.today.live_now")
+                    : d.nextMatch.secondsToLiveOpen > 0
+                        ? _loc.Tr("ranked.today.kickoff_in", Countdown(d.nextMatch.secondsToLiveOpen))
+                        : d.nextMatch.secondsToKickoff > 0
+                            ? _loc.Tr("ranked.today.kickoff_in", Countdown(d.nextMatch.secondsToKickoff))
+                            : _loc.Tr("ranked.today.kickoff_now");
             }
             else if (d.seasonComplete)
             {
@@ -217,6 +229,7 @@ namespace Fts.Presenters
             (int)RankedTodoKind.RespondOffer => _loc.Tr("ranked.todo.respond_offer", t.count),
             (int)RankedTodoKind.MarketWindow => _loc.Tr("ranked.todo.market_window", t.count),
             (int)RankedTodoKind.SeasonSummary => _loc.Tr("ranked.todo.season_summary"),
+            (int)RankedTodoKind.WatchLive => _loc.Tr("ranked.todo.watch_live"),
             _ => string.Empty,
         };
 
@@ -325,7 +338,23 @@ namespace Fts.Presenters
                 case (int)RankedTodoKind.RespondOffer:
                 case (int)RankedTodoKind.MarketWindow: OnMarket(); break;
                 case (int)RankedTodoKind.SeasonSummary: OnSeason(); break;
+                case (int)RankedTodoKind.WatchLive: OnWatchLive(); break;
             }
+        }
+
+        /// <summary>Task 12.3: straight from the digest into the match. The digest knows which fixture and
+        /// who is playing whom, so the coach goes from "what do I do today?" to the pitch in one tap — which
+        /// is the whole argument for putting an appointment on this screen at all.</summary>
+        private void OnWatchLive()
+        {
+            RankedTodayNextMatchDto next = _today?.nextMatch;
+            if (next == null || string.IsNullOrEmpty(next.fixtureId)) return;
+
+            string mine = _today.clubName ?? string.Empty;
+            string home = next.youAreHome ? mine : next.opponentClubName;
+            string away = next.youAreHome ? next.opponentClubName : mine;
+            _liveTarget.Set(next.fixtureId, home, away);
+            _navigator.Push<RankedLiveMatchScreenPresenter>();
         }
 
         private void OnSeason() => _navigator.Push<RankedSeasonScreenPresenter>();

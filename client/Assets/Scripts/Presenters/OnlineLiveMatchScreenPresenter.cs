@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using Fts.MatchView;
@@ -233,7 +232,9 @@ namespace Fts.Presenters
             _renderer.MinuteChanged += OnMinuteChanged;
             _renderer.EventReached += OnEventReached;
             _renderer.Finished += OnFinished;
+            _renderer.ActionReached += OnActionReached;
             _view.PitchContainer.Insert(0, _renderer); // behind the toast overlay
+            _view.ClearActions();
 
             _renderer.SetSpeed(1f);
             if (seekMinute > 0) _renderer.SeekToMinute(seekMinute);
@@ -253,8 +254,25 @@ namespace Fts.Presenters
             _renderer.MinuteChanged -= OnMinuteChanged;
             _renderer.EventReached -= OnEventReached;
             _renderer.Finished -= OnFinished;
+            _renderer.ActionReached -= OnActionReached;
             if (_renderer.parent != null) _renderer.RemoveFromHierarchy();
             _renderer = null;
+        }
+
+        /// <summary>
+        /// Running commentary (task 13.1). A replay arrives as a bare MatchReport with no
+        /// squads attached, so players are named by the shirt numbers the stream carries.
+        /// </summary>
+        private void OnActionReached(BallAction action)
+        {
+            _view.PushAction(MatchCommentary.Describe(action, _loc.Tr, NameOfSlot));
+        }
+
+        private string NameOfSlot(bool home, int slot)
+        {
+            if (_renderer == null) return string.Empty;
+            int[] shirts = home ? _renderer.HomeShirts : _renderer.AwayShirts;
+            return slot >= 0 && slot < shirts.Length ? "#" + shirts[slot] : string.Empty;
         }
 
         private void OnMinuteChanged(int minute)
@@ -532,13 +550,12 @@ namespace Fts.Presenters
 
         private string RoleAbbr(PositionRole role) => _loc.Tr("role." + role.ToString().ToLowerInvariant());
 
-        private static DateTime? ParseUtc(string s)
-        {
-            if (string.IsNullOrEmpty(s)) return null;
-            return DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out DateTime dt)
-                ? dt.ToUniversalTime()
-                : (DateTime?)null;
-        }
+        /// <summary>Delegated to <see cref="OnlineClock"/> in task 12.3, and it is a FIX as well as a tidy-up:
+        /// the old <c>RoundtripKind</c> parse read a timestamp with no trailing "Z" as an Unspecified time and
+        /// <c>ToUniversalTime()</c> then shifted it by the DEVICE's offset — so the shared match minute drifted
+        /// by exactly the local UTC offset whenever the server's string lost its Kind. Postgres hands back a
+        /// Kind and hid it in production; SQLite does not.</summary>
+        private static DateTime? ParseUtc(string s) => OnlineClock.ParseUtc(s);
 
         private static MatchReport TryParseReport(string json)
         {

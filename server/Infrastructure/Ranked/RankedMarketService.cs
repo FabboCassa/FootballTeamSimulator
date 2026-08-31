@@ -221,8 +221,14 @@ public sealed class RankedMarketService : IRankedMarketService
         if (buyerClub.TransferBudget < offer.Fee)
             return RankedResult<RankedOffersDto>.Fail(RankedError.InsufficientBudget, "The buyer can no longer afford this.");
 
+        // THE FLOOR COUNTS THE AUCTION BOARD TOO (task 12.2). A coach can now have players out on his own
+        // auction lots; each of those is a player on his way out, so accepting a direct offer on top of them
+        // has to be measured against what would be left when they all settle.
         int sellerSquad = await _db.Players.CountAsync(p => p.ClubId == offer.SellerClubId, ct);
-        if (sellerSquad - 1 < _opt.MinSquadSizeForSale)
+        int onTheBoard = await _db.RankedAuctions.CountAsync(
+            a => a.RankedGroupId == offer.RankedGroupId && a.Status == RankedAuctionStatus.Open
+                 && a.SellerClubId == offer.SellerClubId, ct);
+        if (sellerSquad - onTheBoard - 1 < _opt.MinSquadSizeForSale)
             return RankedResult<RankedOffersDto>.Fail(RankedError.ValidationFailed, "Selling would leave your squad too small.");
 
         // COLLUSION GUARD, second half (Phase 9.5): re-assess at ACCEPT time. The offer passed the band when

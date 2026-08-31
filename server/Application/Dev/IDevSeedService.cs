@@ -41,6 +41,14 @@ public interface IDevSeedService
     /// instead of spending minutes registering and logging in over HTTP.</summary>
     Task<DevLoadSeedResult> SeedLoadCohortAsync(DevLoadSeedRequest request, CancellationToken ct = default);
 
+    /// <summary>Ranked live-match autopilot (task 12.3 dev tooling): the fixture's OPPONENT — a bot coach
+    /// holding the other club — opens the live session and optionally makes a substitution and confirms
+    /// full-time, so a single human can see the other side of a live ranked match without a second
+    /// account/device. Against a vacant AI seat there is nobody to log in as: the call says so and does
+    /// nothing, because that side is already playing its stored orders.</summary>
+    Task<DevRankedLiveResult> RankedBotLiveAsync(
+        Guid fixtureId, DevRankedLiveRequest request, CancellationToken ct = default);
+
     /// <summary>Ranked market autopilot (Phase 9.2b dev tooling): the bot coaches in the group outbid on the
     /// open auction lots and answer the pending offers sent to them, so a solo human can see the market
     /// react (being outbid, an offer accepted/rejected) without a second account.</summary>

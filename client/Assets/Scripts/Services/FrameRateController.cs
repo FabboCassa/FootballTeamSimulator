@@ -25,8 +25,15 @@ namespace Fts.Services
         private const int LowFps = 30;
         private const float IdleSeconds = 8f;
 
-        /// <summary>Screen that animates continuously and must stay at the high rate.</summary>
-        private const string MatchWatchScreen = "MatchWatchScreenPresenter";
+        /// <summary>Screens that animate continuously and must stay at the high rate.</summary>
+        private static readonly string[] AnimatingScreens =
+        {
+            "MatchWatchScreenPresenter",
+            "OnlineLiveMatchScreenPresenter",
+            "RankedLiveMatchScreenPresenter",
+            "OnlineReplayScreenPresenter",
+            "RankedReplayScreenPresenter"
+        };
 
         private readonly IMessageBroker _broker;
         private IDisposable _screenSub;
@@ -58,7 +65,7 @@ namespace Fts.Services
             if (HasInput())
                 _lastActivity = Time.unscaledTime;
 
-            bool watchingMatch = _currentScreen == MatchWatchScreen;
+            bool watchingMatch = System.Array.IndexOf(AnimatingScreens, _currentScreen) >= 0;
             bool recentlyActive = (Time.unscaledTime - _lastActivity) < IdleSeconds;
 
             Apply(watchingMatch || recentlyActive ? HighFps : LowFps);

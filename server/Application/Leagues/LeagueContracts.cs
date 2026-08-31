@@ -85,7 +85,10 @@ public sealed record LeagueSummaryDto(
     int MemberCount,
     LeagueStatus Status,
     LeagueMode Mode,
-    bool IsCreator);
+    bool IsCreator,
+    // Transfer negotiations waiting on THIS coach right now (Phase 12.1). An unanswered offer expires
+    // when the round resolves, so the home screen badges this and nobody loses a deal by not looking.
+    int OffersAwaitingYou = 0);
 
 /// <summary>Full league view: the summary + members + the generated clubs/squads + the draft state.</summary>
 public sealed record LeagueDetailDto(
@@ -151,6 +154,23 @@ public enum LeagueError
     /// <summary>The submitted change is invalid (minute out of range, moves backwards past an applied
     /// change, or carries no lineup and no tactic) — 8.6.</summary>
     InvalidLiveChange,
+
+    // --- Private-league transfer market (Phase 12.1) ----------------------------------------
+    /// <summary>No transfer window is open right now (a private league trades in two round-based
+    /// windows: pre-season and mid-season) — 12.1.</summary>
+    MarketClosed,
+    /// <summary>No negotiation with that id exists in this league — 12.1.</summary>
+    OfferNotFound,
+    /// <summary>The negotiation has already been accepted, rejected, withdrawn or expired — 12.1.</summary>
+    OfferResolved,
+    /// <summary>The player has moved, been sold, or been signed by someone else first — 12.1.</summary>
+    PlayerUnavailable,
+    /// <summary>The sale would leave a squad below the legal minimum — 12.1.</summary>
+    SquadTooSmall,
+    /// <summary>The buying squad is already at the maximum size — 12.1.</summary>
+    SquadFull,
+    /// <summary>The fee sits outside the anti-collusion band around the player's market value — 9.5/12.1.</summary>
+    IntegrityBlocked,
 }
 
 /// <summary>Result wrapper so the service never throws for expected failures. Exactly one of

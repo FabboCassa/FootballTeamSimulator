@@ -101,6 +101,11 @@ public sealed class RankedSeasonService : IRankedSeasonService
         var now = DateTime.UtcNow;
 
         int started = await StartDueSeasonsAsync(now, ct);
+
+        // TASK 12.3: "fra poco si gioca" — sent one LiveOpensBeforeSeconds before each matchday, which is
+        // also the instant the live door opens, so the push and the lobby are the same event.
+        await SendKickoffRemindersAsync(now, ct);
+
         (int matchdays, int fixtures, int placements, int completed) = await ResolveDueMatchdaysAsync(now, ct);
         int windows = await AnnounceMarketWindowsAsync(now, ct);
 
@@ -108,8 +113,12 @@ public sealed class RankedSeasonService : IRankedSeasonService
         // squads rebuilt, then reopens for the next season (9.3).
         int resets = await ApplyDueSeasonResetsAsync(now, ct);
 
-        // Settle any free-agent auction lot whose window has closed (9.2b). The lots were opened when the
-        // window opened (see AnnounceMarketWindows); the winner gets the player + is charged.
+        // The group's AI clubs bid on the lots coaches put up (task 12.2) — never on the free agents. One
+        // raise per lot per tick, so a coach always gets to come back over the top.
+        await _auctions.RunBotBidsAsync(ct);
+
+        // Settle every auction lot whose OWN timer has elapsed (9.2b, per-lot since task 12.2): the winner
+        // gets the player and is charged, and on a coach's lot the seller is paid.
         await _auctions.SettleDueAsync(false, ct);
 
         return new RankedTickSummary(started, matchdays, fixtures, placements, completed, windows, resets);
@@ -207,6 +216,64 @@ public sealed class RankedSeasonService : IRankedSeasonService
     }
 
     /// <summary>Moves every started season (and its pending kickoffs) back by <paramref name="seconds"/>.</summary>
+    /// <summary>
+    /// DEV/STAGING ONLY (task 12.3 dev-sim tooling). A ranked match kicks off at 21:00 of its world's zone,
+    /// which is exactly right for players and useless for a solo tester at 15:40 — so this pulls the whole
+    /// running ladder's clock forward until the next matchday is about to start, without resolving anything.
+    /// It reuses the same shift the fast-forward uses (season start, remaining kickoffs and open lots all
+    /// move together), so the calendar stays internally consistent and this is time travel rather than a
+    /// special code path. <paramref name="seconds"/> is how long from NOW the next kickoff should be.
+    /// </summary>
+    public async Task<int> BringKickoffForwardAsync(int seconds, CancellationToken ct = default)
+    {
+        await TickGate.WaitAsync(ct);
+        try
+        {
+            var now = DateTime.UtcNow;
+            DateTime target = now.AddSeconds(Math.Max(0, seconds));
+
+            var groups = await _db.RankedGroups
+                .Where(g => g.SeasonStartedUtc != null && g.Status == RankedGroupStatus.Active)
+                .ToListAsync(ct);
+            if (groups.Count == 0) return 0;
+
+            int shifted = 0;
+            foreach (var g in groups)
+            {
+                var pending = await _db.RankedFixtures
+                    .Where(f => f.RankedGroupId == g.Id && !f.IsPlayed)
+                    .ToListAsync(ct);
+                if (pending.Count == 0) continue;
+
+                DateTime nextKickoff = pending.Min(f => f.KickoffUtc);
+                if (nextKickoff <= target) continue; // already imminent (or overdue) — nothing to pull
+
+                TimeSpan offset = nextKickoff - target;
+                g.SeasonStartedUtc = g.SeasonStartedUtc!.Value - offset;
+                foreach (var f in pending) f.KickoffUtc -= offset;
+
+                // The lots close with their window, which just moved with the season start.
+                var lots = await _db.RankedAuctions
+                    .Where(a => a.RankedGroupId == g.Id && a.Status == RankedAuctionStatus.Open)
+                    .ToListAsync(ct);
+                foreach (var lot in lots) lot.EndsUtc -= offset;
+
+                // The reminder for that round has not been sent on the NEW clock, so let it fire.
+                if (g.LiveKickoffNotifiedRound >= pending.Min(f => f.Round))
+                    g.LiveKickoffNotifiedRound = pending.Min(f => f.Round) - 1;
+
+                shifted++;
+            }
+
+            await _db.SaveChangesAsync(ct);
+            return shifted;
+        }
+        finally
+        {
+            TickGate.Release();
+        }
+    }
+
     private async Task ShiftClockBackAsync(int seconds, CancellationToken ct)
     {
         var offset = TimeSpan.FromSeconds(seconds);
@@ -297,6 +364,11 @@ public sealed class RankedSeasonService : IRankedSeasonService
         var clubs = await _db.Clubs.Where(c => clubIds.Contains(c.Id)).ToListAsync(ct);
         var clubByExternal = clubs.ToDictionary(c => c.ExternalId, c => c.Id);
 
+        // TASK 12.3 — the season's kick-offs are computed on the WORLD's own clock: 21:00 local to the zone
+        // the pyramid belongs to, one per matchday, DST included. On a compressed calendar (a test) the clock
+        // reports no anchor and the kickoffs stay season-start-relative, exactly as they were before 12.3.
+        RankedCalendar.KickoffClock clock = await KickoffClockAsync(group, ct);
+
         var externalIds = clubs.Select(c => c.ExternalId).OrderBy(x => x).ToList();
         // Mix the group's season counter into the seed (Phase 9.3) so the season after a reset is a NEW
         // season — a different fixture order and different match seeds, not a replay of the last one.
@@ -314,7 +386,7 @@ public sealed class RankedSeasonService : IRankedSeasonService
                 Round = s.Round,
                 MatchIndex = s.MatchIndex,
                 Day = s.Day,
-                KickoffUtc = RankedCalendar.KickoffOf(now, s.Round, _opt.MatchdayIntervalSeconds),
+                KickoffUtc = RankedCalendar.KickoffOf(now, s.Round, clock),
                 HomeClubId = homeGuid,
                 AwayClubId = awayGuid,
                 IsPlayed = false,
@@ -422,6 +494,15 @@ public sealed class RankedSeasonService : IRankedSeasonService
             // Not due yet — every fixture in a round shares one kickoff, so the first tells the time.
             if (roundFixtures[0].KickoffUtc > now) continue;
 
+            // TASK 12.3 — THE MATCHDAY WAITS FOR WHOEVER TURNED UP. A round resolves in one piece (one
+            // EvolveWeek over the whole world, one coherent table), so if any of its fixtures is still being
+            // played live, the whole round holds. The wait is bounded twice over: it only happens when a
+            // session actually EXISTS and is unfinished — a matchday nobody attended resolves at its kickoff
+            // exactly as it did before 12.3 — and it never runs past LiveGraceSeconds, so no stalled client
+            // can hold a group's day hostage.
+            if (_opt.LiveMatchesEnabled && !await LiveSettledAsync(group, round, roundFixtures[0], now, ct))
+                continue;
+
             fixturesResolved += await ResolveRoundAsync(group, roundFixtures, round, ct);
             matchdays++;
 
@@ -436,6 +517,121 @@ public sealed class RankedSeasonService : IRankedSeasonService
         }
 
         return (matchdays, fixturesResolved, placements, completed);
+    }
+
+    /// <summary>
+    /// True when nothing is still being played in this round, so the calendar may resolve it (task 12.3).
+    ///
+    /// False means "come back next tick": a session for this round is open and the grace has not run out.
+    /// When the grace DOES run out, every unfinished session is closed here rather than left to rot — one
+    /// that was actually being played keeps the football it produced (its report is a legitimate result of
+    /// the same (plan, seed) the headless path would use, just with the coach's substitutions in it), and one
+    /// that never kicked off has no report and simply resolves headless.
+    /// </summary>
+    private async Task<bool> LiveSettledAsync(
+        RankedGroup group, int round, RankedFixture first, DateTime now, CancellationToken ct)
+    {
+        var sessions = await _db.RankedLiveMatches
+            .Where(l => l.RankedGroupId == group.Id && l.Round == round)
+            .ToListAsync(ct);
+
+        var unfinished = sessions
+            .Where(l => l.Status != Fts.Application.Leagues.LiveMatchStatus.Finished)
+            .ToList();
+        if (unfinished.Count == 0) return true;
+
+        DateTime graceEnds = first.KickoffUtc.AddSeconds(Math.Max(0, _opt.LiveGraceSeconds));
+        if (now < graceEnds) return false;
+
+        foreach (var l in unfinished)
+        {
+            l.Status = Fts.Application.Leagues.LiveMatchStatus.Finished;
+            l.FinishedUtc = now;
+            l.UpdatedUtc = now;
+        }
+        await _db.SaveChangesAsync(ct);
+        return true;
+    }
+
+    /// <summary>
+    /// "Fra poco si gioca" (task 12.3): one push per human coach, one <c>LiveOpensBeforeSeconds</c> before
+    /// his matchday — the same instant the live session may be opened, so the notification is also the
+    /// invitation. <c>RankedGroup.LiveKickoffNotifiedRound</c> makes it exactly once per round however often
+    /// the tick runs; a round whose window has already closed is marked notified without a push, so a server
+    /// that was down over a kickoff does not wake up and shout about a match that is over.
+    /// </summary>
+    private async Task SendKickoffRemindersAsync(DateTime now, CancellationToken ct)
+    {
+        if (!_opt.LiveMatchesEnabled || _opt.LiveOpensBeforeSeconds <= 0) return;
+
+        // ONE grouped query decides who is even a candidate. The 9.6 lesson was that a tick which does
+        // per-group work for every group on the ladder stops being linear in the ladder's size; a reminder
+        // pass has no business loading 125 groups a minute to discover that none of them kicks off for hours.
+        DateTime doorOpensBy = now.AddSeconds(_opt.LiveOpensBeforeSeconds);
+        var candidates = await (
+            from f in _db.RankedFixtures
+            join g in _db.RankedGroups on f.RankedGroupId equals g.Id
+            where !f.IsPlayed && g.SeasonStartedUtc != null && g.Status == RankedGroupStatus.Active
+            group f by f.RankedGroupId into grp
+            where grp.Min(x => x.KickoffUtc) <= doorOpensBy
+            select new { GroupId = grp.Key, Kickoff = grp.Min(x => x.KickoffUtc) })
+            .ToListAsync(ct);
+
+        foreach (var candidate in candidates)
+        {
+            var group = await BeginGroupAsync(candidate.GroupId, ct);
+            if (group is null || group.Status != RankedGroupStatus.Active) continue;
+
+            var pending = await _db.RankedFixtures
+                .Where(f => f.RankedGroupId == group.Id && !f.IsPlayed)
+                .ToListAsync(ct);
+            if (pending.Count == 0) continue;
+
+            int round = pending.Min(f => f.Round);
+            if (round <= group.LiveKickoffNotifiedRound) continue;
+
+            var roundFixtures = pending.Where(f => f.Round == round).ToList();
+            DateTime kickoff = roundFixtures.Min(f => f.KickoffUtc);
+            if (now < kickoff.AddSeconds(-_opt.LiveOpensBeforeSeconds)) continue;
+
+            group.LiveKickoffNotifiedRound = round;
+            await _db.SaveChangesAsync(ct);
+
+            // Too late to be an invitation — the door is already shut. Marked, not announced: a server that
+            // was down over a kick-off should not wake up and shout about a match that is over.
+            if (now >= kickoff.AddSeconds(Math.Max(0, _opt.LiveGraceSeconds))) continue;
+
+            var humanByClub = await _db.RankedSeats
+                .Where(s => s.RankedGroupId == group.Id && s.UserId != null && s.ClubId != null)
+                .ToDictionaryAsync(s => s.ClubId!.Value, s => s.UserId!.Value, ct);
+            if (humanByClub.Count == 0) continue;
+
+            var clubNames = await _db.Clubs
+                .Where(c => c.WorldId == group.WorldId)
+                .ToDictionaryAsync(c => c.Id, c => c.Name, ct);
+
+            foreach (var f in roundFixtures)
+            {
+                await RemindAsync(humanByClub, clubNames, f, f.HomeClubId, f.AwayClubId, round, ct);
+                await RemindAsync(humanByClub, clubNames, f, f.AwayClubId, f.HomeClubId, round, ct);
+            }
+        }
+    }
+
+    private async Task RemindAsync(
+        IReadOnlyDictionary<Guid, Guid> humanByClub, IReadOnlyDictionary<Guid, string> clubNames,
+        RankedFixture fixture, Guid clubId, Guid opponentId, int round, CancellationToken ct)
+    {
+        if (!humanByClub.TryGetValue(clubId, out var userId)) return;
+        string opponent = clubNames.TryGetValue(opponentId, out var n) ? n : "l'avversario";
+        await SafeSend(userId, "Fra poco si gioca",
+            $"Giornata {round} contro {opponent}. Entra per giocarla dal vivo.",
+            new Dictionary<string, string>
+            {
+                ["kind"] = "ranked_kickoff",
+                ["fixtureId"] = fixture.Id.ToString(),
+                ["kickoffUtc"] = fixture.KickoffUtc.ToString("o"),
+            }, ct);
     }
 
     private async Task<int> ResolveRoundAsync(
@@ -462,6 +658,19 @@ public sealed class RankedSeasonService : IRankedSeasonService
         // The clubs that played this round (kickoff XI + result) — the input to the weekly condition tick.
         var played = new Dictionary<int, ConditionProgressor.Participation>();
 
+        // TASK 12.3 — a fixture played LIVE carries its result on a Finished session: consume it verbatim
+        // instead of re-simulating, so the score the two coaches watched is the score that feeds the table,
+        // the Elo and the weekly tick. This is the same consumption the private-league round has done since
+        // 8.6, and it is why the ✅ holds both ways: with no changes submitted the stored report IS what the
+        // engine below would produce, byte for byte, from the same seed and the same stored orders.
+        var liveByFixture = _opt.LiveMatchesEnabled
+            ? await _db.RankedLiveMatches
+                .Where(l => l.RankedGroupId == group.Id && l.Round == round
+                            && l.Status == Fts.Application.Leagues.LiveMatchStatus.Finished
+                            && l.ReportJson != null)
+                .ToDictionaryAsync(l => l.FixtureId, l => l, ct)
+            : new Dictionary<Guid, RankedLiveMatch>();
+
         var now = DateTime.UtcNow;
         int resolved = 0;
         foreach (var f in roundFixtures)
@@ -473,6 +682,35 @@ public sealed class RankedSeasonService : IRankedSeasonService
 
             int homeExt = entByGuid[f.HomeClubId].ExternalId;
             int awayExt = entByGuid[f.AwayClubId].ExternalId;
+
+            // Played live (task 12.3): adopt the stored report rather than rolling the match a second time.
+            // The kickoff XI — the base lineups, BEFORE any live substitution — is what the 8.4 weekly
+            // condition tick credits, the same convention the private league uses.
+            if (liveByFixture.TryGetValue(f.Id, out var liveMatch))
+            {
+                f.HomeGoals = liveMatch.HomeGoals;
+                f.AwayGoals = liveMatch.AwayGoals;
+                f.IsPlayed = true;
+                f.MatchSeed = liveMatch.Seed;
+                f.ResolvedUtc = now;
+                f.ReplayJson = liveMatch.ReportJson;
+                resolved++;
+
+                var (liveHomeXI, liveAwayXI) =
+                    MatchResolver.KickoffElevenIds(home, away, homeInputs, awayInputs);
+                played[homeExt] = new ConditionProgressor.Participation(
+                    liveHomeXI, ResultFor(liveMatch.HomeGoals, liveMatch.AwayGoals));
+                played[awayExt] = new ConditionProgressor.Participation(
+                    liveAwayXI, ResultFor(liveMatch.AwayGoals, liveMatch.HomeGoals));
+
+                await ApplyMatchRatingsAsync(group, humanByClub, f.HomeClubId, f.AwayClubId,
+                    liveMatch.HomeGoals, liveMatch.AwayGoals, ct);
+                await NotifyMatchdayAsync(humanByClub, f.HomeClubId, entByGuid,
+                    liveMatch.HomeGoals, liveMatch.AwayGoals, ct);
+                await NotifyMatchdayAsync(humanByClub, f.AwayClubId, entByGuid,
+                    liveMatch.AwayGoals, liveMatch.HomeGoals, ct);
+                continue;
+            }
 
             ulong seed = FixtureSeed.For(worldSeed, f.Round, homeExt, awayExt);
             MatchResolver.ResolveResult r = MatchResolver.Resolve(home, away, homeInputs, awayInputs, seed, _config);
@@ -641,20 +879,27 @@ public sealed class RankedSeasonService : IRankedSeasonService
             await _ranking.ApplyMatchAsync(awayId, homeRating, EloModel.OutcomeOf(awayGoals, homeGoals), ct);
     }
 
-    /// <summary>The seed a given season of a group runs on: the generated world's seed mixed (splitmix-style)
-    /// with the group's season counter, so every season after a reset gets its own schedule and match seeds
-    /// while staying fully reproducible from the world's root seed.</summary>
-    private static long SeasonSeed(long worldSeed, int seasonNumber)
+    /// <summary>
+    /// The clock this group's matchdays are spaced on (task 12.3): the configured interval plus the pyramid's
+    /// own IANA time zone and the local hour it kicks off at. A world opened before 12.3 carries no zone and
+    /// therefore keeps the pre-12.3 relative calendar — an in-flight season is never rescheduled under its
+    /// coaches' feet — and so does any compressed calendar, because "the same hour every day" only means
+    /// something at a whole-day cadence.
+    /// </summary>
+    private async Task<RankedCalendar.KickoffClock> KickoffClockAsync(RankedGroup group, CancellationToken ct)
     {
-        unchecked
-        {
-            ulong mixed = (ulong)worldSeed ^ ((ulong)(uint)Math.Max(1, seasonNumber) * 0x9E3779B97F4A7C15UL);
-            mixed ^= mixed >> 29;
-            mixed *= 0xBF58476D1CE4E5B9UL;
-            mixed ^= mixed >> 32;
-            return (long)mixed;
-        }
+        string? zoneId = await _db.RankedWorlds
+            .Where(w => w.Id == group.RankedWorldId)
+            .Select(w => w.TimeZoneId)
+            .FirstOrDefaultAsync(ct);
+        return new RankedCalendar.KickoffClock(
+            _opt.MatchdayIntervalSeconds, RankedCalendar.ZoneOrNull(zoneId), _opt.KickoffHourLocal);
     }
+
+    /// <summary>The seed a given season of a group runs on. Moved to <see cref="RankedSeeds"/> in task 12.3
+    /// so a LIVE session derives the identical value — a live-played fixture and a headless one have to be
+    /// the same match, and two copies of a mixing function are two chances for them not to be.</summary>
+    private static long SeasonSeed(long worldSeed, int seasonNumber) => RankedSeeds.Season(worldSeed, seasonNumber);
 
     /// <summary>Announces the market window that just opened for each running season (once each, at season
     /// start and around the midpoint). 9.2a fires the signal + notification; the market content is 9.2b.</summary>
@@ -687,7 +932,8 @@ public sealed class RankedSeasonService : IRankedSeasonService
             await _db.SaveChangesAsync(ct);
             opened++;
 
-            // Open a free-agent auction lot per unattached player, ending when the window closes (9.2b).
+            // Open a free-agent auction lot per unattached player (9.2b). The lot runs for the configured
+            // free-agent duration (task 12.2), clamped to the window's close by the service.
             await _auctions.OpenWindowLotsAsync(group.Id, w.Index, w.ClosesUtc, ct);
 
             var humans = await _db.RankedSeats
@@ -944,6 +1190,28 @@ public sealed class RankedSeasonService : IRankedSeasonService
             .OrderBy(f => f.Round).ThenBy(f => f.MatchIndex)
             .ToListAsync(ct);
 
+        // TASK 12.3 — the live door, computed SERVER-side: a device whose clock is a few minutes off would
+        // otherwise offer (or hide) "guardala dal vivo" at the wrong moment, and that moment is the one that
+        // matters. `LiveStatus` is null until somebody actually opens a session.
+        var nowUtc = DateTime.UtcNow;
+        var liveByFixture = _opt.LiveMatchesEnabled
+            ? await _db.RankedLiveMatches
+                .Where(l => l.RankedGroupId == group.Id)
+                .ToDictionaryAsync(l => l.FixtureId, l => l.Status, ct)
+            : new Dictionary<Guid, Fts.Application.Leagues.LiveMatchStatus>();
+
+        int? liveRound = fixtures.Where(f => !f.IsPlayed).Select(f => (int?)f.Round).Min();
+
+        bool LiveDoorOpen(RankedFixture f, bool isYours) =>
+            _opt.LiveMatchesEnabled && isYours && !f.IsPlayed && f.Round == liveRound
+            && nowUtc >= f.KickoffUtc.AddSeconds(-Math.Max(0, _opt.LiveOpensBeforeSeconds))
+            && nowUtc < f.KickoffUtc.AddSeconds(Math.Max(0, _opt.LiveGraceSeconds));
+
+        string worldZoneId = await _db.RankedWorlds
+            .Where(w => w.Id == group.RankedWorldId)
+            .Select(w => w.TimeZoneId)
+            .FirstOrDefaultAsync(ct) ?? string.Empty;
+
         var fixtureDtos = fixtures.Select(f => new RankedFixtureDto(
             Id: f.Id,
             Round: f.Round,
@@ -957,7 +1225,12 @@ public sealed class RankedSeasonService : IRankedSeasonService
             HomeGoals: f.HomeGoals,
             AwayGoals: f.AwayGoals,
             IsYours: yourExternal is { } ye
-                     && (entByGuid[f.HomeClubId].ExternalId == ye || entByGuid[f.AwayClubId].ExternalId == ye)))
+                     && (entByGuid[f.HomeClubId].ExternalId == ye || entByGuid[f.AwayClubId].ExternalId == ye),
+            LiveOpen: LiveDoorOpen(f, yourExternal is { } ye2
+                     && (entByGuid[f.HomeClubId].ExternalId == ye2 || entByGuid[f.AwayClubId].ExternalId == ye2)),
+            LiveStatus: liveByFixture.TryGetValue(f.Id, out var ls)
+                        ? (Fts.Application.Leagues.LiveMatchStatus?)ls
+                        : null))
             .ToList();
 
         var standings = ComputeStandings(clubs, fixtures, yourExternal);
@@ -1001,7 +1274,13 @@ public sealed class RankedSeasonService : IRankedSeasonService
             YourClubExternalId: yourExternal,
             YouSubmittedLineup: youSubmitted,
             CurrentWindow: currentWindow,
-            StateHashHex: stateHash);
+            StateHashHex: stateHash,
+            ServerUtc: nowUtc,
+            WorldTimeZoneId: worldZoneId,
+            LiveOpensBeforeSeconds: Math.Max(0, _opt.LiveOpensBeforeSeconds),
+            LiveGraceSeconds: Math.Max(0, _opt.LiveGraceSeconds),
+            LiveSecondsPerMatchMinute: Math.Max(1, _opt.LiveSecondsPerMatchMinute),
+            LiveEnabled: _opt.LiveMatchesEnabled);
 
         return new RankedSeasonDto(true, state, fixtureDtos, standings);
     }
@@ -1014,18 +1293,9 @@ public sealed class RankedSeasonService : IRankedSeasonService
 
     // --- helpers -----------------------------------------------------------------------------------
 
-    private static MatchResolver.SideInputs DeserializeInputs(RankedLineup x)
-    {
-        LineupPlan? lineup = null;
-        TacticPlan? tactic = null;
-        PrematchPlan? plan = null;
-        try { lineup = JsonSerializer.Deserialize<LineupPlan>(x.LineupJson, PlanJson); } catch (JsonException) { }
-        if (!string.IsNullOrEmpty(x.TacticJson))
-            try { tactic = JsonSerializer.Deserialize<TacticPlan>(x.TacticJson, PlanJson); } catch (JsonException) { }
-        if (!string.IsNullOrEmpty(x.PrematchPlanJson))
-            try { plan = JsonSerializer.Deserialize<PrematchPlan>(x.PrematchPlanJson, PlanJson); } catch (JsonException) { }
-        return new MatchResolver.SideInputs { Lineup = lineup, Tactic = tactic, Plan = plan };
-    }
+    /// <summary>Delegated to <see cref="RankedLiveInputs"/> since task 12.3, so the live session and the
+    /// headless matchday read a coach's stored orders through one function.</summary>
+    private static MatchResolver.SideInputs DeserializeInputs(RankedLineup x) => RankedLiveInputs.Of(x);
 
     private async Task NotifyMatchdayAsync(
         IReadOnlyDictionary<Guid, Guid> humanByClub, Guid clubId,

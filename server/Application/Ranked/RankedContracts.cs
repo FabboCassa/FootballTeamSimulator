@@ -1,4 +1,4 @@
-namespace Fts.Application.Ranked;
+﻿namespace Fts.Application.Ranked;
 
 /// <summary>
 /// Request/response DTOs for the public ranked ladder (Phase 9.1). Plain records so the Api binds them
@@ -171,6 +171,31 @@ public enum RankedError
     /// <summary>The input deadline for the upcoming matchday has passed (Phase 9.5): kickoff is here, so
     /// the stored lineup is what plays.</summary>
     DeadlinePassed,
+    /// <summary>The requested auction duration is outside the allowed 1h-24h range (Phase 12.2 seller lots).</summary>
+    LotDurationInvalid,
+    /// <summary>Listing (or settling) would leave the seller's squad below the playable floor, counting the
+    /// players he already has on the auction board (Phase 12.2).</summary>
+    SquadTooSmall,
+    /// <summary>The player cannot be put up for auction: not yours, a free agent, or already on the board
+    /// (Phase 12.2).</summary>
+    PlayerUnavailable,
+    /// <summary>There is no live session for that ranked fixture (task 12.3) — nobody has opened one, or the
+    /// matchday has already been resolved and the session cleared.</summary>
+    LiveNotFound,
+    /// <summary>The live window for that fixture is not open (task 12.3): it is too early (the door opens
+    /// shortly before kickoff), too late (the matchday's grace has run out and the calendar has resolved
+    /// it), or attending is switched off in this environment.</summary>
+    LiveNotOpen,
+    /// <summary>The caller is not one of the two sides of that live match (task 12.3) — he may watch it, but
+    /// only a coach whose own club is playing may make substitutions or change instructions.</summary>
+    NotYourMatch,
+    /// <summary>The submitted pause-point change is not usable (task 12.3): it carries neither a lineup nor a
+    /// tactic, its minute is out of range, it moves behind an already-applied change, it runs ahead of the
+    /// minute the clock says has been played, or the XI does not materialise against the current squad.</summary>
+    InvalidLiveChange,
+    /// <summary>The live match has already finished (task 12.3) — its report is what the matchday will
+    /// consume, and no further change can reach it.</summary>
+    LiveAlreadyFinished,
 }
 
 /// <summary>Result wrapper so the service never throws for expected failures — mirrors

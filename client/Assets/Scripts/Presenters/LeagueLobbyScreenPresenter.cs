@@ -51,7 +51,7 @@ namespace Fts.Presenters
             _view.PickClicked += OnPick;
             _view.SeasonClicked += OnSeason;
             _view.TrainingClicked += OnTraining;
-            _view.AuctionsClicked += OnAuctions;
+            _view.MarketClicked += OnMarket;
             LoadAsync(_selection.TakePreloaded()).Forget();
         }
 
@@ -64,7 +64,7 @@ namespace Fts.Presenters
             _view.PickClicked -= OnPick;
             _view.SeasonClicked -= OnSeason;
             _view.TrainingClicked -= OnTraining;
-            _view.AuctionsClicked -= OnAuctions;
+            _view.MarketClicked -= OnMarket;
         }
 
         public void Reveal() => LoadAsync(null).Forget();
@@ -117,7 +117,8 @@ namespace Fts.Presenters
             bool active = (LeagueStatus)detail.league.status == LeagueStatus.Active;
             _view.SetSeasonButtonVisible(active);
             _view.SetTrainingButtonVisible(active);
-            _view.SetAuctionsButtonVisible(active);
+            _view.SetMarketButtonVisible(active);
+            _view.SetPendingOffers(detail.league?.offersAwaitingYou ?? 0);
 
             var clubs = new List<LeagueLobbyView.ClubVm>(detail.clubs.Count);
             foreach (var c in detail.clubs)
@@ -206,11 +207,13 @@ namespace Fts.Presenters
             _navigator.Push<OnlineTrainingScreenPresenter>();
         }
 
-        private void OnAuctions()
+        private void OnMarket()
         {
-            // The auction screen reads the selected league id (already set for this lobby).
+            // The market screen reads the selected league id (already set for this lobby). Phase 12.1b
+            // replaced the free-agent auction here: a private league now buys and sells "normally", and a
+            // free agent is signed by agreeing terms with the PLAYER, first come first served.
             _selection.Select(_leagueId);
-            _navigator.Push<OnlineAuctionScreenPresenter>();
+            _navigator.Push<LeagueMarketScreenPresenter>();
         }
 
         private List<LeagueLobbyView.PickVm> BuildPickList(LeagueDetailDto detail)

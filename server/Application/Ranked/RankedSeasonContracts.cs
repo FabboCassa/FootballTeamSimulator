@@ -25,7 +25,15 @@ public sealed record SubmitRankedLineupRequest(LineupPlan Lineup, TacticPlan? Ta
 /// season starts, so this only ever refines an existing sensible default.</summary>
 public sealed record SubmitRankedTrainingRequest(TrainingPlan Training);
 
-/// <summary>One scheduled/played match in a ranked group's season, with its real-time kickoff.</summary>
+/// <summary>
+/// One scheduled/played match in a ranked group's season, with its real-time kickoff.
+///
+/// <see cref="KickoffUtc"/> is a UTC instant and the client renders it in the DEVICE's local time, which is
+/// the whole point of task 12.3's time-zone work: an Italian world's 21:00 shows as 21:00 in Milan and 20:00
+/// in London, for the same match. The two live flags are computed SERVER-side rather than derived from the
+/// client's own clock — a device whose time is a few minutes off would otherwise offer (or hide) the
+/// "guardala dal vivo" button at the wrong moment, which is the one moment that matters.
+/// </summary>
 public sealed record RankedFixtureDto(
     Guid Id,
     int Round,
@@ -38,7 +46,12 @@ public sealed record RankedFixtureDto(
     bool Played,
     int HomeGoals,
     int AwayGoals,
-    bool IsYours);
+    bool IsYours,
+    // True when this is the caller's own fixture and the live door is open right now (task 12.3):
+    // the row becomes "guarda dal vivo" instead of "replay".
+    bool LiveOpen = false,
+    // Where an existing live session for this fixture is, or null when nobody has opened one.
+    Fts.Application.Leagues.LiveMatchStatus? LiveStatus = null);
 
 /// <summary>A club's standing in the group, computed from the played fixtures.</summary>
 public sealed record RankedStandingDto(
@@ -73,7 +86,25 @@ public sealed record RankedSeasonStateDto(
     int? YourClubExternalId,
     bool YouSubmittedLineup,
     RankedMarketWindowDto? CurrentWindow,
-    string StateHashHex);
+    string StateHashHex,
+    // The server's own clock at the moment this was built (task 12.3). A countdown to kickoff has
+    // to be right to the second, and a device's clock is not: the client measures its offset from this once
+    // and counts down against a corrected now.
+    DateTime ServerUtc = default,
+    // The IANA zone the world's kick-offs are anchored to, e.g. Europe/Rome (task 12.3), or
+    // empty for a season on the pre-12.3 relative calendar. Informational — the client always RENDERS in
+    // the device's own zone; this is what lets it say "21:00 ora del mondo" when the two differ.
+    string WorldTimeZoneId = "",
+    // How long before kickoff the live door opens (task 12.3).
+    int LiveOpensBeforeSeconds = 0,
+    // How long after kickoff the calendar waits for a live match before resolving the matchday
+    // headless (task 12.3).
+    int LiveGraceSeconds = 0,
+    // Real seconds per match minute during a live match (task 12.3) — the client renders on this
+    // number because the server judges pause-point changes by it.
+    int LiveSecondsPerMatchMinute = 0,
+    // Whether attending a ranked match is switched on in this environment (task 12.3).
+    bool LiveEnabled = false);
 
 /// <summary>The caller's ranked season: state + full schedule + standings. <see cref="InSeason"/> is false
 /// when the caller is enrolled but their group has not started a season yet.</summary>
@@ -136,6 +167,13 @@ public interface IRankedSeasonService
     /// <summary>The caller's stored training plan as the serialized <c>TrainingPlan</c> JSON, or an empty
     /// string when nothing is stored — so the client's training screen opens on the saved plan.</summary>
     Task<RankedResult<string>> GetMyTrainingAsync(Guid userId, CancellationToken ct = default);
+
+    /// <summary>DEV/STAGING ONLY (task 12.3 dev-sim tooling): pull the caller-visible next matchday's
+    /// kick-off forward so a solo tester can attend a live match NOW instead of waiting for 21:00. Every
+    /// running season's remaining kickoffs — and its season start, so the market windows stay aligned — are
+    /// shifted back by the same amount, which is what makes it a genuine time-travel rather than a special
+    /// code path. Returns how many groups were shifted.</summary>
+    Task<int> BringKickoffForwardAsync(int seconds, CancellationToken ct = default);
 
     /// <summary>DEV/STAGING ONLY (Phase 9.3 dev-sim tooling): time-travel the ladder forward. Every running
     /// season is shifted back by one matchday interval and then ticked, <paramref name="matchdays"/> times —

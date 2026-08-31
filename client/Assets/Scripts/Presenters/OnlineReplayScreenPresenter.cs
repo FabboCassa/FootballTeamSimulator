@@ -99,7 +99,9 @@ namespace Fts.Presenters
             _renderer.MinuteChanged += OnMinuteChanged;
             _renderer.EventReached += OnEventReached;
             _renderer.Finished += OnFinished;
+            _renderer.ActionReached += OnActionReached;
             _view.PitchContainer.Insert(0, _renderer);
+            _view.ClearActions();
 
             _renderer.SetSpeed(_speed);
             _view.SetActiveSpeed(_speed);
@@ -113,8 +115,28 @@ namespace Fts.Presenters
             _renderer.MinuteChanged -= OnMinuteChanged;
             _renderer.EventReached -= OnEventReached;
             _renderer.Finished -= OnFinished;
+            _renderer.ActionReached -= OnActionReached;
             if (_renderer.parent != null) _renderer.RemoveFromHierarchy();
             _renderer = null;
+        }
+
+        /// <summary>
+        /// Running commentary (task 13.1). A replay arrives as a bare MatchReport with no
+        /// squads attached, so players are named by the shirt numbers the stream carries.
+        /// </summary>
+        private void OnActionReached(BallAction action)
+        {
+            if (_speed > 1f && !MatchCommentary.IsMajor(action.Kind))
+                return; // at 2x/4x a line per touch is a blur; keep the moments that matter
+
+            _view.PushAction(MatchCommentary.Describe(action, _loc.Tr, NameOfSlot));
+        }
+
+        private string NameOfSlot(bool home, int slot)
+        {
+            if (_renderer == null) return string.Empty;
+            int[] shirts = home ? _renderer.HomeShirts : _renderer.AwayShirts;
+            return slot >= 0 && slot < shirts.Length ? "#" + shirts[slot] : string.Empty;
         }
 
         private void OnSpeed(float speed)

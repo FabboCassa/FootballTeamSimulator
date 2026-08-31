@@ -29,13 +29,21 @@ public enum RankedTodoKind
     MarketWindow = 3,
     /// <summary>The season is over and the group is in its between-seasons break — read the summary.</summary>
     SeasonSummary = 4,
+    /// <summary>Your match is on RIGHT NOW and you can be there for it (task 12.3). The only item on this
+    /// list that expires: everything else is still waiting tomorrow, an appointment is not.</summary>
+    WatchLive = 5,
 }
 
 /// <summary>One prioritised thing to do. <see cref="Count"/> is 1 for a single action, or how many items
 /// need attention (offers to answer, lots on the market). Lower <see cref="Priority"/> = more urgent.</summary>
 public sealed record RankedTodoDto(RankedTodoKind Kind, int Count, int Priority);
 
-/// <summary>The next match on the coach's calendar.</summary>
+/// <summary>
+/// The next match on the coach's calendar. Since task 12.3 this is an APPOINTMENT rather than a date on a
+/// list, so it carries the live door with it: <see cref="SecondsToLiveOpen"/> is what the digest counts down
+/// to, and <see cref="LiveOpen"/> is the server's own verdict on whether the match can be attended right now
+/// — never the device's, whose clock may be minutes out at exactly the moment that matters.
+/// </summary>
 public sealed record RankedTodayNextMatchDto(
     Guid FixtureId,
     int Round,
@@ -43,7 +51,15 @@ public sealed record RankedTodayNextMatchDto(
     int SecondsToKickoff,
     bool YouAreHome,
     int OpponentClubExternalId,
-    string OpponentClubName);
+    string OpponentClubName,
+    // Task 12.3: the door is open right now — the digest's most urgent to-do.
+    bool LiveOpen = false,
+    // When the door opens (kick-off minus the lead-in), and how long until then. Negative seconds never
+    // travel: once the door is open this is 0 and LiveOpen carries the meaning.
+    DateTime LiveOpensUtc = default,
+    int SecondsToLiveOpen = 0,
+    // Where an existing session for this fixture is, or null when nobody has opened one yet.
+    Fts.Application.Leagues.LiveMatchStatus? LiveStatus = null);
 
 /// <summary>The coach's most recently played match (from their own point of view).</summary>
 public sealed record RankedTodayLastResultDto(

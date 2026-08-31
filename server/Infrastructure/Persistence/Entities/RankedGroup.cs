@@ -61,5 +61,11 @@ public sealed class RankedGroup
     /// stamped onto the awards a season hands out.</summary>
     public int SeasonNumber { get; set; } = 1;
 
+    /// <summary>The highest round whose "your match kicks off shortly" reminder has already been sent
+    /// (task 12.3). Starts at 0; the calendar pushes each round's reminder exactly once, one
+    /// <c>RankedOptions.LiveOpensBeforeSeconds</c> before its kickoff — which is also the moment the live
+    /// session may be opened, so the push and the door opening are the same event.</summary>
+    public int LiveKickoffNotifiedRound { get; set; }
+
     public ICollection<RankedSeat> Seats { get; set; } = new List<RankedSeat>();
 }

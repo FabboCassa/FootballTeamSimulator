@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Fts.Views;
 using Sim.Core.Match;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -7,50 +8,58 @@ using UnityEngine.UIElements;
 namespace Fts.MatchView
 {
     /// <summary>
-    /// Top-down 2D match renderer (task 3.1). Pure presentation: it plays back
-    /// the deterministic position stream produced by Sim.Core and can never
-    /// change a result (ARCHITECTURE.md §5.4).
+    /// Top-down 2D match renderer (tasks 3.1 · 13.1). Pure presentation: it plays back
+    /// the deterministic movement stream produced by Sim.Core and can never change a
+    /// result (ARCHITECTURE.md §5.4).
     ///
-    /// The pitch and the player/ball tokens are drawn with the UI Toolkit
-    /// painter2D (vector) API inside <see cref="OnGenerateVisualContent"/>, so
-    /// the renderer is just another VisualElement in the screen stack - no extra
-    /// Unity scene, no per-frame GameObject churn.
+    /// Everything is drawn with the UI Toolkit painter2D (vector) API inside
+    /// <see cref="OnGenerateVisualContent"/>, so the renderer is just another
+    /// VisualElement in the screen stack — no extra Unity scene, no per-frame GameObject
+    /// churn. The pitch itself comes from <see cref="PitchGraphics"/>, the same painter
+    /// the squad and tactics screens use, so there is one pitch in the whole game.
     ///
-    /// Playback advances in wall-clock time (scheduler delta), scaled by the
-    /// current speed, and interpolates linearly between stream frames so motion
-    /// stays smooth at any frame rate. No allocations happen per frame: tokens
-    /// are drawn from the existing frame arrays and all maths uses stack structs.
+    /// What the stream now carries, and what is drawn from it: the ball is at a player's
+    /// feet (<see cref="PositionStream.Owner"/> — ringed), in flight (a line to whoever
+    /// it is going to, or the trajectory of a shot), or dead on a spot. Players wear
+    /// their shirt numbers. A short trail follows the ball so a pass reads as a pass.
+    ///
+    /// Playback advances in wall-clock time (scheduler delta), scaled by the current
+    /// speed, and interpolates linearly between stream ticks so motion stays smooth at
+    /// any frame rate. The stream carries no per-tick noise any more, so — unlike 3.1 —
+    /// nothing is smoothed on the way in: what Sim.Core produced is what is drawn.
     /// </summary>
     public sealed class MatchRenderer : VisualElement
     {
         // 90 minutes play in this many real seconds at 1x (ARCHITECTURE.md §4.3:
-        // "~3-5 real minutes when watched"). 2x/4x divide it down.
+        // "~3-5 real minutes when watched"). 2x/4x divide it down. The online live
+        // screens derive the shared match minute from this number — do not change it
+        // without changing LiveSecondsPerMinute there too.
         private const float BaseSecondsAt1x = 180f;
         private const int PumpIntervalMs = 16; // ~60 fps
 
         // Geometry in decimetres (Sim.Core pitch space), scaled to pixels on draw.
-        private const float TokenRadiusDm = 12f;
-        private const float BallRadiusDm = 6f;
+        private const float TokenRadiusDm = 15f;
+        private const float BallRadiusDm = 7f;
+        private const int TrailTicks = 8;
 
-        // Stream frames carry independent per-tick noise (BalanceConfig
-        // PlayerNoiseDm/BallNoiseDm); a small centred moving average over each
-        // trajectory removes the visual vibration without touching Sim.Core.
-        private const int PlayerSmoothingRadius = 2;
-        private const int BallSmoothingRadius = 3;
-
-        private static readonly Color PitchColor = new Color(0.16f, 0.42f, 0.20f);
-        private static readonly Color LineColor = new Color(1f, 1f, 1f, 0.75f);
-        private static readonly Color BallColor = new Color(0.97f, 0.97f, 0.97f);
+        private static readonly Color BallColor = new Color(0.98f, 0.98f, 0.98f);
         private static readonly Color BallOutline = new Color(0.1f, 0.1f, 0.1f, 0.9f);
+        private static readonly Color TokenOutline = new Color(0.06f, 0.07f, 0.10f, 0.85f);
+        private static readonly Color CarrierRing = new Color(1f, 0.95f, 0.5f, 0.95f);
+        private static readonly Color TrailColor = new Color(1f, 1f, 1f, 0.55f);
+        private static readonly Color ShotColor = new Color(1f, 0.85f, 0.35f, 0.9f);
 
         private readonly Color _homeColor;
         private readonly Color _awayColor;
+        private readonly Color _homeKeeperColor;
+        private readonly Color _awayKeeperColor;
+        private readonly Color _homeNumberColor;
+        private readonly Color _awayNumberColor;
+
         private readonly List<MatchEvent> _events;
-        private readonly Vector2[] _ball;    // smoothed, indexed by tick (dm space)
-        private readonly Vector2[][] _home;  // [tick][player], smoothed (dm space)
-        private readonly Vector2[][] _away;
-        private readonly int _homeCount;
-        private readonly int _awayCount;
+        private readonly PositionStream _stream;
+        private readonly List<BallAction> _actions;
+        private readonly int _players;
         private readonly int _ticksPerMinute;
         private readonly int _lastTick;
         private readonly float _ticksPerSecond;
@@ -59,8 +68,10 @@ namespace Fts.MatchView
         private float _tickPos;
         private float _speed = 1f;
         private int _nextEvent;
+        private int _nextAction;
         private int _lastMinute = -1;
         private bool _finished;
+        private bool _canDrawText = true;
 
         /// <summary>Fired when the displayed clock minute changes (0..90).</summary>
         public event Action<int> MinuteChanged;
@@ -68,27 +79,34 @@ namespace Fts.MatchView
         /// <summary>Fired as playback crosses an event's tick (for toasts/score).</summary>
         public event Action<MatchEvent> EventReached;
 
+        /// <summary>Fired as playback crosses a ball action — the commentary feed (13.1).</summary>
+        public event Action<BallAction> ActionReached;
+
         /// <summary>Fired once when playback reaches full time (or on Skip).</summary>
         public event Action Finished;
+
+        /// <summary>Shirt numbers by lineup slot, so a caller can name a player it cannot look up.</summary>
+        public int[] HomeShirts => _stream.HomeShirts;
+        public int[] AwayShirts => _stream.AwayShirts;
+        public int[] HomePlayerIds => _stream.HomePlayerIds;
+        public int[] AwayPlayerIds => _stream.AwayPlayerIds;
 
         public MatchRenderer(MatchReport report, Color homeColor, Color awayColor)
         {
             _homeColor = homeColor;
             _awayColor = awayColor;
+            _homeKeeperColor = KeeperColor(homeColor);
+            _awayKeeperColor = KeeperColor(awayColor);
+            _homeNumberColor = ReadableOn(homeColor);
+            _awayNumberColor = ReadableOn(awayColor);
+
             _events = report?.Events ?? new List<MatchEvent>();
-
-            PositionStream stream = report?.Positions;
-            List<PositionFrame> frames = stream?.Frames ?? new List<PositionFrame>();
-            _ticksPerMinute = stream != null && stream.TicksPerMinute > 0 ? stream.TicksPerMinute : 1;
-            _lastTick = frames.Count > 0 ? frames.Count - 1 : 0;
+            _stream = report?.Positions ?? new PositionStream();
+            _actions = _stream.Actions ?? new List<BallAction>();
+            _players = _stream.PlayerCount;
+            _ticksPerMinute = _stream.TicksPerMinute > 0 ? _stream.TicksPerMinute : 1;
+            _lastTick = _stream.TickCount > 0 ? _stream.TickCount - 1 : 0;
             _ticksPerSecond = _lastTick > 0 ? _lastTick / BaseSecondsAt1x : 0f;
-
-            // Precompute smoothed trajectories once (no per-frame allocation).
-            _homeCount = frames.Count > 0 ? frames[0].Home.Length : 0;
-            _awayCount = frames.Count > 0 ? frames[0].Away.Length : 0;
-            _ball = SmoothBall(frames, BallSmoothingRadius);
-            _home = SmoothTeam(frames, true, _homeCount, PlayerSmoothingRadius);
-            _away = SmoothTeam(frames, false, _awayCount, PlayerSmoothingRadius);
 
             // Fill the host container (its alignItems must not shrink us to content).
             style.position = Position.Absolute;
@@ -99,6 +117,9 @@ namespace Fts.MatchView
             generateVisualContent += OnGenerateVisualContent;
         }
 
+        /// <summary>True when there is something to play (a stripped report has nothing).</summary>
+        public bool HasStream => _lastTick > 0 && _players > 0;
+
         /// <summary>Starts (or resumes) playback. Safe to call once on screen enter.</summary>
         public void Play()
         {
@@ -107,7 +128,7 @@ namespace Fts.MatchView
             else
                 _pump.Resume();
 
-            if (_ball.Length == 0)
+            if (!HasStream)
                 Finish(); // nothing to show (e.g. a stripped report)
         }
 
@@ -129,6 +150,10 @@ namespace Fts.MatchView
             while (_nextEvent < _events.Count && _events[_nextEvent].Minute <= m)
                 _nextEvent++;
 
+            _nextAction = 0;
+            while (_nextAction < _actions.Count && _actions[_nextAction].Tick <= _tickPos)
+                _nextAction++;
+
             _lastMinute = m;
             _finished = false;
             MarkDirtyRepaint();
@@ -145,6 +170,7 @@ namespace Fts.MatchView
 
             _tickPos = _lastTick;
             _nextEvent = _events.Count;
+            _nextAction = _actions.Count;
             SetMinute(90);
             MarkDirtyRepaint();
             Finish();
@@ -162,6 +188,9 @@ namespace Fts.MatchView
 
             while (_nextEvent < _events.Count && _events[_nextEvent].Minute * _ticksPerMinute <= _tickPos)
                 EventReached?.Invoke(_events[_nextEvent++]);
+
+            while (_nextAction < _actions.Count && _actions[_nextAction].Tick <= _tickPos)
+                ActionReached?.Invoke(_actions[_nextAction++]);
 
             SetMinute(Mathf.Min(90, Mathf.FloorToInt(_tickPos / _ticksPerMinute)));
             MarkDirtyRepaint();
@@ -192,162 +221,200 @@ namespace Fts.MatchView
         private void OnGenerateVisualContent(MeshGenerationContext mgc)
         {
             Rect r = contentRect;
-            if (_ball.Length == 0 || r.width <= 1f || r.height <= 1f)
+            if (!HasStream || r.width <= 1f || r.height <= 1f)
                 return;
 
-            // Fit the 1050x680 dm pitch into the element, letterboxed and centred.
-            float scale = Mathf.Min(r.width / Pitch.LengthDm, r.height / Pitch.WidthDm);
-            float offX = (r.width - Pitch.LengthDm * scale) * 0.5f;
-            float offY = (r.height - Pitch.WidthDm * scale) * 0.5f;
+            Rect fit = PitchGraphics.FitRect(r.width, r.height);
+            float scale = fit.width / PitchGraphics.LengthDm;
 
             Painter2D p = mgc.painter2D;
-            DrawPitch(p, offX, offY, scale);
+            PitchGraphics.Draw(p, fit);
 
-            // Interpolate between the two surrounding (smoothed) stream frames.
             int ta = Mathf.Clamp(Mathf.FloorToInt(_tickPos), 0, _lastTick);
             int tb = Mathf.Min(ta + 1, _lastTick);
             float f = Mathf.Clamp01(_tickPos - ta);
 
-            DrawTeam(p, _home[ta], _home[tb], f, offX, offY, scale, _homeColor);
-            DrawTeam(p, _away[ta], _away[tb], f, offX, offY, scale, _awayColor);
-            DrawBall(p, _ball[ta], _ball[tb], f, offX, offY, scale);
-        }
+            DrawTrail(p, fit, ta);
+            DrawFlight(p, fit, ta, scale);
 
-        private static void DrawPitch(Painter2D p, float offX, float offY, float scale)
-        {
-            float x0 = offX, y0 = offY;
-            float x1 = offX + Pitch.LengthDm * scale, y1 = offY + Pitch.WidthDm * scale;
-            float midX = offX + Pitch.CenterX * scale, midY = offY + Pitch.CenterY * scale;
+            _stream.TryOwner(_stream.Owner[ta], out bool ownerHome, out int ownerSlot);
+            bool owned = _stream.Owner[ta] != PositionStream.NoOwner;
 
-            // Turf.
-            p.fillColor = PitchColor;
-            p.BeginPath();
-            p.MoveTo(new Vector2(x0, y0));
-            p.LineTo(new Vector2(x1, y0));
-            p.LineTo(new Vector2(x1, y1));
-            p.LineTo(new Vector2(x0, y1));
-            p.ClosePath();
-            p.Fill();
+            DrawTeam(mgc, p, fit, scale, _stream.HomeXY, ta, tb, f, true,
+                owned && ownerHome ? ownerSlot : -1);
+            DrawTeam(mgc, p, fit, scale, _stream.AwayXY, ta, tb, f, false,
+                owned && !ownerHome ? ownerSlot : -1);
 
-            // Markings.
-            p.strokeColor = LineColor;
-            p.lineWidth = Mathf.Max(1.5f, 2f * scale);
-
-            Rectangle(p, x0, y0, x1, y1);                       // outline
-            Line(p, midX, y0, midX, y1);                        // halfway line
-            Circle(p, midX, midY, 91.5f * scale, fill: false);  // centre circle (9.15m)
-
-            // Penalty boxes (16.5m deep, 40.3m wide).
-            float boxDepth = 165f * scale;
-            float boxHalf = 201.5f * scale;
-            Rectangle(p, x0, midY - boxHalf, x0 + boxDepth, midY + boxHalf);
-            Rectangle(p, x1 - boxDepth, midY - boxHalf, x1, midY + boxHalf);
+            DrawBall(p, fit, scale, ta, tb, f);
         }
 
         private void DrawTeam(
-            Painter2D p, Vector2[] a, Vector2[] b, float f,
-            float offX, float offY, float scale, Color color)
+            MeshGenerationContext mgc, Painter2D p, Rect fit, float scale,
+            int[] side, int ta, int tb, float f, bool home, int carrier)
         {
-            int count = Mathf.Min(a.Length, b.Length);
-            float radius = TokenRadiusDm * scale;
-            p.fillColor = color;
-            for (int i = 0; i < count; i++)
+            float radius = Mathf.Max(4f, TokenRadiusDm * scale);
+            Color fill = home ? _homeColor : _awayColor;
+            Color keeper = home ? _homeKeeperColor : _awayKeeperColor;
+            Color numbers = home ? _homeNumberColor : _awayNumberColor;
+            int[] shirts = home ? _stream.HomeShirts : _stream.AwayShirts;
+
+            for (int i = 0; i < _players; i++)
             {
-                float px = offX + Mathf.Lerp(a[i].x, b[i].x, f) * scale;
-                float py = offY + Mathf.Lerp(a[i].y, b[i].y, f) * scale;
+                Vector2 pos = Lerp(fit, side, ta, tb, i, f);
+
+                if (i == carrier)
+                {
+                    p.strokeColor = CarrierRing;
+                    p.lineWidth = Mathf.Max(1.5f, radius * 0.22f);
+                    p.BeginPath();
+                    p.Arc(pos, radius * 1.55f, 0f, 360f);
+                    p.Stroke();
+                }
+
+                p.fillColor = IsKeeper(shirts, i) ? keeper : fill;
                 p.BeginPath();
-                p.Arc(new Vector2(px, py), radius, 0f, 360f);
+                p.Arc(pos, radius, 0f, 360f);
                 p.Fill();
+
+                p.strokeColor = TokenOutline;
+                p.lineWidth = Mathf.Max(1f, radius * 0.14f);
+                p.BeginPath();
+                p.Arc(pos, radius, 0f, 360f);
+                p.Stroke();
+
+                DrawNumber(mgc, shirts, i, pos, radius, numbers);
             }
         }
 
-        private static void DrawBall(
-            Painter2D p, Vector2 a, Vector2 b, float f,
-            float offX, float offY, float scale)
+        /// <summary>Shirt 1 is the keeper; the stream hands numbers over so this needs no lineup.</summary>
+        private static bool IsKeeper(int[] shirts, int slot) =>
+            shirts != null && slot < shirts.Length && shirts[slot] == 1;
+
+        private void DrawNumber(
+            MeshGenerationContext mgc, int[] shirts, int slot, Vector2 pos, float radius, Color color)
         {
-            float px = offX + Mathf.Lerp(a.x, b.x, f) * scale;
-            float py = offY + Mathf.Lerp(a.y, b.y, f) * scale;
-            float radius = Mathf.Max(2f, BallRadiusDm * scale);
+            if (!_canDrawText || shirts == null || slot >= shirts.Length)
+                return;
+
+            float fontSize = radius * 1.15f;
+            if (fontSize < 7f)
+                return; // unreadable at this size; the token alone has to do
+
+            string text = shirts[slot].ToString();
+            var at = new Vector2(pos.x - fontSize * 0.31f * text.Length, pos.y - fontSize * 0.62f);
+
+            try
+            {
+                mgc.DrawText(text, at, fontSize, color);
+            }
+            catch (Exception)
+            {
+                // No font resolved for this panel: drop numbers for the rest of the match
+                // rather than throwing once per token per frame.
+                _canDrawText = false;
+            }
+        }
+
+        /// <summary>A short fading tail behind the ball, so a pass reads as a pass.</summary>
+        private void DrawTrail(Painter2D p, Rect fit, int ta)
+        {
+            int from = Mathf.Max(0, ta - TrailTicks);
+            if (ta - from < 2)
+                return;
+
+            for (int t = from; t < ta; t++)
+            {
+                float age = (float)(t - from) / (ta - from);
+                p.strokeColor = new Color(TrailColor.r, TrailColor.g, TrailColor.b, TrailColor.a * age * 0.8f);
+                p.lineWidth = Mathf.Max(1f, 2.5f * age);
+                p.BeginPath();
+                p.MoveTo(BallPixel(fit, t));
+                p.LineTo(BallPixel(fit, t + 1));
+                p.Stroke();
+            }
+        }
+
+        /// <summary>The line of a pass in the air, or the trajectory of a shot.</summary>
+        private void DrawFlight(Painter2D p, Rect fit, int ta, float scale)
+        {
+            if (_stream.Owner[ta] != PositionStream.NoOwner)
+                return;
+
+            int index = _nextAction - 1;
+            if (index < 0 || index >= _actions.Count)
+                return;
+
+            BallAction a = _actions[index];
+            if (ta - a.Tick > _ticksPerMinute)
+                return;
+
+            int[] side = a.Home ? _stream.HomeXY : _stream.AwayXY;
+            Vector2 ball = BallPixel(fit, ta);
+
+            if (a.Kind == BallActionKind.Shot)
+            {
+                p.strokeColor = ShotColor;
+                p.lineWidth = Mathf.Max(1.5f, 4f * scale);
+                p.BeginPath();
+                p.MoveTo(PlayerPixel(fit, side, a.Tick, a.Slot));
+                p.LineTo(ball);
+                p.Stroke();
+                return;
+            }
+
+            if (a.TargetSlot < 0 || a.TargetSlot >= _players)
+                return;
+
+            Color line = a.Home ? _homeColor : _awayColor;
+            p.strokeColor = new Color(line.r, line.g, line.b, 0.55f);
+            p.lineWidth = Mathf.Max(1f, 2.5f * scale);
+            p.BeginPath();
+            p.MoveTo(ball);
+            p.LineTo(PlayerPixel(fit, side, ta, a.TargetSlot));
+            p.Stroke();
+        }
+
+        private void DrawBall(Painter2D p, Rect fit, float scale, int ta, int tb, float f)
+        {
+            Vector2 pos = Vector2.Lerp(BallPixel(fit, ta), BallPixel(fit, tb), f);
+            float radius = Mathf.Max(2.5f, BallRadiusDm * scale);
 
             p.fillColor = BallColor;
             p.BeginPath();
-            p.Arc(new Vector2(px, py), radius, 0f, 360f);
+            p.Arc(pos, radius, 0f, 360f);
             p.Fill();
 
             p.strokeColor = BallOutline;
             p.lineWidth = 1f;
             p.BeginPath();
-            p.Arc(new Vector2(px, py), radius, 0f, 360f);
+            p.Arc(pos, radius, 0f, 360f);
             p.Stroke();
         }
 
-        // -------------------------------------------------- trajectory smoothing
+        // ------------------------------------------------------------- coordinates
 
-        private static Vector2[] SmoothBall(List<PositionFrame> frames, int radius)
+        private Vector2 BallPixel(Rect fit, int tick) =>
+            PitchGraphics.ToPixelDm(fit, _stream.BallXY[tick * 2], _stream.BallXY[tick * 2 + 1]);
+
+        private Vector2 PlayerPixel(Rect fit, int[] side, int tick, int slot)
         {
-            int n = frames.Count;
-            var outArr = new Vector2[n];
-            for (int t = 0; t < n; t++)
-            {
-                int lo = t - radius < 0 ? 0 : t - radius;
-                int hi = t + radius >= n ? n - 1 : t + radius;
-                float sx = 0f, sy = 0f;
-                for (int k = lo; k <= hi; k++) { sx += frames[k].Ball.X; sy += frames[k].Ball.Y; }
-                int c = hi - lo + 1;
-                outArr[t] = new Vector2(sx / c, sy / c);
-            }
-            return outArr;
+            int i = (tick * _players + slot) * 2;
+            return PitchGraphics.ToPixelDm(fit, side[i], side[i + 1]);
         }
 
-        private static Vector2[][] SmoothTeam(List<PositionFrame> frames, bool home, int count, int radius)
-        {
-            int n = frames.Count;
-            var outArr = new Vector2[n][];
-            for (int t = 0; t < n; t++)
-            {
-                int lo = t - radius < 0 ? 0 : t - radius;
-                int hi = t + radius >= n ? n - 1 : t + radius;
-                int c = hi - lo + 1;
-                var row = new Vector2[count];
-                for (int i = 0; i < count; i++)
-                {
-                    float sx = 0f, sy = 0f;
-                    for (int k = lo; k <= hi; k++)
-                    {
-                        PitchPoint pt = home ? frames[k].Home[i] : frames[k].Away[i];
-                        sx += pt.X; sy += pt.Y;
-                    }
-                    row[i] = new Vector2(sx / c, sy / c);
-                }
-                outArr[t] = row;
-            }
-            return outArr;
-        }
+        private Vector2 Lerp(Rect fit, int[] side, int ta, int tb, int slot, float f) =>
+            Vector2.Lerp(PlayerPixel(fit, side, ta, slot), PlayerPixel(fit, side, tb, slot), f);
 
-        private static void Rectangle(Painter2D p, float x0, float y0, float x1, float y1)
-        {
-            p.BeginPath();
-            p.MoveTo(new Vector2(x0, y0));
-            p.LineTo(new Vector2(x1, y0));
-            p.LineTo(new Vector2(x1, y1));
-            p.LineTo(new Vector2(x0, y1));
-            p.ClosePath();
-            p.Stroke();
-        }
+        // ------------------------------------------------------------- colours
 
-        private static void Line(Painter2D p, float x0, float y0, float x1, float y1)
-        {
-            p.BeginPath();
-            p.MoveTo(new Vector2(x0, y0));
-            p.LineTo(new Vector2(x1, y1));
-            p.Stroke();
-        }
+        /// <summary>A darkened kit for the keeper, so he reads apart from his ten team-mates.</summary>
+        private static Color KeeperColor(Color kit) =>
+            Color.Lerp(kit, new Color(0.10f, 0.11f, 0.14f), 0.55f);
 
-        private static void Circle(Painter2D p, float cx, float cy, float radius, bool fill)
-        {
-            p.BeginPath();
-            p.Arc(new Vector2(cx, cy), radius, 0f, 360f);
-            if (fill) p.Fill(); else p.Stroke();
-        }
+        /// <summary>Black or white, whichever is legible on the kit colour.</summary>
+        private static Color ReadableOn(Color kit) =>
+            kit.r * 0.299f + kit.g * 0.587f + kit.b * 0.114f > 0.55f
+                ? new Color(0.08f, 0.09f, 0.12f)
+                : Color.white;
     }
 }

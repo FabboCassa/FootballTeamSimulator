@@ -527,7 +527,27 @@ public sealed class LeagueSeasonService : ILeagueSeasonService
         if (fixtures.All(f => f.IsPlayed))
             league.Status = LeagueStatus.Completed;
 
+        // --- The transfer market moves with the round (Phase 12.1) ---------------------------------
+        // A resolved round shuts whatever window was open, and "no answer means not accepted" (the user's
+        // rule): every negotiation still waiting on somebody expires here. No AI ever answers in a human's
+        // place — a private league is played together, and the pending count is badged on the home screen
+        // precisely so nobody has to be answered for.
+        var marketEngine = new LeagueMarketEngine(_db, _config);
+        await marketEngine.ExpirePendingOffersAsync(league.Id, now, ct);
+
         await _db.SaveChangesAsync(ct);
+
+        // …and if the round just opened the mid-season window, the bot clubs do their business first, so
+        // the coaches walk into a world that has already moved. Deterministic from (world seed, window).
+        int totalRounds = fixtures.Max(f => f.Round);
+        int roundsPlayed = 0;
+        for (int r = 1; r <= totalRounds; r++)
+            if (fixtures.Where(f => f.Round == r).All(f => f.IsPlayed)) roundsPlayed++;
+
+        var window = LeagueMarketWindow.State(league.Status == LeagueStatus.Active, roundsPlayed, totalRounds);
+        if (window.Open)
+            await marketEngine.RunWindowAsync(league, window.WindowIndex, ct);
+
         return round;
     }
 

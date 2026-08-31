@@ -662,6 +662,49 @@ namespace Fts.Infrastructure.Migrations
                     b.ToTable("league_lineups", (string)null);
                 });
 
+            modelBuilder.Entity("Fts.Infrastructure.Persistence.Entities.LeagueListing", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("AskingPrice")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("ClubExternalId")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("ClubId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("PlayerExternalId")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("PlayerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("PrivateLeagueId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("WorldId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PrivateLeagueId", "ClubId");
+
+                    b.HasIndex("PrivateLeagueId", "PlayerId")
+                        .IsUnique();
+
+                    b.ToTable("league_listings", (string)null);
+                });
+
             modelBuilder.Entity("Fts.Infrastructure.Persistence.Entities.LeagueMember", b =>
                 {
                     b.Property<Guid>("Id")
@@ -693,6 +736,82 @@ namespace Fts.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("league_members", (string)null);
+                });
+
+            modelBuilder.Entity("Fts.Infrastructure.Persistence.Entities.LeagueOffer", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("Amount")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("BuyerClubExternalId")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("BuyerClubId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("BuyerUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("Fee")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("PlayerExternalId")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("PlayerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("PrivateLeagueId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("ProposedBy")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("ResolvedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Rounds")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("SellerClubExternalId")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("SellerClubId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("SellerUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("WindowIndex")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("WorldId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BuyerUserId");
+
+                    b.HasIndex("SellerUserId");
+
+                    b.HasIndex("PrivateLeagueId", "PlayerId");
+
+                    b.HasIndex("PrivateLeagueId", "Status");
+
+                    b.ToTable("league_offers", (string)null);
                 });
 
             modelBuilder.Entity("Fts.Infrastructure.Persistence.Entities.LeagueTraining", b =>
@@ -957,6 +1076,15 @@ namespace Fts.Infrastructure.Migrations
                     b.Property<Guid>("RankedGroupId")
                         .HasColumnType("uuid");
 
+                    b.Property<int?>("SellerClubExternalId")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("SellerClubId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("SellerUserId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTime?>("SettledUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -971,9 +1099,13 @@ namespace Fts.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("RankedGroupId", "SellerClubId");
+
                     b.HasIndex("RankedGroupId", "Status");
 
                     b.HasIndex("RankedGroupId", "WindowIndex");
+
+                    b.HasIndex("Status", "EndsUtc");
 
                     b.ToTable("ranked_auctions", (string)null);
                 });
@@ -1165,6 +1297,9 @@ namespace Fts.Infrastructure.Migrations
                     b.Property<int>("LastMarketWindowOpened")
                         .HasColumnType("integer");
 
+                    b.Property<int>("LiveKickoffNotifiedRound")
+                        .HasColumnType("integer");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(120)
@@ -1245,6 +1380,80 @@ namespace Fts.Infrastructure.Migrations
                     b.HasIndex("RankedGroupId", "UserId");
 
                     b.ToTable("ranked_lineups", (string)null);
+                });
+
+            modelBuilder.Entity("Fts.Infrastructure.Persistence.Entities.RankedLiveMatch", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AwayClubId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("AwayGoals")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("AwayPresent")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid?>("AwayUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ChangesJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("FinishedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("FixtureId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("HomeClubId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("HomeGoals")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("HomePresent")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid?>("HomeUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("KickoffUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("RankedGroupId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ReportJson")
+                        .HasColumnType("text");
+
+                    b.Property<int>("Round")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("Seed")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FixtureId")
+                        .IsUnique();
+
+                    b.HasIndex("RankedGroupId", "Round", "Status");
+
+                    b.ToTable("ranked_live_matches", (string)null);
                 });
 
             modelBuilder.Entity("Fts.Infrastructure.Persistence.Entities.RankedOffer", b =>
@@ -1389,6 +1598,10 @@ namespace Fts.Infrastructure.Migrations
 
                     b.Property<int>("Status")
                         .HasColumnType("integer");
+
+                    b.Property<string>("TimeZoneId")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.HasKey("Id");
 
@@ -1754,6 +1967,17 @@ namespace Fts.Infrastructure.Migrations
                     b.Navigation("PrivateLeague");
                 });
 
+            modelBuilder.Entity("Fts.Infrastructure.Persistence.Entities.LeagueListing", b =>
+                {
+                    b.HasOne("Fts.Infrastructure.Persistence.Entities.PrivateLeague", "PrivateLeague")
+                        .WithMany()
+                        .HasForeignKey("PrivateLeagueId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("PrivateLeague");
+                });
+
             modelBuilder.Entity("Fts.Infrastructure.Persistence.Entities.LeagueMember", b =>
                 {
                     b.HasOne("Fts.Infrastructure.Persistence.Entities.Club", "Club")
@@ -1768,6 +1992,17 @@ namespace Fts.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Club");
+
+                    b.Navigation("PrivateLeague");
+                });
+
+            modelBuilder.Entity("Fts.Infrastructure.Persistence.Entities.LeagueOffer", b =>
+                {
+                    b.HasOne("Fts.Infrastructure.Persistence.Entities.PrivateLeague", "PrivateLeague")
+                        .WithMany()
+                        .HasForeignKey("PrivateLeagueId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.Navigation("PrivateLeague");
                 });
@@ -1913,6 +2148,17 @@ namespace Fts.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Club");
+
+                    b.Navigation("RankedGroup");
+                });
+
+            modelBuilder.Entity("Fts.Infrastructure.Persistence.Entities.RankedLiveMatch", b =>
+                {
+                    b.HasOne("Fts.Infrastructure.Persistence.Entities.RankedGroup", "RankedGroup")
+                        .WithMany()
+                        .HasForeignKey("RankedGroupId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.Navigation("RankedGroup");
                 });

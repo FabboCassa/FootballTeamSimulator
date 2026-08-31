@@ -192,6 +192,30 @@ public static class RankedEndpoints
             return result.Success ? Results.Ok(result.Value) : MapError(result.Error, result.Message);
         }).RequireRateLimiting(IntegrityRateLimits.Bids);
 
+        // --- Selling your own players by auction (task 12.2) --------------------------------
+
+        // Put one of your own players up as a lot, with a timer you choose (1h-24h, clamped to the market
+        // window's close). Refuses a duration outside the range, a player who is not yours or already on the
+        // board, a reserve outside the 9.5 integrity band, and a listing that would take your squad below
+        // the floor (the lots you already have out are counted).
+        group.MapPost("/auctions/list", async (
+            ListRankedLotRequest req, ClaimsPrincipal user,
+            IRankedAuctionService auctions, CancellationToken ct) =>
+        {
+            if (!TryGetUserId(user, out var userId)) return Results.Unauthorized();
+            var result = await auctions.ListLotAsync(userId, req, ct);
+            return result.Success ? Results.Ok(result.Value) : MapError(result.Error, result.Message);
+        }).RequireRateLimiting(IntegrityRateLimits.Writes);
+
+        // Pull one of your own lots off the board — only while nobody has bid on it.
+        group.MapPost("/auctions/{auctionId:guid}/unlist", async (
+            Guid auctionId, ClaimsPrincipal user, IRankedAuctionService auctions, CancellationToken ct) =>
+        {
+            if (!TryGetUserId(user, out var userId)) return Results.Unauthorized();
+            var result = await auctions.UnlistLotAsync(userId, auctionId, ct);
+            return result.Success ? Results.Ok(result.Value) : MapError(result.Error, result.Message);
+        }).RequireRateLimiting(IntegrityRateLimits.Writes);
+
         // --- Daily digest (Phase 9.4) -------------------------------------------------------
 
         // "What do I need to do today?" — the whole daily loop in one call (state, next match, last result,
@@ -278,6 +302,15 @@ public static class RankedEndpoints
             int? matchdays, IRankedSeasonService season, CancellationToken ct) =>
             Results.Ok(await season.FastForwardAsync(matchdays ?? 1, ct)));
 
+        // TASK 12.3 dev-sim tooling: pull the running ladder's next matchday forward to `seconds` from now
+        // (default 30) so a solo tester can attend a live match at 15:40 instead of waiting for 21:00. Every
+        // remaining kickoff, the season start and the open lots shift together, so the calendar stays
+        // consistent and this is time travel rather than a special code path. `seconds` is a query param so a
+        // bodyless POST binds cleanly.
+        group.MapPost("/kickoff-now", async (
+            int? seconds, IRankedSeasonService season, CancellationToken ct) =>
+            Results.Ok(new { shifted = await season.BringKickoffForwardAsync(seconds ?? 30, ct) }));
+
         // Force-settle every open free-agent auction lot now, regardless of its timer (Phase 9.2b) — the
         // dev/staging fast-forward for auctions (the season tick settles them at the window close normally).
         group.MapPost("/auctions/settle", async (IRankedAuctionService auctions, CancellationToken ct) =>
@@ -304,6 +337,16 @@ public static class RankedEndpoints
         return Guid.TryParse(id, out userId);
     }
 
+    /// <summary>The same token → account id resolution, for the sibling ranked endpoint files (task 12.3's
+    /// live matches). Mirrors <c>LeagueEndpoints.TryGetUserIdShared</c>: one implementation, so a second
+    /// ranked surface cannot end up trusting a different claim.</summary>
+    internal static bool TryGetUserIdShared(ClaimsPrincipal user, out Guid userId) => TryGetUserId(user, out userId);
+
+    /// <summary>The same RankedError → status-code mapping, for the sibling ranked endpoint files (task
+    /// 12.3). Keeping one map is what stops the live endpoints answering 400 where the rest of the ladder
+    /// answers 409 for the same refusal.</summary>
+    internal static IResult MapErrorShared(RankedError error, string? message) => MapError(error, message);
+
     private static IResult MapError(RankedError error, string? message) => error switch
     {
         RankedError.ValidationFailed => Results.BadRequest(new { error = "validation_failed", message }),
@@ -321,6 +364,21 @@ public static class RankedEndpoints
         // request — the client shows the message as-is so the coach knows which band they broke.
         RankedError.IntegrityBlocked => Results.Conflict(new { error = "integrity_blocked", message }),
         RankedError.DeadlinePassed => Results.Conflict(new { error = "deadline_passed", message }),
+        // Task 12.2 seller lots: a bad duration is a malformed request; the other two are conflicts with
+        // the board's current state, which is what the client turns into a readable sentence.
+        RankedError.LotDurationInvalid => Results.BadRequest(new { error = "lot_duration_invalid", message }),
+        RankedError.SquadTooSmall => Results.Conflict(new { error = "squad_too_small", message }),
+        RankedError.PlayerUnavailable => Results.Conflict(new { error = "player_unavailable", message }),
+        // Task 12.3 live matches: "not found" for a session that is not there, CONFLICT for the two that are
+        // about state rather than about the request — the door being shut and the match being over are both
+        // things the client turns into a readable sentence, not things the coach typed wrong. A malformed
+        // pause-point change is the one genuine bad request of the set.
+        RankedError.LiveNotFound => Results.NotFound(new { error = "live_not_found", message }),
+        RankedError.LiveNotOpen => Results.Conflict(new { error = "live_not_open", message }),
+        RankedError.LiveAlreadyFinished => Results.Conflict(new { error = "live_already_finished", message }),
+        RankedError.InvalidLiveChange => Results.BadRequest(new { error = "invalid_live_change", message }),
+        RankedError.NotYourMatch => Results.Json(
+            new { error = "not_your_match", message }, statusCode: StatusCodes.Status403Forbidden),
         RankedError.RateLimited => Results.Json(
             new { error = "rate_limited", message }, statusCode: StatusCodes.Status429TooManyRequests),
         RankedError.Forbidden => Results.Json(

@@ -27,6 +27,17 @@ public sealed class RankedWorld
 
     public RankedWorldStatus Status { get; set; }
 
+    /// <summary>
+    /// The IANA time zone this pyramid lives in (task 12.3), e.g. <c>Europe/Rome</c>. Every matchday in
+    /// every one of its groups kicks off at the configured local hour of THIS zone, and each client renders
+    /// that instant in the device's own local time — so a coach in London reads 20:00 for the Italian
+    /// world's 21:00. It is a ZONE and not an offset on purpose: only a zone keeps a season kicking off at
+    /// 21:00 across a DST change. Seeded from <c>RankedOptions.WorldTimeZone</c> when the world is opened;
+    /// a world created before 12.3 carries an empty string and falls back to the pre-12.3 relative
+    /// calendar, so an in-flight season is never rescheduled under its coaches' feet.
+    /// </summary>
+    public string TimeZoneId { get; set; } = string.Empty;
+
     public DateTime CreatedUtc { get; set; }
 
     public ICollection<RankedGroup> Groups { get; set; } = new List<RankedGroup>();

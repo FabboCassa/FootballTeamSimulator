@@ -27,6 +27,7 @@ namespace Fts.Views
         private readonly Label _score;
         private readonly Label _clock;
         private readonly Label _toast;
+        private readonly ActionFeed _feed = new ActionFeed();
         private readonly Label _status;
         private readonly Button[] _speedButtons;
         private readonly float[] _speeds = { 1f, 2f, 4f };
@@ -83,6 +84,8 @@ namespace Fts.Views
             _toast.style.display = DisplayStyle.None;
             toastRow.Add(_toast);
             PitchContainer.Add(toastRow);
+            PitchContainer.Add(_feed.Root);
+            _feed.Clear();
             Root.Add(PitchContainer);
 
             _status = new Label(string.Empty);
@@ -136,6 +139,12 @@ namespace Fts.Views
                 _speedButtons[i].style.backgroundColor =
                     Mathf.Approximately(_speeds[i], speed) ? ActiveSpeed : IdleSpeed;
         }
+
+        /// <summary>Adds a line to the running commentary beside the pitch (task 13.1).</summary>
+        public void PushAction(string text) => _feed.Push(text);
+
+        /// <summary>Empties the commentary (a re-simulated remainder starts fresh).</summary>
+        public void ClearActions() => _feed.Clear();
 
         public void ShowToast(string text)
         {

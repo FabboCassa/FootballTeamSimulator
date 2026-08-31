@@ -194,8 +194,13 @@ namespace Fts.Services.Online
                 return LeagueApiResult<MatchReport>.Fail(MapError(status, text, network));
 
             var report = TryParse<MatchReport>(text);
-            return report?.Positions == null
-                ? LeagueApiResult<MatchReport>.Fail(LeagueApiError.Server)
+            if (report?.Positions == null)
+                return LeagueApiResult<MatchReport>.Fail(LeagueApiError.Server);
+
+            // A replay stored before the movement model changed (13.1) carries a stream this
+            // build cannot draw. Say so rather than rendering an empty pitch.
+            return report.EngineVersion != MatchEngine.Version
+                ? LeagueApiResult<MatchReport>.Fail(LeagueApiError.ReplayTooOld)
                 : LeagueApiResult<MatchReport>.Ok(report);
         }
 
@@ -249,6 +254,88 @@ namespace Fts.Services.Online
             return dto?.lots == null
                 ? LeagueApiResult<AuctionsDto>.Fail(LeagueApiError.Server)
                 : LeagueApiResult<AuctionsDto>.Ok(dto);
+        }
+
+        // ---------------------------------------------------------------- transfer market (12.1b)
+
+        /// <summary>The caller's whole market view: window state, squads, free agents, live negotiations,
+        /// news. One GET feeds every tab of the market screen.</summary>
+        public async UniTask<LeagueApiResult<LeagueMarketDto>> GetMarketAsync(string leagueId)
+        {
+            if (!_api.IsSignedIn) return LeagueApiResult<LeagueMarketDto>.Fail(LeagueApiError.NotSignedIn);
+            var (status, text, network) = await _api.SendAuthedAsync("GET", "/leagues/" + leagueId + "/market");
+            return ParseMarket(status, text, network);
+        }
+
+        /// <summary>Offer a fee for another club's player. A bot seller answers inside this call (the
+        /// returned market already shows its accept / counter / refusal); a human seller gets a pending
+        /// negotiation and a push.</summary>
+        public async UniTask<LeagueApiResult<LeagueMarketDto>> MakeOfferAsync(
+            string leagueId, int playerExternalId, long fee)
+        {
+            if (!_api.IsSignedIn) return LeagueApiResult<LeagueMarketDto>.Fail(LeagueApiError.NotSignedIn);
+            var body = new MakeLeagueOfferBody { playerExternalId = playerExternalId, fee = fee };
+            var (status, text, network) = await _api.SendAuthedAsync(
+                "POST", "/leagues/" + leagueId + "/market/offers", body);
+            return ParseMarket(status, text, network);
+        }
+
+        /// <summary>Answer a negotiation waiting on you: accept, reject, counter (with a figure), or — as
+        /// the buyer — withdraw. A counter against a bot is answered in the same round-trip.</summary>
+        public async UniTask<LeagueApiResult<LeagueMarketDto>> RespondOfferAsync(
+            string leagueId, string offerId, LeagueOfferAction action, long amount = 0)
+        {
+            if (!_api.IsSignedIn) return LeagueApiResult<LeagueMarketDto>.Fail(LeagueApiError.NotSignedIn);
+            var body = new RespondLeagueOfferBody { action = (int)action, amount = amount };
+            var (status, text, network) = await _api.SendAuthedAsync(
+                "POST", "/leagues/" + leagueId + "/market/offers/" + offerId, body);
+            return ParseMarket(status, text, network);
+        }
+
+        /// <summary>Put one of your own players on the transfer list (or take him off it). An asking price
+        /// of 0 means "price him for me"; listing during an open window brings the bot clubs' bids in at
+        /// once, so selling never waits on a friend being online.</summary>
+        public async UniTask<LeagueApiResult<LeagueMarketDto>> SetListingAsync(
+            string leagueId, int playerExternalId, bool listed, long askingPrice)
+        {
+            if (!_api.IsSignedIn) return LeagueApiResult<LeagueMarketDto>.Fail(LeagueApiError.NotSignedIn);
+            var body = new ListPlayerBody
+            {
+                playerExternalId = playerExternalId, listed = listed, askingPrice = askingPrice,
+            };
+            var (status, text, network) = await _api.SendAuthedAsync(
+                "POST", "/leagues/" + leagueId + "/market/listings", body);
+            return ParseMarket(status, text, network);
+        }
+
+        /// <summary>Agree terms with a free agent. A refusal comes back as a SUCCESS with
+        /// <c>signed = false</c> and his demands — only "someone signed him first" is an error.</summary>
+        public async UniTask<LeagueApiResult<FreeAgentSigningDto>> SignFreeAgentAsync(
+            string leagueId, int playerExternalId, long weeklyWage, int seasons)
+        {
+            if (!_api.IsSignedIn) return LeagueApiResult<FreeAgentSigningDto>.Fail(LeagueApiError.NotSignedIn);
+            var body = new SignFreeAgentBody
+            {
+                playerExternalId = playerExternalId, weeklyWage = weeklyWage, seasons = seasons,
+            };
+            var (status, text, network) = await _api.SendAuthedAsync(
+                "POST", "/leagues/" + leagueId + "/market/free-agents", body);
+            if (!IsSuccess(status, network))
+                return LeagueApiResult<FreeAgentSigningDto>.Fail(MapError(status, text, network));
+            var dto = TryParse<FreeAgentSigningDto>(text);
+            return dto == null
+                ? LeagueApiResult<FreeAgentSigningDto>.Fail(LeagueApiError.Server)
+                : LeagueApiResult<FreeAgentSigningDto>.Ok(dto);
+        }
+
+        private static LeagueApiResult<LeagueMarketDto> ParseMarket(long status, string text, bool network)
+        {
+            if (!IsSuccess(status, network))
+                return LeagueApiResult<LeagueMarketDto>.Fail(MapError(status, text, network));
+            var dto = TryParse<LeagueMarketDto>(text);
+            return dto?.window == null
+                ? LeagueApiResult<LeagueMarketDto>.Fail(LeagueApiError.Server)
+                : LeagueApiResult<LeagueMarketDto>.Ok(dto);
         }
 
         // ---------------------------------------------------------------- live match control (8.6b)
@@ -395,13 +482,20 @@ namespace Fts.Services.Online
                      : LeagueApiError.Forbidden,
                 404 => body != null && body.Contains("auction_not_found") ? LeagueApiError.AuctionNotFound
                      : body != null && body.Contains("live_match_not_found") ? LeagueApiError.LiveMatchNotFound
+                     : body != null && body.Contains("offer_not_found") ? LeagueApiError.OfferNotFound
                      : LeagueApiError.NotFound,
                 400 => body != null && body.Contains("too_few_members") ? LeagueApiError.TooFewMembers
                      : body != null && body.Contains("bid_too_low") ? LeagueApiError.BidTooLow
                      : body != null && body.Contains("insufficient_budget") ? LeagueApiError.InsufficientBudget
                      : body != null && body.Contains("invalid_live_change") ? LeagueApiError.InvalidLiveChange
                      : LeagueApiError.Validation,
-                409 => body != null && body.Contains("live_match_not_joinable") ? LeagueApiError.LiveMatchNotJoinable
+                409 => body != null && body.Contains("market_closed") ? LeagueApiError.MarketClosed
+                     : body != null && body.Contains("offer_resolved") ? LeagueApiError.OfferResolved
+                     : body != null && body.Contains("player_unavailable") ? LeagueApiError.PlayerUnavailable
+                     : body != null && body.Contains("squad_too_small") ? LeagueApiError.SquadTooSmall
+                     : body != null && body.Contains("squad_full") ? LeagueApiError.SquadFull
+                     : body != null && body.Contains("integrity_blocked") ? LeagueApiError.IntegrityBlocked
+                     : body != null && body.Contains("live_match_not_joinable") ? LeagueApiError.LiveMatchNotJoinable
                      : body != null && body.Contains("live_match_already_finished") ? LeagueApiError.LiveMatchAlreadyFinished
                      : body != null && body.Contains("live_match_not_live") ? LeagueApiError.LiveMatchNotLive
                      : body != null && body.Contains("league_full") ? LeagueApiError.LeagueFull

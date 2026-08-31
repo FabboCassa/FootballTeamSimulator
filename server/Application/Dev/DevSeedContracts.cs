@@ -90,3 +90,21 @@ public sealed record DevRankedBotMarketRequest(int Rounds = 1, bool AcceptOffers
 
 /// <summary>What the bot market autopilot did.</summary>
 public sealed record DevRankedBotMarketResult(int BidsPlaced, int OffersAnswered);
+
+/// <summary>
+/// Simulate the OPPONENT of a live ranked match (task 12.3 dev tooling) — the ladder's answer to 8.6's
+/// "Bot: entra / Bot: sostituzione", and the reason a solo tester can see the other side of a live match at
+/// all. The opponent joins the session (so the human sees "il tuo avversario è collegato") and, if
+/// <paramref name="Sub"/>, makes a legal substitution at <paramref name="Minute"/>, which the human's screen
+/// then receives as a pushed re-simulation. <paramref name="Finish"/> confirms full-time on the bot's side so
+/// the tester can watch the calendar consume the live result without waiting out the grace.
+/// </summary>
+public sealed record DevRankedLiveRequest(bool Sub = false, int Minute = 45, bool Finish = false);
+
+/// <summary>
+/// What the ranked live autopilot did. <paramref name="Note"/> carries the honest answer when there was
+/// nothing to simulate: a ladder seat with no account behind it is ALREADY played by its stored orders, so
+/// there is no opponent to log in as — the match is running correctly and the bot tooling has no part in it.
+/// </summary>
+public sealed record DevRankedLiveResult(
+    string Status, bool OpponentJoined, bool SubMade, int Minute, bool Finished, string? Note = null);

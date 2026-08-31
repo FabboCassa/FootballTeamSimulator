@@ -23,6 +23,17 @@ public sealed class RankedAuction
     public Guid PlayerId { get; set; }
     public int PlayerExternalId { get; set; }
 
+    /// <summary>
+    /// Task 12.2 — the SELLER, when a coach put one of his own players up: his club, its Sim.Core external
+    /// id and the account behind it. All three are null on a free-agent lot (the calendar's own lots), which
+    /// is what distinguishes the two kinds without a second table. Plain denormalised columns, like the
+    /// high-bid trio above, so the entity keeps its single cascade path (ranked_auctions → ranked_groups).
+    /// At settlement the fee is PAID to this club — that is the whole point of the task.
+    /// </summary>
+    public Guid? SellerClubId { get; set; }
+    public int? SellerClubExternalId { get; set; }
+    public Guid? SellerUserId { get; set; }
+
     /// <summary>Which market window opened this lot (0 = season start, 1 = midpoint).</summary>
     public int WindowIndex { get; set; }
 
@@ -39,7 +50,12 @@ public sealed class RankedAuction
 
     public RankedAuctionStatus Status { get; set; } = RankedAuctionStatus.Open;
 
-    /// <summary>When the lot closes (the market window's close instant).</summary>
+    /// <summary>
+    /// When THIS lot closes. Until task 12.2 every lot of a window shared the window's close instant, so the
+    /// whole board shut at once; a lot now carries its own end — the duration the seller chose (1h-24h,
+    /// clamped to the window's close), or the configured free-agent lot duration — and a bid inside the
+    /// anti-snipe window pushes it back. The season tick settles whatever is due, lot by lot.
+    /// </summary>
     public DateTime EndsUtc { get; set; }
 
     public DateTime CreatedUtc { get; set; }

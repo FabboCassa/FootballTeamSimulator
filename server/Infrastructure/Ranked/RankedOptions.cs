@@ -80,6 +80,91 @@ public sealed class RankedOptions
     /// </summary>
     public long AuctionFlatStartPrice { get; set; } = 1_000_000;
 
+    // --- Auction timers & seller lots (Phase 12.2) ---------------------------------------------
+
+    /// <summary>
+    /// How long an auto-opened FREE-AGENT lot runs (default 24h). Until 12.2 this was implicit — every lot
+    /// of a window ended when the window did — and pulling it out here is what makes the two kinds of lot
+    /// share one mechanism: a duration, clamped to the window's close. With the default window also a day
+    /// long the behaviour is byte-for-byte what 9.2b shipped.
+    /// </summary>
+    public int AuctionLotSeconds { get; set; } = 86_400;
+
+    /// <summary>Shortest timer a coach may put on his OWN lot (default 1h). Anything below is refused —
+    /// a lot nobody can realistically see is not an auction.</summary>
+    public int SellerLotMinSeconds { get; set; } = 3_600;
+
+    /// <summary>Longest timer a coach may put on his own lot (default 24h). Anything above is refused; the
+    /// chosen duration is then clamped to the market window's close, so no lot outlives the market.</summary>
+    public int SellerLotMaxSeconds { get; set; } = 86_400;
+
+    /// <summary>
+    /// A bid landing within this many seconds of a lot's end pushes the end to now + this (default 30s) —
+    /// the private leagues' anti-snipe rule, brought to the ladder now that lots have their own timers.
+    /// It extends THAT lot only. Tests raise it so the extension is observable without waiting out a timer.
+    /// </summary>
+    public int AuctionAntiSnipeSeconds { get; set; } = 30;
+
+    /// <summary>
+    /// Whether the group's AI clubs (vacant seats) bid on the lots coaches put up. On by default: a ladder
+    /// group is mostly AI early on, and a sell flow that only works when another human happens to be online
+    /// is not a sell flow. They never bid on free-agent lots — that board belongs to the coaches.
+    /// </summary>
+    public bool AiBidsOnSellerLots { get; set; } = true;
+
+    /// <summary>The most an AI club will pay for a listed player, as a percentage of his market value
+    /// (default 120%). Inside the 9.5 integrity band by construction, so a bot can never make a deal the
+    /// guards would refuse between two humans.</summary>
+    public int AiSellerLotMaxPercentOfValue { get; set; } = 120;
+
+    // --- Live ranked matches & the visible kick-off time (task 12.3) ---------------------------
+
+    /// <summary>
+    /// The IANA time zone a freshly opened ranked world belongs to (default Europe/Rome). A world kicks off
+    /// at <see cref="KickoffHourLocal"/> of THIS zone and every client renders that instant in the device's
+    /// own local time — so an Italian world's 21:00 reads 20:00 in London, and a US world opened later runs
+    /// on US evenings without anyone being asked to turn up at 05:00. Stored as a zone rather than a fixed
+    /// offset because that is the only way a season keeps kicking off at 21:00 across a DST change.
+    /// </summary>
+    public string WorldTimeZone { get; set; } = "Europe/Rome";
+
+    /// <summary>The local hour (0-23) a matchday kicks off at in its world's zone. The anchoring only
+    /// engages on a whole-day matchday cadence — see <c>RankedCalendar.KickoffClock</c> — so a compressed
+    /// test calendar keeps the pre-12.3 season-start-relative kickoffs.</summary>
+    public int KickoffHourLocal { get; set; } = 21;
+
+    /// <summary>How long before kickoff a coach may open his live session (default 15 min): the lobby where
+    /// he waits out the countdown, and also when the "your match is about to start" push fires.</summary>
+    public int LiveOpensBeforeSeconds { get; set; } = 900;
+
+    /// <summary>
+    /// How long after kickoff the calendar will WAIT for a live match before resolving the matchday headless
+    /// (default 10 min). A live 90' runs at <see cref="LiveSecondsPerMatchMinute"/>, i.e. three real minutes,
+    /// so this is generous — it exists so a stalled client can never hold a whole group's matchday hostage.
+    /// The wait only happens when a session for that round actually exists and is unfinished: a matchday
+    /// nobody turned up for resolves at its kickoff exactly as it did before 12.3.
+    /// </summary>
+    public int LiveGraceSeconds { get; set; } = 600;
+
+    /// <summary>Real seconds per match minute during a live match (default 2 ⇒ a 90' takes three minutes).
+    /// The SERVER owns this number now: the client renders on it AND the server uses it to check that a
+    /// pause-point change is not being made in the match's future (see
+    /// <see cref="LiveChangeMinuteTolerance"/>).</summary>
+    public int LiveSecondsPerMatchMinute { get; set; } = 2;
+
+    /// <summary>
+    /// How many match minutes of slack the server allows a pause-point change beyond the minute the wall
+    /// clock says has been played (default 5). Without a check the whole 90' is in the pushed report, so a
+    /// doctored client could read the ending and then "substitute" at minute 10 with hindsight — a private
+    /// league is a lobby of friends, the ladder is ranked. The tolerance absorbs latency and clock skew;
+    /// 0 disables the check.
+    /// </summary>
+    public int LiveChangeMinuteTolerance { get; set; } = 5;
+
+    /// <summary>Master switch for attending a ranked match (task 12.3). Off ⇒ every matchday resolves
+    /// headless on the tick exactly as it did in 9.2, and the live endpoints refuse.</summary>
+    public bool LiveMatchesEnabled { get; set; } = true;
+
     // --- Coach ranking & seasonal reset (Phase 9.3) --------------------------------------------
 
     /// <summary>Elo K-factor: the most a single matchday can move a rating. 24 keeps a 14-matchday season

@@ -25,6 +25,11 @@ namespace Fts.Views
         public bool IsYours;
         /// <summary>Your unplayed fixture in the current round — tappable to open the live match (8.6b).</summary>
         public bool CanPlayLive;
+        /// <summary>Task 12.3: the kick-off, already rendered in the DEVICE's local time, or empty for a
+        /// competition that has no clock. It sits in the row's leading slot — the flank that was reserved and
+        /// empty so the score column would stay centred — so a schedule with times and one without keep the
+        /// same shape.</summary>
+        public string TimeText;
     }
 
     /// <summary>A matchday: a label + its fixtures.</summary>
@@ -147,7 +152,14 @@ namespace Fts.Views
             Stripe(row, vm.IsYours, index);
 
             bool tappable = (vm.Played && onPlayed != null) || (vm.CanPlayLive && onLive != null);
-            row.Add(Slot(SideSlotWidth));
+
+            VisualElement lead = Slot(SideSlotWidth);
+            if (!string.IsNullOrEmpty(vm.TimeText))
+            {
+                Label when = Cell(vm.TimeText, SideSlotWidth, UiKit.TextMuted, TextAnchor.MiddleLeft, 12, false);
+                lead.Add(when);
+            }
+            row.Add(lead);
 
             Label home = Cell(vm.HomeName, 0, UiKit.TextPrimary, TextAnchor.MiddleRight, 14, false);
             Grow(home);

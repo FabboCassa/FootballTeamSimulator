@@ -4,25 +4,37 @@ using UnityEngine.UIElements;
 namespace Fts.Views
 {
     /// <summary>
-    /// Shared top-down pitch drawing (task 6.7). Mirrors the pitch turf + markings
-    /// painted by the 3.1 <c>MatchRenderer</c> so the formation/lineup pitch and the
-    /// watched-match pitch look identical, without crossing the FTS.MatchView asmdef
-    /// boundary. Pure presentation, no Sim.Core reference — the 1050x680 dm aspect
-    /// is inlined as local constants (same numbers as Sim.Core's <c>Pitch</c>).
+    /// The one top-down pitch in the game (tasks 6.7 · 13.1). The formation/lineup pitch,
+    /// the tactics preview and the watched match all paint through here, so there is a
+    /// single set of markings and a single set of colours rather than two that drift
+    /// apart. Pure presentation, no Sim.Core reference — the 1050x680 dm aspect is
+    /// inlined as local constants (same numbers as Sim.Core's <c>Pitch</c>), which is why
+    /// FTS.MatchView can reference FTS.Views for it without dragging the sim across.
     ///
     /// A pitch is letterboxed into whatever element hosts it (<see cref="FitRect"/>);
     /// normalized coordinates (0..1 along the length, 0..1 across the width) map into
-    /// that rect via <see cref="ToPixel"/>, so tokens drawn as real VisualElements line
-    /// up exactly with the painted markings.
+    /// that rect via <see cref="ToPixel"/>, so tokens drawn as real VisualElements — or
+    /// painted by the match renderer — line up exactly with the markings.
     /// </summary>
-    internal static class PitchGraphics
+    public static class PitchGraphics
     {
         public const float LengthDm = 1050f;
         public const float WidthDm = 680f;
 
-        private static readonly Color TurfColor = new Color(0.16f, 0.42f, 0.20f);
-        private static readonly Color TurfStripe = new Color(0.18f, 0.46f, 0.22f);
-        private static readonly Color LineColor = new Color(1f, 1f, 1f, 0.75f);
+        public static readonly Color TurfColor = new Color(0.16f, 0.42f, 0.20f);
+        public static readonly Color TurfStripe = new Color(0.18f, 0.46f, 0.22f);
+        public static readonly Color LineColor = new Color(1f, 1f, 1f, 0.75f);
+        public static readonly Color GoalColor = new Color(1f, 1f, 1f, 0.95f);
+
+        // Real markings, in decimetres.
+        private const float BoxDepth = 165f;        // penalty area, 16.5 m
+        private const float BoxHalf = 201.5f;       // 40.3 m wide
+        private const float GoalAreaDepth = 55f;    // 6-yard box, 5.5 m
+        private const float GoalAreaHalf = 91.6f;   // 18.32 m wide
+        private const float PenaltySpot = 110f;     // 11 m
+        private const float CircleRadius = 91.5f;   // 9.15 m
+        private const float CornerRadius = 10f;     // 1 m
+        private const float GoalHalf = 37f;         // 7.32 m wide
 
         /// <summary>The letterboxed pitch rectangle (aspect 1050:680) centred in a w x h box.</summary>
         public static Rect FitRect(float w, float h)
@@ -40,6 +52,10 @@ namespace Fts.Views
             return new Vector2(fit.x + x * fit.width, fit.y + ny * fit.height);
         }
 
+        /// <summary>Maps a point in Sim.Core decimetres into the pitch rect.</summary>
+        public static Vector2 ToPixelDm(Rect fit, float xDm, float yDm) =>
+            new Vector2(fit.x + xDm / LengthDm * fit.width, fit.y + yDm / WidthDm * fit.height);
+
         /// <summary>Paints turf + markings into <paramref name="fit"/> (call from OnGenerateVisualContent).</summary>
         public static void Draw(Painter2D p, Rect fit)
         {
@@ -54,9 +70,9 @@ namespace Fts.Views
             p.fillColor = TurfColor;
             FillRect(p, x0, y0, x1, y1);
 
-            // A couple of mowing stripes for a bit of richness (cheap, purely cosmetic).
+            // Mowing stripes, for a bit of richness (cheap, purely cosmetic).
             p.fillColor = TurfStripe;
-            float stripe = fit.width / 6f;
+            float stripe = fit.width / 8f;
             for (float sx = x0 + stripe; sx < x1 - 0.5f; sx += stripe * 2f)
                 FillRect(p, sx, y0, Mathf.Min(sx + stripe, x1), y1);
 
@@ -64,15 +80,44 @@ namespace Fts.Views
             p.strokeColor = LineColor;
             p.lineWidth = Mathf.Max(1.5f, 2f * scale);
 
-            StrokeRect(p, x0, y0, x1, y1);                       // outline
-            Line(p, midX, y0, midX, y1);                         // halfway line
-            Circle(p, midX, midY, 91.5f * scale);                // centre circle (9.15 m)
+            StrokeRect(p, x0, y0, x1, y1);                        // outline
+            Line(p, midX, y0, midX, y1);                          // halfway line
+            Circle(p, midX, midY, CircleRadius * scale);          // centre circle
+            Dot(p, midX, midY, Mathf.Max(1.5f, 3f * scale));      // centre spot
 
-            // Penalty boxes (16.5 m deep, 40.3 m wide).
-            float boxDepth = 165f * scale;
-            float boxHalf = 201.5f * scale;
-            StrokeRect(p, x0, midY - boxHalf, x0 + boxDepth, midY + boxHalf);
-            StrokeRect(p, x1 - boxDepth, midY - boxHalf, x1, midY + boxHalf);
+            for (int end = 0; end < 2; end++)
+            {
+                bool left = end == 0;
+                float goalLine = left ? x0 : x1;
+                float inward = left ? 1f : -1f;
+
+                StrokeRect(p,
+                    goalLine, midY - BoxHalf * scale,
+                    goalLine + inward * BoxDepth * scale, midY + BoxHalf * scale);
+
+                StrokeRect(p,
+                    goalLine, midY - GoalAreaHalf * scale,
+                    goalLine + inward * GoalAreaDepth * scale, midY + GoalAreaHalf * scale);
+
+                float spotX = goalLine + inward * PenaltySpot * scale;
+                Dot(p, spotX, midY, Mathf.Max(1.5f, 3f * scale));
+
+                // The D: the slice of the centre-circle-radius arc that falls outside the box.
+                float sweep = 53f;
+                if (left) Arc(p, spotX, midY, CircleRadius * scale, -sweep, sweep);
+                else Arc(p, spotX, midY, CircleRadius * scale, 180f - sweep, 180f + sweep);
+
+                // Corner arcs.
+                Arc(p, goalLine, y0, CornerRadius * scale, left ? 0f : 90f, left ? 90f : 180f);
+                Arc(p, goalLine, y1, CornerRadius * scale, left ? 270f : 180f, left ? 360f : 270f);
+
+                // Goal mouth: a heavier stroke sitting on the line.
+                p.strokeColor = GoalColor;
+                p.lineWidth = Mathf.Max(2.5f, 5f * scale);
+                Line(p, goalLine, midY - GoalHalf * scale, goalLine, midY + GoalHalf * scale);
+                p.strokeColor = LineColor;
+                p.lineWidth = Mathf.Max(1.5f, 2f * scale);
+            }
         }
 
         private static void FillRect(Painter2D p, float x0, float y0, float x1, float y1)
@@ -110,6 +155,22 @@ namespace Fts.Views
             p.BeginPath();
             p.Arc(new Vector2(cx, cy), radius, 0f, 360f);
             p.Stroke();
+        }
+
+        private static void Arc(Painter2D p, float cx, float cy, float radius, float from, float to)
+        {
+            p.BeginPath();
+            p.Arc(new Vector2(cx, cy), radius, from, to);
+            p.Stroke();
+        }
+
+        private static void Dot(Painter2D p, float cx, float cy, float radius)
+        {
+            Color stroke = p.strokeColor;
+            p.fillColor = stroke;
+            p.BeginPath();
+            p.Arc(new Vector2(cx, cy), radius, 0f, 360f);
+            p.Fill();
         }
     }
 }

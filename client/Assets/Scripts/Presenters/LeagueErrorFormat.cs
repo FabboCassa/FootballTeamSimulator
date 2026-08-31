@@ -35,6 +35,14 @@ namespace Fts.Presenters
             LeagueApiError.LiveMatchNotLive => "leagues.error.live_match_not_live",
             LeagueApiError.LiveMatchAlreadyFinished => "leagues.error.live_match_already_finished",
             LeagueApiError.InvalidLiveChange => "leagues.error.invalid_live_change",
+            LeagueApiError.MarketClosed => "leagues.error.market_closed",
+            LeagueApiError.OfferNotFound => "leagues.error.offer_not_found",
+            LeagueApiError.OfferResolved => "leagues.error.offer_resolved",
+            LeagueApiError.PlayerUnavailable => "leagues.error.player_unavailable",
+            LeagueApiError.SquadTooSmall => "leagues.error.squad_too_small",
+            LeagueApiError.SquadFull => "leagues.error.squad_full",
+            LeagueApiError.IntegrityBlocked => "leagues.error.integrity_blocked",
+            LeagueApiError.ReplayTooOld => "leagues.error.replay_too_old",
             _ => "leagues.error.server",
         };
     }

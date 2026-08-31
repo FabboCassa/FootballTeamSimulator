@@ -26,6 +26,17 @@ namespace Fts.Presenters
             RankedApiError.IntegrityBlocked => "ranked.error.integrity_blocked",
             RankedApiError.DeadlinePassed => "ranked.error.deadline_passed",
             RankedApiError.RateLimited => "ranked.error.rate_limited",
+            // Task 12.2: selling your own players by auction.
+            RankedApiError.LotDurationInvalid => "ranked.error.lot_duration",
+            RankedApiError.SquadTooSmall => "ranked.error.squad_too_small",
+            RankedApiError.PlayerUnavailable => "ranked.error.player_unavailable",
+            // Task 12.3: attending your match.
+            RankedApiError.LiveNotFound => "ranked.error.live_not_found",
+            RankedApiError.LiveNotOpen => "ranked.error.live_not_open",
+            RankedApiError.NotYourMatch => "ranked.error.not_your_match",
+            RankedApiError.InvalidLiveChange => "ranked.error.invalid_live_change",
+            RankedApiError.LiveAlreadyFinished => "ranked.error.live_finished",
+            RankedApiError.ReplayTooOld => "ranked.error.replay_too_old",
             _ => "ranked.error.server",
         };
     }

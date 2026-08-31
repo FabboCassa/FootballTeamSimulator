@@ -33,13 +33,14 @@ public sealed class DevSeedService : IDevSeedService
     private readonly IRankedSeasonService _rankedSeason;
     private readonly IRankedAuctionService _rankedAuctions;
     private readonly IRankedMarketService _rankedMarket;
+    private readonly IRankedLiveMatchService _rankedLive;
     private readonly FtsDbContext _db;
 
     public DevSeedService(
         IAuthService auth, ILeagueService leagues, ILeagueSeasonService season,
         IAuctionService auctions, ILiveMatchService liveMatch, IRankedService ranked,
         IRankedSeasonService rankedSeason, IRankedAuctionService rankedAuctions,
-        IRankedMarketService rankedMarket, FtsDbContext db)
+        IRankedMarketService rankedMarket, IRankedLiveMatchService rankedLive, FtsDbContext db)
     {
         _auth = auth;
         _leagues = leagues;
@@ -50,6 +51,7 @@ public sealed class DevSeedService : IDevSeedService
         _rankedSeason = rankedSeason;
         _rankedAuctions = rankedAuctions;
         _rankedMarket = rankedMarket;
+        _rankedLive = rankedLive;
         _db = db;
     }
 
@@ -251,6 +253,110 @@ public sealed class DevSeedService : IDevSeedService
 
     /// <summary>A legal substitution for the bot's club: its best XI with one bench player brought on for
     /// the last outfield slot, as a serializable <see cref="LineupPlan"/> the live change accepts.</summary>
+    /// <summary>
+    /// Simulate the opponent of a LIVE RANKED match (task 12.3 dev tooling). Composes the real use cases, the
+    /// same way the 8.6 tool does: the bot coach on the other side calls <c>OpenAsync</c> (so the human's
+    /// screen sees him arrive), then <c>SubmitChangeAsync</c> with a legal bench-player substitution, then
+    /// optionally <c>FinishAsync</c> so the calendar can consume the live result on the next tick instead of
+    /// waiting out the grace. Nothing here is a bypass — every guard the ladder applies to a coach applies to
+    /// the bot, which is what makes this tooling worth trusting when it says the flow works.
+    ///
+    /// The one case it declines is a vacant AI seat: there is no account to act as, and the side is already
+    /// playing its stored orders. That is the match working, not the tool failing, and the result says so.
+    /// </summary>
+    public async Task<DevRankedLiveResult> RankedBotLiveAsync(
+        Guid fixtureId, DevRankedLiveRequest request, CancellationToken ct = default)
+    {
+        var fixture = await _db.RankedFixtures.FirstOrDefaultAsync(f => f.Id == fixtureId, ct);
+        if (fixture is null)
+            return new DevRankedLiveResult("fixture_not_found", false, false, 0, false);
+
+        var live = await _db.RankedLiveMatches.FirstOrDefaultAsync(l => l.FixtureId == fixtureId, ct);
+
+        // The opponent is whichever of the two clubs the calling human is NOT already sitting in. The tool is
+        // unauthenticated (it is dev-gated), so "the human" is read off the session's presence flags when
+        // there is one, and otherwise we simply take the side held by a bot account.
+        var seats = await _db.RankedSeats
+            .Where(s => s.RankedGroupId == fixture.RankedGroupId && s.ClubId != null)
+            .ToListAsync(ct);
+        Guid? homeUser = seats.FirstOrDefault(s => s.ClubId == fixture.HomeClubId)?.UserId;
+        Guid? awayUser = seats.FirstOrDefault(s => s.ClubId == fixture.AwayClubId)?.UserId;
+
+        bool homeTaken = live?.HomePresent ?? false;
+        bool awayTaken = live?.AwayPresent ?? false;
+
+        Guid? botUserId;
+        Guid botClubId;
+        if (!homeTaken && homeUser is { } hu && (awayTaken || awayUser is null))
+        {
+            botUserId = hu;
+            botClubId = fixture.HomeClubId;
+        }
+        else if (!awayTaken && awayUser is { } au)
+        {
+            botUserId = au;
+            botClubId = fixture.AwayClubId;
+        }
+        else if (!homeTaken && homeUser is { } hu2)
+        {
+            botUserId = hu2;
+            botClubId = fixture.HomeClubId;
+        }
+        else
+        {
+            return new DevRankedLiveResult("no_opponent_account", false, false, 0, false,
+                "Il posto avversario e' un club AI (nessun account): gioca gia' con i suoi ordini salvati.");
+        }
+
+        var open = await _rankedLive.OpenAsync(botUserId.Value, fixtureId, ct);
+        if (!open.Success)
+            return new DevRankedLiveResult(open.Error.ToString(), false, false, 0, false, open.Message);
+
+        RankedLiveStateDto state = open.Value!;
+        bool joined = true;
+        bool subMade = false;
+        int usedMinute = 0;
+
+        if (request.Sub && state.Status == Fts.Application.Leagues.LiveMatchStatus.Live)
+        {
+            var club = await _db.Clubs.Include(c => c.Players).FirstOrDefaultAsync(c => c.Id == botClubId, ct);
+            if (club != null)
+            {
+                LineupPlan plan = BuildBotSubPlan(club);
+
+                // Not before an already-applied change (the server enforces monotonic minutes), and not in
+                // the match's future either (task 12.3's ranked guard) — so the tool asks for the EARLIER of
+                // the requested minute and the minute the clock says has been played.
+                int last = 0;
+                foreach (RankedLiveChangeDto ch in state.Changes) if (ch.FromMinute > last) last = ch.FromMinute;
+                int perMinute = System.Math.Max(1, state.SecondsPerMatchMinute);
+                int playedNow = (int)System.Math.Min(90,
+                    System.Math.Max(0, (state.ServerUtc - state.KickoffUtc).TotalSeconds / perMinute));
+                int wanted = System.Math.Min(request.Minute, System.Math.Max(1, playedNow));
+                usedMinute = Clamp(System.Math.Max(wanted, System.Math.Max(1, last)), 1, 90);
+
+                var res = await _rankedLive.SubmitChangeAsync(
+                    botUserId.Value, fixtureId,
+                    new SubmitRankedLiveChangeRequest(usedMinute, plan, null), ct);
+                subMade = res.Success;
+                if (!subMade)
+                    return new DevRankedLiveResult(
+                        res.Error.ToString(), joined, false, usedMinute, false, res.Message);
+                state = res.Value!;
+            }
+        }
+
+        bool finished = false;
+        if (request.Finish)
+        {
+            var fin = await _rankedLive.FinishAsync(botUserId.Value, fixtureId, ct);
+            finished = fin.Success;
+            if (finished) state = fin.Value!;
+        }
+
+        return new DevRankedLiveResult(state.Status.ToString(), joined, subMade, usedMinute, finished);
+    }
+
     private static LineupPlan BuildBotSubPlan(Persistence.Entities.Club club)
     {
         SimClub sim = WorldSquadReader.ToSimClub(club);

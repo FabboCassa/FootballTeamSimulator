@@ -13,8 +13,9 @@ namespace Fts.Application.Simulation;
 public sealed class SimulationService : ISimulationService
 {
     /// <summary>Combined hash of the default <see cref="DeterminismCheck.Run()"/> — the value the
-    /// client logs (golden master 0xCDEA5A2F7B9E5CF6). Pinned by <c>SimulationDeterminismTests</c>.</summary>
-    public ulong GoldenCombinedHash => 0xCDEA5A2F7B9E5CF6UL;
+    /// client logs (golden master 0x3421951276465473, engine v3 / task 13.1 — v2 was 0xCDEA5A2F7B9E5CF6).
+    /// Pinned by <c>SimulationDeterminismTests</c>.</summary>
+    public ulong GoldenCombinedHash => 0x3421951276465473UL;
 
     public SimulateMatchResponse SimulateMatch(SimulateMatchRequest request)
     {
@@ -37,7 +38,7 @@ public sealed class SimulationService : ISimulationService
         // Hash the FULL report (incl. positions) so it matches the client's hash exactly,
         // regardless of whether we then strip positions from the response payload.
         ulong hash = MatchReportHasher.Hash(report);
-        int frameCount = report.Positions?.Frames.Count ?? 0;
+        int frameCount = report.Positions?.TickCount ?? 0;
 
         var events = new List<MatchEventDto>(report.Events.Count);
         foreach (MatchEvent e in report.Events)

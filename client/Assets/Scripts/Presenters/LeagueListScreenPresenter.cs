@@ -76,7 +76,14 @@ namespace Fts.Presenters
             _view.ClearStatus();
             var rows = new List<LeagueListView.LeagueRow>(result.Value.Count);
             foreach (var l in result.Value)
-                rows.Add(new LeagueListView.LeagueRow(l.id, FormatRow(l)));
+            {
+                // Phase 12.1: the count of transfer negotiations waiting on this coach. It rides the league
+                // summary precisely so it can be seen from here, without opening anything.
+                string badge = l.offersAwaitingYou > 0
+                    ? _loc.Tr("leagues.offers_badge", l.offersAwaitingYou)
+                    : null;
+                rows.Add(new LeagueListView.LeagueRow(l.id, FormatRow(l), badge));
+            }
             _view.SetLeagues(rows);
         }
 

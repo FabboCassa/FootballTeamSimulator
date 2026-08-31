@@ -23,6 +23,7 @@ namespace Fts.Presenters
         private readonly ILocalizationService _loc;
         private readonly RankedApiService _ranked;
         private readonly RankedReplayTarget _replayTarget;
+        private readonly RankedLiveTarget _liveTarget;
         private readonly RankedSeasonView _view;
 
         private CancellationTokenSource _cts;
@@ -34,15 +35,25 @@ namespace Fts.Presenters
         private readonly Dictionary<string, (string home, string away)> _fixtureNames =
             new Dictionary<string, (string home, string away)>();
 
+        /// <summary>Task 12.3 — the next kick-off and how far the DEVICE's clock is from the SERVER's. The
+        /// countdown ticks against a corrected now: a phone two minutes fast would otherwise offer (or hide)
+        /// the live button two minutes off, and two minutes is the entire margin around a kick-off.</summary>
+        private DateTime? _nextKickoffUtc;
+        private TimeSpan _clockOffset = TimeSpan.Zero;
+        private string _bannerBase = string.Empty;
+        private string _liveFixtureId;
+
         public VisualElement View => _view.Root;
 
         public RankedSeasonScreenPresenter(
-            ScreenNavigator navigator, ILocalizationService loc, RankedApiService ranked, RankedReplayTarget replayTarget)
+            ScreenNavigator navigator, ILocalizationService loc, RankedApiService ranked,
+            RankedReplayTarget replayTarget, RankedLiveTarget liveTarget)
         {
             _navigator = navigator;
             _loc = loc;
             _ranked = ranked;
             _replayTarget = replayTarget;
+            _liveTarget = liveTarget;
             _view = new RankedSeasonView(loc.Tr);
         }
 
@@ -53,10 +64,12 @@ namespace Fts.Presenters
             _view.MarketClicked += OnMarket;
             _view.AdvanceDevClicked += OnAdvanceDev;
             _view.FixtureSelected += OnFixtureSelected;
+            _view.LiveSelected += OnLiveSelected;
             _view.BackClicked += OnBack;
             _view.SetDevToolsVisible(DevFlags.OnlineTestTools);
             _cts = new CancellationTokenSource();
             PollAsync(_cts.Token).Forget();
+            TickCountdownAsync(_cts.Token).Forget();
         }
 
         public void Exit()
@@ -66,6 +79,7 @@ namespace Fts.Presenters
             _view.MarketClicked -= OnMarket;
             _view.AdvanceDevClicked -= OnAdvanceDev;
             _view.FixtureSelected -= OnFixtureSelected;
+            _view.LiveSelected -= OnLiveSelected;
             _view.BackClicked -= OnBack;
             _cts?.Cancel();
             _cts?.Dispose();
@@ -81,6 +95,34 @@ namespace Fts.Presenters
                 await LoadAsync();
                 await UniTask.Delay(TimeSpan.FromSeconds(3), cancellationToken: ct).SuppressCancellationThrow();
             }
+        }
+
+        /// <summary>The banner's countdown ticks every second on its own, independently of the 3-second data
+        /// poll: an appointment counts down in seconds, and re-fetching a whole season nine times a minute to
+        /// animate a clock would be paying for the wrong thing.</summary>
+        private async UniTaskVoid TickCountdownAsync(CancellationToken ct)
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                bool cancelled = await UniTask.Delay(
+                    TimeSpan.FromSeconds(1), cancellationToken: ct).SuppressCancellationThrow();
+                if (cancelled) return;
+                RefreshBanner();
+            }
+        }
+
+        private void RefreshBanner()
+        {
+            if (string.IsNullOrEmpty(_bannerBase)) return;
+            string banner = _bannerBase;
+            if (_nextKickoffUtc.HasValue)
+            {
+                TimeSpan left = _nextKickoffUtc.Value - OnlineClock.NowUtc(_clockOffset);
+                banner += left > TimeSpan.Zero
+                    ? "  ·  " + _loc.Tr("ranked.kickoff_in", OnlineClock.Countdown(left))
+                    : "  ·  " + _loc.Tr("ranked.kickoff_now");
+            }
+            _view.SetBanner(banner);
         }
 
         private void OnRefresh() => LoadAsync().Forget();
@@ -122,12 +164,26 @@ namespace Fts.Presenters
             var st = season.state;
             _view.SetTitle(st.groupName ?? _loc.Tr("ranked.title"));
 
-            string banner = _loc.Tr("ranked.matchday", st.roundsPlayed, st.totalRounds);
+            // TASK 12.3 — the ladder runs on the SERVER's clock, so the countdown does too. One measurement
+            // per refresh is enough: the drift between two clocks does not change while you watch it.
+            _clockOffset = OnlineClock.OffsetFrom(st.serverUtc);
+            _nextKickoffUtc = st.seasonComplete ? null : OnlineClock.ParseUtc(st.nextKickoffUtc);
+
+            _bannerBase = _loc.Tr("ranked.matchday", st.roundsPlayed, st.totalRounds);
             if (st.seasonComplete)
-                banner = _loc.Tr("ranked.season_complete");
+            {
+                _bannerBase = _loc.Tr("ranked.season_complete");
+            }
             else if (st.nextRound.HasValue && !string.IsNullOrEmpty(st.nextKickoffUtc))
-                banner += "  ·  " + _loc.Tr("ranked.next_kickoff", FormatTime(st.nextKickoffUtc));
-            _view.SetBanner(banner);
+            {
+                // The DEVICE's local time, always — an Italian world's 21:00 reads 20:00 in London, and both
+                // coaches are looking at the same instant. When the world's own zone differs from the
+                // device's, the banner says whose evening it is, so nobody has to guess.
+                _bannerBase += "  ·  " + _loc.Tr("ranked.next_kickoff", OnlineClock.LocalDateTime(st.nextKickoffUtc));
+                if (!string.IsNullOrEmpty(st.worldTimeZoneId) && st.worldTimeZoneId != TimeZoneInfo.Local.Id)
+                    _bannerBase += "  ·  " + _loc.Tr("ranked.world_time", st.worldTimeZoneId);
+            }
+            RefreshBanner();
 
             bool windowOpen = st.currentWindow != null && st.currentWindow.isOpen;
             _view.SetWindowBanner(_loc.Tr("ranked.window_open"), windowOpen);
@@ -232,8 +288,9 @@ namespace Fts.Presenters
                         rows = new List<SeasonFixtureRowVm>();
                         groups.Add(new FixtureGroupVm { RoundLabel = _loc.Tr("ranked.round", f.round), Rows = rows });
                     }
-                    // Played fixtures are tappable → the replay.
-                    if (f.played) _fixtureNames[f.id] = (f.homeClubName, f.awayClubName);
+                    // Played fixtures are tappable → the replay. Since 12.3 an UNPLAYED one of yours is
+                    // tappable too, while its door is open → the live match. Both need the names.
+                    _fixtureNames[f.id] = (f.homeClubName, f.awayClubName);
                     rows.Add(new SeasonFixtureRowVm
                     {
                         FixtureId = f.id,
@@ -243,7 +300,13 @@ namespace Fts.Presenters
                         HomeGoals = f.homeGoals,
                         AwayGoals = f.awayGoals,
                         IsYours = f.isYours,
-                        CanPlayLive = false, // the ladder resolves its matchdays on the server clock
+                        // TASK 12.3: the SERVER decides whether the door is open. A device whose clock is a
+                        // few minutes out would otherwise offer the one button that matters at the wrong
+                        // moment — and that moment is the only one it has.
+                        CanPlayLive = f.liveOpen,
+                        // Every kick-off, in the DEVICE's own local time. This is the visible half of the
+                        // task's title, and it is the reason the wire carries an instant and never a string.
+                        TimeText = f.played ? string.Empty : OnlineClock.LocalTimeOfDay(f.kickoffUtc),
                     });
                 }
             }
@@ -262,6 +325,16 @@ namespace Fts.Presenters
             _navigator.Push<RankedReplayScreenPresenter>();
         }
 
+        /// <summary>Task 12.3: the appointment. A row whose door is open goes to the live match, not to a
+        /// replay of a match that has not happened.</summary>
+        private void OnLiveSelected(string fixtureId)
+        {
+            if (string.IsNullOrEmpty(fixtureId)) return;
+            var (home, away) = _fixtureNames.TryGetValue(fixtureId, out var n) ? n : (string.Empty, string.Empty);
+            _liveTarget.Set(fixtureId, home, away);
+            _navigator.Push<RankedLiveMatchScreenPresenter>();
+        }
+
         // Dev-only: fill the placement cohort with bots FIRST (a no-op once the season is under way), then
         // FAST-FORWARD the ranked calendar — with the real 1-matchday-a-day spacing a single tick resolves
         // almost nothing, while the fast-forward time-travels the ladder, so a solo human can watch a whole
@@ -276,6 +349,10 @@ namespace Fts.Presenters
             _view.ShowStatus(_loc.Tr("ranked.dev_filling"), isError: false);
             await _ranked.FillDevAsync();   // fills the forming placement group (0 bots if already full/started)
             await _ranked.FastForwardDevAsync(DevFastForwardMatchdays);
+            // TASK 12.3: leave the ladder standing just before a kick-off rather than between two of them —
+            // a fast-forward that lands mid-week gives a solo tester a calendar and nothing to attend. The
+            // next matchday is now seconds away, so the live row appears on the refresh below.
+            await _ranked.KickoffNowDevAsync(DevSecondsToKickoff);
             _busy = false;
             _view.SetBusy(false);
             _view.ClearStatus();
@@ -288,16 +365,15 @@ namespace Fts.Presenters
         /// forward briskly without skipping past the between-seasons break in a single tap.</summary>
         private const int DevFastForwardMatchdays = 3;
 
+        /// <summary>How far from now the dev fast-forward parks the next kick-off (task 12.3). Far enough to
+        /// see the countdown run and the row turn live, close enough not to be a wait.</summary>
+        private const int DevSecondsToKickoff = 20;
+
         private static string Signed(int value) => value > 0 ? "+" + value : value.ToString();
 
-        /// <summary>Best-effort local time from the server's ISO instant; falls back to the raw string.</summary>
-        private static string FormatTime(string isoUtc)
-        {
-            return DateTime.TryParse(
-                isoUtc, null, System.Globalization.DateTimeStyles.RoundtripKind, out var dt)
-                ? dt.ToLocalTime().ToString("g")
-                : isoUtc;
-        }
+        // FormatTime is gone: it parsed with RoundtripKind, so a server instant that arrived without a
+        // trailing "Z" was read as LOCAL and then shown as local again — right by accident in UTC+0 and an
+        // hour or two wrong everywhere else. Task 12.3 routes every timestamp through OnlineClock instead.
 
         private void OnBack() => _navigator.Pop();
     }

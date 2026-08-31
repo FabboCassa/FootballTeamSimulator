@@ -148,13 +148,38 @@ namespace Sim.Core.Tests.Positioning
             Lineup pushed = PushHeight(WithAnchors(LineupSelector.BestEleven(_club)), 300);
             Lineup plain = LineupSelector.BestEleven(_club);
 
-            var off = new MatchEngine(_cfg); // applyPositioning defaults false
+            // Compared WITHOUT the movement stream, because since task 13.1 the stream lays
+            // players out on their custom positions — a shape the user arranges on the Tactics
+            // pitch is the shape that lines up on the match pitch, which is the point of it.
+            // That is presentation; what this test guards is the SIM, i.e. the score and the
+            // event timeline, and those must not move while the flag is off.
+            var off = new MatchEngine(_cfg, generatePositions: false); // applyPositioning defaults false
             string withPos = JsonSerializer.Serialize(off.Simulate(pushed, plain, new Pcg32(777)));
             string noPos = JsonSerializer.Serialize(off.Simulate(
                 LineupSelector.BestEleven(_club), plain, new Pcg32(777)));
 
             Assert.That(withPos, Is.EqualTo(noPos),
                 "with the positioning flag off, custom positions must not change the sim (golden-master safety)");
+        }
+
+        [Test]
+        public void CustomPositions_ShowUpInTheMovementStream_EvenWithTheFlagOff()
+        {
+            // The other half of the line above, and the reason it had to be redrawn (13.1):
+            // the shape is DRAWN wherever the coach put his players, whether or not the engine
+            // is opted into the rating tilt. Same seed, same result — different geometry.
+            Lineup pushed = PushHeight(WithAnchors(LineupSelector.BestEleven(_club)), 300);
+            Lineup plain = LineupSelector.BestEleven(_club);
+
+            var off = new MatchEngine(_cfg);
+            MatchReport shaped = off.Simulate(pushed, plain, new Pcg32(777));
+            MatchReport preset = off.Simulate(LineupSelector.BestEleven(_club), plain, new Pcg32(777));
+
+            Assert.That(shaped.HomeGoals, Is.EqualTo(preset.HomeGoals), "the result must be untouched");
+            Assert.That(shaped.AwayGoals, Is.EqualTo(preset.AwayGoals), "the result must be untouched");
+            Assert.That(
+                JsonSerializer.Serialize(shaped.Positions), Is.Not.EqualTo(JsonSerializer.Serialize(preset.Positions)),
+                "a side pushed 300 permille up the pitch must be DRAWN further up the pitch");
         }
 
         [Test]

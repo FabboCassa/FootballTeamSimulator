@@ -32,6 +32,9 @@ namespace Fts.Services.Online
         public int status; // LeagueStatus
         public int mode;   // LeagueMode
         public bool isCreator;
+        /// <summary>Transfer negotiations waiting on THIS coach (Phase 12.1). An unanswered offer expires
+        /// when the round resolves, so the leagues list badges it — nobody loses a deal by not looking.</summary>
+        public int offersAwaitingYou;
     }
 
     [Serializable]
@@ -295,6 +298,176 @@ namespace Fts.Services.Online
     /// <summary>Mirrors the server enum (AuctionStatus): 0 Open / 1 Settled / 2 Unsold.</summary>
     public enum AuctionStatus { Open = 0, Settled = 1, Unsold = 2 }
 
+
+    // --- Transfer market (Phase 12.1b) ---------------------------------------------------------
+    // A private league now trades like the single-player career: browse a club, offer a fee, haggle,
+    // put your own players on the transfer list, and sign free agents by agreeing terms with the PLAYER.
+    // Everything is gated to a round-based window (0 = pre-season, 1 = mid-season) — a private league
+    // has no clock. A bot club answers inside the request; a human answers when he opens the app, and an
+    // offer he never answers EXPIRES when the round resolves ("se non risponde è come non accettato").
+
+    /// <summary>Mirrors the server's LeagueOfferStatus.</summary>
+    public enum LeagueOfferStatus { Pending = 0, Accepted = 1, Rejected = 2, Withdrawn = 3, Expired = 4 }
+
+    /// <summary>Which side put the figure currently on the table — the OTHER one has to answer it.</summary>
+    public enum LeagueOfferParty { Buyer = 0, Seller = 1 }
+
+    /// <summary>Mirrors the server's LeagueOfferAction.</summary>
+    public enum LeagueOfferAction { Accept = 0, Reject = 1, Counter = 2, Withdraw = 3 }
+
+    /// <summary>When the market is open, in ROUNDS (a private league advances on rounds, not on a clock).</summary>
+    [Serializable]
+    public sealed class LeagueMarketWindowDto
+    {
+        public bool open;
+        public int windowIndex;      // 0 pre-season · 1 mid-season · -1 none
+        public int roundsPlayed;
+        public int totalRounds;
+        public int closesAfterRound;
+        public int nextOpensAfterRound;
+    }
+
+    [Serializable]
+    public sealed class LeagueMarketPlayerDto
+    {
+        public int externalId;
+        public string name;
+        public int age;
+        public int role;             // Sim.Core PositionRole
+        public int overall;
+        public long marketValue;
+        public long weeklyWage;
+        public int contractSeasonsRemaining;
+        public bool listed;
+        public long askingPrice;
+    }
+
+    [Serializable]
+    public sealed class LeagueMarketSquadDto
+    {
+        public int clubExternalId;
+        public string clubName;
+        public bool isHuman;
+        public long transferBudget;
+        public List<LeagueMarketPlayerDto> players = new List<LeagueMarketPlayerDto>();
+    }
+
+    /// <summary>An unattached player and the terms he is asking for. No auction: meet his wage, pick a
+    /// contract length in his range, and the first coach to agree signs him.</summary>
+    [Serializable]
+    public sealed class LeagueFreeAgentDto
+    {
+        public int externalId;
+        public string name;
+        public int age;
+        public int role;
+        public int overall;
+        public long marketValue;
+        public long demandedWeeklyWage;
+        public int minSeasons;
+        public int maxSeasons;
+        public long signingCostAtDemand;
+    }
+
+    [Serializable]
+    public sealed class LeagueOfferDto
+    {
+        public string id;
+        public int windowIndex;
+        public int playerExternalId;
+        public string playerName;
+        public int playerRole;
+        public int playerOverall;
+        public long playerMarketValue;
+        public int buyerClubExternalId;
+        public string buyerClubName;
+        public int sellerClubExternalId;
+        public string sellerClubName;
+        public long amount;          // the figure currently on the table
+        public int proposedBy;       // LeagueOfferParty
+        public int rounds;
+        public int status;           // LeagueOfferStatus
+        public bool youAreBuyer;
+        public bool youAreSeller;
+        public bool awaitingYou;     // the ball is in your court right now
+        public string updatedUtc;
+    }
+
+    [Serializable]
+    public sealed class LeagueTransferNewsDto
+    {
+        public int playerExternalId;
+        public string playerName;
+        public string fromClubName;
+        public string toClubName;
+        public long fee;
+        public bool involvesYou;
+        public string createdUtc;
+    }
+
+    /// <summary>The caller's whole market view in one payload (GET /leagues/{id}/market).</summary>
+    [Serializable]
+    public sealed class LeagueMarketDto
+    {
+        public LeagueMarketWindowDto window;
+        public int? yourClubExternalId;
+        public long yourBudget;
+        public int yourSquadSize;
+        public List<LeagueMarketPlayerDto> yourSquad = new List<LeagueMarketPlayerDto>();
+        public List<LeagueMarketSquadDto> clubs = new List<LeagueMarketSquadDto>();
+        public List<LeagueFreeAgentDto> freeAgents = new List<LeagueFreeAgentDto>();
+        public List<LeagueOfferDto> awaitingYou = new List<LeagueOfferDto>();
+        public List<LeagueOfferDto> incoming = new List<LeagueOfferDto>();
+        public List<LeagueOfferDto> outgoing = new List<LeagueOfferDto>();
+        public List<LeagueTransferNewsDto> news = new List<LeagueTransferNewsDto>();
+    }
+
+    /// <summary>The outcome of a free-agent approach. A refusal is NOT an error: he simply says what he
+    /// wants, so the screen can bump the offer and try again.</summary>
+    [Serializable]
+    public sealed class FreeAgentSigningDto
+    {
+        public bool signed;
+        public int playerExternalId;
+        public string playerName;
+        public long demandedWeeklyWage;
+        public int minSeasons;
+        public int maxSeasons;
+        public long signingCost;
+        public string message;
+        public LeagueMarketDto market;
+    }
+
+    [Serializable]
+    public sealed class MakeLeagueOfferBody
+    {
+        public int playerExternalId;
+        public long fee;
+    }
+
+    [Serializable]
+    public sealed class RespondLeagueOfferBody
+    {
+        public int action;   // LeagueOfferAction
+        public long amount;  // required for Counter, ignored otherwise
+    }
+
+    [Serializable]
+    public sealed class ListPlayerBody
+    {
+        public int playerExternalId;
+        public bool listed;
+        public long askingPrice;   // 0 = "price him for me"
+    }
+
+    [Serializable]
+    public sealed class SignFreeAgentBody
+    {
+        public int playerExternalId;
+        public long weeklyWage;
+        public int seasons;
+    }
+
     // --- Live match control (Phase 8.6b) -------------------------------------------------------
 
     /// <summary>Mirrors the server enum: which side a change acts on (the server infers it from the
@@ -435,7 +608,15 @@ namespace Fts.Services.Online
         LiveMatchNotLive,        // 409 live_match_not_live (8.6 — not kicked off / finished)
         LiveMatchAlreadyFinished,// 409 live_match_already_finished (8.6)
         InvalidLiveChange,       // 400 invalid_live_change (8.6)
+        MarketClosed,      // 409 market_closed (12.1 — outside the two round-based windows)
+        OfferNotFound,     // 404 offer_not_found (12.1)
+        OfferResolved,     // 409 offer_resolved (12.1 — already accepted/rejected/withdrawn/expired)
+        PlayerUnavailable, // 409 player_unavailable (12.1 — sold, moved, or signed by someone faster)
+        SquadTooSmall,     // 409 squad_too_small (12.1)
+        SquadFull,         // 409 squad_full (12.1)
+        IntegrityBlocked,  // 409 integrity_blocked (9.5 band — a gift or a bribe)
         Server,        // 5xx / unexpected
+        ReplayTooOld,  // 13.1 — recorded by an older match engine, no longer renderable
     }
 
     /// <summary>Result of a league call: the value on success, or an error the presenter maps to loc.</summary>

@@ -39,6 +39,8 @@ namespace Fts.App
             builder.Register<RankedApiService>(Lifetime.Singleton);
             // Ranked replay hand-off (task 9.2): which fixture the ranked replay screen renders.
             builder.Register<RankedReplayTarget>(Lifetime.Singleton);
+            // Ranked live hand-off (task 12.3): which fixture the ranked live screen attends.
+            builder.Register<RankedLiveTarget>(Lifetime.Singleton);
             // Season replay hand-off (task 8.3b): which fixture the online replay screen renders.
             builder.Register<SeasonReplayTarget>(Lifetime.Singleton);
             builder.Register<IGameSessionService, GameSessionService>(Lifetime.Singleton)

@@ -20,7 +20,7 @@ namespace Fts.Views
         public event Action<int> PickClicked;
         public event Action SeasonClicked;
         public event Action TrainingClicked;
-        public event Action AuctionsClicked;
+        public event Action MarketClicked;
 
         public VisualElement Root { get; }
 
@@ -39,7 +39,7 @@ namespace Fts.Views
         private readonly VisualElement _actionsCard;
         private readonly Button _seasonButton;
         private readonly Button _trainingButton;
-        private readonly Button _auctionButton;
+        private readonly Button _marketButton;
         private readonly Label _membersCaption;
         private readonly VisualElement _membersContainer;
         private readonly Label _clubsCaption;
@@ -49,7 +49,8 @@ namespace Fts.Views
         private readonly Button _backButton;
 
         // Which of the active-league actions are on offer — the plate hides itself when none are.
-        private bool _seasonVisible, _trainingVisible, _auctionsVisible;
+        private bool _seasonVisible, _trainingVisible, _marketVisible;
+        private int _pendingOffers;
 
         /// <summary>A club and its squad, both preformatted by the presenter.</summary>
         public readonly struct ClubVm
@@ -132,8 +133,11 @@ namespace Fts.Views
             _seasonButton.style.display = DisplayStyle.None;
             _trainingButton = Compact(actions, () => TrainingClicked?.Invoke(), 150f);
             _trainingButton.style.display = DisplayStyle.None;
-            _auctionButton = Compact(actions, () => AuctionsClicked?.Invoke(), 150f);
-            _auctionButton.style.display = DisplayStyle.None;
+            // Phase 12.1b: the private-league free-agent AUCTION is retired — a league now trades like the
+            // single-player career, so this slot opens the market instead. The auction screen itself lives
+            // on as the client for 12.2's ranked auctions.
+            _marketButton = Compact(actions, () => MarketClicked?.Invoke(), 150f);
+            _marketButton.style.display = DisplayStyle.None;
 
             // ---- members ---------------------------------------------------------------------------
             VisualElement membersPanel = UiKit.Panel();
@@ -276,18 +280,29 @@ namespace Fts.Views
             RefreshActionsVisibility();
         }
 
-        /// <summary>Shows the "auctions" button once the league is active (8.5b).</summary>
-        public void SetAuctionsButtonVisible(bool visible)
+        /// <summary>Shows the "market" button once the league is active (12.1b).</summary>
+        public void SetMarketButtonVisible(bool visible)
         {
-            _auctionsVisible = visible;
-            _auctionButton.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+            _marketVisible = visible;
+            _marketButton.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
             RefreshActionsVisibility();
+        }
+
+        /// <summary>Puts the count of negotiations waiting on this coach on the market button (12.1b). An
+        /// unanswered offer expires when the round resolves, so the number has to be impossible to miss.</summary>
+        public void SetPendingOffers(int count)
+        {
+            _pendingOffers = count;
+            _marketButton.text = count > 0
+                ? _tr("lobby.market") + " (" + count + ")"
+                : _tr("lobby.market");
+            UiKit.SetSmallButtonAccent(_marketButton, count > 0);
         }
 
         /// <summary>The actions plate only exists while it has something on it.</summary>
         private void RefreshActionsVisibility()
         {
-            bool any = _seasonVisible || _trainingVisible || _auctionsVisible;
+            bool any = _seasonVisible || _trainingVisible || _marketVisible;
             _actionsCard.style.display = any ? DisplayStyle.Flex : DisplayStyle.None;
         }
 
@@ -352,7 +367,7 @@ namespace Fts.Views
             _clubsCaption.text = _tr("lobby.clubs");
             _seasonButton.text = _tr("lobby.open_season");
             _trainingButton.text = _tr("lobby.training");
-            _auctionButton.text = _tr("lobby.auctions");
+            SetPendingOffers(_pendingOffers);
             _leaveButton.text = _tr("lobby.leave");
             _backButton.text = _tr("common.back");
         }

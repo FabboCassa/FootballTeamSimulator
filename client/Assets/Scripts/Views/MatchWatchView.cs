@@ -32,6 +32,7 @@ namespace Fts.Views
         private VisualElement _homeCrestSlot;
         private VisualElement _awayCrestSlot;
         private readonly Label _toast;
+        private readonly ActionFeed _feed = new ActionFeed();
         private Button _skip;
         private Button _pause;
         private Button _continue;
@@ -73,6 +74,8 @@ namespace Fts.Views
             _toast.style.display = DisplayStyle.None;
             toastRow.Add(_toast);
             PitchContainer.Add(toastRow);
+            PitchContainer.Add(_feed.Root);
+            _feed.Clear();
 
             Root.Add(PitchContainer);
 
@@ -186,6 +189,12 @@ namespace Fts.Views
                 _speedButtons[i].style.backgroundColor =
                     Mathf.Approximately(_speeds[i], speed) ? ActiveSpeed : IdleSpeed;
         }
+
+        /// <summary>Adds a line to the running commentary beside the pitch (task 13.1).</summary>
+        public void PushAction(string text) => _feed.Push(text);
+
+        /// <summary>Empties the commentary (a re-simulated remainder starts fresh).</summary>
+        public void ClearActions() => _feed.Clear();
 
         public void ShowToast(string text)
         {

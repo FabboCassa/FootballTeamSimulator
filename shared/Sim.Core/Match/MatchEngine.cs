@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Sim.Core.Config;
 using Sim.Core.Domain;
+using Sim.Core.Match.Movement;
 using Sim.Core.Random;
 using Sim.Core.Tactics;
 
@@ -9,7 +10,7 @@ namespace Sim.Core.Match
     /// <summary>
     /// Match engine: minute-by-minute action resolution producing score and
     /// event timeline (task 1.4), plus the replayable top-down position stream
-    /// generated from that timeline (task 1.5, see PositionStreamGenerator).
+    /// generated from that timeline (tasks 1.5 · 13.1, see Movement.PossessionSimulator).
     ///
     /// Model per minute:
     ///   1. an action happens with P = ActionChancePerMinute;
@@ -24,7 +25,7 @@ namespace Sim.Core.Match
     public sealed class MatchEngine
     {
         /// <summary>Bump when changes invalidate stored replays/golden masters.</summary>
-        public const int Version = 2; // v2: position stream added (1.5); score/event model unchanged from v1.
+        public const int Version = 3; // v3: possession movement model (13.1); score/event model unchanged from v1.
 
         private const int MatchMinutes = 90;
 
@@ -35,6 +36,7 @@ namespace Sim.Core.Match
         private readonly bool _applyCondition;
         private readonly bool _applyMatchFatigue;
         private readonly bool _applyPositioning;
+        private readonly bool _generatePositions;
 
         /// <summary>
         /// <paramref name="applyCondition"/> opts the engine into the condition model
@@ -56,7 +58,13 @@ namespace Sim.Core.Match
         /// far its players sit from their role anchors. Separate flag (defaults false) so
         /// it never touches the golden masters; and a lineup with no custom positions (or
         /// sitting on a clean formation preset) is the identity even when the flag is on.
-        public MatchEngine(BalanceConfig? config = null, bool applyCondition = false, bool applyMatchFatigue = false, bool applyPositioning = false)
+        ///
+        /// <paramref name="generatePositions"/> builds the replayable movement stream (13.1).
+        /// It is the last thing a simulation does and every match is handed its own RNG, so
+        /// turning it off cannot move a single bit of any result — it only skips work nobody
+        /// is going to look at. The headless paths (AI matchdays, the balance harness) pass
+        /// false; anything a human can watch or replay leaves it on.
+        public MatchEngine(BalanceConfig? config = null, bool applyCondition = false, bool applyMatchFatigue = false, bool applyPositioning = false, bool generatePositions = true)
         {
             BalanceConfig cfg = config ?? new BalanceConfig();
             _cfg = cfg.Match;
@@ -66,6 +74,7 @@ namespace Sim.Core.Match
             _applyCondition = applyCondition;
             _applyMatchFatigue = applyMatchFatigue;
             _applyPositioning = applyPositioning;
+            _generatePositions = generatePositions;
         }
 
         /// <summary>
@@ -195,12 +204,18 @@ namespace Sim.Core.Match
                 });
             }
 
-            // Position stream (1.5): generated after the result so it draws from
-            // the RNG *after* every outcome roll - scores/events per seed are
-            // identical to engine v1. Uses the final active lineups; for a match
-            // with substitutions the rendered geometry reflects the latest XI
-            // (presentation-only, never affects the result).
-            report.Positions = new PositionStreamGenerator(_cfg).Generate(active.Home, active.Away, report, rng);
+            // Movement stream (1.5 · 13.1): generated after the result so it draws from
+            // the RNG *after* every outcome roll - scores/events per seed are identical to
+            // engine v1. It is handed the finished report and the possession share the
+            // ratings produced, so the side that dominates the result model visibly keeps
+            // the ball. Uses the final active lineups; for a match with substitutions the
+            // rendered geometry reflects the latest XI (presentation-only, never a result).
+            if (_generatePositions)
+            {
+                int possessionPermille = (int)(homePossession * 1000);
+                report.Positions = new PossessionSimulator(_cfg)
+                    .Generate(active.Home, active.Away, report, rng, possessionPermille);
+            }
 
             return report;
         }

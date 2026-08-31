@@ -1,14 +1,20 @@
 using Fts.Application.Leagues;
+using Fts.Application.Ranked;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 
 namespace Fts.Api.Matches;
 
 /// <summary>Strongly-typed client contract for live-match pushes (Phase 8.6) — the Unity/web client
-/// implements a <c>MatchChanged</c> handler to re-render the match when the opponent makes a change.</summary>
+/// implements a <c>MatchChanged</c> handler to re-render the match when the opponent makes a change.
+/// Task 12.3 adds <c>RankedMatchChanged</c>: the ladder's live match rides the SAME hub and the same
+/// per-fixture group (a fixture id is unique either way), because it is the same channel doing the same job
+/// — a second hub would have meant a second connection per client for no gain.</summary>
 public interface IMatchClient
 {
     Task MatchChanged(LiveMatchStateDto state);
+
+    Task RankedMatchChanged(RankedLiveStateDto state);
 }
 
 /// <summary>

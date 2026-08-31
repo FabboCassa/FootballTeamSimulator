@@ -195,6 +195,19 @@ public sealed class AccountDeletionService : IAccountDeletionService
             lot.HighBidUserId = null;
         }
 
+        // Task 12.2: lots the account put up itself. The club plays on as AI, but the shop closes — an
+        // auction whose seller no longer exists has nobody to pay.
+        var ownLots = await _db.RankedAuctions.Where(a => a.SellerUserId == userId).ToListAsync(ct);
+        foreach (var lot in ownLots)
+        {
+            if (lot.Status == RankedAuctionStatus.Open)
+            {
+                lot.Status = RankedAuctionStatus.Cancelled;
+                lot.SettledUtc = DateTime.UtcNow;
+            }
+            lot.SellerUserId = null;
+        }
+
         var seats = await _db.RankedSeats.Where(s => s.UserId == userId).ToListAsync(ct);
         foreach (var seat in seats) { seat.UserId = null; seat.OccupiedUtc = null; }
 

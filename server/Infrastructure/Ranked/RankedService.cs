@@ -478,6 +478,12 @@ public sealed class RankedService : IRankedService
             Seed = NewSeed(),
             SeasonNumber = 1,
             Status = RankedWorldStatus.Open,
+            // TASK 12.3 — the pyramid's own time zone. Every matchday in it kicks off at the configured
+            // local hour HERE, and each client renders that instant in the device's own time, so a coach in
+            // the UK reads 20:00 for the Italian world's 21:00. A world opened before 12.3 has an empty
+            // string and keeps the pre-12.3 relative calendar; the switch is per world, which is what lets a
+            // US world be opened later on US evenings without touching the ones already running.
+            TimeZoneId = _opt.WorldTimeZone ?? string.Empty,
             CreatedUtc = now,
         };
 

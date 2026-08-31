@@ -55,6 +55,15 @@ public static class DevEndpoints
             Results.Ok(await dev.SeedLoadCohortAsync(
                 new DevLoadSeedRequest(coaches ?? 200, ticks ?? 1), ct)));
 
+        // Ranked live autopilot (task 12.3): the fixture's OPPONENT joins the live match and optionally makes
+        // a substitution / confirms full-time, so a solo tester sees the other side of his 21:00 match. Query
+        // params so a bodyless POST binds cleanly. Pair it with /internal/ranked/kickoff-now, which pulls the
+        // matchday forward so there is a live match to join in the first place.
+        group.MapPost("/ranked/live/{fixtureId:guid}/bot", async (
+            Guid fixtureId, bool? sub, int? minute, bool? finish, IDevSeedService dev, CancellationToken ct) =>
+            Results.Ok(await dev.RankedBotLiveAsync(
+                fixtureId, new DevRankedLiveRequest(sub ?? false, minute ?? 45, finish ?? false), ct)));
+
         // Ranked market autopilot (9.2b): the group's bot coaches outbid on the open auction lots and answer
         // the offers the human sent them — query params so a bodyless POST binds cleanly.
         group.MapPost("/ranked/{groupId:guid}/market/bot", async (

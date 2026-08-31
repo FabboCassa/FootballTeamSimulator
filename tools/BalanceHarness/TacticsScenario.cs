@@ -163,7 +163,10 @@ internal static class TacticsScenario
         // The live engine: condition and within-match fatigue are on in the shipped client, so the
         // field is swept the way matches are actually resolved. Equal squads means both sides carry
         // the same condition, so nothing here favours one side but the tactic.
-        var engine = new MatchEngine(cfg, applyCondition: true, applyMatchFatigue: true);
+        // The harness reads goals and events only, and runs many thousands of matches:
+        // skip the movement stream (13.1). Each match gets its own RNG, so the results
+        // it measures are byte-identical either way.
+        var engine = new MatchEngine(cfg, applyCondition: true, applyMatchFatigue: true, generatePositions: false);
 
         // One eleven per (squad, shape), picked once. Two instances per pair - the same eleven either
         // way, but never the same object on both sides of a match.

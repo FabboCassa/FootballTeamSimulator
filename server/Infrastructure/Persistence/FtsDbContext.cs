@@ -39,6 +39,9 @@ public sealed class FtsDbContext : IdentityDbContext<AppUser, IdentityRole<Guid>
     public DbSet<Auction> Auctions => Set<Auction>();
     public DbSet<Bid> Bids => Set<Bid>();
 
+    public DbSet<LeagueOffer> LeagueOffers => Set<LeagueOffer>();
+    public DbSet<LeagueListing> LeagueListings => Set<LeagueListing>();
+
     public DbSet<LiveMatch> LiveMatches => Set<LiveMatch>();
 
     public DbSet<RankedWorld> RankedWorlds => Set<RankedWorld>();
@@ -51,6 +54,7 @@ public sealed class FtsDbContext : IdentityDbContext<AppUser, IdentityRole<Guid>
     public DbSet<RankedOffer> RankedOffers => Set<RankedOffer>();
     public DbSet<RankedAuction> RankedAuctions => Set<RankedAuction>();
     public DbSet<RankedAward> RankedAwards => Set<RankedAward>();
+    public DbSet<RankedLiveMatch> RankedLiveMatches => Set<RankedLiveMatch>();
 
     public DbSet<IntegrityFlag> IntegrityFlags => Set<IntegrityFlag>();
     public DbSet<AccountSignal> AccountSignals => Set<AccountSignal>();
@@ -474,6 +478,27 @@ public sealed class FtsDbContext : IdentityDbContext<AppUser, IdentityRole<Guid>
             e.HasIndex(x => new { x.RankedGroupId, x.IsPlayed });
         });
 
+        // --- Live ranked matches (task 12.3) ------------------------------------------------
+
+        b.Entity<RankedLiveMatch>(e =>
+        {
+            e.ToTable("ranked_live_matches");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Status).HasConversion<int>();
+            e.Property(x => x.ChangesJson).IsRequired();
+            // Cascade from the group, exactly like ranked_fixtures — one cascade path, portable across
+            // PostgreSQL and the SQLite test provider. The fixture / club / user ids stay plain
+            // denormalised columns (no relationship), which is what keeps that path single.
+            e.HasOne(x => x.RankedGroup)
+                .WithMany()
+                .HasForeignKey(x => x.RankedGroupId)
+                .OnDelete(DeleteBehavior.Cascade);
+            // One live session per fixture.
+            e.HasIndex(x => x.FixtureId).IsUnique();
+            // The calendar's question, every tick: "is anything in this round still being played?"
+            e.HasIndex(x => new { x.RankedGroupId, x.Round, x.Status });
+        });
+
         b.Entity<RankedLineup>(e =>
         {
             e.ToTable("ranked_lineups");
@@ -515,6 +540,39 @@ public sealed class FtsDbContext : IdentityDbContext<AppUser, IdentityRole<Guid>
             e.HasIndex(x => new { x.RankedGroupId, x.UserId });
         });
 
+        // --- Private-league transfer market (Phase 12.1) ------------------------------------
+
+        b.Entity<LeagueOffer>(e =>
+        {
+            e.ToTable("league_offers");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Status).HasConversion<int>();
+            e.Property(x => x.ProposedBy).HasConversion<int>();
+            // Cascade from the lobby (single path). Player/club/user ids are plain denormalised columns,
+            // the same convention as bids/ranked_offers — integrity is server-authoritative.
+            e.HasOne(x => x.PrivateLeague)
+                .WithMany()
+                .HasForeignKey(x => x.PrivateLeagueId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(x => new { x.PrivateLeagueId, x.Status });
+            e.HasIndex(x => x.SellerUserId);
+            e.HasIndex(x => x.BuyerUserId);
+            e.HasIndex(x => new { x.PrivateLeagueId, x.PlayerId });
+        });
+
+        b.Entity<LeagueListing>(e =>
+        {
+            e.ToTable("league_listings");
+            e.HasKey(x => x.Id);
+            e.HasOne(x => x.PrivateLeague)
+                .WithMany()
+                .HasForeignKey(x => x.PrivateLeagueId)
+                .OnDelete(DeleteBehavior.Cascade);
+            // One live listing per player per league.
+            e.HasIndex(x => new { x.PrivateLeagueId, x.PlayerId }).IsUnique();
+            e.HasIndex(x => new { x.PrivateLeagueId, x.ClubId });
+        });
+
         b.Entity<RankedOffer>(e =>
         {
             e.ToTable("ranked_offers");
@@ -542,6 +600,10 @@ public sealed class FtsDbContext : IdentityDbContext<AppUser, IdentityRole<Guid>
                 .OnDelete(DeleteBehavior.Cascade);
             e.HasIndex(x => new { x.RankedGroupId, x.Status });
             e.HasIndex(x => new { x.RankedGroupId, x.WindowIndex });
+            // Task 12.2: "what have I got on the board?" — the seller's own lots, and the settlement's
+            // per-lot due query (status + timer) now that lots no longer share a window-wide end.
+            e.HasIndex(x => new { x.RankedGroupId, x.SellerClubId });
+            e.HasIndex(x => new { x.Status, x.EndsUtc });
         });
 
         // --- Coach ranking & seasonal rewards (Phase 9.3) -----------------------------------

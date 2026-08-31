@@ -5,7 +5,7 @@ namespace Fts.Presenters
 {
     /// <summary>
     /// Maps a lineup's role slots to normalized pitch coordinates for the 6.7 visual pitch.
-    /// Mirrors Sim.Core's MatchBalance anchor geometry (PositionStreamGenerator.BuildAnchors)
+    /// Mirrors Sim.Core's MatchBalance anchor geometry (Movement.MovementGeometry.Anchors)
     /// so the shape shown on the Squad/Tactics screens matches the one the match renderer draws:
     /// X by role (defence deep, attack high), Y spread across the width among same-role peers.
     /// Coordinates are in [0,1]; X runs from the team's own goal (0) to the attacked goal (1).

@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using Fts.Application.Balance;
 using Fts.Application.Leagues;
 using Fts.Infrastructure.Persistence;
 using Fts.Infrastructure.Persistence.Entities;
@@ -17,7 +18,16 @@ public sealed class LeagueService : ILeagueService
 {
     private readonly FtsDbContext _db;
 
-    public LeagueService(FtsDbContext db) => _db = db;
+    /// <summary>The server's ACTIVE balance (Phase 10.3), used by the Phase 12.1 market engine — the bot
+    /// clubs' pre-season window runs the moment the draft completes, and it must run against the same
+    /// numbers everything else in the league does.</summary>
+    private readonly Sim.Core.Config.BalanceConfig _config;
+
+    public LeagueService(FtsDbContext db, IBalanceProvider balance)
+    {
+        _db = db;
+        _config = balance.Current;
+    }
 
     public const int MinSize = 2;
     public const int MaxSize = 20;
@@ -211,13 +221,20 @@ public sealed class LeagueService : ILeagueService
         // Once every member holds a club the season is set: the league goes Active and its double
         // round-robin schedule is generated (8.3). Fixtures cover ALL world clubs — unclaimed clubs
         // (members < size) play as AI. Deterministic from the world seed.
-        if (members.All(m => m.ClubId is not null))
+        bool seasonJustStarted = members.All(m => m.ClubId is not null);
+        if (seasonJustStarted)
         {
             league.Status = LeagueStatus.Active;
             await GenerateSeasonFixturesAsync(league, ct);
         }
 
         await _db.SaveChangesAsync(ct);
+
+        // The pre-season market (Phase 12.1, window 0) opens the instant the draft closes — and the bot
+        // clubs do their business before the coaches do, exactly as the career's season-start window does,
+        // so the world the friends shop in has already moved.
+        if (seasonJustStarted)
+            await new LeagueMarketEngine(_db, _config).RunWindowAsync(league, windowIndex: 0, ct);
 
         var detail = await BuildDetailAsync(league, userId, ct);
         return LeagueResult<LeagueDetailDto>.Ok(detail);
@@ -250,6 +267,8 @@ public sealed class LeagueService : ILeagueService
         await _db.LeagueTrainings.Where(x => x.PrivateLeagueId == leagueId).ExecuteDeleteAsync(ct);
         await _db.Bids.Where(x => x.PrivateLeagueId == leagueId).ExecuteDeleteAsync(ct);
         await _db.Auctions.Where(x => x.PrivateLeagueId == leagueId).ExecuteDeleteAsync(ct);
+        await _db.LeagueOffers.Where(x => x.PrivateLeagueId == leagueId).ExecuteDeleteAsync(ct);
+        await _db.LeagueListings.Where(x => x.PrivateLeagueId == leagueId).ExecuteDeleteAsync(ct);
 
         // Un-assign every member's club and clear ready flags for the fresh draft.
         var members = await _db.LeagueMembers.Where(m => m.PrivateLeagueId == leagueId).ToListAsync(ct);
@@ -305,6 +324,8 @@ public sealed class LeagueService : ILeagueService
             // Auctions/bids (8.5) reference players via a Restrict FK — delete them before the players.
             await _db.Bids.Where(x => x.PrivateLeagueId == leagueId).ExecuteDeleteAsync(ct);
             await _db.Auctions.Where(x => x.PrivateLeagueId == leagueId).ExecuteDeleteAsync(ct);
+            await _db.LeagueOffers.Where(x => x.PrivateLeagueId == leagueId).ExecuteDeleteAsync(ct);
+            await _db.LeagueListings.Where(x => x.PrivateLeagueId == leagueId).ExecuteDeleteAsync(ct);
             await _db.Players.Where(p => p.WorldId == worldId).ExecuteDeleteAsync(ct);
             await _db.Coaches.Where(c => c.WorldId == worldId).ExecuteDeleteAsync(ct);
             await _db.Clubs.Where(c => c.WorldId == worldId).ExecuteDeleteAsync(ct);
@@ -349,9 +370,24 @@ public sealed class LeagueService : ILeagueService
             .Select(g => new { LeagueId = g.Key, Count = g.Count() })
             .ToDictionaryAsync(x => x.LeagueId, x => x.Count, ct);
 
+        // Phase 12.1: how many transfer negotiations are waiting on THIS coach in each league. An
+        // unanswered offer expires when the round resolves, so the home screen has to shout about it.
+        var awaiting = await _db.LeagueOffers
+            .Where(o => myLeagueIds.Contains(o.PrivateLeagueId)
+                        && o.Status == LeagueOfferStatus.Pending
+                        && ((o.ProposedBy == LeagueOfferParty.Buyer && o.SellerUserId == userId)
+                            || (o.ProposedBy == LeagueOfferParty.Seller && o.BuyerUserId == userId)))
+            .GroupBy(o => o.PrivateLeagueId)
+            .Select(g => new { LeagueId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.LeagueId, x => x.Count, ct);
+
         return leagues
             .OrderByDescending(l => l.CreatedUtc)
-            .Select(l => Summary(l, counts.TryGetValue(l.Id, out var c) ? c : 0, userId))
+            .Select(l => Summary(
+                l,
+                counts.TryGetValue(l.Id, out var c) ? c : 0,
+                userId,
+                awaiting.TryGetValue(l.Id, out var a) ? a : 0))
             .ToList();
     }
 
@@ -459,10 +495,18 @@ public sealed class LeagueService : ILeagueService
             : null;
         var draft = new DraftStateDto(inProgress, currentPickUserId, picksMade, members.Count);
 
-        return new LeagueDetailDto(Summary(league, members.Count, callerId), memberDtos, clubDtos, draft);
+        int offersAwaitingCaller = await _db.LeagueOffers.CountAsync(
+            o => o.PrivateLeagueId == league.Id
+                 && o.Status == LeagueOfferStatus.Pending
+                 && ((o.ProposedBy == LeagueOfferParty.Buyer && o.SellerUserId == callerId)
+                     || (o.ProposedBy == LeagueOfferParty.Seller && o.BuyerUserId == callerId)), ct);
+
+        return new LeagueDetailDto(
+            Summary(league, members.Count, callerId, offersAwaitingCaller), memberDtos, clubDtos, draft);
     }
 
-    private static LeagueSummaryDto Summary(PrivateLeague l, int memberCount, Guid callerId) => new(
+    private static LeagueSummaryDto Summary(
+        PrivateLeague l, int memberCount, Guid callerId, int offersAwaitingCaller = 0) => new(
         Id: l.Id,
         Name: l.Name,
         InviteCode: l.InviteCode,
@@ -470,7 +514,8 @@ public sealed class LeagueService : ILeagueService
         MemberCount: memberCount,
         Status: l.Status,
         Mode: l.Mode,
-        IsCreator: l.CreatorUserId == callerId);
+        IsCreator: l.CreatorUserId == callerId,
+        OffersAwaitingYou: offersAwaitingCaller);
 
     private static string FullName(Player p) =>
         string.IsNullOrEmpty(p.FirstName) ? p.LastName : $"{p.FirstName} {p.LastName}";

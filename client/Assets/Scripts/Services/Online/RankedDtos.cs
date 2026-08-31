@@ -62,6 +62,22 @@ namespace Fts.Services.Online
         public bool youSubmittedLineup;
         public RankedMarketWindowDto currentWindow;
         public string stateHashHex;
+
+        // --- Live matches & the visible kick-off time (task 12.3) ---------------------------
+        /// <summary>The SERVER's clock when this was built. A countdown to kick-off has to be right to the
+        /// second and a device's clock is not, so the presenter measures its offset from this once and counts
+        /// down against a corrected now.</summary>
+        public string serverUtc;
+        /// <summary>The IANA zone the world's kick-offs are anchored to (e.g. "Europe/Rome"), or empty. The
+        /// client always RENDERS in the DEVICE's own zone; this only lets it say "ora del mondo" when the
+        /// two differ.</summary>
+        public string worldTimeZoneId;
+        public int liveOpensBeforeSeconds;
+        public int liveGraceSeconds;
+        /// <summary>Real seconds per match minute. The SERVER owns this number because it judges pause-point
+        /// changes by it — so the renderer must use it rather than a constant of its own.</summary>
+        public int liveSecondsPerMatchMinute;
+        public bool liveEnabled;
     }
 
     /// <summary>One scheduled/played match with its real-time kickoff.</summary>
@@ -80,6 +96,13 @@ namespace Fts.Services.Online
         public int homeGoals;
         public int awayGoals;
         public bool isYours;
+        /// <summary>Task 12.3: your own match, and the live door is open RIGHT NOW. Computed server-side on
+        /// purpose — a device a few minutes out of step would otherwise offer (or hide) the one button that
+        /// matters at exactly the wrong moment.</summary>
+        public bool liveOpen;
+        /// <summary>Where an existing live session is (numeric <see cref="LiveMatchStatus"/>), or null when
+        /// nobody has opened one.</summary>
+        public int? liveStatus;
     }
 
     /// <summary>A club's standing in the group.</summary>
@@ -137,8 +160,13 @@ namespace Fts.Services.Online
     /// <summary>Mirrors the server RankedOfferStatus.</summary>
     public enum RankedOfferStatus { Pending = 0, Accepted = 1, Rejected = 2, Withdrawn = 3 }
 
-    /// <summary>Mirrors the server RankedAuctionStatus.</summary>
-    public enum RankedAuctionStatus { Open = 0, Settled = 1, Unsold = 2 }
+    /// <summary>Mirrors the server RankedAuctionStatus. <c>Cancelled</c> is task 12.2: a seller pulled his
+    /// own lot back before anyone bid on it.</summary>
+    public enum RankedAuctionStatus { Open = 0, Settled = 1, Unsold = 2, Cancelled = 3 }
+
+    /// <summary>Mirrors the server RankedLotKind (task 12.2): the calendar's free agents, or a player another
+    /// coach put up himself. Same board, same bidding — the difference is who gets paid.</summary>
+    public enum RankedLotKind { FreeAgent = 0, Seller = 1 }
 
     /// <summary>A direct coach-to-coach offer as seen by the caller.</summary>
     [Serializable]
@@ -195,9 +223,16 @@ namespace Fts.Services.Online
         public int status; // RankedAuctionStatus
         public string endsUtc;
         public int secondsRemaining;
+        // --- task 12.2: the seller side (absent on a free-agent lot) ---------------------------------
+        public int kind;  // RankedLotKind
+        public int? sellerClubExternalId;
+        public string sellerClubName;
+        public bool youAreSeller;
     }
 
-    /// <summary>The caller's auction view: open lots + budget picture + window state.</summary>
+    /// <summary>The caller's auction view: open lots + budget picture + window state. Since task 12.2 it
+    /// also carries the calendar (when this window shuts, when the next one opens) and the bounds of the
+    /// duration picker, so "when do auctions come back?" is answerable without re-deriving the schedule.</summary>
     [Serializable]
     public sealed class RankedAuctionsDto
     {
@@ -206,11 +241,38 @@ namespace Fts.Services.Online
         public long available;
         public bool windowOpen;
         public List<RankedAuctionLotDto> lots = new List<RankedAuctionLotDto>();
+        public string windowClosesUtc;
+        public string nextWindowOpensUtc;
+        public int minLotSeconds;
+        public int maxLotSeconds;
+        public int yourClubExternalId;
+    }
+
+    /// <summary>What a bid came back with (task 12.2): the updated lot, and whether it landed inside the
+    /// anti-snipe window and pushed that lot's end back.</summary>
+    [Serializable]
+    public sealed class RankedBidResultDto
+    {
+        public RankedAuctionLotDto lot;
+        public bool outbidPrevious;
+        public int? previousLeaderClubExternalId;
+        public long available;
+        public bool extended;
     }
 
     /// <summary>Body for POST /ranked/auctions/{id}/bid.</summary>
     [Serializable]
     public sealed class PlaceRankedBidBody { public long amount; }
+
+    /// <summary>Body for POST /ranked/auctions/list (task 12.2): put one of your own players up, with a
+    /// reserve (0 = "price him for me") and a timer you choose between the board's min and max.</summary>
+    [Serializable]
+    public sealed class ListRankedLotBody
+    {
+        public int playerExternalId;
+        public long reserve;
+        public int durationSeconds;
+    }
 
     // --- ranking: global leaderboard + palmarès (Phase 9.3) ---------------------------------------
 
@@ -292,6 +354,8 @@ namespace Fts.Services.Online
         RespondOffer = 2,
         MarketWindow = 3,
         SeasonSummary = 4,
+        /// <summary>Task 12.3: your match is on RIGHT NOW. The only item on the list that expires.</summary>
+        WatchLive = 5,
     }
 
     /// <summary>One thing to do today. Lower <see cref="priority"/> = more urgent (the server sorts).</summary>
@@ -314,6 +378,11 @@ namespace Fts.Services.Online
         public bool youAreHome;
         public int opponentClubExternalId;
         public string opponentClubName;
+        // --- the appointment (task 12.3) ---
+        public bool liveOpen;
+        public string liveOpensUtc;
+        public int secondsToLiveOpen;
+        public int? liveStatus; // LiveMatchStatus, or null when no session exists yet
     }
 
     /// <summary>The caller's most recent result, from their own point of view.</summary>
@@ -404,6 +473,69 @@ namespace Fts.Services.Online
     }
 
     /// <summary>Why a ranked API call failed — mapped from the server's HTTP status (Phase 9.2).</summary>
+    // --- Live ranked matches (task 12.3) --------------------------------------------------------
+    // The live VOCABULARY is not re-declared here: LiveSide, LiveMatchStatus and LiveChangeRowDto live in
+    // LeagueDtos.cs, in this same namespace, and they describe a live football match rather than a private
+    // league. One declaration, so the ladder's screen and the friends' screen can never disagree about what
+    // "Pending" means.
+
+    /// <summary>
+    /// Mirrors the server's RankedLiveStateDto (12.3): the whole live-match state, polled or pushed.
+    ///
+    /// The clock fields are the point of the task. <see cref="kickoffUtc"/> is the APPOINTMENT — the
+    /// calendar's instant, not "when both players showed up" — so two devices in different countries render
+    /// the same minute at the same moment. <see cref="serverUtc"/> lets the presenter correct its own drift
+    /// instead of trusting the device. <see cref="secondsPerMatchMinute"/> is the playback rate the SERVER
+    /// validates changes against, so the renderer must use it rather than a constant of its own.
+    ///
+    /// PARSE EVERY TIMESTAMP AS UTC. The server is UTC throughout, but the string can arrive without a
+    /// trailing "Z" (a DateTime whose Kind was lost in the database and in JSON). Parsed as local time, an
+    /// Italian coach's 21:00 match would render at 23:00 — exactly the failure the whole time-zone design
+    /// exists to prevent. Use <c>DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal</c>, then
+    /// convert to the device's zone for DISPLAY only.
+    /// </summary>
+    [Serializable]
+    public sealed class RankedLiveStateDto
+    {
+        public string fixtureId;
+        public string groupId;
+        public int round;
+        public int homeClubExternalId;
+        public string homeClubName;
+        public int awayClubExternalId;
+        public string awayClubName;
+        public int status;      // LiveMatchStatus (0 Pending / 1 Live / 2 Finished)
+        public int? yourSide;   // LiveSide (0 Home / 1 Away), or null when watching
+        /// <summary>True when that side is a vacant ladder seat: it plays its stored orders, which is exactly
+        /// what an absent coach's side does. Attending against one is a supported case, not a fallback.</summary>
+        public bool homeIsAi;
+        public bool awayIsAi;
+        public bool homePresent;
+        public bool awayPresent;
+        public string kickoffUtc;
+        public string opensUtc;
+        public string closesUtc;
+        public string serverUtc;
+        public int secondsPerMatchMinute;
+        public int homeGoals;
+        public int awayGoals;
+        public List<LiveChangeRowDto> changes = new List<LiveChangeRowDto>();
+        /// <summary>The full serialized Sim.Core MatchReport (parse with Newtonsoft, like a replay).</summary>
+        public string reportJson;
+    }
+
+    /// <summary>Body for POST /ranked/live/{fixtureId}/change. The side is inferred server-side from the
+    /// caller's seat. At least one of <see cref="lineup"/>/<see cref="tactic"/> must be present, and
+    /// <see cref="fromMinute"/> may neither move behind an applied change nor run ahead of the minute the
+    /// clock says has been played.</summary>
+    [Serializable]
+    public sealed class SubmitRankedLiveChangeBody
+    {
+        public int fromMinute;
+        public object lineup;
+        public object tactic;
+    }
+
     public enum RankedApiError
     {
         None = 0,
@@ -425,6 +557,18 @@ namespace Fts.Services.Online
         IntegrityBlocked, // 409 integrity_blocked — the fee is far outside the band around market value
         DeadlinePassed,   // 409 deadline_passed  — the next matchday has kicked off
         RateLimited,      // 429 rate_limited     — too many requests in the window
+        // Task 12.2 — selling your own players by auction.
+        LotDurationInvalid, // 400 lot_duration_invalid — outside the allowed 1h-24h range
+        SquadTooSmall,      // 409 squad_too_small     — counting what is already on the board
+        PlayerUnavailable,  // 409 player_unavailable  — not yours, or already listed
+        // Task 12.3 — live ranked matches.
+        LiveNotFound,       // 404 live_not_found       — nobody has opened a session for that fixture
+        LiveNotOpen,        // 409 live_not_open        — too early, too late, or attending is switched off
+        NotYourMatch,       // 403 not_your_match       — you may watch it, but not coach either side
+        InvalidLiveChange,  // 400 invalid_live_change  — bad minute, in the match's future, or an illegal XI
+        LiveAlreadyFinished,
+        // Task 13.1 — the movement stream changed shape.
+        ReplayTooOld,       // recorded by an older match engine, no longer renderable// 409 live_already_finished
     }
 
     /// <summary>Result wrapper mirroring <see cref="LeagueApiResult{T}"/> — the presenter maps the error to loc.</summary>

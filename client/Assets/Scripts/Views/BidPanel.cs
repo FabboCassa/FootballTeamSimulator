@@ -27,6 +27,10 @@ namespace Fts.Views
         public string CancelLabel;
         /// <summary>Shown instead of the controls when the minimum bid is beyond the available budget.</summary>
         public string OverBudget;
+        /// <summary>Where the control OPENS (clamped into [Min, Max]); 0 = at the minimum. A bidder wants
+        /// the minimum raise pre-filled, but a SELLER pricing his own player (task 12.2) wants to start at
+        /// what the man is worth, not at the floor of the legal band.</summary>
+        public long Start;
     }
 
     /// <summary>
@@ -180,7 +184,7 @@ namespace Fts.Views
             _maxButton.SetEnabled(affordable);
             _confirm.SetEnabled(affordable);
 
-            SetValue(_min);
+            SetValue(vm.Start > 0 ? vm.Start : _min);
             IsOpen = true;
             Root.style.display = DisplayStyle.Flex;
         }

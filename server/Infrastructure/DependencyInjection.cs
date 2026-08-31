@@ -81,6 +81,11 @@ public static class DependencyInjection
         // broadcaster + scheduler are no-op DEFAULTS (TryAdd) — the Api replaces the broadcaster with the
         // SignalR one, and AddBackgroundJobs (above) already registered the real Hangfire scheduler when
         // jobs are enabled, so TryAdd here leaves that in place and only fills the gap when jobs are off.
+        // Private-league transfer market (Phase 12.1): offers/counters, the transfer list and free-agent
+        // signings, all server-authoritative over the shared Sim.Core negotiation. Scoped (request-scoped
+        // FtsDbContext); the between-rounds bot pass is driven by the league/season services, not by DI.
+        services.AddScoped<ILeagueMarketService, LeagueMarketService>();
+
         services.AddScoped<IAuctionService, AuctionService>();
         services.TryAddScoped<IAuctionBroadcaster, NoOpAuctionBroadcaster>();
         services.TryAddScoped<IAuctionScheduler, NoOpAuctionScheduler>();
@@ -215,6 +220,39 @@ public static class DependencyInjection
                 o.MinSquadSizeForSale = minSquad;
             if (long.TryParse(ranked["AuctionFlatStartPrice"], out var flatStart) && flatStart >= 0)
                 o.AuctionFlatStartPrice = flatStart;
+            // Auction timers & seller lots (task 12.2). The anti-snipe window may be 0 (a fixture switches
+            // it off so a one-second lot can actually elapse); the durations must stay positive.
+            if (int.TryParse(ranked["AuctionLotSeconds"], out var lotSecs) && lotSecs > 0)
+                o.AuctionLotSeconds = lotSecs;
+            if (int.TryParse(ranked["SellerLotMinSeconds"], out var lotMin) && lotMin > 0)
+                o.SellerLotMinSeconds = lotMin;
+            if (int.TryParse(ranked["SellerLotMaxSeconds"], out var lotMax) && lotMax > 0)
+                o.SellerLotMaxSeconds = lotMax;
+            if (int.TryParse(ranked["AuctionAntiSnipeSeconds"], out var snipe) && snipe >= 0)
+                o.AuctionAntiSnipeSeconds = snipe;
+            if (bool.TryParse(ranked["AiBidsOnSellerLots"], out var aiBids)) o.AiBidsOnSellerLots = aiBids;
+            if (int.TryParse(ranked["AiSellerLotMaxPercentOfValue"], out var aiCap) && aiCap >= 0)
+                o.AiSellerLotMaxPercentOfValue = aiCap;
+            // Live ranked matches & the visible kick-off time (task 12.3). The zone and the hour decide WHEN
+            // a matchday is; the three live knobs decide how long the door stays open and how much the server
+            // trusts a client's clock. A knob that is not listed here is silently ignored — the ranked
+            // options are bound BY HAND — so every new one has to be added in this block as well.
+            if (!string.IsNullOrWhiteSpace(ranked["WorldTimeZone"]))
+                o.WorldTimeZone = ranked["WorldTimeZone"]!;
+            if (int.TryParse(ranked["KickoffHourLocal"], out var kickoffHour) && kickoffHour is >= 0 and <= 23)
+                o.KickoffHourLocal = kickoffHour;
+            if (int.TryParse(ranked["LiveOpensBeforeSeconds"], out var liveOpens) && liveOpens >= 0)
+                o.LiveOpensBeforeSeconds = liveOpens;
+            if (int.TryParse(ranked["LiveGraceSeconds"], out var liveGrace) && liveGrace >= 0)
+                o.LiveGraceSeconds = liveGrace;
+            if (int.TryParse(ranked["LiveSecondsPerMatchMinute"], out var livePace) && livePace > 0)
+                o.LiveSecondsPerMatchMinute = livePace;
+            // 0 is meaningful here: it switches the "no changes in the match's future" check off, which is
+            // what a test that submits a 90th-minute change one second after kickoff needs.
+            if (int.TryParse(ranked["LiveChangeMinuteTolerance"], out var liveTol) && liveTol >= 0)
+                o.LiveChangeMinuteTolerance = liveTol;
+            if (bool.TryParse(ranked["LiveMatchesEnabled"], out var liveOn)) o.LiveMatchesEnabled = liveOn;
+
             // Ranking + seasonal reset knobs (Phase 9.3) — allow 0 (tests remove the between-seasons break).
             if (int.TryParse(ranked["EloKFactor"], out var k) && k > 0) o.EloKFactor = k;
             if (int.TryParse(ranked["AiRatingTopTier"], out var aiTop) && aiTop > 0) o.AiRatingTopTier = aiTop;
@@ -247,6 +285,12 @@ public static class DependencyInjection
         services.AddScoped<IRankedMarketService, RankedMarketService>();
         // Free-agent auctions in the season's windows (Phase 9.2b): lots opened/settled by the season tick.
         services.AddScoped<IRankedAuctionService, RankedAuctionService>();
+
+        // Live ranked matches (task 12.3): attend your matchday instead of reading about it afterwards. The
+        // broadcaster follows the 8.6 convention — a no-op here so the authoritative service is testable
+        // without SignalR, replaced by the real MatchHub implementation in the Api host.
+        services.AddScoped<IRankedLiveMatchService, RankedLiveMatchService>();
+        services.TryAddScoped<IRankedLiveBroadcaster, NoOpRankedLiveBroadcaster>();
 
         // Coach ranking + seasonal reset (Phase 9.3). PostgreSQL is authoritative for both the rating and
         // the palmarès; the leaderboard cache is a REBUILDABLE Redis sorted set, so environments without a

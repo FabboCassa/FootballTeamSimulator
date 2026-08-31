@@ -35,12 +35,20 @@ namespace Fts.Views
         private readonly Button _backButton;
         private readonly Button _devSeedButton; // dev-only
 
-        /// <summary>One row in the leagues list — the presenter supplies a preformatted label.</summary>
+        /// <summary>One row in the leagues list — the presenter supplies a preformatted label. The
+        /// optional <see cref="Badge"/> is the Phase 12.1 count of transfer negotiations waiting on this
+        /// coach: an unanswered offer expires when the round resolves, so it belongs where he lands.</summary>
         public readonly struct LeagueRow
         {
             public readonly string Id;
             public readonly string Label;
-            public LeagueRow(string id, string label) { Id = id; Label = label; }
+            public readonly string Badge;
+            public LeagueRow(string id, string label, string badge = null)
+            {
+                Id = id;
+                Label = label;
+                Badge = badge;
+            }
         }
 
         public LeagueListView(Func<string, string> tr)
@@ -136,6 +144,16 @@ namespace Fts.Views
                 label.style.whiteSpace = WhiteSpace.Normal;
                 label.pickingMode = PickingMode.Ignore;
                 card.Add(label);
+
+                if (!string.IsNullOrEmpty(row.Badge))
+                {
+                    Label badge = UiKit.Pill(row.Badge, UiKit.Accent, UiKit.TextPrimary);
+                    badge.style.fontSize = 12;
+                    badge.style.marginLeft = UiKit.SpaceSm;
+                    badge.style.flexShrink = 0f;
+                    badge.pickingMode = PickingMode.Ignore;
+                    card.Add(badge);
+                }
 
                 var chevron = new Label("›");
                 chevron.style.fontSize = 20;
