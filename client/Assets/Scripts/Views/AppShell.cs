@@ -22,10 +22,10 @@ namespace Fts.Views
     /// </summary>
     public sealed class AppShell
     {
-        /// <summary>Below this width (UI points) the shell switches to the portrait bottom bar.</summary>
-        private const float PortraitMaxWidth = 720f;
-        /// <summary>Below this width (while landscape) the sidebar collapses to icons only.</summary>
-        private const float CompactSidebarMaxWidth = 1000f;
+        // Task 14.1 took the breakpoint away from this class. The old test was `width < 720`, and
+        // it never fired on a real phone: Panel Settings scales against a 1920x1080 reference, so a
+        // 1080x2400 handset reports about 970 POINTS of width and the shell kept showing the desktop
+        // sidebar in every portrait build. Responsive decides now, on the aspect ratio.
 
         public event Action BackClicked;
         public event Action AdvanceDayClicked;
@@ -252,11 +252,7 @@ namespace Fts.Views
 
         private void ApplyResponsiveLayout()
         {
-            float width = Root.resolvedStyle.width;
-            if (float.IsNaN(width) || width <= 0f)
-                width = UnityEngine.Screen.width;
-
-            bool portrait = width < PortraitMaxWidth;
+            bool portrait = Responsive.IsMobile;
             bool showSidebar = _chromeVisible && !portrait;
             bool showBottomBar = _chromeVisible && portrait;
 
@@ -264,10 +260,7 @@ namespace Fts.Views
             _bottomBar.style.display = showBottomBar ? DisplayStyle.Flex : DisplayStyle.None;
 
             if (showSidebar)
-            {
-                if (width < CompactSidebarMaxWidth) _sidebar.AddToClassList("fts-sidebar--compact");
-                else _sidebar.RemoveFromClassList("fts-sidebar--compact");
-            }
+                _sidebar.EnableInClassList("fts-sidebar--compact", Responsive.Current == Viewport.Tablet);
         }
 
         private static Button IconButton(string iconId, Action onClick)

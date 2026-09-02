@@ -32,6 +32,7 @@ namespace Sim.Core.Career
         private const ulong LineupClubMix = 0xCBF29CE484222325UL;
 
         private readonly MatchEngine _engine;
+        private readonly MatchEngine _watchEngine;
         private readonly ConditionProgressor _conditionProgressor;
         private readonly int _familiarityMax;
 
@@ -50,11 +51,15 @@ namespace Sim.Core.Career
         public SeasonProgressor(BalanceConfig? config = null, bool applyCondition = false, bool applyMatchFatigue = false, bool applyPositioning = false)
         {
             BalanceConfig cfg = config ?? new BalanceConfig();
-            // No position stream here: AdvanceDay resolves the AI fixtures nobody watches,
-            // hundreds a matchday, and each match is handed its own RNG — so skipping the
-            // movement layer (13.1) is free of any effect on the results, and saves building
-            // a stream per fixture that is thrown away a line later.
+            // TWO ENGINES, one difference: whether the movement stream (13.1) is built.
+            // A matchday resolves every fixture in every playable division — hundreds of AI
+            // matches nobody will ever look at — and building a ~200KB stream for each of
+            // them is pure waste. But the fixture the COACH is in is the one he then watches,
+            // and its report IS the replay, so that one must carry its stream. Safe by
+            // construction: each fixture gets its own RNG and the stream is drawn after every
+            // outcome roll, so which engine plays a fixture cannot change its result.
             _engine = new MatchEngine(cfg, applyCondition, applyMatchFatigue, applyPositioning, generatePositions: false);
+            _watchEngine = new MatchEngine(cfg, applyCondition, applyMatchFatigue, applyPositioning, generatePositions: true);
             _conditionProgressor = new ConditionProgressor(cfg.Condition);
             _familiarityMax = cfg.Tactics.FamiliarityMax;
         }
@@ -67,9 +72,10 @@ namespace Sim.Core.Career
             IReadOnlyDictionary<int, LineupPlan>? lineupPlans = null,
             IReadOnlyDictionary<int, TacticContext>? tactics = null,
             IReadOnlyDictionary<int, IReadOnlyList<MatchRule>>? rules = null,
-            DifficultyContext? difficulty = null)
+            DifficultyContext? difficulty = null,
+            int? watchedClubId = null)
         {
-            return AdvanceDay(new[] { league }, season, worldSeed, lineupPlans, tactics, rules, difficulty);
+            return AdvanceDay(new[] { league }, season, worldSeed, lineupPlans, tactics, rules, difficulty, watchedClubId);
         }
 
         /// <summary>
@@ -88,7 +94,8 @@ namespace Sim.Core.Career
             IReadOnlyDictionary<int, LineupPlan>? lineupPlans = null,
             IReadOnlyDictionary<int, TacticContext>? tactics = null,
             IReadOnlyDictionary<int, IReadOnlyList<MatchRule>>? rules = null,
-            DifficultyContext? difficulty = null)
+            DifficultyContext? difficulty = null,
+            int? watchedClubId = null)
         {
             season.CurrentDay++;
 
@@ -98,7 +105,7 @@ namespace Sim.Core.Career
                 if (fixture.Played || fixture.Day > season.CurrentDay)
                     continue;
 
-                outcomes.Add(Simulate(leagues, season, fixture, worldSeed, lineupPlans, tactics, rules, difficulty));
+                outcomes.Add(Simulate(leagues, season, fixture, worldSeed, lineupPlans, tactics, rules, difficulty, watchedClubId));
             }
 
             return outcomes;
@@ -162,7 +169,8 @@ namespace Sim.Core.Career
             IReadOnlyDictionary<int, LineupPlan>? lineupPlans,
             IReadOnlyDictionary<int, TacticContext>? tactics,
             IReadOnlyDictionary<int, IReadOnlyList<MatchRule>>? rules,
-            DifficultyContext? difficulty)
+            DifficultyContext? difficulty,
+            int? watchedClubId)
         {
             Club home = FindClub(leagues, fixture.HomeClubId)
                 ?? throw new InvalidOperationException($"Fixture {fixture.Id}: home club {fixture.HomeClubId} not in world.");
@@ -177,10 +185,17 @@ namespace Sim.Core.Career
             IReadOnlyList<MatchRule>? homeRules = RulesFor(rules, fixture.HomeClubId);
             IReadOnlyList<MatchRule>? awayRules = RulesFor(rules, fixture.AwayClubId);
 
+            // The fixture the coach is in is the one he then watches, so it carries the
+            // movement stream; every other fixture skips building one. Identical results
+            // either way — the stream is drawn after the last outcome roll.
+            MatchEngine engine = watchedClubId.HasValue && fixture.Involves(watchedClubId.Value)
+                ? _watchEngine
+                : _engine;
+
             // No rules on either side -> unchanged legacy call (byte-identical).
             MatchReport report = homeRules == null && awayRules == null
-                ? _engine.Simulate(homeLineup, awayLineup, rng, matchTactics)
-                : _engine.Simulate(new MatchPlan(new MatchInput(homeLineup, awayLineup, matchTactics)), homeRules, awayRules, rng);
+                ? engine.Simulate(homeLineup, awayLineup, rng, matchTactics)
+                : engine.Simulate(new MatchPlan(new MatchInput(homeLineup, awayLineup, matchTactics)), homeRules, awayRules, rng);
 
             RecordResult(season, fixture, report);
             return new MatchOutcome(fixture, report);

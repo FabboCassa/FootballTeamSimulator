@@ -119,7 +119,7 @@ namespace Sim.Core.Tests.Condition
             // Same fixture, same seed: a knackered side creates fewer/worse chances.
             SetCondition(_club, C.FormNeutral, C.MoraleNeutral, 100);
             SetCondition(_opp, C.FormNeutral, C.MoraleNeutral, 100);
-            var engine = new MatchEngine(_cfg, applyCondition: true);
+            var engine = new MatchEngine(_cfg, applyCondition: true, generatePositions: false);  // statistics only: the picture costs 96ms a match and nothing here looks at it
 
             int freshGoalsFor = 0, tiredGoalsFor = 0;
             for (ulong i = 0; i < 400; i++)

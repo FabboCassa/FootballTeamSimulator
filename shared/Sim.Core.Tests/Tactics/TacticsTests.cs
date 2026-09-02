@@ -39,7 +39,12 @@ namespace Sim.Core.Tests.Tactics
             Lineup lb = LineupSelector.BestEleven(_club, tb.Formation);
             var ca = new TacticContext(ta, famA);
             var cb = new TacticContext(tb, famB);
-            var engine = new MatchEngine(_cfg);
+            // The instruction/formation field is 81 tactics x 80 games: thousands of matches of
+            // which only the SCORE is read. Generating the movement stream for each of them cost
+            // ~96ms a match in Debug and was almost the whole runtime of the Sim.Core suite. The
+            // stream is derived after every outcome roll and each match here gets its own seed,
+            // so turning it off is result-identical (verified over 1296 matches).
+            var engine = new MatchEngine(_cfg, generatePositions: false);
 
             if (aHome)
             {

@@ -963,13 +963,13 @@ namespace Sim.Core.Config
         /// <summary>Relative shooting weight per PositionRole (enum order: GK, CB, FB, DM, CM, AM, W, ST).</summary>
         public int[] ScorerWeightsByRole { get; set; } = { 0, 2, 3, 4, 8, 16, 18, 30 };
 
-        // --- Position stream / movement model (tasks 1.5 · 13.1) — distances in decimetres ---
+        // --- Visual match simulation (tasks 1.5 · 13.1 · 13.2) — distances in decimetres ---
 
         /// <summary>
         /// Position snapshots per match minute. A tick is an ACTION BEAT, not a real second:
         /// 90' plays back in ~180 real seconds (30x compression), so a physically accurate
         /// 1.5-second pass would last 0.05s on screen. At 12 the replay runs 6 beats per real
-        /// second at 1x — a pass reads in ~0.4s, a possession in 2-4s, ~70 possessions a match.
+        /// second at 1x — a pass reads in ~0.4s and a possession in 2-4s.
         /// </summary>
         public int TicksPerMinute { get; set; } = 12;
 
@@ -982,115 +982,182 @@ namespace Sim.Core.Config
         /// <summary>Y margin from the touchline for central roles.</summary>
         public int CentralRoleYMarginDm { get; set; } = 170;
 
-        // --- Player motion ---
+        // --- Players ---
 
-        /// <summary>Base distance a player covers per tick.</summary>
         public int PlayerSpeedBaseDmPerTick { get; set; } = 10;
 
         /// <summary>Extra per-tick distance at Pace 100 (scaled linearly by the player's Pace).</summary>
         public int PlayerSpeedPaceDmPerTick { get; set; } = 10;
 
-        /// <summary>Speed multiplier (percent) while pressing, sprinting onto a ball or attacking a shot.</summary>
+        /// <summary>Speed multiplier (percent) while chasing, pressing, receiving or supporting.</summary>
         public int PlayerSprintPercent { get; set; } = 170;
 
-        /// <summary>Velocity carry-over per tick (percent). Higher = heavier, smoother movement.</summary>
-        public int PlayerInertiaPercent { get; set; } = 45;
+        /// <summary>Fraction of top speed a player can gain in one tick.</summary>
+        public int PlayerAccelPercent { get; set; } = 50;
+
+        /// <summary>How close team-mates may get before they push each other apart, and how hard.</summary>
+        public int SeparationRadiusDm { get; set; } = 62;
+        public int SeparationStrengthPercent { get; set; } = 70;
+
+        // --- Ball contact ---
+
+        /// <summary>How close a player must be to take a loose ball, and to reach one to put it back in play.</summary>
+        public int ControlRadiusDm { get; set; } = 24;
+        public int KickRangeDm { get; set; } = 26;
+
+        /// <summary>How far a player can stretch to cut a pass out.</summary>
+        public int InterceptReachDm { get; set; } = 25;
+
+        /// <summary>An opponent this close counts as pressure on the man in possession.</summary>
+        public int PressureRadiusDm { get; set; } = 48;
+
+        /// <summary>How close the presser gets to the ball, and a marker to his man.</summary>
+        public int PressDistanceDm { get; set; } = 22;
+        public int MarkDistanceDm { get; set; } = 58;
+
+        /// <summary>
+        /// The stretch in front of the receiver that is HIS to win. An opponent whose only
+        /// chance of touching the ball is inside it is not intercepting the pass, he is
+        /// contesting the reception — which is a tackle, not a reason never to pass.
+        /// </summary>
+        public int ReceiverSpaceDm { get; set; } = 75;
+
+        /// <summary>Ticks a defender loses reading the pass before he can move for it.</summary>
+        public int PassReactionTicks { get; set; } = 2;
+
+        /// <summary>Chance per tick that a challenger takes the ball off the man in possession.</summary>
+        public int TacklePercentPerTick { get; set; } = 14;
+
+        /// <summary>Ticks after a challenge before the ball can change hands again, so it does not ping-pong.</summary>
+        public int TackleLockTicks { get; set; } = 5;
+
+        /// <summary>How often a defender only gets something on the ball instead of controlling it.</summary>
+        public int DeflectPercent { get; set; } = 45;
+        public int DeflectForcePercent { get; set; } = 85;
+
+        // --- Striking the ball ---
+
+        /// <summary>
+        /// Hardest a ball can be struck, in decimetres per tick before friction. This is what
+        /// makes a seventy-metre pass IMPOSSIBLE rather than merely discouraged: the ball
+        /// simply does not roll that far.
+        /// </summary>
+        public int MaxPassForceDmPerTick { get; set; } = 60;
+        public int MaxShootForceDmPerTick { get; set; } = 110;
+
+        /// <summary>Beyond this a player will not shoot.</summary>
+        public int MaxShootRangeDm { get; set; } = 320;
+
+        /// <summary>
+        /// How long a strike has to become a goal, a save or a ball out of play. A shot that
+        /// hits somebody and stops has to be called anyway — while one is live nobody may
+        /// touch the ball, so a strike that never resolves would freeze the match.
+        /// </summary>
+        public int ShotResolveTicks { get; set; } = 6;
+
+        /// <summary>Shortest pass worth playing, how far ahead of a runner it is played, and when it counts as a long ball.</summary>
+        public int MinPassDm { get; set; } = 70;
+        public int PassLeadDm { get; set; } = 60;
+        public int LongBallFromDm { get; set; } = 300;
+
+        /// <summary>How far ahead a carrier knocks the ball when he runs with it.</summary>
+        public int DribbleDistanceDm { get; set; } = 80;
 
         // --- Team shape ---
 
-        /// <summary>How far the block follows the ball along X while in possession (percent of the ball's offset from centre).</summary>
-        public int PossessionPullXPercent { get; set; } = 72;
+        /// <summary>The support-spot grid: how many places the team considers running into.</summary>
+        public int SupportSpotColumns { get; set; } = 6;
+        public int SupportSpotRows { get; set; } = 4;
+        public int SupportRecalcTicks { get; set; } = 4;
 
-        /// <summary>The same while defending (a shade lower: the block stays behind the ball).</summary>
-        public int DefensivePullXPercent { get; set; } = 62;
+        /// <summary>How far from the ball a supporting run wants to be.</summary>
+        public int SupportIdealDistanceDm { get; set; } = 260;
 
-        /// <summary>Extra forward push in possession, at full role forwardness (a striker gets all of it, a keeper none).</summary>
-        public int PossessionPushDm { get; set; } = 70;
-
-        /// <summary>How far the block drops when defending, at full role forwardness.</summary>
-        public int DefensiveDropDm { get; set; } = 50;
-
-        /// <summary>In possession, how much wider than his anchor a player sits (percent of his offset from centre).</summary>
-        public int WidthExpandPercent { get; set; } = 24;
-
-        /// <summary>Out of possession, how much of his width offset a player keeps (percent) — the rest is compactness.</summary>
-        public int CompactPercent { get; set; } = 62;
-
-        /// <summary>Out of possession, how far the block slides toward the ball's side of the pitch (percent).</summary>
-        public int DefensiveBallShiftYPercent { get; set; } = 42;
-
-        /// <summary>The same in possession (much less: the team keeps its width).</summary>
-        public int PossessionBallShiftYPercent { get; set; } = 16;
-
-        /// <summary>How close the nearest defender closes on the ball carrier.</summary>
-        public int PressDistanceDm { get; set; } = 24;
-
-        /// <summary>How far ahead of the ball the intended receiver shows for the pass.</summary>
-        public int SupportRunDm { get; set; } = 90;
+        /// <summary>How far the whole block slides toward the ball's side of the pitch.</summary>
+        public int BlockBallShiftPercent { get; set; } = 25;
 
         // --- Goalkeeper ---
 
-        /// <summary>How far off his goal line the keeper normally stands.</summary>
         public int KeeperDepthDm { get; set; } = 45;
-
-        /// <summary>How much of the ball's lateral offset the keeper tracks (percent).</summary>
         public int KeeperLateralPercent { get; set; } = 38;
-
-        /// <summary>How far the keeper pushes off his line while play is at the far end.</summary>
         public int KeeperRushDm { get; set; } = 130;
 
-        // --- Ball ---
+        // --- Restarts and the director ---
 
-        public int PassFlightTicksMin { get; set; } = 2;
-        public int PassFlightTicksMax { get; set; } = 4;
-        public int LongBallFlightTicks { get; set; } = 6;
-        public int ShotFlightTicks { get; set; } = 3;
-
-        /// <summary>How long a player keeps the ball at his feet between touches.</summary>
-        public int CarryTicksMin { get; set; } = 2;
-        public int CarryTicksMax { get; set; } = 7;
-
-        // --- Possession structure ---
-
-        public int PossessionTouchesMin { get; set; } = 2;
-        public int PossessionTouchesMax { get; set; } = 7;
-
-        /// <summary>Length of a possession that is not building toward a scripted chance.</summary>
-        public int FreePossessionTicksMin { get; set; } = 14;
-        public int FreePossessionTicksMax { get; set; } = 48;
+        /// <summary>Pause on a dead ball before it is put back in play, and after a goal.</summary>
+        public int DeadBallTicks { get; set; } = 3;
+        public int GoalCelebrationTicks { get; set; } = 6;
 
         /// <summary>
-        /// Ticks before an event during which the scripted shooter attacks his shooting
-        /// position. Long on purpose: a centre-back going up for a set piece has to cross
-        /// most of the pitch, and every armed runner steers independently, so overlapping
-        /// run-ups cost nothing.
+        /// How long before a chance on the 1.4 timeline the attacking side starts working the
+        /// ball toward the man who is going to take it. Long enough for two or three passes.
         /// </summary>
-        public int ShooterApproachTicks { get; set; } = 44;
+        public int ChanceWindowTicks { get; set; } = 60;
 
-        /// <summary>Pause on a dead ball before it is put back in play.</summary>
-        public int DeadBallTicks { get; set; } = 7;
+        /// <summary>How far the man whose chance it is drops toward the ball to get involved.</summary>
+        public int ChanceDropPercent { get; set; } = 55;
 
-        /// <summary>Pause after a goal, before the kickoff.</summary>
-        public int GoalCelebrationTicks { get; set; } = 12;
+        /// <summary>How far he will go for a loose ball during his window.</summary>
+        public int ChanceChaseRangeDm { get; set; } = 620;
 
-        /// <summary>Range of distances from the attacked goal line at which shots are struck.</summary>
-        public int ShotSpotGoalDistanceMinDm { get; set; } = 90;
-        public int ShotSpotGoalDistanceMaxDm { get; set; } = 265;
+        /// <summary>Ticks of grace after his minute for the move to arrive before it is forced.</summary>
+        public int ChanceGraceTicks { get; set; } = 10;
 
-        /// <summary>Max lateral offset of a shooting position from the goal's centre line.</summary>
-        public int ShotSpotHalfWidthDm { get; set; } = 175;
+        /// <summary>How far from the goal a strike can be taken and still look like a strike.</summary>
+        public int ShootableRangeDm { get; set; } = 400;
 
-        /// <summary>Of the possessions that break down, how many end in a tackle/interception (vs the ball going out).</summary>
-        public int TurnoverSharePercent { get; set; } = 58;
+        /// <summary>Where the man whose chance it is attacks once the ball is up the pitch.</summary>
+        public int ChanceShotSpotDm { get; set; } = 150;
 
-        /// <summary>Share of passes played long.</summary>
-        public int LongBallSharePercent { get; set; } = 16;
+        /// <summary>Extra push on the attacking block while a chance is being built.</summary>
+        public int ChanceDriveShiftPermille { get; set; } = 110;
 
-        /// <summary>Share of passes from a wide, advanced position played as a cross.</summary>
-        public int CrossSharePercent { get; set; } = 30;
+        /// <summary>How long before his minute the side starts playing for the chance.</summary>
+        public int ChanceUrgencyTicks { get; set; } = 45;
 
-        /// <summary>Share of passes carried past an opponent first (drawn as a dribble).</summary>
-        public int DribbleSharePercent { get; set; } = 22;
+        /// <summary>Press reach, as a percentage, over that stretch.</summary>
+        public int ChancePressPercent { get; set; } = 260;
+
+        /// <summary>Tackle success, as a percentage of the usual, over that stretch.</summary>
+        public int ChanceTacklePercent { get; set; } = 260;
+
+        /// <summary>Appetite for the forward pass, as a percentage, over that stretch.</summary>
+        public int ChanceForwardPercent { get; set; } = 220;
+
+        /// <summary>The extra stride his side gets to a loose ball over that stretch.</summary>
+        public int ChanceReachBonusDm { get; set; } = 55;
+
+        /// <summary>How long one touch of a dribble carries the ball.</summary>
+        public int DribbleFlightTicks { get; set; } = 4;
+
+        /// <summary>Ticks before the man who played the ball may take it back.</summary>
+        public int ReleaseLockTicks { get; set; } = 3;
+
+        // --- What the coach's instructions mean on the pitch (task 13.2) ---
+        // Each table is indexed by the enum: Mentality Defensive/Balanced/Attacking,
+        // Pressing Low/Medium/High, Tempo Slow/Normal/Fast, Width Narrow/Normal/Wide.
+
+        /// <summary>Permille of pitch length the block pushes up with the ball.</summary>
+        public int[] MentalityAttackShiftPermille { get; set; } = { 60, 110, 170 };
+
+        /// <summary>Permille it drops without it.</summary>
+        public int[] MentalityDefendShiftPermille { get; set; } = { 120, 80, 45 };
+
+        /// <summary>How many players make supporting runs.</summary>
+        public int[] MentalitySupporters { get; set; } = { 1, 2, 3 };
+
+        /// <summary>Percent applied to each player's distance from the centre line.</summary>
+        public int[] WidthSpreadPercent { get; set; } = { 82, 100, 122 };
+
+        /// <summary>How far from his position a player will go to press the ball.</summary>
+        public int[] PressReachDm { get; set; } = { 160, 260, 380 };
+
+        /// <summary>Ticks a player keeps the ball before looking to release it.</summary>
+        public int[] TempoHoldTicksMin { get; set; } = { 4, 3, 1 };
+        public int[] TempoHoldTicksMax { get; set; } = { 8, 5, 3 };
+
+        /// <summary>How strongly the forward option is preferred when passing.</summary>
+        public int[] TempoForwardBias { get; set; } = { 6, 10, 16 };
     }
 
     /// <summary>

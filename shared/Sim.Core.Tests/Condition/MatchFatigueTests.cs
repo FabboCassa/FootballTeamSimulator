@@ -71,8 +71,9 @@ namespace Sim.Core.Tests.Condition
             Lineup h = LineupSelector.BestEleven(high);
             Lineup a = LineupSelector.BestEleven(low);
 
-            var off = new MatchEngine(Cfg);                          // no fatigue (baseline)
-            var on = new MatchEngine(Cfg, applyMatchFatigue: true);  // within-match fatigue
+            // generatePositions off: 400 matches of which only the score is read.
+            var off = new MatchEngine(Cfg, generatePositions: false);                          // no fatigue (baseline)
+            var on = new MatchEngine(Cfg, applyMatchFatigue: true, generatePositions: false);  // within-match fatigue
 
             int offNet = 0, onNet = 0;
             const int matches = 400;

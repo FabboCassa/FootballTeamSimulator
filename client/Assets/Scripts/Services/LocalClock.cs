@@ -142,7 +142,11 @@ namespace Fts.Services
             // own club is excluded). null/Hard = best XI; Easy/Normal field genuinely weaker sides.
             DifficultyContext difficulty = BuildDifficultyContext();
 
-            List<MatchOutcome> outcomes = _progressor.AdvanceDay(_career.Leagues, _career.Season, _career.Seed, plans, tactics, rules, difficulty);
+            // The user's own fixture is the one he can watch, so it is the only one that needs
+            // the movement stream (13.1) — the report it produces IS the replay the match screen
+            // plays back. Every other fixture on the day skips building one.
+            List<MatchOutcome> outcomes = _progressor.AdvanceDay(
+                _career.Leagues, _career.Season, _career.Seed, plans, tactics, rules, difficulty, _career.UserClubId);
 
             bool userMatchPlayed = false;
             foreach (MatchOutcome outcome in outcomes)

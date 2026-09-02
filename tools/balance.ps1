@@ -20,12 +20,32 @@
                   world season at Small / Medium / Large, plus how closely the cheap
                   background resolver tracks the real match engine.
 
+    Plus one that is NOT part of "all", because it measures a rewrite in progress rather
+    than the shipped balance:
+
+      pitch       what the match LOOKS like: goals, shots, passes and their accuracy,
+                  restarts, ground covered, and the SHAPE of each block - width, depth,
+                  how near the back four is to being a line, how much of the match a
+                  player spends inside three metres of an opponent. Every reading is
+                  printed against the band real football produces. Phase 0 of the match
+                  engine rework; see docs/engine/MATCH_ENGINE_PLAN.md.
+
     Nothing here talks to a server or a database: it runs Sim.Core and the server's
     rating maths in-process, so it is safe to run any time and it replays exactly for
     a given seed.
 
 .PARAMETER Scenario
-    all | tactics | economy | difficulty | ladder | world. Default all.
+    all | tactics | economy | difficulty | ladder | world | pitch. Default all.
+    "pitch" is NOT included in "all" - ask for it by name.
+
+.PARAMETER PitchMatches
+    Matches measured by the pitch scenario. Default 100 (the harness default).
+
+.PARAMETER PitchStrict
+    Turn the pitch scenario's "against real football" bands into PASS/FAIL checks.
+
+.PARAMETER PitchDump
+    Write one measured match out as a self-contained HTML replay at this path.
 
 .PARAMETER Seed
     Root seed. Default 20260803. Same seed = same numbers.
@@ -37,14 +57,19 @@
     .\tools\balance.ps1
     .\tools\balance.ps1 -Scenario tactics
     .\tools\balance.ps1 -Long
+    .\tools\balance.ps1 -Scenario pitch
+    .\tools\balance.ps1 -Scenario pitch -PitchMatches 200 -PitchDump .\replay.html
 #>
 
 [CmdletBinding()]
 param(
-    [ValidateSet("all", "tactics", "economy", "difficulty", "ladder", "world")]
+    [ValidateSet("all", "tactics", "economy", "difficulty", "ladder", "world", "pitch")]
     [string]$Scenario = "all",
     [long]$Seed = 20260803,
-    [switch]$Long
+    [switch]$Long,
+    [int]$PitchMatches = 0,
+    [switch]$PitchStrict,
+    [string]$PitchDump
 )
 
 $ErrorActionPreference = "Stop"
@@ -70,6 +95,9 @@ $arguments = @(
     "--seed", $Seed
 )
 if ($Long) { $arguments += "--long" }
+if ($PitchMatches -gt 0) { $arguments += @("--pitch-matches", $PitchMatches) }
+if ($PitchStrict) { $arguments += "--pitch-strict" }
+if ($PitchDump) { $arguments += @("--pitch-dump", $PitchDump) }
 
 Write-Host ""
 Write-Host "Running: dotnet $($arguments -join ' ')" -ForegroundColor Cyan

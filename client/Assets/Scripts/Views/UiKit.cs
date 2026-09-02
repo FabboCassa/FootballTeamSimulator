@@ -26,66 +26,171 @@ namespace Fts.Views
     public static class UiKit
     {
         // ---------------------------------------------------------------- palette tokens (mirror FtsTheme.uss)
-        public static readonly Color Background = Hex(0x141C30);
-        public static readonly Color Surface = Hex(0x1E2A44);
-        public static readonly Color SurfaceAlt = Hex(0x2A3A5C);
-        public static readonly Color Border = Hex(0x3A4D74);
+        // Task 14.1 repointed every one of these at the "Nuova Carriera" mockup: a near-black navy
+        // ground, three quiet plate greys above it, ONE emerald accent, and a five-step text ramp
+        // instead of the old alpha-white guesswork. The names are unchanged so all 45 screens keep
+        // compiling and re-theme themselves the moment this file is saved.
 
-        public static readonly Color Accent = Hex(0x27C281);
-        public static readonly Color AccentDark = Hex(0x1C9B66);
-        public static readonly Color Amber = Hex(0xF2B33D);
+        /// <summary>The page ground — nearly black, so plates and the accent do all the talking.</summary>
+        public static readonly Color Background = Hex(0x080D18);
+        /// <summary>A card / option block.</summary>
+        public static readonly Color Surface = Hex(0x101A2C);
+        /// <summary>A panel that HOLDS things (the list pane, the phone body): darker than a card.</summary>
+        public static readonly Color SurfaceDeep = Hex(0x0D1626);
+        /// <summary>The one lifted plate (summary block, phone header).</summary>
+        public static readonly Color SurfaceRaised = Hex(0x14243C);
+        /// <summary>Resting fill of a small control (chip, tab, small button).</summary>
+        public static readonly Color SurfaceAlt = Hex(0x142034);
+        /// <summary>Hover fill of any quiet control.</summary>
+        public static readonly Color SurfaceHover = Hex(0x1A2740);
+        /// <summary>Resting fill of a full-width list row.</summary>
+        public static readonly Color RowSurface = Hex(0x121D31);
+        /// <summary>Resting fill of a ghost (secondary) button.</summary>
+        public static readonly Color Ghost = Hex(0x131D31);
+        /// <summary>Text-input ground — the darkest plate in the system.</summary>
+        public static readonly Color InputSurface = Hex(0x0A1120);
+        /// <summary>Resting fill of a code/short tag.</summary>
+        public static readonly Color TagSurface = Hex(0x1D2A42);
 
-        /// <summary>Selected/active blue used by tabs, chips and picked rows (task 6.12).</summary>
-        public static readonly Color Selection = Hex(0x3D6DB0);
-        /// <summary>The quieter tint of <see cref="Selection"/> for selected list rows.</summary>
-        public static readonly Color SelectionSoft = Hex(0x2C4573);
+        /// <summary>The hairline around a card.</summary>
+        public static readonly Color Border = Hex(0x1F2C46);
+        /// <summary>The slightly louder hairline around a control.</summary>
+        public static readonly Color BorderStrong = Hex(0x26334E);
+        /// <summary>The hairline around a list row.</summary>
+        public static readonly Color BorderRow = Hex(0x22304B);
+        /// <summary>A rule between blocks.</summary>
+        public static readonly Color DividerLine = Hex(0x1E2B45);
 
-        public static readonly Color TextPrimary = Hex(0xF4F7FB);
-        public static readonly Color TextMuted = new Color(0.96f, 0.97f, 0.99f, 0.62f);
-        public static readonly Color TextOnAccent = Hex(0x0C2419);
+        public static readonly Color Accent = Hex(0x2FD08A);
+        public static readonly Color AccentDark = Hex(0x1FA76D);
+        /// <summary>The accent at 12% — the fill of a SELECTED row, where a solid accent would shout.</summary>
+        public static readonly Color AccentSoft = new Color(47f / 255f, 208f / 255f, 138f / 255f, 0.12f);
+        public static readonly Color Amber = Hex(0xF2A63B);
 
-        public static readonly Color Positive = Hex(0x6FCF6B);
-        public static readonly Color Warning = Hex(0xE6C75A);
-        public static readonly Color Danger = Hex(0xE0675C);
+        /// <summary>
+        /// Task 14.1: selection IS the accent now — the mockup has no second highlight colour.
+        /// Anything that paints <see cref="Selection"/> must use <see cref="TextOnAccent"/> for its
+        /// label; the light-on-blue pairing the old theme used is unreadable on emerald.
+        /// </summary>
+        public static readonly Color Selection = Accent;
+        /// <summary>The quiet tint of <see cref="Selection"/> for a picked list row (light text is fine on it).</summary>
+        public static readonly Color SelectionSoft = Hex(0x14352C);
+
+        public static readonly Color TextPrimary = Hex(0xE6EDF8);
+        /// <summary>Body copy one step below the headline.</summary>
+        public static readonly Color TextSecondary = Hex(0xCFDAEC);
+        public static readonly Color TextMuted = Hex(0xA9BAD6);
+        /// <summary>Eyebrows, block captions, key columns.</summary>
+        public static readonly Color TextLabel = Hex(0x7D90B0);
+        /// <summary>Explanatory small print under a control.</summary>
+        public static readonly Color TextHint = Hex(0x6E819F);
+        /// <summary>Disabled / absent.</summary>
+        public static readonly Color TextDim = Hex(0x4D5E7A);
+        /// <summary>The label on a resting tag.</summary>
+        public static readonly Color TagText = Hex(0x8FA2C0);
+        public static readonly Color TextOnAccent = Hex(0x06221A);
+
+        public static readonly Color Positive = Hex(0x5FD39A);
+        public static readonly Color Warning = Hex(0xF2A63B);
+        public static readonly Color Danger = Hex(0xE2574C);
 
         // ---------------------------------------------------------------- legacy aliases (kept so existing screens compile + re-theme)
         /// <summary>Task 6.6: re-pointed to the themed navy — the green main menu clashed with the rest of the app.</summary>
-        public static readonly Color MenuGreen = Hex(0x141C30);
+        public static readonly Color MenuGreen = Background;
         public static readonly Color HubBlue = Background;
         public static readonly Color PanelGray = Surface;
 
         // ---------------------------------------------------------------- scale tokens
-        public const int RadiusSm = 8;
-        public const int RadiusMd = 14;
+        // These are DESKTOP values in UI POINTS, not mockup pixels. Panel Settings scales with
+        // screen size against 1920x1080 at match 0.5, so one mockup pixel is about 1.35 points on a
+        // desktop window and about 2.5 on a portrait phone. Component sizes therefore live in
+        // FtsTheme.uss, which has a per-breakpoint block; the constants here exist for the ~225
+        // places in the screens that still compute a margin or a radius in C#.
+
+        public const int RadiusSm = 11;
+        public const int RadiusMd = 15;
         public const int RadiusLg = 20;
-        public const int SpaceXs = 4;
-        public const int SpaceSm = 8;
-        public const int SpaceMd = 16;
-        public const int SpaceLg = 24;
+        /// <summary>Sheet / phone-card radius (task 14.1).</summary>
+        public const int RadiusXl = 28;
+        public const int SpaceXs = 5;
+        public const int SpaceSm = 11;
+        public const int SpaceMd = 20;
+        public const int SpaceLg = 30;
 
-        public const int FontTitle = 40;
-        public const int FontHeader = 26;
-        public const int FontBody = 18;
-        public const int FontSmall = 14;
+        public const int FontTitle = 60;
+        public const int FontHeader = 34;
+        public const int FontBody = 19;
+        public const int FontSmall = 15;
+        /// <summary>The tracked-out kicker above a title (task 14.1).</summary>
+        public const int FontEyebrow = 18;
 
-        /// <summary>Minimum comfortable touch-target edge in UI points (Roadmap 6.4).</summary>
-        public const int MinTouchPx = 48;
+        /// <summary>Minimum comfortable touch-target edge in UI points (Roadmap 6.4, re-measured in 14.1).</summary>
+        public const int MinTouchPx = 62;
 
         // ---------------------------------------------------------------- width tiers (task 6.12)
         // Screens no longer pick an arbitrary cap each: they choose one of three tiers, so a
         // wide desktop window is actually filled and every screen lines up with its neighbours.
 
         /// <summary>Forms and short prompts (login, create league, confirmations).</summary>
-        public const float WidthNarrow = 520f;
+        public const float WidthNarrow = 620f;
         /// <summary>Reading/detail screens with a single column of prose or controls.</summary>
-        public const float WidthMedium = 900f;
+        public const float WidthMedium = 1040f;
         /// <summary>Lists, tables and anything with columns (roster, market, league table).</summary>
-        public const float WidthWide = 1280f;
+        public const float WidthWide = 1560f;
 
         // ---------------------------------------------------------------- stylesheet attach (task 6.6)
 
         private static StyleSheet _theme;
         private static bool _loadAttempted;
+
+        // ---------------------------------------------------------------- fonts (task 14.1)
+        // Two faces, both loaded from Resources/Fonts so a WebGL/Android build carries them:
+        //   Archivo    — everything you READ (rows, values, hints, buttons).
+        //   Bebas Neue — everything that SHOUTS (titles, kickers, block captions, tier numbers).
+        // They are assigned from C# rather than from USS on purpose: the sheet is loaded through
+        // Resources.Load and a resource() font reference that fails to resolve takes the whole rule
+        // with it, whereas a missing Font here just leaves Unity's default in place.
+
+        private static Font _bodyFont;
+        private static Font _bodyBoldFont;
+        private static Font _displayFont;
+        private static bool _fontsAttempted;
+
+        /// <summary>Archivo Regular, the app's reading face. Null if the asset is missing.</summary>
+        public static Font BodyFont { get { EnsureFonts(); return _bodyFont; } }
+        /// <summary>Archivo Bold, for values and buttons.</summary>
+        public static Font BodyBoldFont { get { EnsureFonts(); return _bodyBoldFont; } }
+        /// <summary>Bebas Neue, the condensed display face.</summary>
+        public static Font DisplayFont { get { EnsureFonts(); return _displayFont; } }
+
+        private static void EnsureFonts()
+        {
+            if (_fontsAttempted) return;
+            _fontsAttempted = true;
+            _bodyFont = Resources.Load<Font>("Fonts/Archivo-Regular");
+            _bodyBoldFont = Resources.Load<Font>("Fonts/Archivo-Bold");
+            _displayFont = Resources.Load<Font>("Fonts/BebasNeue-Regular");
+            if (_bodyFont == null || _displayFont == null)
+                Debug.LogWarning("[UiKit] Resources/Fonts missing a face — falling back to the Unity default.");
+        }
+
+        /// <summary>Paints <paramref name="e"/> in the condensed display face (Bebas Neue).</summary>
+        public static VisualElement UseDisplayFont(VisualElement e)
+        {
+            EnsureFonts();
+            if (_displayFont != null)
+                e.style.unityFontDefinition = new StyleFontDefinition(_displayFont);
+            return e;
+        }
+
+        /// <summary>Paints <paramref name="e"/> in the bold reading face (Archivo Bold).</summary>
+        public static VisualElement UseBodyBoldFont(VisualElement e)
+        {
+            EnsureFonts();
+            if (_bodyBoldFont != null)
+                e.style.unityFontDefinition = new StyleFontDefinition(_bodyBoldFont);
+            return e;
+        }
 
         /// <summary>True once the USS theme has been loaded and attached; factories then rely on classes.</summary>
         public static bool StylesLoaded { get; private set; }
@@ -108,6 +213,16 @@ namespace Fts.Views
             root.AddToClassList("fts-root");
             if (_theme != null && !root.styleSheets.Contains(_theme))
                 root.styleSheets.Add(_theme);
+
+            // Archivo on the root; every child inherits it, and the handful of display elements
+            // override themselves with Bebas in their own factory below (task 14.1).
+            EnsureFonts();
+            if (_bodyFont != null)
+                root.style.unityFontDefinition = new StyleFontDefinition(_bodyFont);
+
+            // The breakpoint class the whole stylesheet keys off. Attaching it here rather than in
+            // AppEntryPoint means no caller can forget it (task 14.1).
+            Responsive.Attach(root);
         }
 
         // ---------------------------------------------------------------- containers
@@ -226,7 +341,7 @@ namespace Fts.Views
                 e.style.paddingBottom = SpaceMd;
                 e.style.marginTop = SpaceSm;
                 e.style.marginBottom = SpaceSm;
-                Round(e, RadiusMd);
+                Round(e, RadiusLg);
                 SetBorder(e, Border, 1);
             }
             return e;
@@ -241,17 +356,17 @@ namespace Fts.Views
         {
             var e = new VisualElement();
             e.AddToClassList("fts-panel");
-            e.style.paddingLeft = SpaceMd;
-            e.style.paddingRight = SpaceMd;
-            e.style.paddingTop = SpaceSm + SpaceXs;
-            e.style.paddingBottom = SpaceSm + SpaceXs;
-            e.style.marginBottom = SpaceSm;
             e.style.flexShrink = grow ? 1f : 0f;
             if (grow) e.style.flexGrow = 1f;
             if (!StylesLoaded)
             {
-                e.style.backgroundColor = Surface;
-                Round(e, RadiusMd);
+                e.style.paddingLeft = SpaceMd;
+                e.style.paddingRight = SpaceMd;
+                e.style.paddingTop = SpaceMd;
+                e.style.paddingBottom = SpaceMd;
+                e.style.marginBottom = SpaceSm;
+                e.style.backgroundColor = SurfaceDeep;
+                Round(e, RadiusLg);
                 SetBorder(e, Border, 1);
             }
             return e;
@@ -277,16 +392,16 @@ namespace Fts.Views
             e.AddToClassList("fts-rowcard");
             e.style.flexDirection = FlexDirection.Row;
             e.style.alignItems = Align.Center;
-            e.style.minHeight = minHeight;
-            e.style.marginBottom = 6;
-            e.style.paddingLeft = SpaceMd - 4;
-            e.style.paddingRight = SpaceSm;
-            e.style.paddingTop = 6;
-            e.style.paddingBottom = 6;
             if (!StylesLoaded)
             {
-                e.style.backgroundColor = Surface;
-                Round(e, RadiusSm);
+                e.style.minHeight = minHeight;
+                e.style.marginBottom = 8;
+                e.style.paddingLeft = 14;
+                e.style.paddingRight = 14;
+                e.style.paddingTop = 8;
+                e.style.paddingBottom = 8;
+                e.style.backgroundColor = RowSurface;
+                Round(e, RadiusSm + 2);
             }
             return e;
         }
@@ -297,7 +412,7 @@ namespace Fts.Views
             if (selected) row.AddToClassList("fts-rowcard--selected");
             else row.RemoveFromClassList("fts-rowcard--selected");
             if (!StylesLoaded)
-                row.style.backgroundColor = selected ? SelectionSoft : Surface;
+                row.style.backgroundColor = selected ? SelectionSoft : RowSurface;
         }
 
         /// <summary>A thin divider line.</summary>
@@ -310,7 +425,7 @@ namespace Fts.Views
                 e.style.height = 1;
                 e.style.marginTop = SpaceSm;
                 e.style.marginBottom = SpaceSm;
-                e.style.backgroundColor = Border;
+                e.style.backgroundColor = DividerLine;
             }
             return e;
         }
@@ -354,7 +469,7 @@ namespace Fts.Views
             if (!StylesLoaded)
             {
                 e.style.borderTopWidth = 1;
-                e.style.borderTopColor = Border;
+                e.style.borderTopColor = DividerLine;
             }
             return e;
         }
@@ -376,6 +491,7 @@ namespace Fts.Views
         {
             var label = new Label(text);
             label.AddToClassList("fts-title");
+            UseDisplayFont(label);
             if (!StylesLoaded)
             {
                 label.style.fontSize = FontTitle;
@@ -392,6 +508,7 @@ namespace Fts.Views
         {
             var label = new Label(text);
             label.AddToClassList("fts-header");
+            UseDisplayFont(label);
             if (!StylesLoaded)
             {
                 label.style.fontSize = FontHeader;
@@ -410,10 +527,12 @@ namespace Fts.Views
         {
             var label = new Label(text ?? string.Empty);
             label.AddToClassList("fts-screentitle");
-            label.style.fontSize = 24;
-            label.style.unityFontStyleAndWeight = FontStyle.Bold;
-            if (!StylesLoaded) label.style.color = TextPrimary;
-            label.style.marginBottom = 2;
+            UseDisplayFont(label);
+            if (!StylesLoaded)
+            {
+                label.style.fontSize = FontHeader;
+                label.style.color = TextPrimary;
+            }
             label.style.flexShrink = 0f;
             label.style.unityTextAlign = TextAnchor.MiddleLeft;
             return label;
@@ -441,7 +560,7 @@ namespace Fts.Views
             if (!StylesLoaded)
             {
                 label.style.fontSize = FontSmall;
-                label.style.color = TextMuted;
+                label.style.color = TextLabel;
             }
             return label;
         }
@@ -452,13 +571,17 @@ namespace Fts.Views
         /// </summary>
         public static Label SectionLabel(string caption)
         {
-            var label = new Label(caption ?? string.Empty);
+            // USS has no text-transform, so the caps that give the mockup its rhythm happen here.
+            var label = new Label((caption ?? string.Empty).ToUpperInvariant());
             label.AddToClassList("fts-section");
-            label.style.fontSize = 12;
-            label.style.unityFontStyleAndWeight = FontStyle.Bold;
-            if (!StylesLoaded) label.style.color = new Color(0.96f, 0.97f, 0.99f, 0.55f);
-            label.style.marginTop = SpaceSm;
-            label.style.marginBottom = SpaceXs;
+            UseDisplayFont(label);
+            if (!StylesLoaded)
+            {
+                label.style.fontSize = 17;
+                label.style.color = TextLabel;
+                label.style.marginTop = SpaceSm;
+                label.style.marginBottom = SpaceXs;
+            }
             label.style.flexShrink = 0f;
             return label;
         }
@@ -468,8 +591,11 @@ namespace Fts.Views
         {
             var label = new Label(text ?? string.Empty);
             label.AddToClassList("fts-help");
-            label.style.fontSize = 13;
-            if (!StylesLoaded) label.style.color = TextMuted;
+            if (!StylesLoaded)
+            {
+                label.style.fontSize = 16;
+                label.style.color = TextHint;
+            }
             label.style.whiteSpace = WhiteSpace.Normal;
             label.style.flexShrink = 0f;
             label.style.marginBottom = SpaceSm;
@@ -480,10 +606,13 @@ namespace Fts.Views
         public static Label PanelLine(string text = "")
         {
             var label = new Label(text ?? string.Empty);
-            label.style.fontSize = 14;
-            label.style.color = TextPrimary;
+            label.AddToClassList("fts-line");
+            if (!StylesLoaded)
+            {
+                label.style.fontSize = 19;
+                label.style.color = TextSecondary;
+            }
             label.style.whiteSpace = WhiteSpace.Normal;
-            label.style.marginBottom = 2;
             return label;
         }
 
@@ -535,9 +664,8 @@ namespace Fts.Views
         public static Button FooterButton(string text, Action onClick)
         {
             var button = MenuButton(text, onClick);
-            button.style.width = 170;
-            button.style.height = 44;
-            button.style.fontSize = 15;
+            button.style.width = StyleKeyword.Null;
+            button.style.minWidth = 190;
             button.style.marginLeft = 6;
             button.style.marginRight = 6;
             button.style.marginTop = 0;
@@ -550,9 +678,7 @@ namespace Fts.Views
         public static Button FooterPrimaryButton(string text, Action onClick)
         {
             var button = PrimaryButton(text, onClick);
-            button.style.width = 170;
-            button.style.height = 44;
-            button.style.fontSize = 15;
+            button.style.minWidth = 190;
             button.style.marginLeft = 6;
             button.style.marginRight = 6;
             button.style.marginTop = 0;
@@ -568,19 +694,17 @@ namespace Fts.Views
             button.AddToClassList("fts-tabbtn");
             button.style.flexGrow = 1f;
             button.style.flexBasis = 0f;
-            button.style.height = 40;
-            button.style.fontSize = 14;
-            button.style.unityFontStyleAndWeight = FontStyle.Bold;
             button.style.marginLeft = 0;
             button.style.marginRight = 6;
             button.style.marginTop = 0;
             button.style.marginBottom = 0;
-            button.style.paddingLeft = SpaceSm;
-            button.style.paddingRight = SpaceSm;
             if (!StylesLoaded)
             {
+                button.style.height = 46;
+                button.style.fontSize = 17;
+                button.style.unityFontStyleAndWeight = FontStyle.Bold;
                 ClearButtonChrome(button);
-                Round(button, RadiusSm + 2);
+                Round(button, RadiusMd);
             }
             SetTabActive(button, false);
             return button;
@@ -593,8 +717,8 @@ namespace Fts.Views
             else button.RemoveFromClassList("fts-tabbtn--active");
             if (!StylesLoaded)
             {
-                button.style.backgroundColor = active ? Selection : SurfaceAlt;
-                button.style.color = active ? TextPrimary : TextMuted;
+                button.style.backgroundColor = active ? Accent : SurfaceAlt;
+                button.style.color = active ? TextOnAccent : TextMuted;
             }
         }
 
@@ -603,11 +727,6 @@ namespace Fts.Views
         {
             var button = new Button(onClick) { text = text ?? string.Empty };
             button.AddToClassList("fts-chip");
-            button.style.height = 32;
-            button.style.fontSize = 12;
-            button.style.unityFontStyleAndWeight = FontStyle.Bold;
-            button.style.paddingLeft = 12;
-            button.style.paddingRight = 12;
             button.style.marginLeft = 0;
             button.style.marginRight = 6;
             button.style.marginTop = 2;
@@ -615,10 +734,15 @@ namespace Fts.Views
             button.style.flexShrink = 0f;
             if (!StylesLoaded)
             {
-                button.style.color = TextPrimary;
+                button.style.height = 44;
+                button.style.fontSize = 17;
+                button.style.unityFontStyleAndWeight = FontStyle.Bold;
+                button.style.paddingLeft = 18;
+                button.style.paddingRight = 18;
+                button.style.color = TextMuted;
                 button.style.backgroundColor = SurfaceAlt;
                 ClearButtonChrome(button);
-                Round(button, 16);
+                Round(button, RadiusSm + 2);
             }
             return button;
         }
@@ -644,8 +768,8 @@ namespace Fts.Views
                     chip.AddToClassList("fts-chip--active");
                     // Inline so the chip can take the reparto colour; the resting (unselected)
                     // chips keep their stylesheet colours and therefore their hover state.
-                    chip.style.backgroundColor = vm.RoleGroup >= 0 ? PlayerRowKit.RoleColor(vm.RoleGroup) : Selection;
-                    chip.style.color = vm.RoleGroup == 0 ? Hex(0x231A00) : TextPrimary;
+                    chip.style.backgroundColor = vm.RoleGroup >= 0 ? PlayerRowKit.RoleColor(vm.RoleGroup) : Accent;
+                    chip.style.color = vm.RoleGroup >= 0 ? Hex(0x231A00) : TextOnAccent;
                 }
                 container.Add(chip);
             }
@@ -658,8 +782,8 @@ namespace Fts.Views
             else button.RemoveFromClassList("fts-chip--active");
             if (!StylesLoaded)
             {
-                button.style.backgroundColor = active ? Selection : SurfaceAlt;
-                button.style.color = active ? TextPrimary : TextMuted;
+                button.style.backgroundColor = active ? Accent : SurfaceAlt;
+                button.style.color = active ? TextOnAccent : TextMuted;
             }
         }
 
@@ -668,12 +792,7 @@ namespace Fts.Views
         {
             var button = new Button(onClick) { text = text ?? string.Empty };
             button.AddToClassList("fts-smallbtn");
-            button.style.height = 34;
             button.style.minWidth = minWidth;
-            button.style.fontSize = 13;
-            button.style.unityFontStyleAndWeight = FontStyle.Bold;
-            button.style.paddingLeft = 10;
-            button.style.paddingRight = 10;
             button.style.marginLeft = 5;
             button.style.marginRight = 0;
             button.style.marginTop = 0;
@@ -681,7 +800,12 @@ namespace Fts.Views
             button.style.flexShrink = 0f;
             if (!StylesLoaded)
             {
-                button.style.color = TextPrimary;
+                button.style.height = 44;
+                button.style.fontSize = 17;
+                button.style.unityFontStyleAndWeight = FontStyle.Bold;
+                button.style.paddingLeft = 14;
+                button.style.paddingRight = 14;
+                button.style.color = TextMuted;
                 button.style.backgroundColor = SurfaceAlt;
                 ClearButtonChrome(button);
                 Round(button, RadiusSm);
@@ -697,7 +821,7 @@ namespace Fts.Views
             if (!StylesLoaded)
             {
                 button.style.backgroundColor = accent ? Accent : SurfaceAlt;
-                button.style.color = accent ? TextOnAccent : TextPrimary;
+                button.style.color = accent ? TextOnAccent : TextMuted;
             }
         }
 
@@ -707,7 +831,7 @@ namespace Fts.Views
             if (on) button.AddToClassList("fts-smallbtn--on");
             else button.RemoveFromClassList("fts-smallbtn--on");
             if (!StylesLoaded)
-                button.style.backgroundColor = on ? Selection : SurfaceAlt;
+                button.style.backgroundColor = on ? SelectionSoft : SurfaceAlt;
         }
 
         /// <summary>A full-width "cycle to the next value" control (tactics, training, setup).</summary>
@@ -715,23 +839,23 @@ namespace Fts.Views
         {
             var button = new Button(onClick) { text = text ?? string.Empty };
             button.AddToClassList("fts-cycle");
-            button.style.height = 44;
             button.style.width = Length.Percent(100);
-            button.style.fontSize = 15;
-            button.style.unityFontStyleAndWeight = FontStyle.Bold;
             button.style.unityTextAlign = TextAnchor.MiddleLeft;
-            button.style.paddingLeft = 14;
-            button.style.paddingRight = 14;
             button.style.marginLeft = 0;
             button.style.marginRight = 0;
             button.style.marginTop = 0;
             button.style.marginBottom = 6;
             if (!StylesLoaded)
             {
-                button.style.color = TextPrimary;
-                button.style.backgroundColor = SurfaceAlt;
+                button.style.height = 58;
+                button.style.fontSize = 19;
+                button.style.unityFontStyleAndWeight = FontStyle.Bold;
+                button.style.paddingLeft = 20;
+                button.style.paddingRight = 20;
+                button.style.color = TextSecondary;
+                button.style.backgroundColor = RowSurface;
                 ClearButtonChrome(button);
-                Round(button, RadiusSm);
+                Round(button, RadiusMd);
             }
             return button;
         }
@@ -773,23 +897,26 @@ namespace Fts.Views
             tile.style.minWidth = minWidth;
             tile.style.marginRight = SpaceSm;
             tile.style.marginBottom = SpaceSm;
-            tile.style.paddingLeft = SpaceMd - 2;
-            tile.style.paddingRight = SpaceMd - 2;
-            tile.style.paddingTop = SpaceSm + 2;
-            tile.style.paddingBottom = SpaceSm + 2;
             if (!StylesLoaded)
             {
+                tile.style.paddingLeft = SpaceMd;
+                tile.style.paddingRight = SpaceMd;
+                tile.style.paddingTop = SpaceSm + 5;
+                tile.style.paddingBottom = SpaceSm + 5;
                 tile.style.backgroundColor = Surface;
-                Round(tile, RadiusMd);
+                Round(tile, RadiusLg);
                 SetBorder(tile, Border, 1);
             }
 
             var k = new Label((caption ?? string.Empty).ToUpperInvariant());
             k.AddToClassList("fts-stat__k");
-            k.style.fontSize = 11;
-            k.style.unityFontStyleAndWeight = FontStyle.Bold;
-            if (!StylesLoaded) k.style.color = new Color(0.96f, 0.97f, 0.99f, 0.52f);
-            k.style.marginBottom = 3;
+            UseDisplayFont(k);
+            if (!StylesLoaded)
+            {
+                k.style.fontSize = 15;
+                k.style.color = TextLabel;
+                k.style.marginBottom = 4;
+            }
             k.style.whiteSpace = WhiteSpace.NoWrap;
             k.style.overflow = Overflow.Hidden;
             k.style.textOverflow = TextOverflow.Ellipsis;
@@ -797,8 +924,11 @@ namespace Fts.Views
 
             var v = new Label(value ?? string.Empty);
             v.AddToClassList("fts-stat__v");
-            v.style.fontSize = 20;
-            v.style.unityFontStyleAndWeight = FontStyle.Bold;
+            if (!StylesLoaded)
+            {
+                v.style.fontSize = 28;
+                v.style.unityFontStyleAndWeight = FontStyle.Bold;
+            }
             if (valueColor.HasValue) v.style.color = valueColor.Value;
             else if (!StylesLoaded) v.style.color = TextPrimary;
             v.style.whiteSpace = WhiteSpace.Normal;
@@ -836,6 +966,548 @@ namespace Fts.Views
             Round(bar, RadiusSm);
             track.Add(bar);
             return track;
+        }
+
+        // ---------------------------------------------------------------- mockup components (task 14.1)
+        // Everything below comes straight off docs/Nuova Carriera.html. They are here rather than in
+        // CareerSetupView because the mockup is the whole app's new language: the same kicker, the
+        // same option card, the same tappable row and the same accent CTA are what every remaining
+        // screen gets migrated onto in 14.3 and after.
+
+        /// <summary>The small tracked-out kicker that sits above a title ("NUOVA CARRIERA").</summary>
+        public static Label Eyebrow(string text)
+        {
+            var label = new Label((text ?? string.Empty).ToUpperInvariant());
+            label.AddToClassList("fts-eyebrow");
+            UseDisplayFont(label);
+            if (!StylesLoaded)
+            {
+                label.style.fontSize = FontEyebrow;
+                label.style.color = TextLabel;
+                label.style.letterSpacing = 4;
+            }
+            label.style.flexShrink = 0f;
+            return label;
+        }
+
+        /// <summary>
+        /// The page header strip: a left stack (kicker + title) and a right group of quiet actions,
+        /// separated from the body by one hairline. Returns the strip; add your left stack and your
+        /// buttons to <see cref="PageHeadParts.Left"/> / <see cref="PageHeadParts.Actions"/>.
+        /// </summary>
+        public static PageHeadParts PageHead()
+        {
+            var bar = new VisualElement();
+            bar.AddToClassList("fts-pagehead");
+            bar.style.flexDirection = FlexDirection.Row;
+            bar.style.alignItems = Align.FlexEnd;
+            bar.style.justifyContent = Justify.SpaceBetween;
+            bar.style.flexShrink = 0f;
+
+            var left = new VisualElement();
+            left.style.flexShrink = 1f;
+            left.style.minWidth = 0f;
+            bar.Add(left);
+
+            var actions = new VisualElement();
+            actions.style.flexDirection = FlexDirection.Row;
+            actions.style.alignItems = Align.Center;
+            actions.style.flexShrink = 0f;
+            bar.Add(actions);
+
+            return new PageHeadParts { Root = bar, Left = left, Actions = actions };
+        }
+
+        /// <summary>A block of related settings on a card (the mockup's left column).</summary>
+        public static VisualElement OptionCard()
+        {
+            var e = new VisualElement();
+            e.AddToClassList("fts-optioncard");
+            e.style.flexShrink = 0f;
+            if (!StylesLoaded)
+            {
+                e.style.backgroundColor = Surface;
+                e.style.paddingLeft = SpaceMd;
+                e.style.paddingRight = SpaceMd;
+                e.style.paddingTop = SpaceMd;
+                e.style.paddingBottom = SpaceMd;
+                e.style.marginBottom = SpaceSm + SpaceXs;
+                Round(e, RadiusLg);
+                SetBorder(e, Border, 1);
+            }
+            return e;
+        }
+
+        /// <summary>The one lifted plate on a screen — the summary block.</summary>
+        public static VisualElement RaisedCard()
+        {
+            var e = new VisualElement();
+            e.AddToClassList("fts-raised");
+            e.style.flexShrink = 0f;
+            if (!StylesLoaded)
+            {
+                e.style.backgroundColor = SurfaceRaised;
+                e.style.paddingLeft = SpaceLg - 6;
+                e.style.paddingRight = SpaceLg - 6;
+                e.style.paddingTop = SpaceLg - 6;
+                e.style.paddingBottom = SpaceLg - 6;
+                Round(e, RadiusLg);
+                SetBorder(e, BorderStrong, 1);
+            }
+            return e;
+        }
+
+        /// <summary>Small print on a plate — the "this choice is final" block.</summary>
+        public static Label NoteCard(string text)
+        {
+            var label = new Label(text ?? string.Empty);
+            label.AddToClassList("fts-note");
+            label.style.whiteSpace = WhiteSpace.Normal;
+            label.style.flexShrink = 0f;
+            if (!StylesLoaded)
+            {
+                label.style.backgroundColor = Surface;
+                label.style.color = TextHint;
+                label.style.fontSize = 16;
+                label.style.paddingLeft = SpaceMd;
+                label.style.paddingRight = SpaceMd;
+                label.style.paddingTop = SpaceMd;
+                label.style.paddingBottom = SpaceMd;
+                Round(label, RadiusLg);
+                SetBorder(label, Border, 1);
+            }
+            return label;
+        }
+
+        /// <summary>The quiet secondary action of the header / footer.</summary>
+        public static Button GhostButton(string text, Action onClick)
+        {
+            var button = new Button(onClick) { text = text ?? string.Empty };
+            button.AddToClassList("fts-ghostbtn");
+            button.style.flexShrink = 0f;
+            if (!StylesLoaded)
+            {
+                button.style.minHeight = 48;
+                button.style.fontSize = 18;
+                button.style.unityFontStyleAndWeight = FontStyle.Bold;
+                button.style.color = TextMuted;
+                button.style.backgroundColor = Ghost;
+                button.style.paddingLeft = 22;
+                button.style.paddingRight = 22;
+                Round(button, RadiusSm);
+                SetBorder(button, BorderStrong, 1);
+            }
+            return button;
+        }
+
+        /// <summary>
+        /// The accent call to action, with a display headline and a quiet second line under it —
+        /// the "Inizia carriera / Italia Prima Divisione · 20 club" block of the mockup.
+        /// Set <see cref="SetCtaSub"/> to change the second line later.
+        /// </summary>
+        public static Button CtaButton(string label, string sub, Action onClick)
+        {
+            var button = new Button(onClick) { text = string.Empty };
+            button.AddToClassList("fts-ctabtn");
+            button.style.flexDirection = FlexDirection.Column;
+            button.style.flexShrink = 0f;
+            if (!StylesLoaded)
+            {
+                button.style.backgroundColor = Accent;
+                button.style.paddingTop = SpaceMd;
+                button.style.paddingBottom = SpaceMd;
+                ClearButtonChrome(button);
+                Round(button, RadiusMd);
+            }
+
+            var head = new Label(label ?? string.Empty);
+            head.AddToClassList("fts-ctabtn__label");
+            UseDisplayFont(head);
+            head.style.color = TextOnAccent;
+            button.Add(head);
+
+            var line = new Label(sub ?? string.Empty);
+            line.AddToClassList("fts-ctabtn__sub");
+            line.style.color = TextOnAccent;
+            line.style.display = string.IsNullOrEmpty(sub) ? DisplayStyle.None : DisplayStyle.Flex;
+            button.Add(line);
+
+            button.userData = line;
+            return button;
+        }
+
+        /// <summary>Updates the quiet second line of a <see cref="CtaButton"/>.</summary>
+        public static void SetCtaSub(Button cta, string sub)
+        {
+            if (cta?.userData is Label line)
+            {
+                line.text = sub ?? string.Empty;
+                line.style.display = string.IsNullOrEmpty(sub) ? DisplayStyle.None : DisplayStyle.Flex;
+            }
+        }
+
+        /// <summary>
+        /// The mockup's tappable row: a whole-width button carrying a left stack (an optional
+        /// leading element, a name and a meta line) and a right marker. It is a Button and not a
+        /// clickable VisualElement so it keeps keyboard focus, the hover state and the tap target.
+        /// </summary>
+        public static SelectRowParts SelectRow(Action onClick)
+        {
+            var button = new Button(onClick) { text = string.Empty };
+            button.AddToClassList("fts-selectrow");
+            button.style.flexDirection = FlexDirection.Row;
+            button.style.alignItems = Align.Center;
+            button.style.justifyContent = Justify.SpaceBetween;
+            button.style.flexShrink = 0f;
+            if (!StylesLoaded)
+            {
+                button.style.minHeight = 66;
+                button.style.backgroundColor = RowSurface;
+                button.style.paddingLeft = 20;
+                button.style.paddingRight = 20;
+                Round(button, RadiusMd);
+                SetBorder(button, BorderRow, 1);
+            }
+
+            var lead = new VisualElement();
+            lead.style.flexDirection = FlexDirection.Row;
+            lead.style.alignItems = Align.Center;
+            lead.style.flexShrink = 1f;
+            lead.style.minWidth = 0f;
+            button.Add(lead);
+
+            var stack = new VisualElement();
+            stack.style.flexShrink = 1f;
+            stack.style.minWidth = 0f;
+            lead.Add(stack);
+
+            var name = new Label(string.Empty);
+            name.AddToClassList("fts-selectrow__name");
+            name.style.overflow = Overflow.Hidden;
+            name.style.textOverflow = TextOverflow.Ellipsis;
+            if (!StylesLoaded)
+            {
+                name.style.fontSize = 23;
+                name.style.unityFontStyleAndWeight = FontStyle.Bold;
+                name.style.color = TextPrimary;
+            }
+            stack.Add(name);
+
+            var meta = new Label(string.Empty);
+            meta.AddToClassList("fts-selectrow__meta");
+            meta.style.display = DisplayStyle.None;
+            meta.style.overflow = Overflow.Hidden;
+            meta.style.textOverflow = TextOverflow.Ellipsis;
+            if (!StylesLoaded)
+            {
+                meta.style.fontSize = 15;
+                meta.style.color = TextLabel;
+            }
+            stack.Add(meta);
+
+            var mark = new Label(string.Empty);
+            mark.AddToClassList("fts-selectrow__mark");
+            mark.style.flexShrink = 0f;
+            mark.style.display = DisplayStyle.None;
+            if (!StylesLoaded)
+            {
+                mark.style.fontSize = 16;
+                mark.style.unityFontStyleAndWeight = FontStyle.Bold;
+                mark.style.color = Accent;
+            }
+            button.Add(mark);
+
+            return new SelectRowParts { Root = button, Lead = lead, Name = name, Meta = meta, Mark = mark };
+        }
+
+        /// <summary>Paints a <see cref="SelectRow"/> as picked / unpicked / not choosable.</summary>
+        public static void SetSelectRowState(SelectRowParts row, bool active, bool locked = false)
+        {
+            row.Root.EnableInClassList("fts-selectrow--active", active && !locked);
+            row.Root.EnableInClassList("fts-selectrow--locked", locked);
+            row.Root.SetEnabled(!locked);
+            if (!StylesLoaded)
+            {
+                row.Root.style.backgroundColor = active && !locked ? SelectionSoft : RowSurface;
+                SetBorder(row.Root, active && !locked ? Accent : BorderRow, 1);
+                row.Root.style.opacity = locked ? 0.4f : 1f;
+            }
+        }
+
+        /// <summary>
+        /// One option of a segmented control that shares its row equally (1 / 2 / 3 divisions,
+        /// Piccolo / Medio / Grande). A caption under the label is optional.
+        /// </summary>
+        public static Button SegChip(string label, string caption, Action onClick)
+        {
+            var button = new Button(onClick) { text = string.Empty };
+            button.AddToClassList("fts-segchip");
+            button.style.flexDirection = FlexDirection.Column;
+            button.style.flexGrow = 1f;
+            button.style.flexBasis = 0f;
+            button.style.marginLeft = 0;
+            button.style.marginRight = 0;
+            button.style.marginTop = 0;
+            button.style.marginBottom = 0;
+            if (!StylesLoaded)
+            {
+                button.style.minHeight = 60;
+                button.style.backgroundColor = SurfaceAlt;
+                Round(button, RadiusSm + 2);
+                SetBorder(button, BorderStrong, 1);
+            }
+
+            var head = new Label(label ?? string.Empty);
+            head.style.unityFontStyleAndWeight = FontStyle.Bold;
+            if (!StylesLoaded) head.style.fontSize = 18;
+            button.Add(head);
+
+            var sub = new Label(caption ?? string.Empty);
+            sub.AddToClassList("fts-caption");
+            sub.style.display = string.IsNullOrEmpty(caption) ? DisplayStyle.None : DisplayStyle.Flex;
+            button.Add(sub);
+
+            button.userData = head;
+            return button;
+        }
+
+        /// <summary>Paints a <see cref="SegChip"/> as picked / unpicked / unavailable.</summary>
+        public static void SetSegChipState(Button chip, bool active, bool locked = false)
+        {
+            chip.EnableInClassList("fts-segchip--active", active && !locked);
+            chip.EnableInClassList("fts-segchip--locked", locked);
+            chip.SetEnabled(!locked);
+
+            // The child labels do not inherit the button's :hover colour, so paint them here.
+            Color text = active && !locked ? TextOnAccent : TextMuted;
+            foreach (VisualElement child in chip.Children())
+                child.style.color = text;
+
+            if (!StylesLoaded)
+            {
+                chip.style.backgroundColor = active && !locked ? Accent : SurfaceAlt;
+                chip.style.opacity = locked ? 0.35f : 1f;
+            }
+        }
+
+        /// <summary>A row that lays segmented chips out evenly with a gap between them.</summary>
+        public static VisualElement SegRow(params VisualElement[] items)
+        {
+            var row = new VisualElement();
+            row.style.flexDirection = FlexDirection.Row;
+            row.style.flexShrink = 0f;
+            for (int i = 0; i < items.Length; i++)
+            {
+                if (i > 0) items[i].style.marginLeft = SpaceSm;
+                row.Add(items[i]);
+            }
+            return row;
+        }
+
+        /// <summary>The short code tag on a nation row (ITA, ENG, ...).</summary>
+        public static Label Tag(string text)
+        {
+            var label = new Label((text ?? string.Empty).ToUpperInvariant());
+            label.AddToClassList("fts-tag");
+            UseDisplayFont(label);
+            label.style.flexShrink = 0f;
+            if (!StylesLoaded)
+            {
+                label.style.backgroundColor = TagSurface;
+                label.style.color = TagText;
+                label.style.fontSize = 18;
+                label.style.paddingLeft = 10;
+                label.style.paddingRight = 10;
+                label.style.unityTextAlign = TextAnchor.MiddleCenter;
+                Round(label, 7);
+            }
+            return label;
+        }
+
+        /// <summary>The square index badge on a division row.</summary>
+        public static Label TierBadge(string text)
+        {
+            var label = new Label(text ?? string.Empty);
+            label.AddToClassList("fts-tierbadge");
+            UseDisplayFont(label);
+            label.style.flexShrink = 0f;
+            if (!StylesLoaded)
+            {
+                label.style.width = 52;
+                label.style.height = 52;
+                label.style.backgroundColor = TagSurface;
+                label.style.color = TagText;
+                label.style.fontSize = 30;
+                label.style.unityTextAlign = TextAnchor.MiddleCenter;
+                Round(label, RadiusSm + 2);
+            }
+            return label;
+        }
+
+        /// <summary>Lights a <see cref="Tag"/> or a <see cref="TierBadge"/> in the accent.</summary>
+        public static void SetBadgeActive(Label badge, bool active)
+        {
+            badge.EnableInClassList("fts-tag--active", active && badge.ClassListContains("fts-tag"));
+            badge.EnableInClassList("fts-tierbadge--active", active && badge.ClassListContains("fts-tierbadge"));
+            if (!StylesLoaded)
+            {
+                badge.style.backgroundColor = active ? Accent : TagSurface;
+                badge.style.color = active ? TextOnAccent : TagText;
+            }
+        }
+
+        /// <summary>One "KEY ......... value" line of the summary block. Returns the value label.</summary>
+        public static Label SummaryRow(VisualElement parent, string key, string value)
+        {
+            var row = new VisualElement();
+            row.AddToClassList("fts-summaryrow");
+            row.style.flexDirection = FlexDirection.Row;
+            row.style.alignItems = Align.FlexEnd;
+            row.style.justifyContent = Justify.SpaceBetween;
+            row.style.flexShrink = 0f;
+
+            var k = new Label((key ?? string.Empty).ToUpperInvariant());
+            k.AddToClassList("fts-summaryrow__k");
+            k.style.flexShrink = 0f;
+            if (!StylesLoaded)
+            {
+                k.style.fontSize = 15;
+                k.style.color = TextLabel;
+            }
+            row.Add(k);
+
+            var v = new Label(value ?? string.Empty);
+            v.AddToClassList("fts-summaryrow__v");
+            v.style.flexShrink = 1f;
+            v.style.minWidth = 0f;
+            v.style.overflow = Overflow.Hidden;
+            v.style.textOverflow = TextOverflow.Ellipsis;
+            v.style.unityTextAlign = TextAnchor.MiddleRight;
+            if (!StylesLoaded)
+            {
+                v.style.fontSize = 20;
+                v.style.unityFontStyleAndWeight = FontStyle.Bold;
+                v.style.color = TextPrimary;
+            }
+            row.Add(v);
+
+            parent.Add(row);
+            return v;
+        }
+
+        /// <summary>A themed one-line search box. The caller wires <c>RegisterValueChangedCallback</c>.</summary>
+        public static TextField SearchField(string placeholder)
+        {
+            var field = new TextField { isDelayed = false };
+            field.AddToClassList("fts-search");
+            field.textEdition.placeholder = placeholder ?? string.Empty;
+            field.textEdition.hidePlaceholderOnFocus = true;
+            field.style.flexGrow = 1f;
+            field.style.flexShrink = 1f;
+            field.style.minWidth = 0f;
+            if (!StylesLoaded)
+            {
+                field.style.minHeight = 48;
+                field.style.backgroundColor = InputSurface;
+                Round(field, RadiusSm);
+                SetBorder(field, BorderStrong, 1);
+            }
+            return field;
+        }
+
+        /// <summary>
+        /// The phone's modal bottom sheet. Returns the dimmed overlay (hidden) plus the panel to
+        /// fill; call <see cref="ShowSheet"/> to raise it.
+        /// </summary>
+        public static SheetParts Sheet()
+        {
+            var overlay = new VisualElement();
+            overlay.AddToClassList("fts-sheet");
+            overlay.style.position = Position.Absolute;
+            overlay.style.left = 0;
+            overlay.style.top = 0;
+            overlay.style.right = 0;
+            overlay.style.bottom = 0;
+            overlay.style.justifyContent = Justify.FlexEnd;
+            overlay.style.display = DisplayStyle.None;
+            if (!StylesLoaded)
+                overlay.style.backgroundColor = new Color(6f / 255f, 10f / 255f, 20f / 255f, 0.72f);
+
+            var panel = new VisualElement();
+            panel.AddToClassList("fts-sheet__panel");
+            panel.style.maxHeight = Length.Percent(78);
+            if (!StylesLoaded)
+            {
+                panel.style.backgroundColor = SurfaceDeep;
+                panel.style.paddingLeft = SpaceLg;
+                panel.style.paddingRight = SpaceLg;
+                panel.style.paddingTop = SpaceLg;
+                panel.style.paddingBottom = SpaceLg;
+                panel.style.borderTopLeftRadius = RadiusXl;
+                panel.style.borderTopRightRadius = RadiusXl;
+            }
+            overlay.Add(panel);
+
+            var grab = new VisualElement();
+            grab.AddToClassList("fts-sheet__grab");
+            grab.style.alignSelf = Align.Center;
+            grab.style.flexShrink = 0f;
+            if (!StylesLoaded)
+            {
+                grab.style.width = 104;
+                grab.style.height = 10;
+                grab.style.backgroundColor = Hex(0x2B3A58);
+                grab.style.marginBottom = SpaceMd;
+                Round(grab, 5);
+            }
+            panel.Add(grab);
+
+            return new SheetParts { Root = overlay, Panel = panel };
+        }
+
+        /// <summary>Raises or hides a sheet built by <see cref="Sheet"/>.</summary>
+        public static void ShowSheet(SheetParts sheet, bool visible) =>
+            sheet.Root.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+
+        /// <summary>The phone's fixed bottom action bar (summary on the left, CTA on the right).</summary>
+        public static VisualElement BottomBar()
+        {
+            var e = new VisualElement();
+            e.AddToClassList("fts-bottombar");
+            e.style.flexDirection = FlexDirection.Row;
+            e.style.alignItems = Align.Center;
+            e.style.justifyContent = Justify.SpaceBetween;
+            e.style.flexShrink = 0f;
+            if (!StylesLoaded)
+            {
+                e.style.backgroundColor = SurfaceDeep;
+                e.style.borderTopWidth = 1;
+                e.style.borderTopColor = Border;
+                e.style.paddingLeft = SpaceLg;
+                e.style.paddingRight = SpaceLg;
+                e.style.paddingTop = SpaceMd;
+                e.style.paddingBottom = SpaceLg;
+            }
+            return e;
+        }
+
+        /// <summary>The phone's header block (kicker + title + meta on a lifted plate).</summary>
+        public static VisualElement MobileHeader()
+        {
+            var e = new VisualElement();
+            e.AddToClassList("fts-mheader");
+            e.style.flexShrink = 0f;
+            if (!StylesLoaded)
+            {
+                e.style.backgroundColor = SurfaceRaised;
+                e.style.borderBottomWidth = 1;
+                e.style.borderBottomColor = Border;
+                e.style.paddingLeft = SpaceLg;
+                e.style.paddingRight = SpaceLg;
+                e.style.paddingTop = SpaceLg + SpaceMd;
+                e.style.paddingBottom = SpaceMd;
+            }
+            return e;
         }
 
         // ---------------------------------------------------------------- style helpers
@@ -880,6 +1552,41 @@ namespace Fts.Views
         /// <summary>0xRRGGBB → opaque Color.</summary>
         public static Color Hex(int rgb) =>
             new Color(((rgb >> 16) & 0xFF) / 255f, ((rgb >> 8) & 0xFF) / 255f, (rgb & 0xFF) / 255f);
+    }
+
+    /// <summary>The three parts of a <see cref="UiKit.PageHead"/> (task 14.1).</summary>
+    public struct PageHeadParts
+    {
+        /// <summary>The strip itself — add this to the screen.</summary>
+        public VisualElement Root;
+        /// <summary>The left stack: put the kicker and the title in here.</summary>
+        public VisualElement Left;
+        /// <summary>The right group: put the ghost buttons in here.</summary>
+        public VisualElement Actions;
+    }
+
+    /// <summary>The parts of a <see cref="UiKit.SelectRow"/> (task 14.1).</summary>
+    public struct SelectRowParts
+    {
+        /// <summary>The clickable row — add this to the list.</summary>
+        public Button Root;
+        /// <summary>The left group; insert a tag or a tier badge at index 0.</summary>
+        public VisualElement Lead;
+        /// <summary>The row's headline.</summary>
+        public Label Name;
+        /// <summary>The quiet line under the headline; hidden until it has text.</summary>
+        public Label Meta;
+        /// <summary>The right-hand marker ("Selezionata", a dot, an arrow); hidden until it has text.</summary>
+        public Label Mark;
+    }
+
+    /// <summary>The parts of a <see cref="UiKit.Sheet"/> (task 14.1).</summary>
+    public struct SheetParts
+    {
+        /// <summary>The dimmed overlay — add this LAST to an absolutely-positioned screen root.</summary>
+        public VisualElement Root;
+        /// <summary>The white-space inside the sheet; fill it with the picker.</summary>
+        public VisualElement Panel;
     }
 
     /// <summary>One option in a <see cref="UiKit.FillFilterChips"/> row.</summary>

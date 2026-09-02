@@ -230,8 +230,8 @@ namespace Sim.Core.Tests.Positioning
             const int push = 200; // permille (a clear, sub-cap tilt: ~+4% attack / −4% defense)
 
             long gfBase = 0, gaBase = 0, gfPush = 0, gaPush = 0;
-            var off = new MatchEngine(_cfg);
-            var on = new MatchEngine(_cfg, applyPositioning: true);
+            var off = new MatchEngine(_cfg, generatePositions: false);  // statistics only: the picture costs 96ms a match and nothing here looks at it
+            var on = new MatchEngine(_cfg, applyPositioning: true, generatePositions: false);
 
             for (ulong i = 0; i < seeds; i++)
             {
@@ -262,7 +262,7 @@ namespace Sim.Core.Tests.Positioning
             const int spread = 200;
 
             long gfWide = 0, gfNarrow = 0;
-            var on = new MatchEngine(_cfg, applyPositioning: true);
+            var on = new MatchEngine(_cfg, applyPositioning: true, generatePositions: false);  // statistics only: the picture costs 96ms a match and nothing here looks at it
 
             for (ulong i = 0; i < seeds; i++)
             {
@@ -296,7 +296,7 @@ namespace Sim.Core.Tests.Positioning
             const int push = 500; // saturates the tilt cap
 
             int aWins = 0, bWins = 0, draws = 0;
-            var on = new MatchEngine(_cfg, applyPositioning: true);
+            var on = new MatchEngine(_cfg, applyPositioning: true, generatePositions: false);  // statistics only: the picture costs 96ms a match and nothing here looks at it
 
             for (ulong i = 0; i < seeds; i++)
             {

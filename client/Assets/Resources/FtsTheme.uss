@@ -1,176 +1,740 @@
 /* ============================================================================
-   Football Team Simulator — design system stylesheet (Roadmap task 6.6).
+   Football Team Simulator — design system stylesheet.
+   Task 6.6 created it; task 14.1 rebuilt it on the "Nuova Carriera" mockup.
 
-   Design tokens (colours, spacing, radii, type scale) live here as USS custom
-   properties on .fts-root; component classes (.fts-*) style the code-built
-   views. UiKit.Attach() loads this sheet from Resources onto the UIDocument
-   root once at startup — views stay C# (ARCHITECTURE §5.3) and assign these
-   classes instead of inline styles (the hybrid decided with the user).
+   HOW THIS SHEET IS ORGANISED, and it matters:
 
-   Reference look: Football Manager, heavily simplified; navy + emerald
-   palette (NOT purple), cartoon-friendly rounded shapes.
+   1. COLOUR TOKENS live once, on .fts-root, and are breakpoint-independent.
+   2. COMPONENT RULES carry the DESKTOP sizes. A panel that has somehow lost its
+      breakpoint class therefore still renders a correct desktop screen.
+   3. A single .fts--mobile block at the bottom overrides every size for the
+      phone. Responsive.cs stamps fts--mobile / fts--tablet / fts--desktop on the
+      panel root, so crossing a breakpoint restyles the whole game live — USS has
+      no media queries and this class-on-the-root trick is the substitute.
+
+   WHY THE MOBILE NUMBERS LOOK ENORMOUS. Panel Settings scales with screen size
+   against a 1920x1080 reference at match 0.5, so a 1080x2400 phone resolves to
+   about 970x2150 UI POINTS, not 390 CSS pixels. One mockup pixel is therefore
+   ~1.35 points on desktop and ~2.5 points on a phone, and the numbers below are
+   the mockup's already multiplied. This is also why the old theme felt tiny in a
+   handset build: a 48-point "touch target" is 5% of a 970-point screen.
+
+   Reference look: the Claude Design mockup docs/Nuova Carriera.html — near-black
+   navy, one emerald accent, Bebas Neue for display type and Archivo for text.
+   Fonts are assigned from UiKit.Attach (Resources/Fonts) rather than here, so a
+   missing font degrades to Unity's default instead of to an unstyled sheet.
    ========================================================================= */
 
 .fts-root {
-    --fts-bg: #141C30;
-    --fts-surface: #1E2A44;
-    --fts-surface-alt: #2A3A5C;
-    --fts-surface-hover: #33466E;
-    --fts-border: #3A4D74;
+    /* ---- grounds -------------------------------------------------------- */
+    --fts-bg: #080D18;
+    --fts-surface: #101A2C;
+    --fts-surface-deep: #0D1626;
+    --fts-surface-raised: #14243C;
+    --fts-surface-alt: #142034;
+    --fts-surface-hover: #1A2740;
+    --fts-row: #121D31;
+    --fts-ghost: #131D31;
+    --fts-input: #0A1120;
+    --fts-tag: #1D2A42;
 
-    --fts-accent: #27C281;
-    --fts-accent-dark: #1C9B66;
-    --fts-amber: #F2B33D;
+    /* ---- lines ---------------------------------------------------------- */
+    --fts-border: #1F2C46;
+    --fts-border-strong: #26334E;
+    --fts-border-row: #22304B;
+    --fts-divider: #1E2B45;
+    --fts-divider-soft: #223350;
 
-    --fts-text: #F4F7FB;
-    --fts-text-muted: rgba(244, 247, 251, 0.62);
-    --fts-on-accent: #0C2419;
+    /* ---- accent --------------------------------------------------------- */
+    --fts-accent: #2FD08A;
+    --fts-accent-dark: #1FA76D;
+    --fts-accent-soft: rgba(47, 208, 138, 0.12);
+    --fts-on-accent: #06221A;
+    --fts-amber: #F2A63B;
 
-    --fts-positive: #6FCF6B;
-    --fts-warning: #E6C75A;
-    --fts-danger: #E0675C;
+    /* ---- type ----------------------------------------------------------- */
+    --fts-text: #E6EDF8;
+    --fts-text-2: #CFDAEC;
+    --fts-text-muted: #A9BAD6;
+    --fts-text-label: #7D90B0;
+    --fts-text-hint: #6E819F;
+    --fts-text-dim: #4D5E7A;
+    --fts-tag-text: #8FA2C0;
+
+    /* ---- status --------------------------------------------------------- */
+    --fts-positive: #5FD39A;
+    --fts-warning: #F2A63B;
+    --fts-danger: #E2574C;
+
+    background-color: var(--fts-bg);
+    color: var(--fts-text);
 }
 
 /* ----------------------------------------------------- element defaults
-   Type selectors so even plain `new Button()` / `new Label()` in the older
-   code-built views pick up the theme (the 6.6c readability pass) — no more
-   default light-gray buttons or near-black labels on the navy background.
-   Classed components (.fts-*) and inline styles still win on specificity. */
+   Type selectors so even a plain `new Button()` in an unmigrated view picks up
+   the theme. Classed components and inline styles still win on specificity. */
 
 Label {
     color: var(--fts-text);
 }
 
 Button {
-    background-color: var(--fts-surface-alt);
-    color: var(--fts-text);
+    background-color: var(--fts-ghost);
+    color: var(--fts-text-muted);
     -unity-font-style: bold;
     border-width: 1px;
-    border-color: var(--fts-border);
-    border-radius: 10px;
-    padding: 4px 10px;
-    transition-property: background-color;
-    transition-duration: 0.08s;
+    border-color: var(--fts-border-strong);
+    border-radius: 11px;
+    padding: 12px 20px;
+    transition-property: background-color, color, border-color;
+    transition-duration: 0.12s;
 }
 
-Button:hover { background-color: var(--fts-surface-hover); }
-Button:active { background-color: var(--fts-border); }
+Button:hover {
+    background-color: var(--fts-surface-hover);
+    color: var(--fts-text);
+}
+
+Button:active { background-color: var(--fts-border-strong); }
 
 Button:disabled {
     background-color: var(--fts-surface);
-    color: var(--fts-text-muted);
+    color: var(--fts-text-dim);
+    opacity: 1;
+}
+
+TextField {
+    margin: 0;
 }
 
 .unity-base-text-field__input {
-    background-color: var(--fts-surface-alt);
+    background-color: var(--fts-input);
     color: var(--fts-text);
-    border-color: var(--fts-border);
-    border-radius: 8px;
+    border-color: var(--fts-border-strong);
+    border-width: 1px;
+    border-radius: 11px;
+    padding: 13px 16px;
+    font-size: 18px;
+}
+
+.unity-base-field__label {
+    color: var(--fts-text-label);
+    font-size: 15px;
+}
+
+.unity-scroller--vertical {
+    width: 12px;
+    background-color: transparent;
+    border-width: 0;
+}
+
+.unity-scroller--vertical .unity-base-slider__tracker {
+    background-color: transparent;
+    border-width: 0;
+}
+
+.unity-scroller--vertical .unity-base-slider__dragger {
+    background-color: #2B3A58;
+    border-width: 0;
+    border-radius: 6px;
+    width: 8px;
+}
+
+.unity-repeat-button {
+    display: none;
 }
 
 /* ------------------------------------------------------------- typography */
 
 .fts-title {
-    font-size: 40px;
-    -unity-font-style: bold;
+    font-size: 60px;
+    -unity-font-style: normal;
     color: var(--fts-text);
-    margin-bottom: 24px;
+    letter-spacing: 1px;
+    margin-bottom: 20px;
     -unity-text-align: middle-center;
 }
 
 .fts-header {
-    font-size: 26px;
-    -unity-font-style: bold;
+    font-size: 34px;
     color: var(--fts-text);
-    margin-bottom: 8px;
+    letter-spacing: 1px;
+    margin-bottom: 10px;
+}
+
+.fts-screentitle {
+    font-size: 34px;
+    color: var(--fts-text);
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+    -unity-text-align: middle-left;
+}
+
+/* The small tracked-out kicker above a title — the mockup's loudest signature. */
+.fts-eyebrow {
+    font-size: 18px;
+    color: var(--fts-text-label);
+    letter-spacing: 4px;
+    margin-bottom: 4px;
 }
 
 .fts-subtitle {
-    font-size: 18px;
+    font-size: 19px;
     color: var(--fts-text-muted);
     margin-bottom: 16px;
     -unity-text-align: middle-center;
 }
 
 .fts-caption {
-    font-size: 14px;
-    color: var(--fts-text-muted);
+    font-size: 15px;
+    color: var(--fts-text-label);
+}
+
+/* The block introducer: uppercase, tracked out, Bebas. */
+.fts-section {
+    font-size: 17px;
+    color: var(--fts-text-label);
+    letter-spacing: 3px;
+    -unity-font-style: normal;
+    margin-top: 10px;
+    margin-bottom: 8px;
+}
+
+.fts-help {
+    font-size: 16px;
+    color: var(--fts-text-hint);
+    margin-bottom: 10px;
+}
+
+.fts-line {
+    font-size: 19px;
+    color: var(--fts-text-2);
+    margin-bottom: 3px;
+}
+
+.fts-value {
+    font-size: 20px;
+    -unity-font-style: bold;
+    color: var(--fts-text);
 }
 
 /* ------------------------------------------------------------- containers */
 
+.fts-screen {
+    background-color: var(--fts-bg);
+    padding: 26px 34px 22px 34px;
+}
+
+.fts-page {
+    background-color: var(--fts-bg);
+    padding: 22px 26px 12px 26px;
+}
+
 .fts-card {
     background-color: var(--fts-surface);
-    padding: 16px;
+    padding: 22px;
     margin-top: 8px;
     margin-bottom: 8px;
-    border-radius: 14px;
+    border-radius: 20px;
     border-width: 1px;
     border-color: var(--fts-border);
 }
 
-.fts-row {
-    flex-direction: row;
-    align-items: center;
+.fts-panel {
+    background-color: var(--fts-surface-deep);
+    border-radius: 20px;
+    border-width: 1px;
+    border-color: var(--fts-border);
+    padding: 22px;
+    margin-bottom: 12px;
 }
+
+/* The option block of the mockup's left column. */
+.fts-optioncard {
+    background-color: var(--fts-surface);
+    border-width: 1px;
+    border-color: var(--fts-border);
+    border-radius: 20px;
+    padding: 22px 22px 20px 22px;
+    margin-bottom: 14px;
+}
+
+/* The raised block the summary sits in. */
+.fts-raised {
+    background-color: var(--fts-surface-raised);
+    border-width: 1px;
+    border-color: var(--fts-border-strong);
+    border-radius: 20px;
+    padding: 24px;
+}
+
+.fts-row { flex-direction: row; align-items: center; }
 
 .fts-divider {
     height: 1px;
-    margin-top: 8px;
-    margin-bottom: 8px;
-    background-color: var(--fts-border);
+    margin-top: 10px;
+    margin-bottom: 10px;
+    background-color: var(--fts-divider);
+}
+
+.fts-rule {
+    height: 1px;
+    background-color: var(--fts-divider);
+}
+
+.fts-toolbar { margin-bottom: 12px; }
+
+.fts-footer {
+    border-top-width: 1px;
+    border-top-color: var(--fts-divider);
+    margin-top: 12px;
+    padding-top: 14px;
+}
+
+/* The page header of the mockup: kicker + big title on the left, ghosts right. */
+.fts-pagehead {
+    flex-direction: row;
+    align-items: flex-end;
+    justify-content: space-between;
+    border-bottom-width: 1px;
+    border-bottom-color: var(--fts-divider);
+    padding-bottom: 20px;
+    margin-bottom: 22px;
 }
 
 /* ---------------------------------------------------------------- buttons */
 
 .fts-btn {
-    height: 54px;
-    font-size: 18px;
+    height: 60px;
+    font-size: 19px;
     -unity-font-style: bold;
     border-width: 0;
-    border-radius: 14px;
+    border-radius: 15px;
+    padding: 0 22px;
     margin-top: 5px;
     margin-bottom: 5px;
-    transition-property: background-color;
-    transition-duration: 0.08s;
+    transition-property: background-color, color;
+    transition-duration: 0.12s;
 }
 
 .fts-btn--menu {
     width: 320px;
-    color: var(--fts-text);
-    background-color: var(--fts-surface-alt);
+    color: var(--fts-text-2);
+    background-color: var(--fts-row);
     border-width: 1px;
-    border-color: var(--fts-border);
+    border-color: var(--fts-border-row);
 }
 
-.fts-btn--menu:hover { background-color: var(--fts-surface-hover); }
-.fts-btn--menu:active { background-color: var(--fts-border); }
+.fts-btn--menu:hover { background-color: var(--fts-surface-hover); color: var(--fts-text); }
+.fts-btn--menu:active { background-color: var(--fts-border-strong); }
 
 .fts-btn--primary {
     color: var(--fts-on-accent);
     background-color: var(--fts-accent);
-    padding-left: 24px;
-    padding-right: 24px;
+    border-width: 0;
 }
 
-.fts-btn--primary:hover { background-color: #2ED494; }
+.fts-btn--primary:hover { background-color: #4EDDA0; }
 .fts-btn--primary:active { background-color: var(--fts-accent-dark); }
 
-.fts-pill {
-    font-size: 14px;
+/* The quiet header/footer action of the mockup. */
+.fts-ghostbtn {
+    height: auto;
+    min-height: 48px;
+    font-size: 18px;
     -unity-font-style: bold;
-    padding: 2px 8px;
-    border-radius: 8px;
+    color: var(--fts-text-muted);
+    background-color: var(--fts-ghost);
+    border-width: 1px;
+    border-color: var(--fts-border-strong);
+    border-radius: 11px;
+    padding: 14px 22px;
+    margin: 0 0 0 10px;
+}
+
+.fts-ghostbtn:hover { background-color: var(--fts-surface-hover); color: var(--fts-text); }
+
+/* The accent call to action, tall enough to carry a second line. */
+.fts-ctabtn {
+    background-color: var(--fts-accent);
+    color: var(--fts-on-accent);
+    border-width: 0;
+    border-radius: 17px;
+    padding: 20px 22px;
+    margin: 0;
+    align-items: center;
+    justify-content: center;
+}
+
+.fts-ctabtn:hover { background-color: #4EDDA0; }
+.fts-ctabtn:active { background-color: var(--fts-accent-dark); }
+
+.fts-ctabtn:disabled {
+    background-color: var(--fts-surface-alt);
+    color: var(--fts-text-dim);
+}
+
+.fts-ctabtn__label {
+    font-size: 33px;
+    letter-spacing: 2px;
+    color: var(--fts-on-accent);
+}
+
+.fts-ctabtn__sub {
+    font-size: 15px;
+    -unity-font-style: bold;
+    color: var(--fts-on-accent);
+    opacity: 0.75;
+}
+
+.fts-tabbtn {
+    height: 46px;
+    font-size: 17px;
+    border-width: 0;
+    border-radius: 12px;
+    background-color: var(--fts-surface-alt);
+    color: var(--fts-text-muted);
+}
+
+.fts-tabbtn:hover { background-color: var(--fts-surface-hover); color: var(--fts-text); }
+
+.fts-tabbtn--active {
+    background-color: var(--fts-accent);
+    color: var(--fts-on-accent);
+}
+
+.fts-tabbtn--active:hover { background-color: var(--fts-accent); color: var(--fts-on-accent); }
+
+.fts-chip {
+    height: 44px;
+    font-size: 17px;
+    padding: 0 18px;
+    border-width: 1px;
+    border-color: var(--fts-border-strong);
+    border-radius: 13px;
+    background-color: var(--fts-surface-alt);
+    color: var(--fts-text-muted);
+}
+
+.fts-chip:hover { background-color: var(--fts-surface-hover); color: var(--fts-text); }
+
+.fts-chip--active {
+    background-color: var(--fts-accent);
+    border-color: var(--fts-accent);
+    color: var(--fts-on-accent);
+}
+
+.fts-chip--active:hover { background-color: var(--fts-accent); color: var(--fts-on-accent); }
+
+/* A segmented option that shares its row equally — the 1/2/3 and Piccolo/Medio/
+   Grande controls. Same colours as a chip, but it stretches and stacks. */
+.fts-segchip {
+    min-height: 60px;
+    font-size: 18px;
+    -unity-font-style: bold;
+    padding: 12px 8px;
+    border-width: 1px;
+    border-color: var(--fts-border-strong);
+    border-radius: 13px;
+    background-color: var(--fts-surface-alt);
+    color: var(--fts-text-muted);
+    align-items: center;
+    justify-content: center;
+    transition-property: background-color, color, border-color;
+    transition-duration: 0.12s;
+}
+
+.fts-segchip:hover { background-color: var(--fts-surface-hover); color: var(--fts-text); }
+
+.fts-segchip--active {
+    background-color: var(--fts-accent);
+    border-color: var(--fts-accent);
+    color: var(--fts-on-accent);
+}
+
+.fts-segchip--active:hover { background-color: var(--fts-accent); color: var(--fts-on-accent); }
+
+.fts-segchip--locked { opacity: 0.35; }
+
+.fts-smallbtn {
+    height: 44px;
+    font-size: 17px;
+    padding: 0 14px;
+    border-width: 1px;
+    border-color: var(--fts-border-strong);
+    border-radius: 11px;
+    background-color: var(--fts-surface-alt);
+    color: var(--fts-text-muted);
+}
+
+.fts-smallbtn:hover { background-color: var(--fts-surface-hover); color: var(--fts-text); }
+
+.fts-smallbtn--accent {
+    background-color: var(--fts-accent);
+    border-color: var(--fts-accent);
+    color: var(--fts-on-accent);
+}
+
+.fts-smallbtn--accent:hover { background-color: var(--fts-accent); color: var(--fts-on-accent); }
+
+.fts-smallbtn--on {
+    background-color: var(--fts-accent-soft);
+    border-color: var(--fts-accent);
+    color: var(--fts-accent);
+}
+
+.fts-cycle {
+    height: 58px;
+    font-size: 19px;
+    padding: 0 20px;
+    border-width: 1px;
+    border-color: var(--fts-border-row);
+    border-radius: 15px;
+    background-color: var(--fts-row);
+    color: var(--fts-text-2);
+    -unity-text-align: middle-left;
+}
+
+.fts-cycle:hover { background-color: var(--fts-surface-hover); color: var(--fts-text); }
+
+/* ------------------------------------------------------------ list rows */
+
+.fts-rowcard {
+    background-color: var(--fts-row);
+    border-width: 1px;
+    border-color: var(--fts-border-row);
+    border-radius: 13px;
+    min-height: 66px;
+    margin-bottom: 8px;
+    padding: 8px 14px;
+}
+
+.fts-rowcard--selected {
+    background-color: var(--fts-accent-soft);
+    border-color: var(--fts-accent);
+}
+
+/* The mockup's tappable row: a whole button, left label stack, right marker. */
+.fts-selectrow {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 66px;
+    padding: 16px 20px;
+    margin: 0 0 8px 0;
+    border-width: 1px;
+    border-color: var(--fts-border-row);
+    border-radius: 15px;
+    background-color: var(--fts-row);
+    color: var(--fts-text-2);
+    -unity-text-align: middle-left;
+    transition-property: background-color, border-color;
+    transition-duration: 0.12s;
+}
+
+.fts-selectrow:hover { background-color: var(--fts-surface-hover); }
+
+.fts-selectrow--active {
+    background-color: var(--fts-accent-soft);
+    border-color: var(--fts-accent);
+    color: var(--fts-text);
+}
+
+.fts-selectrow--active:hover { background-color: var(--fts-accent-soft); }
+
+.fts-selectrow--locked { opacity: 0.4; }
+
+.fts-selectrow__name {
+    font-size: 23px;
+    -unity-font-style: bold;
+    color: var(--fts-text);
+}
+
+.fts-selectrow__meta {
+    font-size: 15px;
+    color: var(--fts-text-label);
+}
+
+.fts-selectrow__mark {
+    font-size: 16px;
+    -unity-font-style: bold;
+    color: var(--fts-accent);
+    letter-spacing: 1px;
+}
+
+.fts-selectrow__mark--off { color: var(--fts-text-hint); }
+
+/* The square index badge on a division row. */
+.fts-tierbadge {
+    width: 52px;
+    height: 52px;
+    border-radius: 13px;
+    background-color: var(--fts-tag);
+    color: var(--fts-tag-text);
+    font-size: 30px;
+    -unity-text-align: middle-center;
+    margin-right: 16px;
+}
+
+.fts-tierbadge--active {
+    background-color: var(--fts-accent);
+    color: var(--fts-on-accent);
+}
+
+/* The little country/short code tag. */
+.fts-tag {
+    background-color: var(--fts-tag);
+    color: var(--fts-tag-text);
+    font-size: 18px;
+    letter-spacing: 1px;
+    border-radius: 7px;
+    padding: 4px 10px;
+    -unity-text-align: middle-center;
+    margin-right: 14px;
+}
+
+.fts-tag--active {
+    background-color: var(--fts-accent);
+    color: var(--fts-on-accent);
+}
+
+.fts-pill {
+    font-size: 15px;
+    -unity-font-style: bold;
+    padding: 3px 11px;
+    border-radius: 9px;
     -unity-text-align: middle-center;
 }
 
-.fts-page {
-    flex-grow: 1;
-    align-items: center;
-    padding: 16px 16px 8px 16px;
+/* ------------------------------------------------------ summary / stats */
+
+.fts-summaryrow {
+    flex-direction: row;
+    align-items: flex-end;
+    justify-content: space-between;
+    border-bottom-width: 1px;
+    border-bottom-color: var(--fts-divider-soft);
+    padding-bottom: 12px;
+    margin-bottom: 12px;
 }
 
-/* ------------------------------------------------------------- app shell */
+.fts-summaryrow__k {
+    font-size: 15px;
+    letter-spacing: 1px;
+    color: var(--fts-text-label);
+}
+
+.fts-summaryrow__v {
+    font-size: 20px;
+    -unity-font-style: bold;
+    color: var(--fts-text);
+    -unity-text-align: middle-right;
+}
+
+.fts-note {
+    background-color: var(--fts-surface);
+    border-width: 1px;
+    border-color: var(--fts-border);
+    border-radius: 20px;
+    padding: 20px;
+    font-size: 16px;
+    color: var(--fts-text-hint);
+}
+
+.fts-stat {
+    background-color: var(--fts-surface);
+    border-radius: 20px;
+    border-width: 1px;
+    border-color: var(--fts-border);
+    padding: 16px 20px;
+}
+
+.fts-stat__k {
+    font-size: 15px;
+    letter-spacing: 2px;
+    color: var(--fts-text-label);
+    margin-bottom: 4px;
+}
+
+.fts-stat__v {
+    font-size: 28px;
+    -unity-font-style: bold;
+    color: var(--fts-text);
+}
+
+/* --------------------------------------------------------- search field */
+
+.fts-search {
+    background-color: var(--fts-input);
+    border-width: 1px;
+    border-color: var(--fts-border-strong);
+    border-radius: 11px;
+    min-height: 48px;
+}
+
+.fts-search .unity-base-text-field__input {
+    background-color: transparent;
+    border-width: 0;
+    font-size: 18px;
+    padding: 12px 16px;
+}
+
+/* --------------------------------------------------- mobile-only chrome */
+
+/* The phone header block: quieter ground than the page, one hairline under. */
+.fts-mheader {
+    background-color: var(--fts-surface-raised);
+    border-bottom-width: 1px;
+    border-bottom-color: var(--fts-border);
+    padding: 60px 40px 32px 40px;
+}
+
+/* The phone's fixed bottom action bar. */
+.fts-bottombar {
+    flex-direction: row;
+    align-items: center;
+    background-color: var(--fts-surface-deep);
+    border-top-width: 1px;
+    border-top-color: var(--fts-border);
+    padding: 26px 36px 46px 36px;
+}
+
+/* The modal sheet the nation picker rides in. */
+.fts-sheet {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(6, 10, 20, 0.72);
+    justify-content: flex-end;
+}
+
+.fts-sheet__panel {
+    background-color: var(--fts-surface-deep);
+    border-top-width: 1px;
+    border-top-color: var(--fts-border-strong);
+    border-top-left-radius: 44px;
+    border-top-right-radius: 44px;
+    padding: 26px 32px 46px 32px;
+    max-height: 78%;
+}
+
+.fts-sheet__grab {
+    width: 104px;
+    height: 10px;
+    border-radius: 5px;
+    background-color: #2B3A58;
+    align-self: center;
+    margin-bottom: 20px;
+}
+
+.fts-hidden { display: none; }
+
+/* ============================================================================
+   APP SHELL (task 6.6, re-tuned in 14.1) — the persistent chrome the screens
+   are pushed into: top bar, left icon sidebar, portrait bottom tab bar.
+   ========================================================================= */
 
 .fts-shell {
     flex-grow: 1;
@@ -180,119 +744,108 @@ Button:disabled {
 .fts-topbar {
     flex-direction: row;
     align-items: center;
-    min-height: 64px;
-    padding: 6px 12px;
-    background-color: var(--fts-surface);
-    border-bottom-width: 2px;
-    border-bottom-color: var(--fts-border);
+    min-height: 84px;
+    padding: 8px 18px;
+    background-color: var(--fts-surface-deep);
+    border-bottom-width: 1px;
+    border-bottom-color: var(--fts-divider);
 }
 
 .fts-topbar__club {
-    font-size: 20px;
+    font-size: 27px;
     -unity-font-style: bold;
     color: var(--fts-text);
 }
 
 .fts-topbar__sub {
-    font-size: 13px;
-    color: var(--fts-text-muted);
+    font-size: 18px;
+    color: var(--fts-text-label);
 }
 
 .fts-topbar__continue {
-    height: 46px;
-    margin-left: 8px;
+    height: 60px;
+    margin-left: 12px;
 }
 
 .fts-iconbtn {
-    width: 46px;
-    height: 46px;
-    border-width: 0;
-    border-radius: 12px;
-    background-color: var(--fts-surface-alt);
-    margin-left: 4px;
-    margin-right: 4px;
+    width: 60px;
+    height: 60px;
+    border-width: 1px;
+    border-color: var(--fts-border-strong);
+    border-radius: 15px;
+    background-color: var(--fts-ghost);
+    margin-left: 5px;
+    margin-right: 5px;
+    padding: 0;
     align-items: center;
     justify-content: center;
     transition-property: background-color;
-    transition-duration: 0.08s;
+    transition-duration: 0.12s;
 }
 
 .fts-iconbtn:hover { background-color: var(--fts-surface-hover); }
-.fts-iconbtn:active { background-color: var(--fts-border); }
+.fts-iconbtn:active { background-color: var(--fts-border-strong); }
 
 .fts-body {
     flex-direction: row;
     flex-grow: 1;
 }
 
-.fts-content {
-    flex-grow: 1;
-}
-
-/* --- sidebar (landscape / desktop) --- */
+.fts-content { flex-grow: 1; }
 
 .fts-sidebar {
-    width: 200px;
-    background-color: var(--fts-surface);
-    border-right-width: 2px;
-    border-right-color: var(--fts-border);
-    padding-top: 6px;
-    padding-bottom: 6px;
+    width: 260px;
+    background-color: var(--fts-surface-deep);
+    border-right-width: 1px;
+    border-right-color: var(--fts-divider);
+    padding-top: 8px;
+    padding-bottom: 8px;
 }
 
-.fts-sidebar--compact {
-    width: 64px;
-}
+.fts-sidebar--compact { width: 86px; }
 
 .fts-navitem {
     flex-direction: row;
     align-items: center;
-    min-height: 46px;
-    margin: 2px 6px;
-    padding-left: 10px;
-    padding-right: 10px;
+    min-height: 62px;
+    margin: 3px 8px;
+    padding-left: 14px;
+    padding-right: 14px;
     border-width: 0;
-    border-radius: 12px;
+    border-radius: 15px;
     background-color: rgba(0, 0, 0, 0);
     transition-property: background-color;
-    transition-duration: 0.08s;
+    transition-duration: 0.12s;
 }
 
 .fts-navitem:hover { background-color: var(--fts-surface-hover); }
-.fts-navitem--active { background-color: var(--fts-surface-alt); }
+
+.fts-navitem--active { background-color: var(--fts-accent-soft); }
 
 .fts-navitem__label {
-    font-size: 15px;
+    font-size: 20px;
     -unity-font-style: bold;
-    color: var(--fts-text);
-    margin-left: 10px;
+    color: var(--fts-text-muted);
+    margin-left: 12px;
     flex-grow: 1;
     -unity-text-align: middle-left;
 }
 
+.fts-navitem--active .fts-navitem__label { color: var(--fts-accent); }
+
 .fts-sidebar--compact .fts-navitem__label { display: none; }
 
 .fts-navitem__badge {
-    min-width: 20px;
-    height: 20px;
-    padding-left: 5px;
-    padding-right: 5px;
-    border-radius: 10px;
+    min-width: 26px;
+    height: 26px;
+    padding-left: 7px;
+    padding-right: 7px;
+    border-radius: 13px;
     background-color: var(--fts-amber);
     color: var(--fts-bg);
-    font-size: 12px;
+    font-size: 15px;
     -unity-font-style: bold;
     -unity-text-align: middle-center;
-}
-
-/* --- bottom tab bar (portrait / phone) --- */
-
-.fts-bottombar {
-    flex-direction: row;
-    background-color: var(--fts-surface);
-    border-top-width: 2px;
-    border-top-color: var(--fts-border);
-    min-height: 60px;
 }
 
 .fts-tab {
@@ -302,206 +855,23 @@ Button:disabled {
     border-width: 0;
     border-radius: 0;
     background-color: rgba(0, 0, 0, 0);
-    padding-top: 6px;
-    padding-bottom: 4px;
+    padding-top: 8px;
+    padding-bottom: 6px;
 }
 
 .fts-tab:active { background-color: var(--fts-surface-hover); }
-.fts-tab--active { background-color: var(--fts-surface-alt); }
+.fts-tab--active { background-color: var(--fts-accent-soft); }
 
 .fts-tab__label {
-    font-size: 11px;
-    color: var(--fts-text-muted);
-    margin-top: 2px;
+    font-size: 15px;
+    color: var(--fts-text-label);
+    margin-top: 3px;
     -unity-text-align: middle-center;
 }
 
 .fts-tab--active .fts-tab__label {
-    color: var(--fts-text);
+    color: var(--fts-accent);
     -unity-font-style: bold;
-}
-
-
-/* ===========================================================================
-   Task 6.12 — shared page scaffold.
-
-   Every screen is now framed the same way: .fts-screen (page background +
-   margins) → .fts-col (centred column capped at one of the three width tiers)
-   → title / toolbar / .fts-panel blocks → .fts-footer.
-
-   IMPORTANT: colours for these components live HERE, not inline in C#. Inline
-   styles beat stylesheet rules in UI Toolkit, so anything the C# paints inline
-   can never light up on :hover. UiKit only writes the inline fallback when the
-   sheet failed to load (UiKit.StylesLoaded == false).
-   ========================================================================= */
-
-.fts-screen {
-    flex-grow: 1;
-    background-color: var(--fts-bg);
-}
-
-.fts-col {
-    width: 100%;
-    align-self: center;
-    flex-grow: 1;
-}
-
-.fts-screentitle {
-    font-size: 24px;
-    -unity-font-style: bold;
-    color: var(--fts-text);
-}
-
-.fts-section {
-    font-size: 12px;
-    -unity-font-style: bold;
-    color: rgba(244, 247, 251, 0.55);
-}
-
-.fts-help {
-    font-size: 13px;
-    color: var(--fts-text-muted);
-}
-
-/* ------------------------------------------------------------------ panels */
-
-.fts-panel {
-    background-color: var(--fts-surface);
-    border-width: 1px;
-    border-color: var(--fts-border);
-    border-radius: 14px;
-}
-
-.fts-rowcard {
-    background-color: var(--fts-surface);
-    border-radius: 8px;
-    transition-property: background-color;
-    transition-duration: 0.08s;
-}
-
-.fts-rowcard:hover { background-color: var(--fts-surface-alt); }
-.fts-rowcard--selected { background-color: #2C4573; }
-.fts-rowcard--selected:hover { background-color: #35528A; }
-
-/* ----------------------------------------------------------------- footer */
-
-.fts-footer {
-    flex-direction: row;
-    justify-content: center;
-    align-items: center;
-    border-top-width: 1px;
-    border-top-color: var(--fts-border);
-}
-
-/* ------------------------------------------------------- segmented tabs */
-
-.fts-tabbtn {
-    background-color: var(--fts-surface-alt);
-    color: var(--fts-text-muted);
-    -unity-font-style: bold;
-    border-width: 0;
-    border-radius: 10px;
-    transition-property: background-color;
-    transition-duration: 0.08s;
-}
-
-.fts-tabbtn:hover { background-color: var(--fts-surface-hover); }
-.fts-tabbtn:disabled { background-color: var(--fts-surface); color: var(--fts-text-muted); }
-
-.fts-tabbtn--active {
-    background-color: #3D6DB0;
-    color: var(--fts-text);
-}
-
-.fts-tabbtn--active:hover { background-color: #4A7CC4; }
-
-/* -------------------------------------------------------------- filter chips */
-
-.fts-chip {
-    background-color: var(--fts-surface-alt);
-    color: var(--fts-text);
-    -unity-font-style: bold;
-    border-width: 0;
-    border-radius: 16px;
-    transition-property: background-color;
-    transition-duration: 0.08s;
-}
-
-.fts-chip:hover { background-color: var(--fts-surface-hover); }
-
-.fts-chip--active {
-    background-color: #3D6DB0;
-    color: var(--fts-text);
-}
-
-.fts-chip--active:hover { background-color: #4A7CC4; }
-
-/* --------------------------------------------------- inline row actions */
-
-.fts-smallbtn {
-    background-color: var(--fts-surface-alt);
-    color: var(--fts-text);
-    -unity-font-style: bold;
-    border-width: 0;
-    border-radius: 8px;
-    transition-property: background-color;
-    transition-duration: 0.08s;
-}
-
-.fts-smallbtn:hover { background-color: var(--fts-surface-hover); }
-.fts-smallbtn:active { background-color: var(--fts-border); }
-.fts-smallbtn:disabled { background-color: var(--fts-surface); color: var(--fts-text-muted); }
-
-.fts-smallbtn--accent {
-    background-color: var(--fts-accent);
-    color: var(--fts-on-accent);
-}
-
-.fts-smallbtn--accent:hover { background-color: #2ED494; }
-.fts-smallbtn--accent:disabled { background-color: var(--fts-surface); color: var(--fts-text-muted); }
-
-.fts-smallbtn--on {
-    background-color: #3D6DB0;
-    color: var(--fts-text);
-}
-
-.fts-smallbtn--on:hover { background-color: #4A7CC4; }
-
-/* ------------------------------------------------------- cycle controls */
-
-.fts-cycle {
-    background-color: var(--fts-surface-alt);
-    color: var(--fts-text);
-    -unity-font-style: bold;
-    border-width: 0;
-    border-radius: 8px;
-    -unity-text-align: middle-left;
-    transition-property: background-color;
-    transition-duration: 0.08s;
-}
-
-.fts-cycle:hover { background-color: var(--fts-surface-hover); }
-.fts-cycle:active { background-color: var(--fts-border); }
-
-/* ------------------------------------------------------------ stat tiles */
-
-.fts-stat {
-    background-color: var(--fts-surface);
-    border-width: 1px;
-    border-color: var(--fts-border);
-    border-radius: 14px;
-}
-
-.fts-stat__k {
-    font-size: 11px;
-    -unity-font-style: bold;
-    color: rgba(244, 247, 251, 0.52);
-}
-
-.fts-stat__v {
-    font-size: 20px;
-    -unity-font-style: bold;
-    color: var(--fts-text);
 }
 
 /* ------------------------------------------------------------ data tables */
@@ -510,18 +880,115 @@ Button:disabled {
     flex-direction: row;
     align-items: center;
     background-color: var(--fts-surface-alt);
-    border-radius: 8px;
+    border-radius: 11px;
 }
 
 .fts-trow {
     flex-direction: row;
     align-items: center;
-    border-radius: 6px;
+    border-radius: 9px;
     transition-property: background-color;
-    transition-duration: 0.08s;
+    transition-duration: 0.12s;
 }
 
-.fts-trow--zebra { background-color: rgba(255, 255, 255, 0.035); }
-.fts-trow--user { background-color: #1F4A34; }
+.fts-trow--zebra { background-color: rgba(255, 255, 255, 0.03); }
+.fts-trow--user { background-color: #14352C; }
 .fts-trow:hover { background-color: var(--fts-surface-alt); }
-.fts-trow--user:hover { background-color: #2A6146; }
+.fts-trow--user:hover { background-color: #1B4A3B; }
+
+/* The centred content column every screen puts inside its page. */
+.fts-col {
+    width: 100%;
+    align-self: center;
+    flex-grow: 1;
+}
+
+/* ============================================================================
+   MOBILE OVERRIDES — everything above, re-sized for a ~970-point portrait panel.
+   Only sizes change here; colours never do.
+   ========================================================================= */
+
+.fts--mobile .fts-title { font-size: 78px; margin-bottom: 14px; }
+.fts--mobile .fts-header { font-size: 46px; }
+.fts--mobile .fts-screentitle { font-size: 48px; }
+.fts--mobile .fts-eyebrow { font-size: 28px; letter-spacing: 6px; }
+.fts--mobile .fts-subtitle { font-size: 31px; margin-bottom: 22px; }
+.fts--mobile .fts-caption { font-size: 28px; }
+.fts--mobile .fts-section { font-size: 26px; letter-spacing: 5px; margin-top: 14px; margin-bottom: 12px; }
+.fts--mobile .fts-help { font-size: 29px; margin-bottom: 16px; }
+.fts--mobile .fts-line { font-size: 34px; }
+.fts--mobile .fts-value { font-size: 36px; }
+
+.fts--mobile .fts-screen { padding: 24px 36px 16px 36px; }
+.fts--mobile .fts-page { padding: 20px 32px 12px 32px; }
+.fts--mobile .fts-card { border-radius: 36px; padding: 34px; }
+.fts--mobile .fts-panel { border-radius: 36px; padding: 30px; }
+.fts--mobile .fts-optioncard { border-radius: 36px; padding: 34px; margin-bottom: 26px; }
+.fts--mobile .fts-raised { border-radius: 36px; padding: 34px; }
+.fts--mobile .fts-note { border-radius: 36px; padding: 32px; font-size: 28px; }
+.fts--mobile .fts-pagehead { padding-bottom: 0; margin-bottom: 0; border-bottom-width: 0; }
+
+.fts--mobile .fts-btn { height: 118px; font-size: 36px; border-radius: 28px; padding: 0 30px; }
+.fts--mobile .fts-btn--menu { width: 100%; }
+.fts--mobile .fts-ghostbtn { min-height: 118px; font-size: 32px; border-radius: 26px; padding: 26px 30px; margin-left: 0; }
+.fts--mobile .fts-ctabtn { border-radius: 28px; padding: 28px 26px; }
+.fts--mobile .fts-ctabtn__label { font-size: 44px; letter-spacing: 3px; }
+.fts--mobile .fts-ctabtn__sub { font-size: 26px; }
+.fts--mobile .fts-tabbtn { height: 100px; font-size: 30px; border-radius: 22px; }
+.fts--mobile .fts-chip { height: 100px; font-size: 30px; padding: 0 30px; border-radius: 23px; }
+.fts--mobile .fts-segchip { min-height: 125px; font-size: 34px; border-radius: 23px; padding: 20px 10px; }
+.fts--mobile .fts-smallbtn { height: 96px; font-size: 30px; border-radius: 22px; padding: 0 24px; }
+.fts--mobile .fts-cycle { height: 120px; font-size: 34px; border-radius: 28px; padding: 0 30px; }
+
+.fts--mobile .fts-rowcard { min-height: 148px; border-radius: 26px; padding: 14px 26px; margin-bottom: 16px; }
+.fts--mobile .fts-selectrow { min-height: 150px; border-radius: 28px; padding: 26px 30px; margin-bottom: 16px; }
+.fts--mobile .fts-selectrow__name { font-size: 40px; }
+.fts--mobile .fts-selectrow__meta { font-size: 28px; }
+.fts--mobile .fts-selectrow__mark { font-size: 30px; }
+.fts--mobile .fts-tierbadge { width: 96px; height: 96px; border-radius: 24px; font-size: 52px; margin-right: 26px; }
+.fts--mobile .fts-tag { font-size: 30px; border-radius: 12px; padding: 6px 16px; margin-right: 24px; }
+.fts--mobile .fts-pill { font-size: 26px; border-radius: 16px; padding: 5px 18px; }
+
+.fts--mobile .fts-summaryrow { padding-bottom: 18px; margin-bottom: 18px; }
+.fts--mobile .fts-summaryrow__k { font-size: 26px; letter-spacing: 2px; }
+.fts--mobile .fts-summaryrow__v { font-size: 34px; }
+.fts--mobile .fts-stat { border-radius: 36px; padding: 26px 30px; }
+.fts--mobile .fts-stat__k { font-size: 26px; letter-spacing: 3px; }
+.fts--mobile .fts-stat__v { font-size: 48px; }
+
+.fts--mobile .fts-divider { margin-top: 18px; margin-bottom: 18px; }
+.fts--mobile .fts-footer { padding-top: 24px; margin-top: 20px; }
+.fts--mobile .fts-toolbar { margin-bottom: 20px; }
+
+.fts--mobile .fts-search { min-height: 118px; border-radius: 26px; }
+.fts--mobile .fts-search .unity-base-text-field__input { font-size: 32px; padding: 22px 28px; }
+.fts--mobile .unity-base-text-field__input { font-size: 32px; padding: 22px 28px; border-radius: 26px; }
+.fts--mobile .unity-base-field__label { font-size: 28px; }
+.fts--mobile .unity-scroller--vertical { width: 20px; }
+.fts--mobile .unity-scroller--vertical .unity-base-slider__dragger { width: 14px; border-radius: 10px; }
+
+/* ---- app shell on a phone ---- */
+.fts--mobile .fts-topbar { min-height: 150px; padding: 14px 28px; }
+.fts--mobile .fts-topbar__club { font-size: 44px; }
+.fts--mobile .fts-topbar__sub { font-size: 28px; }
+.fts--mobile .fts-topbar__continue { height: 110px; margin-left: 20px; }
+.fts--mobile .fts-iconbtn { width: 110px; height: 110px; border-radius: 26px; margin-left: 8px; margin-right: 8px; }
+.fts--mobile .fts-navitem { min-height: 120px; border-radius: 26px; margin: 5px 12px; padding-left: 24px; padding-right: 24px; }
+.fts--mobile .fts-navitem__label { font-size: 32px; margin-left: 20px; }
+.fts--mobile .fts-navitem__badge { min-width: 44px; height: 44px; border-radius: 22px; font-size: 26px; padding-left: 12px; padding-right: 12px; }
+.fts--mobile .fts-tab { padding-top: 14px; padding-bottom: 10px; }
+.fts--mobile .fts-tab__label { font-size: 24px; margin-top: 6px; }
+.fts--mobile .fts-thead { border-radius: 20px; }
+.fts--mobile .fts-trow { border-radius: 18px; }
+
+/* ============================================================================
+   TABLET — desktop shapes, mobile-sized touch targets. Kept deliberately small:
+   the per-screen tablet pass is its own roadmap task.
+   ========================================================================= */
+
+.fts--tablet .fts-title { font-size: 52px; }
+.fts--tablet .fts-btn { height: 72px; font-size: 22px; }
+.fts--tablet .fts-segchip { min-height: 72px; font-size: 20px; }
+.fts--tablet .fts-selectrow { min-height: 78px; }
+.fts--tablet .fts-chip { height: 54px; font-size: 19px; }
+.fts--tablet .fts-ghostbtn { min-height: 56px; font-size: 19px; }

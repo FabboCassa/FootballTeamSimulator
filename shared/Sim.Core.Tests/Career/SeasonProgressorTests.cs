@@ -38,6 +38,63 @@ namespace Sim.Core.Tests.Career
             return outcomes;
         }
 
+        // ------------------------------------------------------------ the watched fixture (13.1)
+
+        [Test]
+        public void OnlyTheWatchedClubsFixture_CarriesTheMovementStream()
+        {
+            (League league, Season season) = NewWorld();
+            var progressor = new SeasonProgressor();
+            int firstMatchDay = new SeasonBalance().FirstMatchDay;
+            int watched = league.Clubs[3].Id;
+
+            // The season starts on day 1, so the (firstMatchDay - 1)th advance is round one.
+            AdvanceDays(progressor, league, season, firstMatchDay - 2);
+            List<MatchOutcome> day = progressor.AdvanceDay(
+                league, season, WorldSeed, null, null, null, null, watched);
+
+            Assert.That(day, Is.Not.Empty, "the first matchday must play fixtures");
+
+            List<MatchOutcome> hisMatch = day.Where(o => o.Fixture.Involves(watched)).ToList();
+            Assert.That(hisMatch, Has.Count.EqualTo(1), "a club plays once a matchday");
+            Assert.That(hisMatch[0].Report.Positions, Is.Not.Null,
+                "the fixture the coach can watch MUST carry its replay — this is what a blank pitch looks like");
+            Assert.That(hisMatch[0].Report.Positions!.TickCount, Is.GreaterThan(1));
+
+            foreach (MatchOutcome other in day.Where(o => !o.Fixture.Involves(watched)))
+                Assert.That(other.Report.Positions, Is.Null,
+                    "nobody watches an AI fixture; building a stream for it is waste");
+        }
+
+        [Test]
+        public void WatchingAFixture_DoesNotChangeAnyResult()
+        {
+            int watchedId;
+            {
+                (League probe, Season _) = NewWorld();
+                watchedId = probe.Clubs[3].Id;
+            }
+
+            string Play(int? watched)
+            {
+                (League league, Season season) = NewWorld();
+                var progressor = new SeasonProgressor();
+                int firstMatchDay = new SeasonBalance().FirstMatchDay;
+                AdvanceDays(progressor, league, season, firstMatchDay - 2);
+
+                List<MatchOutcome> day = progressor.AdvanceDay(
+                    league, season, WorldSeed, null, null, null, null, watched);
+
+                // The scoreline and the timeline only — the stream is the thing that differs.
+                return string.Join("|", day.Select(o =>
+                    $"{o.Fixture.Id}:{o.Report.HomeGoals}-{o.Report.AwayGoals}:" +
+                    string.Join(",", o.Report.Events.Select(e => $"{e.Minute}/{(int)e.Type}/{e.PlayerId}"))));
+            }
+
+            Assert.That(Play(watchedId), Is.EqualTo(Play(null)),
+                "which engine plays a fixture must not move its result by one goal");
+        }
+
         [Test]
         public void QuietDays_PlayNothing_AndAdvanceTheCalendar()
         {

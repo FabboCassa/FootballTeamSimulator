@@ -10,7 +10,8 @@ namespace Sim.Core.Match
     /// <summary>
     /// Match engine: minute-by-minute action resolution producing score and
     /// event timeline (task 1.4), plus the replayable top-down position stream
-    /// generated from that timeline (tasks 1.5 · 13.1, see Movement.PossessionSimulator).
+    /// played out around that timeline by the agent simulation (tasks 1.5 · 13.1 · 13.2,
+    /// see Movement.MatchSimulator and Movement.MatchDirector).
     ///
     /// Model per minute:
     ///   1. an action happens with P = ActionChancePerMinute;
@@ -213,8 +214,8 @@ namespace Sim.Core.Match
             if (_generatePositions)
             {
                 int possessionPermille = (int)(homePossession * 1000);
-                report.Positions = new PossessionSimulator(_cfg)
-                    .Generate(active.Home, active.Away, report, rng, possessionPermille);
+                report.Positions = new MatchSimulator(_cfg)
+                    .Generate(active.Home, active.Away, report, rng, active.Tactics, possessionPermille);
             }
 
             return report;

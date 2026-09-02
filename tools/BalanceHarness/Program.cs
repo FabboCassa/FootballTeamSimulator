@@ -25,6 +25,12 @@ if (all || options.Scenario == "difficulty") DifficultyScenario.Run(options, con
 if (all || options.Scenario == "ladder") LadderScenario.Run(options, checks);
 if (all || options.Scenario == "world") WorldScenario.Run(options, config, checks);
 
+// Deliberately NOT part of "all": the pitch scenario is the measuring instrument of the match
+// engine rework (phase 0, docs/engine/MATCH_ENGINE_PLAN.md), and today it reports a match that
+// is a long way from football. Folding that into the default run would turn every balance run
+// red and hide a real regression in the other five. Ask for it by name.
+if (options.Scenario == "pitch") PitchScenario.Run(options, config, checks);
+
 if (checks.Count == 0)
 {
     Console.WriteLine();

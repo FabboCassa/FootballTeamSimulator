@@ -91,8 +91,12 @@ namespace Sim.Core.Tests.Match
         public void NeverFiringRule_IsByteIdentical()
         {
             var engine = new MatchEngine();
-            // "Winning by >= 5" essentially never holds in a normal match.
-            var rule = new MatchRule(1, ScoreSituation.Winning, AttackAction(), margin: 5);
+            // The gate has to be one that NEVER opens, or the rule fires and the report is
+            // allowed to differ. A five-goal lead is not that gate: seed 27 of this fixture
+            // ends 6-1 and passes through +5, so margin 5 fired and the test failed on a
+            // premise that was simply untrue. Over these fifty seeds the biggest lead reached
+            // at any minute is 5, so 8 leaves real headroom.
+            var rule = new MatchRule(1, ScoreSituation.Winning, AttackAction(), margin: 8);
 
             for (ulong seed = 1; seed <= 50; seed++)
             {
