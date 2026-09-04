@@ -1,4 +1,4 @@
-using Sim.Core.Config;
+﻿using Sim.Core.Config;
 using Sim.Core.Tactics;
 
 namespace Sim.Core.Match.Movement
@@ -26,6 +26,12 @@ namespace Sim.Core.Match.Movement
         /// <summary>How far from his position a player will go to press the ball, in units.</summary>
         public readonly int PressReachU;
 
+        /// <summary>
+        /// How far up the pitch the side will chase the man on the ball at all, in decimetres
+        /// from its own goal (engine phase 3). Past it a low block simply keeps its shape.
+        /// </summary>
+        public readonly int PressTriggerDepthDm;
+
         /// <summary>How many players run to support the man on the ball.</summary>
         public readonly int Supporters;
 
@@ -37,12 +43,13 @@ namespace Sim.Core.Match.Movement
         public readonly int ForwardBias;
 
         private MovementTactics(
-            int linePushDm, int widthPercent, int pressReachU,
+            int linePushDm, int widthPercent, int pressReachU, int pressTriggerDepthDm,
             int supporters, int holdMin, int holdMax, int forwardBias)
         {
             LinePushDm = linePushDm;
             WidthPercent = widthPercent;
             PressReachU = pressReachU;
+            PressTriggerDepthDm = pressTriggerDepthDm;
             Supporters = supporters;
             HoldTicksMin = holdMin;
             HoldTicksMax = holdMax;
@@ -64,6 +71,7 @@ namespace Sim.Core.Match.Movement
                 linePushDm: Pick(cfg.MentalityLinePushDm, mentality),
                 widthPercent: Pick(cfg.WidthSpreadPercent, width),
                 pressReachU: U.Units(Pick(cfg.PressReachDm, pressing)),
+                pressTriggerDepthDm: Pick(cfg.PressTriggerDepthDm, pressing),
                 supporters: Pick(cfg.MentalitySupporters, mentality),
                 holdMin: cfg.TicksOfMs(Pick(cfg.TempoHoldMsMin, tempo)),
                 holdMax: cfg.TicksOfMs(Pick(cfg.TempoHoldMsMax, tempo)),

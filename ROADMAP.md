@@ -1,4 +1,4 @@
-# Football Team Simulator — Roadmap
+﻿# Football Team Simulator — Roadmap
 
 Phases are sequential; each task is small and **individually testable** (✅ = how you verify it). Single player first → full game loop offline → then backend & online. Status legend: `[ ]` todo · `[~]` in progress · `[x]` done.
 
@@ -512,9 +512,79 @@ acting one out — with the game playable at the end of every one of them.
   in the old shape still reads, and that a stream arriving packed draws itself anyway. The cadence
   lever (`StreamTicksPerFrame` 5 → 10, which would halve it again at 30 fps instead of 60) is left
   on the table, not pulled.
-- [ ] Phase 3 — defending: zones and triggers · [ ] Phase 4 — decisions on the ball ·
-  [ ] Phase 5 — the laws · [ ] Phase 6 — inverting the causality · [ ] Phase 7 — performance
-  data · [ ] Phase 8 — the instructions matter
+- [x] **Phase 3 — defending: zones and triggers** (2026-09-04, **VERIFIED by the user**:
+  `dotnet test` **589/589 green in 360 s** — Sim.Core.Tests 349 (340 + the 4 `ReplayCodecTests`
+  he had not yet run + the 5 new `DefensiveDutyTests`) and Api.Tests 240 — with
+  `[DeterminismCheck]`/`[server-determinism]` **`0xABC7B41DC6F258C2` identical digit for digit** to
+  the container's .NET 10 figure, so cross-runtime determinism survives engine v6; `balance.ps1`
+  **28/28 PASS with every figure unchanged** (difficulty 6.9/6.6/9.5/7.6/10.1, 67.6 transfers,
+  wages 69.8%, the whole world block); and the `pitch` scenario reproducing **every single number**
+  of the container's run — 12/19, defending 40.6 x 36.2 m, back line 5.9 m, goals 2.52, shots 25.1
+  — at **263.6 ms a match** against the container's 444. Its exit code 1 is the expected red: the
+  held-ball-on-a-line bug of §1.7, which is phase 5's). A defending side finally has **its own shape**. `AssignMarks`
+  put a marker on every one of the ten opponents wherever he stood (§1.5), so ten duels roamed the
+  pitch, the "hold your place in the block" branch of the movement ran **0.0%** of the time, and —
+  the consequence phase 2 measured and deferred to here — a defending side's shape WAS the
+  attacking side's shape offset by 5.8 m. The team brain now hands out ONE duty per man per brain
+  tick: **presser** 7.5% of defending ticks · **cover** 8.9% (never a centre-back: a defender who
+  steps out to cover is a defender out of the line, and the line is what gets measured) ·
+  **marker** 11.8% *(was 41%)*, and only for an opponent who is genuinely dangerous — inside our
+  own third or already through the back line — · **zone** **71.5%** *(was 0.0%)*.
+  `Separate()` now pushes **opponents** apart too, with a radius deliberately shorter than the
+  distance a presser stands off the ball so it can never stop a challenge: time spent inside a
+  metre of an opponent **0.116% → 0.066%** on the same match. And the `Pressing` instruction is a
+  real **TRIGGER**: a zone of engagement in decimetres from your own goal (350 / 620 / 1050) plus
+  the two situations that switch the press on outside it — a **back pass** (+50% of reach for three
+  seconds) and a **reception out wide** (+20%). Measured, the space left to a man on the ball in his
+  own third: **low 6.76 m · medium 6.56 m · high 5.96 m**, and the share of ticks spent pressing
+  **5.7% → 9.7%**. (The third trigger the plan names — a dirty touch — needs execution error to
+  exist at all, which is phase 4; it was not faked.)
+  **Two things the measurement asked for and the plan did not:** the block **collapses in 1.5 s and
+  opens in 4** (phase 2's inertia was symmetric, so with a turnover every few seconds a side spent
+  most of its defending time still carrying the attacking width — worth 2.6 m of defending width on
+  its own), and a man caught up the pitch **runs back** instead of jogging.
+  **Readings inside the band 10/19 → 12/19**, and they are the two the phase declared: defending
+  **depth 47.8 → 36.2 m** (band 22-38) and **back line spread 9.2 → 5.9 m** (band 0-6), with
+  defending width 40.6, biggest hole 11.5, marked share 13.0%, attacking 42.9 × 39.4 and km/player
+  11.56 all held. **Goals 2.52 and shots 25.1 are STILL identical digit for digit** to phases 0, 1
+  and 2 — the movement layer draws from the RNG after the result is decided. For the first time the
+  two rows of the shape measurement disagree: **40.6 × 36.2 defending against 42.9 × 39.4
+  attacking** (phase 2: 38.8 × 47.8 against 42.0 × 48.3, the same shape twice).
+  `MatchEngine.Version` → **6**, golden master → **`0xABC7B41DC6F258C2`**, v5 replays no longer
+  renderable (the client rejects them itself by comparing `MatchEngine.Version`). Cost **483 → 444
+  ms a match in the container** — cheaper than phase 2, because assigning four marks instead of ten
+  and leaving seven men standing in their place costs less than what it replaced.
+  **The measurement disproved two hypotheses, again.** With the duties in place the marking share
+  collapsed but the defending depth barely moved (47.8 → 45.3): the obvious culprit — "the markers
+  are dragging the shape apart" — was wrong, and one probe said so in a line: the zone SPOTS spanned
+  26 m while the men spanned 42.6, with the most advanced man **12 m in front of his own place**.
+  The second hypothesis, "they walk too slowly when they are near it", was tried and **paid
+  terribly**: halving the approach band bought 0.8 m of depth and cost **1.5 km a match per
+  player**, which put the mileage out of band. Put back. What worked was compressing the nominal
+  shape and the transition, not making people run more. New `DefensiveDutyTests` (5) pin the
+  defending shape, the bodies and the trigger; `BlockShapeTests` (6) still green. Full write-up in
+  §10 of the plan.
+  **The phase also answers phase 2's open question — where the 41 minutes of `dotnet test` go.**
+  Timed per test, the `Match` namespace cost 1932 s in the container and **1806 s of it (93%) was
+  four tests in `MatchEngineTests`**: the three calibration sweeps of the RESULT model plus the
+  scorer check, thousands of matches each — and every one of those matches was also building **a
+  film none of those tests looks at**, because `new MatchEngine()` generates the stream by default
+  and since phase 1 a match with the picture costs half a second against the result model's one
+  millisecond. `MatchEngineTests.Play` now builds the engine with `generatePositions: false` (only
+  `GoldenMaster_SameSeed_IdenticalReport` turns it back on): **1806 s → 2.2 s, every printed figure
+  identical** — 2.44 goals/match, 24.8% draws, 48.4% home wins, 51.2% vs 41.8%. Safe by a test that
+  already existed (`SkippingTheStream_LeavesTheResultUntouched`), with the golden master still
+  covering the film through `DeterminismCheckTests`. On the user's machine those four tests are
+  ~7,000 matches x 268 ms = **about 31 of the 41 minutes**. **Confirmed on his machine: `dotnet test`
+  went from 41 minutes to 360 s** (Sim.Core.Tests 239.9 s), i.e. 2467 s → 240 s for the same 349
+  tests and the same printed calibration.
+  **One printed figure did drift, and it is worth knowing why:** `[positioning-width]` reads
+  549 vs 531 where it read 543 vs 524 — that harness reuses one `Pcg32` across its 400 matches, so
+  the movement layer's draws shift the matches that follow it. The claim it makes is a comparative
+  one (wide creates more than narrow) and the gap is unchanged at +18 against +19, but a sweep that
+  shares an RNG across matches is not a figure to quote as fixed.
+- [ ] Phase 4 — decisions on the ball · [ ] Phase 5 — the laws · [ ] Phase 6 — inverting the
+  causality · [ ] Phase 7 — performance data · [ ] Phase 8 — the instructions matter
 
 - [~] **13.2 The agent match engine** — 13.1's choreographer is retired. It wrote a script in TICK SPACE and had the players act it out, so nobody in it decided anything: the ball's owner was assigned rather than won, a pass happened because the script said so rather than because one was on, nothing knew the ball had gone out, and team shape was a formula on ball position — which is why the user's second Play-mode recording showed twenty men in one penalty area, half the pitch empty, and players standing on top of each other. That is not a defect list, it is what that architecture produces.
   **The model, from the literature the user asked me to go and find:** Mat Buckland's *Programming Game AI by Example* ch. 4 (Simple Soccer) is the canonical design for a believable 2D match, and it is agent-based. Each player has a home region from the formation, a small set of states and steering with SEPARATION (the missing separation is why the tokens overlapped). Each team has a brain: who chases, who supports, who marks. A **support-spot grid** in the attacking half is scored on whether the man on the ball could find it, whether a goal could be struck from it, and whether it is a comfortable distance — the best spot is where the attackers run, and that is what a viewer reads as a pattern of play. **Passing** follows the book's rule verbatim — *"the best pass is the pass that cannot be intercepted by an opponent and that is as far forward of the receiver as possible"* — with three candidate targets per team-mate. **Marking** takes the RoboCup 2D idea of grouped assignment (defenders take the most advanced opponents first, each opponent once) instead of "everyone marks his nearest", which is what puts three men on one opponent. And the **ball is an object** with velocity and friction: a pass can be read and cut out, and crossing a line IS the throw-in — restarts are DETECTED, not written.

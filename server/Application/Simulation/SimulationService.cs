@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using Sim.Core.Domain;
 using Sim.Core.Generation;
 using Sim.Core.Match;
@@ -13,9 +13,9 @@ namespace Fts.Application.Simulation;
 public sealed class SimulationService : ISimulationService
 {
     /// <summary>Combined hash of the default <see cref="DeterminismCheck.Run()"/> — the value the
-    /// client logs (golden master 0xB3C30BEEAA5781B2, engine v5 / engine rework phase 2).
+    /// client logs (golden master 0xABC7B41DC6F258C2, engine v6 / engine rework phase 3).
     /// Pinned by <c>SimulationDeterminismTests</c>.</summary>
-    public ulong GoldenCombinedHash => 0xB3C30BEEAA5781B2UL;
+    public ulong GoldenCombinedHash => 0xABC7B41DC6F258C2UL;
 
     public SimulateMatchResponse SimulateMatch(SimulateMatchRequest request)
     {

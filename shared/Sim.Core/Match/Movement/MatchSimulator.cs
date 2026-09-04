@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using Sim.Core.Config;
 using Sim.Core.Domain;
 using Sim.Core.Random;
@@ -57,6 +57,17 @@ namespace Sim.Core.Match.Movement
         private bool[] _keeper = System.Array.Empty<bool>();
         private int[] _hold = System.Array.Empty<int>();
         private int[] _mark = System.Array.Empty<int>();
+
+        // One duty per man per brain tick, for the side without the ball (engine phase 3).
+        // Going to the ball is decided every tick and is not stored here; these are the three
+        // standing jobs: cover the presser, pick a man up, or hold your place in the block.
+        private const int DutyZone = 0;
+        private const int DutyCover = 1;
+        private const int DutyMark = 2;
+        private int[] _duty = System.Array.Empty<int>();
+
+        /// <summary>Until when a ball played backwards keeps the opposing press switched on.</summary>
+        private readonly int[] _pressUntil = new int[SideCount];
 
         /// <summary>Where each player was when he gained the ball, and whether his run has been called.</summary>
         private int[] _gotBallX = System.Array.Empty<int>();
@@ -124,13 +135,16 @@ namespace Sim.Core.Match.Movement
         private int _releasedUntil = -1;
 
         private int _controlU, _kickU, _separationU, _interceptU, _arrivalU, _dribbleReportU;
+        private int _foeSeparationU;
+        private int _recoveryU;
+        private long _foeSeparationSq;
         private int _approachU;
         private int _separationSq;
         private int _maxPassForce, _maxShootForce, _shootRangeU;
         private int _maxPassRange, _nominalStepU, _minFlightTicks, _maxFlightTicks;
         private int _streamStride, _lastFrame;
 
-        /// <summary>Scratch for <see cref="AssignMarks"/>, so a hot loop allocates nothing.</summary>
+        /// <summary>Scratch for <see cref="AssignDuties"/>, so a hot loop allocates nothing.</summary>
         private bool[] _markTaken = System.Array.Empty<bool>();
 
         public MatchSimulator(MatchBalance cfg)
@@ -262,6 +276,9 @@ namespace Sim.Core.Match.Movement
             _keeper = new bool[total];
             _hold = new int[total];
             _mark = new int[total];
+            _duty = new int[total];
+            _pressUntil[0] = -1;
+            _pressUntil[1] = -1;
             _gotBallX = new int[total];
             _gotBallY = new int[total];
             _runCalled = new bool[total];
@@ -274,6 +291,11 @@ namespace Sim.Core.Match.Movement
             _kickU = U.Units(_cfg.KickRangeDm);
             _separationU = U.Units(_cfg.SeparationRadiusDm);
             _separationSq = _separationU * _separationU;
+            _recoveryU = U.Units(_cfg.RecoveryRunDm);
+            if (_recoveryU < 1) _recoveryU = 1;
+            _foeSeparationU = U.Units(_cfg.OpponentSeparationRadiusDm);
+            if (_foeSeparationU < 1) _foeSeparationU = 1;
+            _foeSeparationSq = (long)_foeSeparationU * _foeSeparationU;
             _interceptU = U.Units(_cfg.InterceptReachDm);
             _shootRangeU = U.Units(_cfg.MaxShootRangeDm);
             _markTaken = new bool[_n];
@@ -440,18 +462,19 @@ namespace Sim.Core.Match.Movement
                 int left = _director.TicksToChance(tick, side == 0);
                 _urgent[side] = left >= 0 && left <= _cfg.ChanceUrgencyTicks;
 
+                // The shape, once for the tick, and FIRST: everything that asks where a man
+                // belongs reads it and nothing recomputes it, and the duties below are read off
+                // it — where the back line is decides who has got in behind it.
+                UpdateBlock(side);
+
                 if (_attacking[side])
                 {
                     if (rethink) UpdateSupport(tick, side);
                 }
                 else if (rethink)
                 {
-                    AssignMarks(side);
+                    AssignDuties(side);
                 }
-
-                // The shape, once for the tick. Everything that asks where a man belongs reads
-                // it; nothing recomputes it.
-                UpdateBlock(side);
             }
         }
 
@@ -549,55 +572,89 @@ namespace Sim.Core.Match.Movement
         }
 
         /// <summary>
-        /// Who picks up whom. Defenders take the most advanced opponents first and each
-        /// opponent is taken once — the naive "everybody marks his nearest" leaves three men
-        /// on one opponent and nobody on the rest, which is exactly what a crowd looks like.
+        /// Who does what, for a side without the ball (engine phase 3).
+        ///
+        /// What this replaced put a marker on every one of the ten opponents, wherever he was
+        /// (§1.5): ten duels roaming the pitch, a Zone branch that ran 0.0% of the time, and a
+        /// defending shape that was the attacking shape moved five metres back — which is why the
+        /// two rows of the measurement agreed to a tenth of a metre. Football is zonal. One man
+        /// goes to the ball (decided every tick, not here), one covers him, an opponent is picked
+        /// up only where he is genuinely dangerous — inside our own third, or already through the
+        /// back line — and everybody else holds his place in the block.
         /// </summary>
-        private void AssignMarks(int side)
+        private void AssignDuties(int side)
         {
             int opponent = 1 - side;
+            bool home = side == 0;
+
+            for (int i = 0; i < _n; i++)
+            {
+                _duty[side * _n + i] = DutyZone;
+                _mark[side * _n + i] = -1;
+            }
+
+            // The line, in depth from our own goal: past it an opponent is in behind.
+            int lineDepth = home
+                ? U.Dm(_blockLineU[side])
+                : Pitch.LengthDm - U.Dm(_blockLineU[side]);
+
             bool[] taken = _markTaken;
             for (int i = 0; i < _n; i++) taken[i] = false;
 
-            for (int i = 0; i < _n; i++) _mark[side * _n + i] = -1;
-
-            // Our men, deepest first.
-            for (int pass = 0; pass < _n; pass++)
+            // The dangerous ones first — nearest our goal wins, and a man the timeline says has
+            // found a yard counts as nearer than he is.
+            for (int pass = 0; pass < _cfg.MaxMarkers; pass++)
             {
-                int me = -1, meDepth = int.MaxValue;
-                for (int i = 0; i < _n; i++)
-                {
-                    int k = side * _n + i;
-                    if (_keeper[k] || _mark[k] >= 0) continue;
-                    if (_forward[k] < meDepth)
-                    {
-                        meDepth = _forward[k];
-                        me = i;
-                    }
-                }
-
-                if (me < 0) break;
-
-                int best = -1, bestScore = int.MinValue;
+                int worst = -1, worstDanger = int.MaxValue;
                 for (int j = 0; j < _n; j++)
                 {
                     int ok = opponent * _n + j;
                     if (_keeper[ok] || taken[j]) continue;
 
-                    // Danger first (how far up he is), then how near he is to me.
-                    int distance = U.Distance(_px[side * _n + me], _py[side * _n + me], _px[ok], _py[ok]);
-                    int score = _forward[ok] * 3 - distance / U.Scale;
-                    if (j == _looseMan[opponent]) score -= 600;   // he has found a yard
-                    if (score > bestScore)
-                    {
-                        bestScore = score;
-                        best = j;
-                    }
+                    int depth = home ? U.Dm(_px[ok]) : Pitch.LengthDm - U.Dm(_px[ok]);
+                    bool inOurThird = depth <= _cfg.MarkOwnThirdDepthDm;
+                    bool inBehind = depth < lineDepth - _cfg.MarkBehindLineDm;
+                    if (!inOurThird && !inBehind) continue;
+
+                    int danger = depth;
+                    if (j == _looseMan[opponent]) danger -= _cfg.MarkOwnThirdDepthDm / 4;
+                    if (danger < worstDanger) { worstDanger = danger; worst = j; }
                 }
 
-                _mark[side * _n + me] = best;
-                if (best >= 0) taken[best] = true;
+                if (worst < 0) break;
+                taken[worst] = true;
+
+                // The nearest man who has nothing else to do takes him.
+                int foe = opponent * _n + worst;
+                int best = -1;
+                long bestDistance = long.MaxValue;
+                for (int i = 0; i < _n; i++)
+                {
+                    int k = side * _n + i;
+                    if (_keeper[k] || _duty[k] != DutyZone || _chaser[side] == i) continue;
+                    long d = U.DistanceSq(_px[k], _py[k], _px[foe], _py[foe]);
+                    if (d < bestDistance) { bestDistance = d; best = i; }
+                }
+
+                if (best < 0) break;
+                _duty[side * _n + best] = DutyMark;
+                _mark[side * _n + best] = worst;
             }
+
+            // And one man covers the space behind whoever goes to the ball.
+            CoverSpot(side, out int cx, out int cy);
+            int cover = -1;
+            long coverRange = (long)U.Units(_cfg.CoverMaxRangeDm) * U.Units(_cfg.CoverMaxRangeDm);
+            for (int i = 0; i < _n; i++)
+            {
+                int k = side * _n + i;
+                if (_keeper[k] || _duty[k] != DutyZone || _chaser[side] == i) continue;
+                if (_lineRank[k] == 0) continue;   // a centre-back covering is a centre-back out of the line
+                long d = U.DistanceSq(_px[k], _py[k], cx, cy);
+                if (d < coverRange) { coverRange = d; cover = i; }
+            }
+
+            if (cover >= 0) _duty[side * _n + cover] = DutyCover;
         }
 
         // ------------------------------------------------------------------ acting
@@ -892,6 +949,10 @@ namespace Sim.Core.Match.Movement
             _ball.Kick(side, slot, bestX - _px[k], bestY - _py[k], passForce);
             Release(tick, side, slot);
 
+            // A ball played backwards is the moment the other side steps up (engine phase 3).
+            if (dir * (bestX - _px[k]) < -U.Units(_cfg.BackPassMinDm))
+                _pressUntil[1 - side] = tick + _cfg.PressBackPassTicks;
+
             _receiver[side] = bestSlot;
             _receiveX[side] = bestX;
             _receiveY[side] = bestY;
@@ -1007,7 +1068,7 @@ namespace Sim.Core.Match.Movement
                 InterceptSpot(k, out tx, out ty);
                 sprint = true;
             }
-            else if (!_attacking[side] && Pressing(side, slot, out pressHomeX, out pressHomeY))
+            else if (!_attacking[side] && Pressing(tick, side, slot, out pressHomeX, out pressHomeY))
             {
                 PressSpot(k, out tx, out ty);
                 sprint = true;
@@ -1040,7 +1101,11 @@ namespace Sim.Core.Match.Movement
                 ty = _supportY[side];
                 sprint = true;
             }
-            else if (!_attacking[side] && _mark[k] >= 0)
+            else if (!_attacking[side] && _duty[k] == DutyCover)
+            {
+                CoverSpot(side, out tx, out ty);
+            }
+            else if (!_attacking[side] && _duty[k] == DutyMark && _mark[k] >= 0)
             {
                 MarkSpot(side, k, out tx, out ty);
             }
@@ -1055,7 +1120,17 @@ namespace Sim.Core.Match.Movement
                 HomeSpot(side, slot, out tx, out ty);
             }
 
-            Steer(k, U.ClampX(tx), U.ClampY(ty), sprint);
+            // The recovery run (engine phase 3). A man who has been caught up the pitch does
+            // not jog home while the ball goes the other way, and the difference is not cosmetic:
+            // at a jog the block takes a dozen seconds to re-form, which is a dozen seconds in
+            // which the side defending is a side still strung out from attacking.
+            tx = U.ClampX(tx);
+            ty = U.ClampY(ty);
+            if (!sprint && !_attacking[side] && !_keeper[k]
+                && U.DistanceSq(_px[k], _py[k], tx, ty) > (long)_recoveryU * _recoveryU)
+                sprint = true;
+
+            Steer(k, tx, ty, sprint);
         }
 
         private void Steer(int k, int tx, int ty, bool sprint)
@@ -1138,8 +1213,32 @@ namespace Sim.Core.Match.Movement
                 pushY += sy;
             }
 
-            wx += pushX * _cfg.SeparationStrengthPercent / 100;
-            wy += pushY * _cfg.SeparationStrengthPercent / 100;
+            // And off the opposition (engine phase 3). Separation used to push team-mates apart
+            // and never opponents, which is why a marker stood literally on top of his man and
+            // the video showed red/blue pairs moving as one body (§1.5). The radius is shorter
+            // than the distance a presser stands off the ball, so this keeps men out of each
+            // other without ever stopping a challenge.
+            int foePushX = 0, foePushY = 0;
+            int foes = (1 - side) * _n;
+            for (int j = 0; j < _n; j++)
+            {
+                int other = foes + j;
+                int dx = _px[k] - _px[other], dy = _py[k] - _py[other];
+                long sq = (long)dx * dx + (long)dy * dy;
+                if (sq >= _foeSeparationSq || sq <= 0) continue;
+                int distance = U.Length(dx, dy);
+                if (distance <= 0) continue;
+
+                int strength = (_foeSeparationU - distance) * top / _foeSeparationU;
+                U.Scaled(dx, dy, strength, out int fx, out int fy);
+                foePushX += fx;
+                foePushY += fy;
+            }
+
+            wx += pushX * _cfg.SeparationStrengthPercent / 100
+                + foePushX * _cfg.OpponentSeparationStrengthPercent / 100;
+            wy += pushY * _cfg.SeparationStrengthPercent / 100
+                + foePushY * _cfg.OpponentSeparationStrengthPercent / 100;
             U.Cap(ref wx, ref wy, top);
         }
 
@@ -1171,9 +1270,11 @@ namespace Sim.Core.Match.Movement
             // Toward the attacking shape, or back toward the defensive one, a step at a time.
             int step = 1000 / _cfg.ShapeTransitionTicks;
             if (step < 1) step = 1;
+            int collapse = 1000 / _cfg.ShapeCollapseTicks;
+            if (collapse < 1) collapse = 1;
             int e = _expansion[side];
             if (_attacking[side]) { e += step; if (e > 1000) e = 1000; }
-            else { e -= step; if (e < 0) e = 0; }
+            else { e -= collapse; if (e < 0) e = 0; }
             _expansion[side] = e;
 
             // Law 8: a kickoff is taken with both sides in their own half. The shape is squeezed
@@ -1196,7 +1297,10 @@ namespace Sim.Core.Match.Movement
 
             int spacing = kickoff
                 ? _cfg.LineSpacingDm
-                : _cfg.LineSpacingDm * (100 + (_cfg.AttackLineSpacingPercent - 100) * e / 1000) / 100;
+                : _cfg.LineSpacingDm
+                  * (_cfg.DefendLineSpacingPercent
+                     + (_cfg.AttackLineSpacingPercent - _cfg.DefendLineSpacingPercent) * e / 1000)
+                  / 100;
 
             // How much room the front line has. Without a ceiling the most advanced line ends up
             // standing on the goal line instead of on the edge of the box.
@@ -1343,7 +1447,7 @@ namespace Sim.Core.Match.Movement
         /// the caller needs it whichever answer it gets and it is not cheap enough to work out
         /// twice for eleven men, ten times a second.
         /// </summary>
-        private bool Pressing(int side, int slot, out int homeX, out int homeY)
+        private bool Pressing(int tick, int side, int slot, out int homeX, out int homeY)
         {
             int k = side * _n + slot;
             HomeSpot(side, slot, out homeX, out homeY);
@@ -1359,8 +1463,46 @@ namespace Sim.Core.Match.Movement
             }
 
             long reach = _tactics[side].PressReachU;
-            if (_urgent[side]) reach = reach * _cfg.ChancePressPercent / 100;
+            if (_urgent[side])
+            {
+                reach = reach * _cfg.ChancePressPercent / 100;
+            }
+            else
+            {
+                // The TRIGGER (engine phase 3). A side does not chase the man on the ball
+                // wherever he stands: it has a zone it presses in, which is what the coach's
+                // Pressing instruction has always meant, plus the two situations that switch the
+                // press on outside it — a ball played backwards, and a man receiving with a
+                // touchline behind him. Outside both, the block holds its shape and lets him
+                // have it. (A loose ball is not in here on purpose: it is chased by the branch
+                // above this one, whoever owns the trigger.)
+                int ballDepth = side == 0 ? U.Dm(_ball.X) : Pitch.LengthDm - U.Dm(_ball.X);
+                if (ballDepth > _tactics[side].PressTriggerDepthDm) return false;
+
+                int boost = 100;
+                if (_pressUntil[side] > tick) boost = boost * _cfg.PressBackPassPercent / 100;
+                int offCentre = _ball.Y - U.CenterYU;
+                if (offCentre < 0) offCentre = -offCentre;
+                if (offCentre > U.Units(_cfg.PressWideThresholdDm))
+                    boost = boost * _cfg.PressWideReceptionPercent / 100;
+                reach = reach * boost / 100;
+            }
+
             return U.DistanceSq(homeX, homeY, _ball.X, _ball.Y) <= reach * reach;
+        }
+
+        /// <summary>
+        /// Where the covering man stands: goal-side of the ball and a few metres off it. Not on
+        /// the ball — that is the presser's job — but in the space the presser left behind him.
+        /// </summary>
+        private void CoverSpot(int side, out int x, out int y)
+        {
+            bool home = side == 0;
+            int goalX = U.Units(MovementGeometry.OwnGoalX(home));
+            U.Scaled(goalX - _ball.X, U.CenterYU - _ball.Y, U.Units(_cfg.CoverDistanceDm),
+                out int gx, out int gy);
+            x = U.ClampX(_ball.X + gx);
+            y = U.ClampY(_ball.Y + gy);
         }
 
         private void PressSpot(int k, out int x, out int y)
@@ -1393,18 +1535,29 @@ namespace Sim.Core.Match.Movement
             x = _px[ok] + gx;
             y = _py[ok] + gy;
 
+            // A man who is NOT on the back line does not drop in behind it (engine phase 3).
+            // He takes his man goal-side inside his own zone; the space between the back line and
+            // the goal belongs to the back four, and a midfielder dropping into it is what put
+            // eight metres of daylight through a line that is supposed to be flat.
+            int ownLineU = _blockLineU[side];
+            if (_lineRank[k] != 0)
+            {
+                int spotDepth = home ? x : U.LengthU - x;
+                int floor = home ? ownLineU : U.LengthU - ownLineU;
+                if (spotDepth < floor) x = ownLineU;
+                return;
+            }
+
             // A man on the back line HOLDS THE LINE (engine phase 2). He picks his opponent up
             // across the pitch, but he does not follow him up and down it: four defenders each
             // tracking his own man's depth is exactly how a back four stops being a line and
             // becomes four separate duels — the fourteen metres of "back line spread" the
             // harness was reading. He leaves the line only for a man who has already got behind
             // it, which is the one thing the line exists to deal with.
-            if (_lineRank[k] != 0) return;
-
-            int lineU = _blockLineU[side];
+            int lineU = ownLineU;
             int lineDepth = home ? lineU : U.LengthU - lineU;
             int manDepth = home ? _px[ok] : U.LengthU - _px[ok];
-            if (manDepth >= lineDepth) x = lineU;
+            if (manDepth >= lineDepth - U.Units(_cfg.MarkBehindLineDm)) x = lineU;
         }
 
         // ------------------------------------------------------------------ resolution

@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using NUnit.Framework;
@@ -29,8 +29,18 @@ namespace Sim.Core.Tests.Match
             _midB = _league.Clubs[10];
         }
 
-        private static MatchReport Play(Club home, Club away, ulong seed, BalanceConfig? cfg = null) =>
-            new MatchEngine(cfg).Simulate(
+        /// <summary>
+        /// One match. The position stream is OFF by default (engine phase 3): this fixture asks
+        /// what the SCORE model does, and its three calibration harnesses sweep thousands of
+        /// matches to ask it. Since phase 1 a match with the picture costs half a second against
+        /// the result model's one millisecond, so leaving it on here was ninety-three percent of
+        /// the time the whole match namespace took — a picture nothing in this file looks at.
+        /// `SkippingTheStream_LeavesTheResultUntouched` is the test that says this is safe, and
+        /// the golden master below keeps the stream on so that claim is still pinned somewhere.
+        /// </summary>
+        private static MatchReport Play(Club home, Club away, ulong seed, BalanceConfig? cfg = null,
+            bool positions = false) =>
+            new MatchEngine(cfg, generatePositions: positions).Simulate(
                 LineupSelector.BestEleven(home), LineupSelector.BestEleven(away), new Pcg32(seed));
 
         // ------------------------------------------------------------------ determinism
@@ -38,8 +48,8 @@ namespace Sim.Core.Tests.Match
         [Test]
         public void GoldenMaster_SameSeed_IdenticalReport()
         {
-            string a = JsonSerializer.Serialize(Play(_midA, _midB, 42));
-            string b = JsonSerializer.Serialize(Play(_midA, _midB, 42));
+            string a = JsonSerializer.Serialize(Play(_midA, _midB, 42, positions: true));
+            string b = JsonSerializer.Serialize(Play(_midA, _midB, 42, positions: true));
 
             Assert.That(b, Is.EqualTo(a));
         }

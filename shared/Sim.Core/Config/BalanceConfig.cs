@@ -1,4 +1,4 @@
-namespace Sim.Core.Config
+﻿namespace Sim.Core.Config
 {
     /// <summary>
     /// THE single home for every gameplay tunable (ARCHITECTURE.md 4.1 rule 4).
@@ -1094,7 +1094,7 @@ namespace Sim.Core.Config
 
         /// <summary>How close the presser gets to the ball, and a marker to his man.</summary>
         public int PressDistanceDm { get; set; } = 22;
-        public int MarkDistanceDm { get; set; } = 58;
+        public int MarkDistanceDm { get; set; } = 32;
 
         /// <summary>
         /// The stretch in front of the receiver that is HIS to win. An opponent whose only
@@ -1273,6 +1273,17 @@ namespace Sim.Core.Config
         public int ShapeTransitionMs { get; set; } = 4000;
         public int ShapeTransitionTicks => TicksOfMs(ShapeTransitionMs);
 
+        /// <summary>
+        /// And how long it takes to CLOSE DOWN into the defensive one (engine phase 3). Not the
+        /// same number: a side drops into its block in a second and a half and comes out of it in
+        /// four. Symmetric, the inertia phase 2 added meant a side that had just lost the ball
+        /// kept the attacking shape's width and line spacing for four seconds — and with a
+        /// turnover every few seconds that was most of the time it spent defending, which is why
+        /// the harness kept reading the defending block as the attacking one.
+        /// </summary>
+        public int ShapeCollapseMs { get; set; } = 1500;
+        public int ShapeCollapseTicks => TicksOfMs(ShapeCollapseMs);
+
         /// <summary>Distance between two adjacent lines of the block, in decimetres.</summary>
         public int LineSpacingDm { get; set; } = 100;
 
@@ -1283,6 +1294,16 @@ namespace Sim.Core.Config
         /// when possession is lost while his centre-backs move fifteen.
         /// </summary>
         public int AttackLineSpacingPercent { get; set; } = 120;
+
+        /// <summary>
+        /// And how much of it is left when the side is defending (engine phase 3). Until the
+        /// duties existed this could not be seen: every man was following an opponent, so what
+        /// the harness measured as "the defending block" was the attacking block moved five
+        /// metres back. With everybody holding a zone the block's own depth IS what gets
+        /// measured, and a side without the ball squeezes - thirty metres from the back line to
+        /// the strikers, not forty-five.
+        /// </summary>
+        public int DefendLineSpacingPercent { get; set; } = 55;
 
         /// <summary>How near the goal the most advanced line will stand, in decimetres from it.</summary>
         public int FrontLineGoalGapDm { get; set; } = 160;
@@ -1300,7 +1321,7 @@ namespace Sim.Core.Config
         /// ball and with it. A professional block defends thirty to forty metres wide and
         /// attacks forty to sixty: the same shape, squeezed or stretched.
         /// </summary>
-        public int DefendWidthPercent { get; set; } = 66;
+        public int DefendWidthPercent { get; set; } = 60;
         public int AttackWidthPercent { get; set; } = 118;
 
         /// <summary>
@@ -1309,6 +1330,79 @@ namespace Sim.Core.Config
         /// difference between a team shifting across and a team collapsing into one channel.
         /// </summary>
         public int BlockLateralShiftMaxDm { get; set; } = 100;
+
+        // --- Defending: duties, zones and triggers (engine phase 3) ---
+        //
+        // Football is zonal. Before this the team brain put a marker on every one of the ten
+        // opponents, wherever he stood (§1.5), so ten individual duels wandered the pitch and a
+        // defending side's shape WAS the attacking side's shape moved five metres back - which is
+        // exactly what the measurement read (defending 38.8 x 47.8 m against attacking 42.0 x
+        // 48.3). A man now gets ONE duty per brain tick: he goes to the ball, he covers the man
+        // who does, he picks up an opponent who is genuinely dangerous, or he holds his place in
+        // the block. The last of those is what nearly everybody does, and it is the branch of the
+        // movement that used to run 0.0% of the time.
+
+        /// <summary>
+        /// How deep into our own half an opponent has to be before anybody leaves the block to
+        /// pick him up, in decimetres from our own goal line. Beyond it he is somebody's zone,
+        /// not somebody's man.
+        /// </summary>
+        public int MarkOwnThirdDepthDm { get; set; } = 350;
+
+        /// <summary>
+        /// How far past the back line counts as running in behind. A man who has got there is
+        /// marked wherever he is: it is the one thing the line cannot deal with by holding.
+        /// </summary>
+        public int MarkBehindLineDm { get; set; } = 40;
+
+        /// <summary>Most men who may leave their zone to take an opponent at the same time.</summary>
+        public int MaxMarkers { get; set; } = 4;
+
+        /// <summary>
+        /// Where the covering man stands - goal-side of the ball, a few metres off it - and how
+        /// far he will travel to get there. A single presser is walked around; a presser with
+        /// cover behind him is a press.
+        /// </summary>
+        public int CoverDistanceDm { get; set; } = 95;
+        public int CoverMaxRangeDm { get; set; } = 320;
+
+        /// <summary>
+        /// How far up the pitch a side will chase the man on the ball, in decimetres from its own
+        /// goal, per Pressing instruction (low / medium / high). This is the trigger ZONE, and it
+        /// is what the instruction has always meant: a low block lets the centre-back have it and
+        /// keeps its shape, a high press goes and gets him.
+        /// </summary>
+        public int[] PressTriggerDepthDm { get; set; } = { 350, 620, 1050 };
+
+        /// <summary>
+        /// The situations that switch the press on outside its zone. A ball played backwards is
+        /// the moment a side steps up, and a man receiving with a touchline behind him has half
+        /// the options he would have in the middle. The third real trigger - a dirty touch - needs
+        /// execution error to exist at all, which is phase 4.
+        /// </summary>
+        public int PressBackPassPercent { get; set; } = 150;
+        public int PressWideReceptionPercent { get; set; } = 120;
+        public int PressWideThresholdDm { get; set; } = 200;
+        public int BackPassMinDm { get; set; } = 60;
+        public int PressBackPassMs { get; set; } = 3000;
+        public int PressBackPassTicks => TicksOfMs(PressBackPassMs);
+
+        /// <summary>
+        /// Bodies. Separation used to push team-mates apart and never opponents, so a marker stood
+        /// literally on top of his man (§1.5). The radius is deliberately shorter than the
+        /// distance a presser stands off the ball, so keeping men out of each other cannot stop
+        /// anybody from making a challenge.
+        /// </summary>
+        /// <summary>
+        /// How far out of his defensive place a man has to be caught before he stops jogging
+        /// home and RUNS, in decimetres. Off the ball a footballer jogs; a recovery run is the
+        /// one thing off the ball he sprints for, and without it the block took a dozen seconds
+        /// to re-form after every turnover - which is measured as a block that is not compact.
+        /// </summary>
+        public int RecoveryRunDm { get; set; } = 180;
+
+        public int OpponentSeparationRadiusDm { get; set; } = 24;
+        public int OpponentSeparationStrengthPercent { get; set; } = 70;
 
         // --- Goalkeeper ---
 

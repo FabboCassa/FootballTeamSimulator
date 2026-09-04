@@ -1,4 +1,4 @@
-# Rifacimento del motore partita — diagnosi e piano
+﻿# Rifacimento del motore partita — diagnosi e piano
 
 Stato: piano approvato il 2026-09-02. Causalità invertita (il campo decide), lavorazione a fasi
 con il gioco sempre funzionante, regolamento fino a falli/cartellini/punizioni.
@@ -6,7 +6,7 @@ con il gioco sempre funzionante, regolamento fino a falli/cartellini/punizioni.
 - [x] **Fase 0 — banco di prova** (2026-09-02). Vedi §7 per la misura di partenza.
 - [x] **Fase 1 — unità e base temporale** (2026-09-03). Vedi §8.
 - [x] **Fase 2 — forma: formazione e blocco** (2026-09-03). Vedi §9.
-- [ ] Fase 3 — difendere: zona e trigger
+- [x] **Fase 3 — difendere: zona e trigger** (2026-09-04). Vedi §10.
 - [ ] Fase 4 — decisioni con la palla
 - [ ] Fase 5 — il regolamento
 - [ ] Fase 6 — inversione della causalità
@@ -15,27 +15,27 @@ con il gioco sempre funzionante, regolamento fino a falli/cartellini/punizioni.
 
 ---
 
-## 📍 Stato — 3 settembre 2026
+## 📍 Stato — 4 settembre 2026
 
-**Siamo qui: 🏁 FASE 2 CHIUSA E VERIFICATA dall'utente il 3 settembre 2026. Tutto verde.** La squadra
-adesso è un **blocco**: la formazione è disposta **per linee** invece che per ruoli, e dove sta un
-uomo viene dall'altezza della sua linea, dalla larghezza del blocco e dalla sua traslazione
-**con tetto** verso la palla — non più da una tabella in permille più una lerp senza tetto sulla
-Y della palla. Le letture in banda passano da **7/19 a 10/19**: si chiudono **larghezza** (34,6 →
-42,0 m) e **profondità del blocco in possesso** (55,7 → 48,3 m) e il **buco più grande** (16,6 →
-14,9 m), mentre i chilometri restano dentro (11,3 → 10,8) e **gol e tiri sono ancora identici
-cifra per cifra** — 2,52 e 25,1, come alla fase 0 e alla fase 1. Golden master nuovo:
-**`0xB3C30BEEAA5781B2`** (engine v5). `balance.ps1` senza `pitch` è **identico riga per riga**,
-verificato con un diff contro l'albero pre-fase: nessun numero del modello di risultato si è
-mosso. Vedi §9.
+**Siamo qui: 🏁 FASE 3 CHIUSA E VERIFICATA dall'utente il 4 settembre 2026. Tutto verde.** La squadra
+adesso **difende**: il cervello assegna un compito per uomo — va sulla palla, copre chi ci è andato,
+prende un uomo *solo dove è pericoloso*, oppure tiene la sua zona — al posto della marcatura a uomo
+su tutti e dieci. Il ramo "tieni la zona", che girava lo **0,0%** del tempo, adesso gira il
+**71,5%**, e la marcatura scende dal 41% all'11,8%. Le letture in banda passano da **10/19 a
+12/19**: si chiudono le due che la fase 2 aveva lasciato rosse — **profondità del blocco senza
+palla** (47,8 → **36,2 m**) e **dispersione della linea difensiva** (9,2 → **5,9 m**) — senza far
+uscire di banda nient'altro, e **gol e tiri restano identici cifra per cifra** (2,52 e 25,1, come
+alle fasi 0, 1 e 2). Per la prima volta la sagoma di chi difende **non è** quella di chi attacca:
+40,6 × 36,2 contro 42,9 × 39,4. Golden master nuovo: **`0xABC7B41DC6F258C2`** (engine v6). Vedi §10.
 
 | | Fase | Stato |
 |---|---|---|
 | 0 | banco di prova | ✅ fatta **e verificata dall'utente** |
 | 1 | unità e base temporale | ✅ fatta **e verificata dall'utente** |
 | 2 | forma: formazione e blocco | ✅ fatta **e verificata dall'utente** |
-| 3 | difendere: zona e trigger | ⬅️ **prossima** — e le tre bande difensive ancora rosse sono sue, vedi §9 |
-| 4-8 | — | da fare |
+| 3 | difendere: zona e trigger | ✅ fatta **e verificata dall'utente** |
+| 4 | decisioni con la palla | ⬅️ **prossima** — ed è la fase in cui nascono le differenze fra giocatori |
+| 5-8 | — | da fare |
 
 ### Come si verifica che tutto gira
 
@@ -44,9 +44,31 @@ mosso. Vedi §9.
     .\tools\balance.ps1 -Scenario pitch -PitchMatches 200 -PitchDump .\replay.html
     .\tools\balance.ps1        # gli altri scenari NON devono muoversi di un numero
 
-**Golden master della fase 2: `0xB3C30BEEAA5781B2`** (engine v5; era `0x214A70906A5180AC` in v4),
-già ripuntato nei quattro posti soliti. I replay salvati in v4 non sono più disegnabili: è
+**Golden master della fase 3: `0xABC7B41DC6F258C2`** (engine v6; era `0xB3C30BEEAA5781B2` in v5),
+già ripuntato nei quattro posti soliti. I replay salvati in v5 non sono più disegnabili: è
 previsto, e il client li rifiuta da solo perché confronta con `MatchEngine.Version`.
+
+### Verificato dall'utente il 4 settembre 2026 (fase 3)
+
+`dotnet test` **589 su 589, zero rossi, in 360,5 s** — `Sim.Core.Tests` **349** (i 340 della fase 2,
+più i 4 `ReplayCodecTests` che non aveva ancora girato, più i 5 nuovi `DefensiveDutyTests`) e
+`Api.Tests` **240**. `[DeterminismCheck]` e `[server-determinism]` stampano entrambi
+**`0xABC7B41DC6F258C2`**, **identico cifra per cifra** al valore calcolato nel container: la
+determinismo fra runtime sopravvive a engine v6. `.\tools\balance.ps1` **28/28 PASS con ogni cifra
+invariata** (difficoltà 6,9/6,6/9,5/7,6/10,1, 67,6 trasferimenti, ingaggi 69,8%, tutto il blocco
+mondo). Lo scenario `pitch` ha riprodotto **ogni singolo numero** del run del container — 12/19 in
+banda, difendendo 40,6 × 36,2 m, linea 5,9 m, gol 2,52, tiri 25,1 — a **263,6 ms a partita** contro
+i 444 del container. Il suo **exit code 1 è previsto**: è il rosso della palla tenuta sulla linea
+(§1.7), che è della fase 5.
+
+E la correzione dei quattro test costosi è confermata sul campo: **`dotnet test` è passato da 41
+minuti a 360 s** (`Sim.Core.Tests` da 2467 s a **239,9 s**) a parità di test e di cifre stampate.
+
+**Una cifra stampata si è però mossa, e vale sapere perché:** `[positioning-width]` legge 549 contro
+531 dove leggeva 543 contro 524. Quell'harness riusa **un solo `Pcg32` per le sue 400 partite**,
+quindi le pescate del livello movimento spostano le partite successive. La tesi che afferma è
+comparativa (largo crea più di stretto) e il distacco è invariato, +18 contro +19 — ma uno sweep che
+condivide l'RNG fra le partite non è un numero da citare come fisso.
 
 ### Verificato dall'utente il 3 settembre 2026 (fase 2)
 
@@ -433,7 +455,7 @@ Rompe golden master e replay salvati → `MatchEngine.Version` da 3 a 4 e rigene
 
 **Fatta il 3 settembre 2026 — il resoconto, con i numeri, è in §9.**
 
-### Fase 3 — Difendere: zona e trigger
+### Fase 3 — Difendere: zona e trigger ✅ FATTA
 
 *Qui il video cambia faccia: finché la marcatura è a uomo su tutti e dieci, la sagoma di chi
 difende È la sagoma di chi attacca, e le tre bande difensive ancora rosse sono sue (§9).*
@@ -1036,7 +1058,179 @@ posizionamento.
 
 ---
 
-## 10. Riferimenti
+## 10. Fase 3 — fatta: difendere, zona e trigger
+
+### Cosa è cambiato
+
+**Il cervello di squadra assegna un COMPITO, non un marcatore a testa.** `AssignMarks` metteva un
+marcatore su **ognuno** dei dieci avversari, ovunque si trovasse (§1.5): dieci duelli individuali
+che vagavano per il campo, il ramo "tieni la posizione di blocco" del movimento che girava lo
+**0,0%** del tempo, e — la conseguenza che la fase 2 aveva misurato e rimandato qui — una sagoma
+difensiva che **era** la sagoma offensiva spostata di cinque metri e ottanta. Adesso ogni uomo
+riceve un compito solo per tick di cervello:
+
+| compito | quota dei tick difensivi | dove sta |
+|---|---|---|
+| va sulla palla (`Presser`) | 7,5% | addosso al portatore |
+| copre chi ci è andato (`Cover`) | 8,9% | dal lato porta della palla, a 9,5 m |
+| prende un uomo (`Marker`) | 11,8% *(era 41%)* | solo nel nostro terzo, o già dietro la linea |
+| tiene la zona (`Zone`) | **71,5%** *(era 0,0%)* | al suo posto nel blocco |
+
+Un avversario si marca **dove è pericoloso davvero**: dentro il nostro terzo, oppure quando ha già
+passato la linea difensiva. Tutti gli altri sono una zona da tenere, non un uomo da inseguire. Il
+**Cover** non esce mai dalla linea difensiva — un centrale che va a coprire è un centrale fuori
+dalla linea, e la linea è esattamente ciò che si misura.
+
+**`Separate()` respinge anche gli avversari.** Prima allontanava solo i compagni, quindi il
+marcatore finiva letteralmente sopra il suo uomo. Il raggio è **deliberatamente più corto** della
+distanza a cui il pressante si ferma sulla palla, così tenere i corpi separati non impedisce mai un
+contrasto. Misurato sulla stessa partita, con la spinta spenta e accesa: il tempo passato entro un
+metro da un avversario scende da **0,116% a 0,066%**.
+
+**Il pressing è un TRIGGER.** L'istruzione `Pressing` adesso è una **zona di innesco** — fin dove
+la squadra va a prendere il portatore, in decimetri dalla propria porta: 350 / 620 / 1050 — più due
+situazioni che accendono il pressing fuori da quella zona: un **retropassaggio** (+50% di raggio per
+tre secondi) e una **ricezione sull'esterno** (+20%). Misurato, lo spazio lasciato a un uomo che ha
+la palla nel proprio terzo: **basso 6,76 m · medio 6,56 m · alto 5,96 m**, e la quota di tick
+passati a pressare va da **5,7% a 9,7%**. Il terzo trigger che il piano nominava — il controllo
+sporco — ha bisogno che l'errore di esecuzione esista, e quello è della **fase 4**: non è stato
+finto.
+
+### Le due cose che ha chiesto la misura, e che il piano non prevedeva
+
+**(1) Il blocco si CHIUDE più in fretta di quanto si apra.** La fase 2 aveva dato inerzia alla
+forma per farle smettere di sbattere di lato a ogni cambio di possesso, e l'aveva fatta simmetrica:
+quattro secondi in entrambe le direzioni. Con un cambio di possesso ogni pochi secondi (che è un
+difetto del passaggio, non della forma — fase 4) questo significava che una squadra che aveva
+appena perso palla si portava dietro **la larghezza e la spaziatura offensive per quattro secondi**,
+cioè per quasi tutto il tempo in cui difendeva. Adesso la chiusura è **1,5 secondi** e l'apertura
+resta 4. Da sola questa riga vale 2,6 m di larghezza difensiva.
+
+**(2) Un uomo sorpreso in avanti TORNA DI CORSA.** Fuori palla un calciatore trotta; la corsa di
+recupero è l'unica cosa fuori palla per cui scatta davvero. Senza, il blocco ci metteva una decina
+di secondi a riformarsi dopo ogni turnover, e ciò che l'harness misurava come "la squadra che
+difende" era una squadra ancora sfilata dall'azione d'attacco.
+
+### Come la misura ha smentito due ipotesi, di nuovo
+
+Il primo run con i compiti a posto chiudeva la marcatura (41% → 20%) ma la profondità difensiva si
+muoveva appena, da 47,8 a 45,3 m. **L'ipotesi ovvia — "sono i marcatori che sfilano la squadra" —
+era sbagliata**, e il probe l'ha detto in una riga: le posizioni di zona coprivano **26 m**, gli
+uomini ne coprivano **42,6**, e l'uomo più avanzato stava **12 m davanti al suo posto**. Non era la
+forma: erano uomini che non ci arrivavano mai.
+
+La seconda ipotesi — "camminano troppo piano quando sono vicini al posto" — è stata provata e
+**pagata malissimo**: dimezzare la banda di andatura (`PlayerApproachDm` 150 → 60) ha guadagnato
+0,8 m di profondità e costato **1,5 km a partita per giocatore**, portando i chilometri fuori banda.
+Rimessa com'era. Quello che ha funzionato è stato misurare la **dispersione** invece della media:
+lo scarto è rumore, non deriva, e il rumore si riduce comprimendo la forma nominale e la
+transizione, non facendo correre di più la gente.
+
+### La misura, prima e dopo (200 partite, tattiche neutre, seed 20260803)
+
+| Lettura | Fase 2 | **Fase 3** | Calcio vero | |
+|---|---|---|---|---|
+| **profondità del blocco senza palla** | 47,8 | **36,2 m** | 22-38 | ✅ **chiusa** |
+| **dispersione della linea difensiva** | 9,2 | **5,9 m** | 0-6 | ✅ **chiusa** |
+| larghezza del blocco senza palla | 38,8 | 40,6 m | 28-42 | ✅ tenuta |
+| buco più grande fra due uomini | 14,9 | 11,5 m | 0-15 | ✅ tenuta |
+| un avversario entro 3 m | 19,0% | 13,0% | 5-25 | ✅ tenuta |
+| larghezza del blocco in possesso | 42,0 | 42,9 m | 40-60 | ✅ tenuta |
+| profondità del blocco in possesso | 48,3 | 39,4 m | 30-50 | ✅ tenuta |
+| km per giocatore | 10,83 | 11,56 | 9,5-11,5 | ✅ tenuta (banda del check 9-12) |
+| **gol** | 2,52 | **2,52** | 2,6-2,8 | invariati |
+| **tiri** | 25,1 | **25,1** | 22-28 | invariati |
+
+**Letture in banda: da 10/19 a 12/19, e sono le due che la fase dichiarava.** La riga più
+importante resta quella che non si muove: **gol e tiri identici cifra per cifra** alla fase 0, alla
+fase 1 e alla fase 2. Il modello di risultato non è stato sfiorato — il livello movimento pesca
+dall'RNG **dopo** che il tabellino è deciso, ed è per questo che può cambiare faccia senza cambiare
+un punteggio.
+
+E per la prima volta le due righe della forma **non si somigliano più**: 40,6 × 36,2 difendendo
+contro 42,9 × 39,4 attaccando. Alla fase 2 erano 38,8 × 47,8 contro 42,0 × 48,3, cioè la stessa
+sagoma due volte.
+
+### Il costo
+
+    modello di risultato (generatePositions: false)   invariato
+    con il flusso di movimento    483 → 444 ms per partita   (container, .NET 10)
+
+**Meno** della fase 2, non di più: assegnare quattro marcature invece di dieci, e avere sette uomini
+su dieci che stanno fermi al loro posto invece di inseguire qualcuno, costa meno di quello che
+costava prima. Sulla macchina dell'utente il rapporto sarà diverso in valore assoluto (là la fase 2
+girava a 292 ms), ma il segno dovrebbe reggere.
+
+### Cosa è stato toccato
+
+| File | Cosa |
+|---|---|
+| `Match/Movement/MatchSimulator.cs` | `AssignDuties` (sostituisce `AssignMarks`), `CoverSpot`, il trigger dentro `Pressing`, la corsa di recupero in `Move`, `Separate` estesa agli avversari, la chiusura asimmetrica in `UpdateBlock`, la disciplina di linea in `MarkSpot` |
+| `Match/Movement/MovementTactics.cs` | l'istruzione `Pressing` porta anche la zona di innesco |
+| `Config/BalanceConfig.cs` | il blocco "difendere": zona di marcatura, cover, trigger, separazione dagli avversari, corsa di recupero, chiusura della forma, spaziatura difensiva delle linee |
+| `Match/MatchEngine.cs` | `Version = 6` |
+| `Sim.Core.Tests/Match/DefensiveDutyTests.cs` | **nuovo**: la sagoma difensiva è sua, i corpi non si compenetrano, il blocco basso lo lascia giocare |
+| `Api.Tests` · `SimulationService` · `runbook.md` · `release-checklist.md` | golden master ripuntato |
+
+### Cosa deve girare sulla macchina dell'utente
+
+    .\tools\build-simcore.ps1
+    dotnet test shared/Sim.Core.Tests/Sim.Core.Tests.csproj --logger "console;verbosity=detailed"
+    dotnet test server/Api.Tests/Api.Tests.csproj
+    .\tools\balance.ps1 -Scenario pitch -PitchMatches 200 -PitchDump .\replay.html
+    .\tools\balance.ps1            # ogni numero degli altri scenari deve restare identico
+
+**Il golden master è `0xABC7B41DC6F258C2`** (prima `0xB3C30BEEAA5781B2`), calcolato nel container su
+.NET 10 e già ripuntato nei quattro posti. I replay salvati in v5 non sono più disegnabili: è
+previsto, e il client li rifiuta da solo confrontando `MatchEngine.Version`.
+
+**Come è stata verificata.** Il container non arriva a NuGet, quindi NUnit non si restaura: come
+nelle fasi 1 e 2 lo **stub NUnit scritto a mano** compila l'INTERO `Sim.Core.Tests` (zero errori) e
+un runner a riflessione esegue davvero le fixture che contano — `BlockShapeTests` **6/6** e i nuovi
+`DefensiveDutyTests` **5/5**, con le righe `[duties]`, `[bodies]` e `[press]` stampate. Il modello di
+risultato è stato ricontrollato dal suo harness: `Harness_EqualTeams_RealisticScores` stampa ancora
+**2,44 gol/partita, 24,8% di pareggi, 48,4% di vittorie interne**, cioè la calibrazione accettata.
+
+### E la domanda aperta della fase 2 ha una risposta: dove vanno i 41 minuti di `dotnet test`
+
+Il runner a riflessione cronometra ogni test, e il namespace `Match` nel container costava
+**1932 secondi — di cui 1806, il 93%, in QUATTRO test di `MatchEngineTests`**:
+
+    839,1 s  Harness_HomeAdvantage_IsRealAndConfigurable
+    419,8 s  Harness_EqualTeams_RealisticScores
+    419,7 s  Harness_StrongBeatsWeak_70to80Percent
+    127,0 s  Goals_AreScoredMostlyByAttackers
+
+Sono le tre calibrazioni del modello di RISULTATO più il controllo sui marcatori: migliaia di
+partite a sweep, e **ognuna di quelle partite costruiva anche un filmato che nessuno di quei test
+guarda**, perché `new MatchEngine()` genera lo stream per default e dalla fase 1 una partita col
+filmato costa mezzo secondo contro il millisecondo del modello di risultato.
+
+**La correzione è una parola:** l'helper `Play` di `MatchEngineTests` costruisce il motore con
+`generatePositions: false`, e solo `GoldenMaster_SameSeed_IdenticalReport` lo riaccende (è l'unico
+di quel file che ha qualcosa da dire sul filmato). Misurato: **1806 s → 2,2 s**, e **ogni cifra
+stampata è identica** — 2,44 gol/partita, 24,8% di pareggi, 48,4% di vittorie interne, 51,2% contro
+41,8%. Che sia lecito non è un'opinione: `SkippingTheStream_LeavesTheResultUntouched` è il test che
+lo afferma, e il golden master continua a coprire il filmato da `DeterminismCheckTests`.
+
+Sulla macchina dell'utente gli stessi quattro test valgono grosso modo **7.000 partite × 268 ms ≈
+31 minuti** dei 41 misurati: il `.trx` lo confermerà, ma il conto torna già.
+
+### Aperto, per scelta
+
+- **Il controllo sporco come trigger di pressing** aspetta l'errore di esecuzione: fase 4.
+- **`FindSupportSpot` calcola un punto solo per squadra** (§1.8) — fase 4, come già scritto.
+- **La linea del fuorigioco** non entra ancora nel vincolo della linea difensiva: fase 5.
+- **Le rimesse laterali restano 82 a partita** (banda 30-50) e i corner mezzo: sono il regolamento
+  e il possesso, fasi 4 e 5.
+- **Gli uomini stanno in media 7-8 m dal loro posto in zona.** Non è pigrizia del modello: con
+  qualche centinaio di turnover a partita il blocco è quasi sempre in transizione. Si chiude quando
+  il passaggio smette di regalare la palla — fase 4 — e allora la profondità difensiva scenderà
+  ancora senza toccare la geometria.
+
+---
+
+## 11. Riferimenti
 
 - RoboCup Soccer Simulator — https://rcsoccersim.readthedocs.io/en/latest/overview.html
 - RoboCup 2D Soccer Simulation League — https://en.wikipedia.org/wiki/RoboCup_2D_Soccer_Simulation_League

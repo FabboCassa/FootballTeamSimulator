@@ -1,4 +1,4 @@
-# CLAUDE.md — session context for Football Team Simulator
+﻿# CLAUDE.md — session context for Football Team Simulator
 
 Read ARCHITECTURE.md (design) and ROADMAP.md (plan + current status via checkboxes) before doing anything.
 
@@ -16,9 +16,149 @@ Read ARCHITECTURE.md (design) and ROADMAP.md (plan + current status via checkbox
 - After ANY change in `shared/`, the user must run `.\tools\build-simcore.ps1` so Unity gets fresh DLLs (Sim.Core.dll + Fts.Contracts.dll → `client/Assets/Plugins/SimCore/`, gitignored, .meta committed).
 - Test command: `dotnet test` (all) or with harness output:
   `dotnet test shared/Sim.Core.Tests/Sim.Core.Tests.csproj --logger "console;verbosity=detailed"`
-- Current test count: 212 green (through 8.4a, +4 OnlineSeasonTick tests over 6.10a's 208). Golden master 0xCDEA5A2F7B9E5CF6. **STALE as of 13.1: the golden master changes with engine v3 — see the current position below.** Server Api.Tests: 70 green (through 8.5a, +11 LeagueAuctionTests over 8.4a's 59) + DevSeedTests (5) from the dev-seed tooling; **8.6 (live match control) DONE [x] — 8.6a (server) 85/85 green + 8.6b (Unity client) + dev "simulate the opponent" tooling Play-mode VERIFIED & ACCEPTED by the user (docker `up --build` healthy, the live match kicks off and the bot opponent joins/subs from the live screen). `[server-determinism] 0xCDEA5A2F7B9E5CF6` unchanged, NO Sim.Core change → 212 Sim.Core + golden master stand, no save bump. Still standing: commit `Migrations/AddLiveMatch*` for a clean Postgres/docker deploy (the running dev DB already has `live_matches`). Client: Season "▶ Live" launch, ~1s poll, MatchRenderer synced to KickoffUtc, InMatchPanel subs+instructions → POST /change, finish/leave (new .cs: LiveMatchView, OnlineLiveMatchScreenPresenter). DEV TOOLING (test the live match solo): server `POST /internal/dev/leagues/{id}/live/{fixtureId}/bot` (`DevSeedService.BotLiveAsync` — the fixture's @dev.local bot opens/joins + optionally a legal `LineupPlan.From(BestEleven)` sub), client dev row "Bot: entra"/"Bot: sostituzione" (gated by `DevFlags.OnlineTestTools`); `DevSeedService` ctor now takes `ILiveMatchService` (DI-resolved → the 5 DevSeedTests stay green). NEXT: Phase 9 (public ranked mode) — 8.7 (private season end) is DONE [x] and 🏁 Phase 8 is COMPLETE. **8.7 summary:** SERVER-ONLY logic, NO Sim.Core change, NO migration (reuses `LeagueStatus.Completed`=2 + existing columns); `dotnet test Api.Tests` **92/92 green**, `[server-determinism] 0xCDEA5A2F7B9E5CF6` unchanged. `ResolveNextRoundAsync` flips the league to Completed on the last matchday; `GET /leagues/{id}/season/summary` → final table + champion / top scorer (aggregated from the stored MatchReport goal events) / best defence / wooden spoon; `POST /leagues/{id}/season/new` (creator, Completed only) = FULL reset → deletes fixtures/lineups/trainings/bids/auctions/live, un-assigns clubs, re-equalises the developed squads + re-seeds 25M budgets, resets condition to neutral, reopens the draft (players KEEP their developed ability). Client 8.7b: `SeasonSummaryDto`/`SeasonAwardDto`/`TopScorerDto` + `GetSeasonSummaryAsync`/`StartNewSeasonAsync`, new `Views/OnlineSeasonEndView` + `Presenters/OnlineSeasonEndScreenPresenter` (named `Online*` because `SeasonEndView`/`season_end.*` is the SP 2.7 screen; the online one owns `seasonend.*`), opened by a "Bilancio stagione" button that appears on the Season screen once complete; loc en+it 612/612 at parity. The user's monthly-public-league vision (per-player rating → matchmaking by level → auto-enrol with opt-out → 1-week break between seasons) is recorded as the Phase 9 direction.**
+- Current test count: **589 green** (Sim.Core.Tests 349 + Api.Tests 240), golden master **0xABC7B41DC6F258C2** (engine v6, engine rework phase 3, verified on the user's machine 2026-09-04), and `dotnet test` takes ~6 minutes. The paragraph below is the historical note it replaced: 212 green (through 8.4a, +4 OnlineSeasonTick tests over 6.10a's 208). Golden master 0xCDEA5A2F7B9E5CF6. **STALE as of 13.1: the golden master changes with engine v3 — see the current position below.** Server Api.Tests: 70 green (through 8.5a, +11 LeagueAuctionTests over 8.4a's 59) + DevSeedTests (5) from the dev-seed tooling; **8.6 (live match control) DONE [x] — 8.6a (server) 85/85 green + 8.6b (Unity client) + dev "simulate the opponent" tooling Play-mode VERIFIED & ACCEPTED by the user (docker `up --build` healthy, the live match kicks off and the bot opponent joins/subs from the live screen). `[server-determinism] 0xCDEA5A2F7B9E5CF6` unchanged, NO Sim.Core change → 212 Sim.Core + golden master stand, no save bump. Still standing: commit `Migrations/AddLiveMatch*` for a clean Postgres/docker deploy (the running dev DB already has `live_matches`). Client: Season "▶ Live" launch, ~1s poll, MatchRenderer synced to KickoffUtc, InMatchPanel subs+instructions → POST /change, finish/leave (new .cs: LiveMatchView, OnlineLiveMatchScreenPresenter). DEV TOOLING (test the live match solo): server `POST /internal/dev/leagues/{id}/live/{fixtureId}/bot` (`DevSeedService.BotLiveAsync` — the fixture's @dev.local bot opens/joins + optionally a legal `LineupPlan.From(BestEleven)` sub), client dev row "Bot: entra"/"Bot: sostituzione" (gated by `DevFlags.OnlineTestTools`); `DevSeedService` ctor now takes `ILiveMatchService` (DI-resolved → the 5 DevSeedTests stay green). NEXT: Phase 9 (public ranked mode) — 8.7 (private season end) is DONE [x] and 🏁 Phase 8 is COMPLETE. **8.7 summary:** SERVER-ONLY logic, NO Sim.Core change, NO migration (reuses `LeagueStatus.Completed`=2 + existing columns); `dotnet test Api.Tests` **92/92 green**, `[server-determinism] 0xCDEA5A2F7B9E5CF6` unchanged. `ResolveNextRoundAsync` flips the league to Completed on the last matchday; `GET /leagues/{id}/season/summary` → final table + champion / top scorer (aggregated from the stored MatchReport goal events) / best defence / wooden spoon; `POST /leagues/{id}/season/new` (creator, Completed only) = FULL reset → deletes fixtures/lineups/trainings/bids/auctions/live, un-assigns clubs, re-equalises the developed squads + re-seeds 25M budgets, resets condition to neutral, reopens the draft (players KEEP their developed ability). Client 8.7b: `SeasonSummaryDto`/`SeasonAwardDto`/`TopScorerDto` + `GetSeasonSummaryAsync`/`StartNewSeasonAsync`, new `Views/OnlineSeasonEndView` + `Presenters/OnlineSeasonEndScreenPresenter` (named `Online*` because `SeasonEndView`/`season_end.*` is the SP 2.7 screen; the online one owns `seasonend.*`), opened by a "Bilancio stagione" button that appears on the Season screen once complete; loc en+it 612/612 at parity. The user's monthly-public-league vision (per-player rating → matchmaking by level → auto-enrol with opt-out → 1-week break between seasons) is recorded as the Phase 9 direction.**
 
-## Current position — 🏁 ENGINE REWORK PHASE 2 CLOSED (2026-09-03): the team is a BLOCK
+## Current position — 🏁 ENGINE REWORK PHASE 3 CLOSED (2026-09-04): the team DEFENDS
+
+**THE USER'S RUN, 2026-09-04.** `dotnet test` **589/589 green, 0 failed, in 360.5 s**
+(`Sim.Core.Tests` **349** — the 340 of phase 2, plus the 4 `ReplayCodecTests` he had not yet run,
+plus the 5 new `DefensiveDutyTests` — and `Api.Tests` **240**). `[DeterminismCheck]` and
+`[server-determinism]` both print **`0xABC7B41DC6F258C2`**, **identical digit for digit** to the
+value computed in the container on .NET 10 — cross-runtime determinism survives engine v6.
+`.\tools\balance.ps1` **28/28 PASS with every figure unchanged** (difficulty 6.9/6.6/9.5/7.6/10.1,
+67.6 transfers, wages 69.8%, the whole world block). The `pitch` scenario reproduced **every single
+number** of the container's run — 12/19 in band, defending 40.6 x 36.2 m, back line 5.9 m, goals
+2.52, shots 25.1 — at **263.6 ms a match against the container's 444**. Its **exit code 1 is
+expected**: the red is the held-ball-on-a-line bug of §1.7, which is phase 5's.
+
+**AND THE 41 MINUTES ARE GONE, CONFIRMED ON HIS MACHINE: `dotnet test` now takes 360 s**
+(`Sim.Core.Tests` **2467 s → 239.9 s**) for the same tests and the same printed calibration.
+
+**ONE PRINTED FIGURE DID DRIFT, and it is worth knowing why.** `[positioning-width]` reads 549 vs
+531 where it read 543 vs 524. That harness reuses **one `Pcg32` across its 400 matches**, so the
+movement layer's draws shift the matches that follow. What it claims is comparative (wide creates
+more than narrow) and the gap is unchanged at +18 against +19 — but a sweep that shares an RNG
+across matches is not a figure to quote as fixed, and the same caution applies to any harness
+written that way.
+
+Read `docs/engine/MATCH_ENGINE_PLAN.md` first — **§10 is the full write-up of this phase**.
+
+**WHAT CHANGED — the team brain hands out a DUTY, not a marker each.** `AssignMarks` put a marker
+on **every one** of the ten opponents, wherever he stood (§1.5): ten duels roaming the pitch, the
+"hold your place in the block" branch of the movement running **0.0%** of the time, and — the
+consequence phase 2 measured and deferred to here — a defending side's shape that **was** the
+attacking side's shape offset by 5.8 m. Now, per brain tick: **presser** 7.5% of defending ticks ·
+**cover** 8.9% · **marker** 11.8% *(was 41%)* · **zone** **71.5%** *(was 0.0%)*. An opponent is
+picked up only where he is genuinely dangerous — inside our own third, or already through the back
+line. The **cover never comes from the back four** (a centre-back who steps out to cover is a
+centre-back out of the line, and the line is what gets measured).
+
+- **`Separate()` now pushes OPPONENTS apart too**, with a radius deliberately SHORTER than the
+  distance a presser stands off the ball, so keeping bodies apart can never stop a challenge.
+  A/B on the same match with the push off and on: time spent inside a metre of an opponent
+  **0.116% → 0.066%**.
+- **`Pressing` is a real TRIGGER**: a zone of engagement in decimetres from your own goal
+  (`PressTriggerDepthDm` 350 / 620 / 1050) plus two situations that switch the press on outside it
+  — a **back pass** (+50% of reach for 3 s) and a **reception out wide** (+20%). Measured, the space
+  left to a man on the ball in his own third: **low 6.76 m · medium 6.56 m · high 5.96 m**; press
+  share **5.7% → 9.7%**. The third trigger the plan names — a dirty touch — needs execution error to
+  exist at all (phase 4), and was NOT faked.
+- **TWO THINGS THE MEASUREMENT ASKED FOR AND THE PLAN DID NOT.** (1) The block **collapses in 1.5 s
+  and opens in 4** (`ShapeCollapseMs`): phase 2's inertia was symmetric, so with a turnover every
+  few seconds a side spent most of its defending time still carrying the ATTACKING width and line
+  spacing — that one asymmetry is worth 2.6 m of defending width. (2) A man caught up the pitch
+  **runs back** (`RecoveryRunDm` 180) instead of jogging home while the ball goes the other way.
+
+**THE HEADLINE NUMBERS (200 matches, seed 20260803). Readings in band 10/19 → 12/19**, and they are
+the two the phase declared: defending **depth 47.8 → 36.2 m** (band 22-38 ✅ closed) and **back line
+spread 9.2 → 5.9 m** (0-6 ✅ closed). Held: defending width 40.6 (28-42), biggest hole 11.5 (0-15),
+an opponent within 3 m 13.0% (5-25), attacking 42.9 × 39.4, km/player 11.56 (9-12). **Goals 2.52 and
+shots 25.1 are STILL identical digit for digit** to phases 0, 1 and 2 — the movement layer draws
+from the RNG *after* the result is decided, which is why it can change face without moving a
+scoreline. And for the first time the two rows of the shape measurement DISAGREE: **40.6 × 36.2
+defending against 42.9 × 39.4 attacking** (phase 2: 38.8 × 47.8 against 42.0 × 48.3 — the same shape
+twice).
+
+**`MatchEngine.Version` IS NOW 6** and the golden master moved to **`0xABC7B41DC6F258C2`** (was
+`0xB3C30BEEAA5781B2`), computed in the container on .NET 10 and already re-pinned in
+`SimulationDeterminismTests`, `SimulationService`, `docs/ops/runbook.md`,
+`docs/store/release-checklist.md`. v5 replays are no longer renderable and the client already
+rejects them by comparing `MatchEngine.Version`.
+
+**THE MEASUREMENT DISPROVED TWO HYPOTHESES, AGAIN — keep the method.** With the duties in place the
+marking share collapsed but the defending depth barely moved (47.8 → 45.3). The obvious culprit —
+"the markers are dragging the shape apart" — was WRONG, and a probe said so in one line: the zone
+SPOTS spanned 26 m while the men spanned 42.6, with the most advanced man **12 m in front of his own
+place**. It was not the shape, it was men who never got to it. The second hypothesis — "they walk
+too slowly when they are near it" — was tried and **paid terribly**: halving the approach band
+(`PlayerApproachDm` 150 → 60) bought 0.8 m of depth and cost **1.5 km a match per player**, putting
+the mileage out of band. Put back. What worked was compressing the nominal shape and the transition,
+not making people run more.
+
+**THE COST: 483 → 444 ms a match in the container** — CHEAPER than phase 2, because assigning four
+marks instead of ten and leaving seven men standing in their place costs less than what it replaced.
+On the user's machine the absolute figure will differ (phase 2 ran at 292 ms there), but the sign
+should hold.
+
+**HOW IT WAS VERIFIED HERE (the container cannot reach NuGet, so `dotnet test` was NOT run).**
+`dotnet-sdk-10.0` installs from the Ubuntu archive; Sim.Core has no package references, so a scratch
+`net10.0` csproj compiles it offline, and the **hand-written NUnit stub** compiles the WHOLE of
+`Sim.Core.Tests` with **zero errors** (that is the "it type-checks" half). A reflection runner then
+RUNS the fixtures that matter: **`BlockShapeTests` 6/6** and the new **`DefensiveDutyTests` 5/5**,
+printing `[duties]`, `[bodies]` and `[press]`. The result model was re-checked through its own
+harness: `Harness_EqualTeams_RealisticScores` still prints **2.44 goals/match, 24.8% draws, 48.4%
+home wins** — the accepted calibration. The balance harness's `pitch` scenario was rebuilt as a
+scratch console project against Sim.Core only (Ladder/Economy need `server/Infrastructure`, so they
+are left out) and is where every figure above comes from.
+
+**AND THE 41-MINUTE `dotnet test` HAS AN ANSWER — measured, not guessed.** A reflection runner that
+times every test says the `Match` namespace cost **1932 s in the container, of which 1806 (93%) were
+FOUR tests in `MatchEngineTests`**: `Harness_HomeAdvantage_IsRealAndConfigurable` 839 s,
+`Harness_EqualTeams_RealisticScores` 420 s, `Harness_StrongBeatsWeak_70to80Percent` 420 s,
+`Goals_AreScoredMostlyByAttackers` 127 s. They are the RESULT model's calibration sweeps — thousands
+of matches each — and since phase 1 every one of those matches also built **a film none of those
+tests ever looks at**, because `new MatchEngine()` generates the stream by default and a match with
+the picture costs half a second against the result model's one millisecond. **The fix is one word**:
+`MatchEngineTests.Play` now builds the engine with `generatePositions: false`, and only
+`GoldenMaster_SameSeed_IdenticalReport` turns it back on. Measured here: **1806 s → 2.2 s with every
+printed figure identical** (2.44 goals/match, 24.8% draws, 48.4% home wins, 51.2% vs 41.8%). It is
+safe by a test that already exists — `SkippingTheStream_LeavesTheResultUntouched` — and the golden
+master still covers the film through `DeterminismCheckTests`. On the user's machine those same four
+tests are roughly 7,000 matches x 268 ms = **~31 of the 41 minutes**.
+
+**WHAT THE USER RAN (all green, see the top of this section):** `.\tools\build-simcore.ps1` →
+`dotnet test` (**589**) → `dotnet test server/Api.Tests` (the new golden master is already
+pinned; if `[DeterminismCheck]` disagrees, the printed value is the one to keep) →
+`.\tools\balance.ps1 -Scenario pitch -PitchMatches 200 -PitchDump .\replay.html` →
+`.\tools\balance.ps1`. **Still worth doing at his leisure: OPEN `replay.html` and LOOK at the
+defending shape** — the numbers are in band, the eye is the other half of the acceptance.
+
+**NEW/CHANGED FILES:** `Match/Movement/MatchSimulator.cs` (`AssignDuties` replaces `AssignMarks`,
+`CoverSpot`, the trigger inside `Pressing`, the recovery run in `Move`, `Separate` extended to
+opponents, the asymmetric collapse in `UpdateBlock`, the line discipline in `MarkSpot`),
+`Match/Movement/MovementTactics.cs`, `Config/BalanceConfig.cs` (the "defending" block),
+`Match/MatchEngine.cs` (`Version = 6`), **new** `Sim.Core.Tests/Match/DefensiveDutyTests.cs`.
+**The whole phase is also reproducible as a script**: `_stage/phase3.py` applies every edit to a
+pristine `shared/Sim.Core` and asserts each anchor — it is what the container compiled, so the
+sources on disk and the thing that was measured cannot have drifted apart.
+
+**RESIDUE TO DELETE BY HAND:** `_stage/` (the pristine `Sim.Core.pre3` copy, the tarball used to
+carry the sources into the container, and `phase3.py` itself once the phase is accepted) and the old
+`_to_delete/`. The sandbox bridge cannot delete in the synced folder — `Remove-Item` from PowerShell.
+
+**OPEN, ON PURPOSE:** a dirty touch as a pressing trigger (phase 4, it needs execution error);
+`FindSupportSpot` still computes one spot per team (§1.8, phase 4); the offside line does not yet
+constrain the back line (phase 5); throw-ins are still 82 a match and corners half of one (the laws
+and possession, phases 4-5); and men still stand 7-8 m from their zone spot on average — not model
+laziness but the several hundred turnovers a match, which is a PASSING defect and closes with phase
+4, at which point the defending depth will fall further without touching the geometry.
+
+**NEXT: phase 4 — decisioni con la palla, guidate dagli attributi.** `TryPass` becomes an evaluation
+of options with EXECUTION ERROR scaled by `Passing`/`Technique`/`Vision` and by the pressure on the
+man; dribbling as a duel; shooting as an xG-like model. **That is the phase where the difference
+between players is born**, and where the several hundred turnovers a match finally stop.
+
+### Previous position — 🏁 ENGINE REWORK PHASE 2 CLOSED (2026-09-03): the team is a BLOCK
 
 **THE USER'S RUN, 2026-09-03.** `dotnet test` **580/580 green, 0 failed, 0 skipped**, in 2467.2 s
 (Sim.Core.Tests **340/340** — the 334 of phase 1 plus the 6 new `BlockShapeTests` — and Api.Tests

@@ -1,4 +1,4 @@
-# Live-ops runbook
+﻿# Live-ops runbook
 
 Roadmap 10.3. What to do when the ladder is live and something needs looking at.
 
@@ -105,7 +105,7 @@ Rules the server enforces, and why:
 
 World *generation* is deliberately **not** affected: `WorldFactory` still builds worlds from the balance
 embedded in the build, so a seed keeps generating the same world forever and the golden master
-`0xB3C30BEEAA5781B2` stays meaningful. The push covers the live knobs — match, condition, development,
+`0xABC7B41DC6F258C2` stays meaningful. The push covers the live knobs — match, condition, development,
 market, finance, tactics.
 
 If a pushed revision turns out to be unreadable, every instance logs it and **stays on the balance it
