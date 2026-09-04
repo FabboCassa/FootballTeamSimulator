@@ -320,7 +320,7 @@ public sealed class LeagueSeasonService : ILeagueSeasonService
         {
             if (string.IsNullOrEmpty(f.ReplayJson)) continue;
             MatchReport? report = null;
-            try { report = JsonSerializer.Deserialize<MatchReport>(f.ReplayJson); }
+            try { report = ReplayStore.Read(f.ReplayJson); }
             catch (JsonException) { }
             if (report is null) continue;
             foreach (MatchEvent e in report.Events)
@@ -484,7 +484,7 @@ public sealed class LeagueSeasonService : ILeagueSeasonService
             f.IsPlayed = true;
             f.MatchSeed = unchecked((long)seed);
             f.ResolvedUtc = now;
-            f.ReplayJson = JsonSerializer.Serialize(report);
+            f.ReplayJson = ReplayStore.Write(report);
 
             played[homeExt] = new ConditionProgressor.Participation(
                 r.HomeStarterIds, ResultFor(report.HomeGoals, report.AwayGoals));

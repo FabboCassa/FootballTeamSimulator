@@ -90,7 +90,12 @@ namespace Sim.Core.Tests.Match
         [Test]
         public void NeverFiringRule_IsByteIdentical()
         {
-            var engine = new MatchEngine();
+            // The sweep asks about the RESULT, and nobody watches these matches: since the
+            // engine rework's phase 1 a match with the picture on costs some hundreds of
+            // milliseconds against under a millisecond without it, so a sweep that generated
+            // one would cost minutes. The identity of the picture itself is pinned by the
+            // single-match tests in this fixture, which keep it on.
+            var engine = new MatchEngine(generatePositions: false);
             // The gate has to be one that NEVER opens, or the rule fires and the report is
             // allowed to differ. A five-goal lead is not that gate: seed 27 of this fixture
             // ends 6-1 and passes through +5, so margin 5 fired and the test failed on a
@@ -106,6 +111,14 @@ namespace Sim.Core.Tests.Match
                 Assert.That(MatchReportHasher.Hash(withRule), Is.EqualTo(MatchReportHasher.Hash(baseline)),
                     $"Seed {seed}: a rule whose gate never opens must not change the report.");
             }
+
+            // And once with the picture on, so the claim covers the whole report and not just
+            // the half of it the sweep can afford to compute.
+            var watched = new MatchEngine();
+            Assert.That(
+                MatchReportHasher.Hash(watched.Simulate(KickoffPlan(), new[] { rule }, null, new Pcg32(7))),
+                Is.EqualTo(MatchReportHasher.Hash(watched.Simulate(KickoffPlan(), new Pcg32(7)))),
+                "A rule whose gate never opens must not change the position stream either.");
         }
 
         [Test]
@@ -125,7 +138,12 @@ namespace Sim.Core.Tests.Match
         public void FiringRule_LeavesPrefixIdentical()
         {
             const int m = 45;
-            var engine = new MatchEngine();
+            // The sweep asks about the RESULT, and nobody watches these matches: since the
+            // engine rework's phase 1 a match with the picture on costs some hundreds of
+            // milliseconds against under a millisecond without it, so a sweep that generated
+            // one would cost minutes. The identity of the picture itself is pinned by the
+            // single-match tests in this fixture, which keep it on.
+            var engine = new MatchEngine(generatePositions: false);
             var rules = new[] { new MatchRule(m, ScoreSituation.Always, AttackAction()) };
 
             for (ulong seed = 1; seed <= 40; seed++)
@@ -184,7 +202,12 @@ namespace Sim.Core.Tests.Match
         /// </summary>
         private static bool AssertConditionalEqualsStatic(ulong seed, MatchRule rule, bool isHome)
         {
-            var engine = new MatchEngine();
+            // The sweep asks about the RESULT, and nobody watches these matches: since the
+            // engine rework's phase 1 a match with the picture on costs some hundreds of
+            // milliseconds against under a millisecond without it, so a sweep that generated
+            // one would cost minutes. The identity of the picture itself is pinned by the
+            // single-match tests in this fixture, which keep it on.
+            var engine = new MatchEngine(generatePositions: false);
             MatchPlan plan = KickoffPlan();
             MatchReport baseline = engine.Simulate(plan, new Pcg32(seed));
 

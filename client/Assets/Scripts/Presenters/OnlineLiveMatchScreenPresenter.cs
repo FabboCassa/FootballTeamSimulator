@@ -560,7 +560,16 @@ namespace Fts.Presenters
         private static MatchReport TryParseReport(string json)
         {
             if (string.IsNullOrEmpty(json)) return null;
-            try { return JsonConvert.DeserializeObject<MatchReport>(json); }
+            try
+            {
+                MatchReport report = JsonConvert.DeserializeObject<MatchReport>(json);
+                // The movement stream crosses the wire PACKED since engine phase 2 (a stored
+                // replay went from 2077 KB to 794 KB); unpacking it is what turns the blob back
+                // into the arrays the renderer walks. A report from before the packed form is
+                // already carrying its arrays, and this is a no-op on it.
+                report?.Positions?.Unpack();
+                return report;
+            }
             catch (JsonException) { return null; }
         }
     }

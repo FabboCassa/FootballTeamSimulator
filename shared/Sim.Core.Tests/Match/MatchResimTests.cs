@@ -72,7 +72,12 @@ namespace Sim.Core.Tests.Match
         public void ChangeAtMinuteM_LeavesPrefixIdentical_AndDivergesAfter()
         {
             const int m = 45;
-            var engine = new MatchEngine();
+            // The sweep asks about the RESULT, and nobody watches these matches: since the
+            // engine rework's phase 1 a match with the picture on costs some hundreds of
+            // milliseconds against under a millisecond without it, so a sweep that generated
+            // one would cost minutes. The identity of the picture itself is pinned by the
+            // single-match tests in this fixture, which keep it on.
+            var engine = new MatchEngine(generatePositions: false);
             int diverged = 0;
 
             for (ulong seed = 1; seed <= 60; seed++)
@@ -101,7 +106,12 @@ namespace Sim.Core.Tests.Match
         public void AttackingChangeAtHalfTime_RaisesRemainderScoring()
         {
             const int m = 45;
-            var engine = new MatchEngine();
+            // The sweep asks about the RESULT, and nobody watches these matches: since the
+            // engine rework's phase 1 a match with the picture on costs some hundreds of
+            // milliseconds against under a millisecond without it, so a sweep that generated
+            // one would cost minutes. The identity of the picture itself is pinned by the
+            // single-match tests in this fixture, which keep it on.
+            var engine = new MatchEngine(generatePositions: false);
             int baseGoals = 0, changedGoals = 0;
 
             for (ulong seed = 1; seed <= 200; seed++)

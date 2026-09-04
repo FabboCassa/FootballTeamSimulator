@@ -721,7 +721,7 @@ public sealed class RankedSeasonService : IRankedSeasonService
             f.IsPlayed = true;
             f.MatchSeed = unchecked((long)seed);
             f.ResolvedUtc = now;
-            f.ReplayJson = JsonSerializer.Serialize(report);
+            f.ReplayJson = ReplayStore.Write(report);
             resolved++;
 
             played[homeExt] = new ConditionProgressor.Participation(

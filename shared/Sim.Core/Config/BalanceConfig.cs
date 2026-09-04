@@ -963,15 +963,51 @@ namespace Sim.Core.Config
         /// <summary>Relative shooting weight per PositionRole (enum order: GK, CB, FB, DM, CM, AM, W, ST).</summary>
         public int[] ScorerWeightsByRole { get; set; } = { 0, 2, 3, 4, 8, 16, 18, 30 };
 
-        // --- Visual match simulation (tasks 1.5 · 13.1 · 13.2) — distances in decimetres ---
+        // --- Visual match simulation (tasks 1.5 · 13.1 · 13.2 · engine rework phase 1) ---
+        //
+        // PHASE 1 OF THE ENGINE REWORK (docs/engine/MATCH_ENGINE_PLAN.md) put this block on
+        // PHYSICAL UNITS. Before it a tick was an "action beat" of five seconds and every speed
+        // was written per tick, which left the model dimensionally incoherent: a player sprinted
+        // at 0.7 m/s and the ball travelled at 1.2 m/s, so the ball was barely twice as quick as
+        // a man where football is three to four times. That ratio IS the geometry of the game —
+        // how much ground a defender covers while the ball is in flight is what decides whether
+        // a pass can be cut out, whether the press arrives, and whether the space behind a high
+        // line is attackable — so no amount of calibration could have made the old numbers look
+        // like football.
+        //
+        // The rule from here on: anything with time in it is written PER SECOND or in
+        // MILLISECONDS, and the tick counts the model works in are DERIVED from the tick rate.
+        // Change TicksPerSecond and every duration below keeps its meaning. Distances stay in
+        // decimetres, which is the pitch's own unit.
+
+        // --- Time base ---
 
         /// <summary>
-        /// Position snapshots per match minute. A tick is an ACTION BEAT, not a real second:
-        /// 90' plays back in ~180 real seconds (30x compression), so a physically accurate
-        /// 1.5-second pass would last 0.05s on screen. At 12 the replay runs 6 beats per real
-        /// second at 1x — a pass reads in ~0.4s and a possession in 2-4s.
+        /// Simulation steps per second of match time. At 10 a tick is 100 ms: fine enough for a
+        /// pass to be read and cut out, coarse enough to stay affordable over 54,000 ticks.
         /// </summary>
-        public int TicksPerMinute { get; set; } = 12;
+        public int TicksPerSecond { get; set; } = 10;
+
+        /// <summary>Simulation ticks per match minute (derived). A 90' match is 90 times this.</summary>
+        public int TicksPerMinute => TicksPerSecond * 60;
+
+        /// <summary>
+        /// Simulation ticks per frame WRITTEN to the position stream. The physics needs 10 Hz;
+        /// the replay does not. At the 30x compression the renderer uses ("1x" = 180 real seconds
+        /// for 90') a 2 Hz stream already plays back at 60 fps, so writing every tick would make
+        /// the stream five times larger for a picture nobody could tell apart.
+        /// </summary>
+        public int StreamTicksPerFrame { get; set; } = 5;
+
+        /// <summary>Stream frames per match minute — what PositionStream.TicksPerMinute carries.</summary>
+        public int FramesPerMinute => TicksPerMinute / (StreamTicksPerFrame < 1 ? 1 : StreamTicksPerFrame);
+
+        /// <summary>Milliseconds of match time as whole ticks, never fewer than one.</summary>
+        public int TicksOfMs(int milliseconds)
+        {
+            int ticks = (milliseconds * TicksPerSecond + 500) / 1000;
+            return ticks < 1 ? 1 : ticks;
+        }
 
         /// <summary>Formation anchor X per PositionRole, in 1/1000 of pitch length (home side; away is mirrored).</summary>
         public int[] FormationAnchorXPermilleByRole { get; set; } = { 40, 180, 200, 340, 440, 540, 620, 720 };
@@ -982,18 +1018,63 @@ namespace Sim.Core.Config
         /// <summary>Y margin from the touchline for central roles.</summary>
         public int CentralRoleYMarginDm { get; set; } = 170;
 
-        // --- Players ---
+        /// <summary>
+        /// Which LINE of the shape each role stands on, indexed by PositionRole
+        /// (GK, CB, FB, DM, CM, AM, W, ST). Roles sharing a number stand shoulder to shoulder:
+        /// centre-backs with full-backs, wingers with the striker. This is the unit the width
+        /// is laid out in and the unit the block spaces in depth — a role is a job, a line is
+        /// a place on the pitch (engine phase 2).
+        /// </summary>
+        public int[] FormationLineByRole { get; set; } = { 0, 1, 1, 2, 3, 4, 5, 5 };
 
-        public int PlayerSpeedBaseDmPerTick { get; set; } = 10;
+        /// <summary>
+        /// Lateral distance between two men who share a line and are both central, in
+        /// decimetres. A back four's two centre-backs stand this far apart before the block's
+        /// width factor is applied.
+        /// </summary>
+        public int LineCentralSpacingDm { get; set; } = 140;
 
-        /// <summary>Extra per-tick distance at Pace 100 (scaled linearly by the player's Pace).</summary>
-        public int PlayerSpeedPaceDmPerTick { get; set; } = 10;
+        /// <summary>
+        /// From this many men in a line, its outermost pair takes the touchline margin whatever
+        /// their roles are called: the outside men of a flat four ARE its wide players.
+        /// </summary>
+        public int LineWideFromMembers { get; set; } = 4;
 
-        /// <summary>Speed multiplier (percent) while chasing, pressing, receiving or supporting.</summary>
-        public int PlayerSprintPercent { get; set; } = 170;
+        // --- Players: real footballers' speeds ---
 
-        /// <summary>Fraction of top speed a player can gain in one tick.</summary>
-        public int PlayerAccelPercent { get; set; } = 50;
+        /// <summary>
+        /// Flat-out running speed of a Pace 0 player, in decimetres per second (55 = 5.5 m/s).
+        /// A professional tops out between about 5.5 and 8.5 m/s, so Pace spans that band.
+        /// </summary>
+        public int PlayerTopSpeedDmPerSecond { get; set; } = 55;
+
+        /// <summary>Extra top speed at Pace 100, in decimetres per second (scaled linearly by Pace).</summary>
+        public int PlayerTopSpeedPaceDmPerSecond { get; set; } = 30;
+
+        /// <summary>
+        /// What a player does when he is not going flat out, as a percentage of his top speed.
+        /// A match is mostly jogging and walking: sprinting is reserved for chasing the ball,
+        /// pressing, running onto a pass or making a support run.
+        /// </summary>
+        public int PlayerCruisePercent { get; set; } = 42;
+
+        /// <summary>Acceleration in decimetres per second per second (35 = 3.5 m/s^2, so ~2s to top speed).</summary>
+        public int PlayerAccelDmPerSecond2 { get; set; } = 35;
+
+        /// <summary>
+        /// How near his target a player has to be to call it arrived and stand still. Without a
+        /// deadband every man chases a position that moves with the ball ten times a second, and
+        /// the eleven of them walk a marathon: it is the difference between covering eleven
+        /// kilometres in a match and covering sixteen.
+        /// </summary>
+        public int PlayerArrivalRadiusDm { get; set; } = 30;
+
+        /// <summary>
+        /// Inside this distance from his position a player scales his pace down with the
+        /// distance left, in decimetres: a walk for a few metres, a jog for twenty. Only
+        /// repositioning is paced this way — a man going for the ball goes at it.
+        /// </summary>
+        public int PlayerApproachDm { get; set; } = 150;
 
         /// <summary>How close team-mates may get before they push each other apart, and how hard.</summary>
         public int SeparationRadiusDm { get; set; } = 62;
@@ -1022,14 +1103,22 @@ namespace Sim.Core.Config
         /// </summary>
         public int ReceiverSpaceDm { get; set; } = 75;
 
-        /// <summary>Ticks a defender loses reading the pass before he can move for it.</summary>
-        public int PassReactionTicks { get; set; } = 2;
+        /// <summary>How long a defender loses reading the pass before he can move for it.</summary>
+        public int PassReactionMs { get; set; } = 300;
+        public int PassReactionTicks => TicksOfMs(PassReactionMs);
 
-        /// <summary>Chance per tick that a challenger takes the ball off the man in possession.</summary>
-        public int TacklePercentPerTick { get; set; } = 14;
+        /// <summary>
+        /// Chance per SECOND, in permille, that a challenger takes the ball off the man in
+        /// possession. Written per second because at 10 Hz a per-tick percentage would be a
+        /// coarse, tick-rate-dependent number: ~45% a second is a duel that resolves in a
+        /// second or two, which is what a challenge inside two metres looks like.
+        /// </summary>
+        public int TackleChancePermillePerSecond { get; set; } = 450;
+        public int TackleChancePermillePerTick => TackleChancePermillePerSecond / TicksPerSecond;
 
-        /// <summary>Ticks after a challenge before the ball can change hands again, so it does not ping-pong.</summary>
-        public int TackleLockTicks { get; set; } = 5;
+        /// <summary>How long after a challenge before the ball can change hands again, so it does not ping-pong.</summary>
+        public int TackleLockMs { get; set; } = 700;
+        public int TackleLockTicks => TicksOfMs(TackleLockMs);
 
         /// <summary>How often a defender only gets something on the ball instead of controlling it.</summary>
         public int DeflectPercent { get; set; } = 45;
@@ -1038,12 +1127,40 @@ namespace Sim.Core.Config
         // --- Striking the ball ---
 
         /// <summary>
-        /// Hardest a ball can be struck, in decimetres per tick before friction. This is what
-        /// makes a seventy-metre pass IMPOSSIBLE rather than merely discouraged: the ball
-        /// simply does not roll that far.
+        /// Hardest a pass can be struck, in decimetres per second (240 = 24 m/s). Together with
+        /// the ball's friction this is what makes a seventy-metre pass IMPOSSIBLE rather than
+        /// merely discouraged: the ball simply does not roll that far before it is gathered.
         /// </summary>
-        public int MaxPassForceDmPerTick { get; set; } = 60;
-        public int MaxShootForceDmPerTick { get; set; } = 110;
+        public int MaxPassSpeedDmPerSecond { get; set; } = 260;
+
+        /// <summary>Hardest a shot can be struck, in decimetres per second (300 = 30 m/s).</summary>
+        public int MaxShootSpeedDmPerSecond { get; set; } = 320;
+
+        /// <summary>
+        /// Share of its speed a rolling ball still has one second later, in permille. 740 sheds
+        /// about seven metres per second squared at twenty-five metres a second and under one at
+        /// walking pace, which is the shape rolling resistance plus air drag actually has — a
+        /// flat deceleration would either glue a hard pass to the floor or let a slow one roll
+        /// for a hundred metres. The per-TICK figure is derived from this, so the ball behaves
+        /// the same at any simulation frequency.
+        /// </summary>
+        public int BallSpeedKeptPermillePerSecond { get; set; } = 740;
+
+        /// <summary>Below this the ball has stopped, in decimetres per second.</summary>
+        public int BallRestSpeedDmPerSecond { get; set; } = 8;
+
+        /// <summary>How far ahead the ball's roll is tabulated for the passing model to consult.</summary>
+        public int BallTrackedSeconds { get; set; } = 12;
+
+        /// <summary>
+        /// How quickly an ordinary pass is meant to arrive, in decimetres per second. It sets
+        /// the FLIGHT TIME the passer aims for; the force needed follows from the distance.
+        /// </summary>
+        public int NominalPassSpeedDmPerSecond { get; set; } = 150;
+
+        /// <summary>The longest a ball may be asked to spend reaching its target.</summary>
+        public int MaxFlightMs { get; set; } = 4000;
+        public int MaxFlightTicks => TicksOfMs(MaxFlightMs);
 
         /// <summary>Beyond this a player will not shoot.</summary>
         public int MaxShootRangeDm { get; set; } = 320;
@@ -1053,28 +1170,145 @@ namespace Sim.Core.Config
         /// hits somebody and stops has to be called anyway — while one is live nobody may
         /// touch the ball, so a strike that never resolves would freeze the match.
         /// </summary>
-        public int ShotResolveTicks { get; set; } = 6;
+        public int ShotResolveMs { get; set; } = 2500;
+        public int ShotResolveTicks => TicksOfMs(ShotResolveMs);
 
         /// <summary>Shortest pass worth playing, how far ahead of a runner it is played, and when it counts as a long ball.</summary>
         public int MinPassDm { get; set; } = 70;
         public int PassLeadDm { get; set; } = 60;
         public int LongBallFromDm { get; set; } = 300;
 
-        /// <summary>How far ahead a carrier knocks the ball when he runs with it.</summary>
+        /// <summary>How far ahead a carrier knocks the ball when he runs with it, and for how long.</summary>
         public int DribbleDistanceDm { get; set; } = 80;
+        public int DribbleFlightMs { get; set; } = 900;
+        public int DribbleFlightTicks => TicksOfMs(DribbleFlightMs);
+
+        /// <summary>
+        /// How far a player must have carried the ball before the commentary calls it a run with
+        /// the ball. Every touch used to be logged as a dribble, which at five seconds a tick was
+        /// roughly true and at a tenth of a second is nonsense — a man knocking it ahead once a
+        /// second produced a feed reading "dribble, dribble, dribble" and a thousand-odd entries
+        /// in the stream that no viewer would call anything.
+        /// </summary>
+        public int DribbleReportDm { get; set; } = 100;
+
+        /// <summary>How far ahead a chaser reads the ball's roll when he runs to meet it.</summary>
+        public int InterceptLookaheadMs { get; set; } = 1500;
+        public int InterceptLookaheadTicks => TicksOfMs(InterceptLookaheadMs);
 
         // --- Team shape ---
 
         /// <summary>The support-spot grid: how many places the team considers running into.</summary>
-        public int SupportSpotColumns { get; set; } = 6;
-        public int SupportSpotRows { get; set; } = 4;
-        public int SupportRecalcTicks { get; set; } = 4;
+        public int SupportSpotColumns { get; set; } = 5;
+        public int SupportSpotRows { get; set; } = 3;
+
+        /// <summary>
+        /// How often the support spot is recomputed, and how often the team brain re-reads the
+        /// game (who chases, who marks whom). Decisions are DELIBERATELY slower than the
+        /// physics: a defender does not repick his man ten times a second, and re-deciding at
+        /// 10 Hz would cost fifty times what it costs at 2 Hz for a picture that looks the same.
+        /// </summary>
+        public int SupportRecalcMs { get; set; } = 1000;
+        public int SupportRecalcTicks => TicksOfMs(SupportRecalcMs);
+        public int TeamBrainMs { get; set; } = 500;
+        public int TeamBrainTicks => TicksOfMs(TeamBrainMs);
 
         /// <summary>How far from the ball a supporting run wants to be.</summary>
         public int SupportIdealDistanceDm { get; set; } = 260;
 
-        /// <summary>How far the whole block slides toward the ball's side of the pitch.</summary>
-        public int BlockBallShiftPercent { get; set; } = 25;
+        // --- The block (engine phase 2) ---
+        //
+        // A team is not eleven men each drifting toward the ball; it is a BLOCK — a shape with a
+        // width, a depth and a place on the pitch — and the three are separate questions. Where
+        // the block sits is set by its BACK LINE, because that is the line a coach actually
+        // instructs ("hold on the halfway line", "drop off"); every other line is spaced off it,
+        // so the back four is a line by construction instead of by luck. How wide and how deep
+        // the block is depends only on whether it has the ball.
+        //
+        // What this replaced was a per-player lerp toward the ball's Y with no cap
+        // (BlockBallShiftPercent): the man furthest from the ball moved MORE than the man
+        // nearest it, so the team did not slide, it collapsed into the ball's channel and left
+        // a third of the pitch empty (§1.4 of docs/engine/MATCH_ENGINE_PLAN.md).
+
+        /// <summary>
+        /// How far behind the ball the back line holds, in decimetres. Ten metres: near enough
+        /// to squeeze the space in front, far enough that a ball played over the top has to be
+        /// run onto rather than merely arrived at.
+        /// </summary>
+        public int BackLineBallLagDm { get; set; } = 105;
+
+        /// <summary>
+        /// How much of the ball's advance up the pitch the back line takes, in percent. Not a
+        /// hundred: a line anchored only on the ball runs the length of every passing move.
+        /// </summary>
+        public int BackLineBallFollowPercent { get; set; } = 40;
+
+        /// <summary>
+        /// The deepest and the highest the back line will sit, in decimetres from its own goal.
+        /// The floor is the edge of the penalty area — a defence that keeps dropping ends up on
+        /// its own keeper; the ceiling is what stops the line following the ball into the
+        /// opponent's half when the team is camped in attack.
+        /// </summary>
+        public int BackLineMinDepthDm { get; set; } = 165;
+        public int BackLineMaxDepthDm { get; set; } = 520;
+
+        /// <summary>How much higher the line holds while the team has the ball, in decimetres.</summary>
+        public int PossessionLinePushDm { get; set; } = 60;
+
+        /// <summary>
+        /// How far the ball must move before the block resets to it, in decimetres. A defensive
+        /// line STEPS: it holds its height, and when the ball has genuinely travelled it moves as
+        /// a unit. Without the deadband the shape shuffles after every sideways pass, which is
+        /// both wrong to watch and two extra kilometres a match on every pair of legs.
+        /// </summary>
+        public int BackLineHoldDm { get; set; } = 60;
+
+        /// <summary>
+        /// How long a side takes to go from its defensive shape to its attacking one, in
+        /// milliseconds. A shape has inertia: eleven men do not step six metres sideways the
+        /// instant the ball changes feet, and with the several hundred turnovers a match this
+        /// engine still produces, snapping between the two shapes is most of a defender's
+        /// mileage and none of his football.
+        /// </summary>
+        public int ShapeTransitionMs { get; set; } = 4000;
+        public int ShapeTransitionTicks => TicksOfMs(ShapeTransitionMs);
+
+        /// <summary>Distance between two adjacent lines of the block, in decimetres.</summary>
+        public int LineSpacingDm { get; set; } = 100;
+
+        /// <summary>
+        /// How much further apart the lines stand with the ball, as a percent of
+        /// <see cref="LineSpacingDm"/>. This is where the asymmetry of the shift lives: the
+        /// spacing is measured FORWARD from the back line, so a striker drops forty-odd metres
+        /// when possession is lost while his centre-backs move fifteen.
+        /// </summary>
+        public int AttackLineSpacingPercent { get; set; } = 120;
+
+        /// <summary>How near the goal the most advanced line will stand, in decimetres from it.</summary>
+        public int FrontLineGoalGapDm { get; set; } = 160;
+
+        /// <summary>
+        /// How far behind the halfway line the most advanced line stands at a kickoff, in
+        /// decimetres. Law 8 puts both sides in their own half until the ball is in play; before
+        /// this the two blocks simply overlapped across the middle of the pitch and the kickoff
+        /// frame was legal only by accident.
+        /// </summary>
+        public int KickoffHalfwayGapDm { get; set; } = 20;
+
+        /// <summary>
+        /// Half-width of the block as a percent of the formation's nominal spread, without the
+        /// ball and with it. A professional block defends thirty to forty metres wide and
+        /// attacks forty to sixty: the same shape, squeezed or stretched.
+        /// </summary>
+        public int DefendWidthPercent { get; set; } = 66;
+        public int AttackWidthPercent { get; set; } = 118;
+
+        /// <summary>
+        /// How far the block's centre may slide toward the ball's side of the pitch, in
+        /// decimetres. It is a TRANSLATION of the whole shape and it is capped, which is the
+        /// difference between a team shifting across and a team collapsing into one channel.
+        /// </summary>
+        public int BlockLateralShiftMaxDm { get; set; } = 100;
 
         // --- Goalkeeper ---
 
@@ -1085,14 +1319,17 @@ namespace Sim.Core.Config
         // --- Restarts and the director ---
 
         /// <summary>Pause on a dead ball before it is put back in play, and after a goal.</summary>
-        public int DeadBallTicks { get; set; } = 3;
-        public int GoalCelebrationTicks { get; set; } = 6;
+        public int DeadBallMs { get; set; } = 4000;
+        public int DeadBallTicks => TicksOfMs(DeadBallMs);
+        public int GoalCelebrationMs { get; set; } = 9000;
+        public int GoalCelebrationTicks => TicksOfMs(GoalCelebrationMs);
 
         /// <summary>
         /// How long before a chance on the 1.4 timeline the attacking side starts working the
         /// ball toward the man who is going to take it. Long enough for two or three passes.
         /// </summary>
-        public int ChanceWindowTicks { get; set; } = 60;
+        public int ChanceWindowSeconds { get; set; } = 25;
+        public int ChanceWindowTicks => ChanceWindowSeconds * TicksPerSecond;
 
         /// <summary>How far the man whose chance it is drops toward the ball to get involved.</summary>
         public int ChanceDropPercent { get; set; } = 55;
@@ -1100,8 +1337,9 @@ namespace Sim.Core.Config
         /// <summary>How far he will go for a loose ball during his window.</summary>
         public int ChanceChaseRangeDm { get; set; } = 620;
 
-        /// <summary>Ticks of grace after his minute for the move to arrive before it is forced.</summary>
-        public int ChanceGraceTicks { get; set; } = 10;
+        /// <summary>Grace after his minute for the move to arrive before the strike is forced.</summary>
+        public int ChanceGraceSeconds { get; set; } = 8;
+        public int ChanceGraceTicks => ChanceGraceSeconds * TicksPerSecond;
 
         /// <summary>How far from the goal a strike can be taken and still look like a strike.</summary>
         public int ShootableRangeDm { get; set; } = 400;
@@ -1113,7 +1351,8 @@ namespace Sim.Core.Config
         public int ChanceDriveShiftPermille { get; set; } = 110;
 
         /// <summary>How long before his minute the side starts playing for the chance.</summary>
-        public int ChanceUrgencyTicks { get; set; } = 45;
+        public int ChanceUrgencySeconds { get; set; } = 20;
+        public int ChanceUrgencyTicks => ChanceUrgencySeconds * TicksPerSecond;
 
         /// <summary>Press reach, as a percentage, over that stretch.</summary>
         public int ChancePressPercent { get; set; } = 260;
@@ -1127,21 +1366,21 @@ namespace Sim.Core.Config
         /// <summary>The extra stride his side gets to a loose ball over that stretch.</summary>
         public int ChanceReachBonusDm { get; set; } = 55;
 
-        /// <summary>How long one touch of a dribble carries the ball.</summary>
-        public int DribbleFlightTicks { get; set; } = 4;
-
-        /// <summary>Ticks before the man who played the ball may take it back.</summary>
-        public int ReleaseLockTicks { get; set; } = 3;
+        /// <summary>How long before the man who played the ball may take it back.</summary>
+        public int ReleaseLockMs { get; set; } = 400;
+        public int ReleaseLockTicks => TicksOfMs(ReleaseLockMs);
 
         // --- What the coach's instructions mean on the pitch (task 13.2) ---
         // Each table is indexed by the enum: Mentality Defensive/Balanced/Attacking,
         // Pressing Low/Medium/High, Tempo Slow/Normal/Fast, Width Narrow/Normal/Wide.
 
-        /// <summary>Permille of pitch length the block pushes up with the ball.</summary>
-        public int[] MentalityAttackShiftPermille { get; set; } = { 60, 110, 170 };
-
-        /// <summary>Permille it drops without it.</summary>
-        public int[] MentalityDefendShiftPermille { get; set; } = { 120, 80, 45 };
+        /// <summary>
+        /// Where mentality moves the back line, in decimetres. It is the height of the line —
+        /// the one instruction a coach gives in exactly these words — and everything else in the
+        /// block follows from it, so a defensive side genuinely sits deeper rather than merely
+        /// scoring differently.
+        /// </summary>
+        public int[] MentalityLinePushDm { get; set; } = { -70, 0, 80 };
 
         /// <summary>How many players make supporting runs.</summary>
         public int[] MentalitySupporters { get; set; } = { 1, 2, 3 };
@@ -1152,9 +1391,9 @@ namespace Sim.Core.Config
         /// <summary>How far from his position a player will go to press the ball.</summary>
         public int[] PressReachDm { get; set; } = { 160, 260, 380 };
 
-        /// <summary>Ticks a player keeps the ball before looking to release it.</summary>
-        public int[] TempoHoldTicksMin { get; set; } = { 4, 3, 1 };
-        public int[] TempoHoldTicksMax { get; set; } = { 8, 5, 3 };
+        /// <summary>How long a player keeps the ball before he looks to release it, in milliseconds.</summary>
+        public int[] TempoHoldMsMin { get; set; } = { 2400, 1800, 1000 };
+        public int[] TempoHoldMsMax { get; set; } = { 4200, 3200, 2000 };
 
         /// <summary>How strongly the forward option is preferred when passing.</summary>
         public int[] TempoForwardBias { get; set; } = { 6, 10, 16 };

@@ -215,7 +215,7 @@ public sealed class LiveMatchService : ILiveMatchService
             changes, unchecked((ulong)live.Seed), _config);
 
         live.ChangesJson = JsonSerializer.Serialize(changes, PlanJson);
-        live.ReportJson = JsonSerializer.Serialize(r.Report);
+        live.ReportJson = ReplayStore.Write(r.Report);
         live.HomeGoals = r.Report.HomeGoals;
         live.AwayGoals = r.Report.AwayGoals;
         live.UpdatedUtc = DateTime.UtcNow;
@@ -305,7 +305,7 @@ public sealed class LiveMatchService : ILiveMatchService
         MatchResolver.ResolveResult r = MatchResolver.ResolveLive(
             sides.Value.Home, sides.Value.Away, sides.Value.HomeInputs, sides.Value.AwayInputs,
             changes, unchecked((ulong)live.Seed), _config);
-        live.ReportJson = JsonSerializer.Serialize(r.Report);
+        live.ReportJson = ReplayStore.Write(r.Report);
         live.HomeGoals = r.Report.HomeGoals;
         live.AwayGoals = r.Report.AwayGoals;
     }

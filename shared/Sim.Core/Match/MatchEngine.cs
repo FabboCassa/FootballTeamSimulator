@@ -26,7 +26,16 @@ namespace Sim.Core.Match
     public sealed class MatchEngine
     {
         /// <summary>Bump when changes invalidate stored replays/golden masters.</summary>
-        public const int Version = 3; // v3: possession movement model (13.1); score/event model unchanged from v1.
+        // v4: the engine rework's phase 1 — the simulation runs at 10 Hz on real units (players
+        // 5.5-8.5 m/s, a pass up to 26 m/s, a ball with friction written per second) and the
+        // position stream is written at 2 Hz.
+        // v5: phase 2 — the team is a BLOCK. The formation is laid out by line instead of by
+        // role, and where a man stands comes from his line's height, the block's width and its
+        // capped slide toward the ball, not from a permille table plus an uncapped lerp at the
+        // ball. The SCORE and EVENT model is still unchanged from v1; what moved, again, is the
+        // picture, and it moved enough that a v4 replay cannot be rendered by a v5 client —
+        // which is exactly what this number is for.
+        public const int Version = 5;
 
         private const int MatchMinutes = 90;
 

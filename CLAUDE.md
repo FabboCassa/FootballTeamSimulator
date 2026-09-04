@@ -5,7 +5,7 @@ Read ARCHITECTURE.md (design) and ROADMAP.md (plan + current status via checkbox
 ## Working agreement (do not violate)
 - **NEVER run ANY git command in this repo — `git status` and `git log` included.** The user commits from his Windows machine; concurrent git access through the synced folder corrupts the index. **`git status` is NOT read-only**: it refreshes the stat cache through `.git/index.lock`, and the sandbox bridge cannot unlink files, so the lock survives as a 0-byte file. Visual Studio's Git panel then shows the warning "potrebbe essere in esecuzione un processo GIT", reports **"nessuna modifica"** even with dozens of changed files, and refuses to commit. It happened on 2026-08-18 and again on 2026-08-20 (task 11.2) — the corpses are parked in `_to_delete/index.lock.stale*`. **The fix, if it happens again:** the sandbox cannot delete, so `mv .git/index.lock _to_delete/<name>` (the index itself is untouched and needs no repair), or from PowerShell `Remove-Item .git\index.lock`. Then do NOT run git again to "check" — that recreates it. To see what changed, list files or read them; the diff is the user's job in his own tools.
 - One roadmap task at a time. The user tests every task on his machine (`dotnet test`, Unity) before it is marked `[x]` in ROADMAP.md. Mark `[~]` while in progress.
-- The sandbox has NO dotnet SDK and cannot reach Microsoft/dot.net domains — code cannot be compiled here. Write conservative, standard C# and let the user build. If a test might be statistically fragile, say so and ask for the output.
+- **The sandbox CAN compile and MEASURE `shared/Sim.Core` — do it, do not hand over unmeasured code.** `apt-get update && apt-get install -y dotnet-sdk-8.0` works in the container (dot.net itself is blocked, the Ubuntu archive is not); nuget.org is blocked but `Sim.Core` has NO package references, so a scratch `net8.0` csproj with a `<clear/>` NuGet.config builds it offline under `TreatWarningsAsErrors`, and a hand-written NUnit stub type-checks the whole of `Sim.Core.Tests`. A purpose-built harness then MEASURES what changed — that is how engine phase 1 found the stray-strike bug and proved three performance hypotheses wrong. The DEVICE VM has no dotnet and no route to install one, and the server/client still cannot be built anywhere but on the user's machine. If a test might be statistically fragile, say so and ask for the output.
 - Balance-sensitive changes go through the 1,000-match harness; the user pastes the printed distribution and we judge together before closing the task.
 - **Every online/multiplayer feature MUST ship dev-sim tooling — build it proactively, don't wait to be asked.** The user tests SOLO (a single account), so any feature that needs other participants (private leagues, ranked ladder, auctions, live matches, offers) is untestable without a dev way to simulate them. Provide bot autopilot + a fast-forward: fill a cohort/lobby with bots, place bids / make-accept offers, and advance the clock (tick the calendar / force-settle / bot-ready) — server behind the dev gates (`Dev:ExposeSeedEndpoints` for bot bootstrap via `DevSeedService`; `Ranked:ExposeInternalEndpoints` for `/internal/ranked/tick`+`/auctions/settle`), client behind `DevFlags.OnlineTestTools`. Pattern: DevSeedService composes the real use cases with deterministic/fresh `*@dev.local` bots; client dev buttons are hidden unless the flag is on. (Ranked so far: `POST /internal/dev/ranked/fill` fills the placement cohort; `POST /internal/ranked/tick` advances the calendar; client "Riempi con bot (dev)" + "Avanza calendario (dev)" buttons.)
 - Language: chat in Italian, all code/comments/docs in English.
@@ -18,7 +18,284 @@ Read ARCHITECTURE.md (design) and ROADMAP.md (plan + current status via checkbox
   `dotnet test shared/Sim.Core.Tests/Sim.Core.Tests.csproj --logger "console;verbosity=detailed"`
 - Current test count: 212 green (through 8.4a, +4 OnlineSeasonTick tests over 6.10a's 208). Golden master 0xCDEA5A2F7B9E5CF6. **STALE as of 13.1: the golden master changes with engine v3 — see the current position below.** Server Api.Tests: 70 green (through 8.5a, +11 LeagueAuctionTests over 8.4a's 59) + DevSeedTests (5) from the dev-seed tooling; **8.6 (live match control) DONE [x] — 8.6a (server) 85/85 green + 8.6b (Unity client) + dev "simulate the opponent" tooling Play-mode VERIFIED & ACCEPTED by the user (docker `up --build` healthy, the live match kicks off and the bot opponent joins/subs from the live screen). `[server-determinism] 0xCDEA5A2F7B9E5CF6` unchanged, NO Sim.Core change → 212 Sim.Core + golden master stand, no save bump. Still standing: commit `Migrations/AddLiveMatch*` for a clean Postgres/docker deploy (the running dev DB already has `live_matches`). Client: Season "▶ Live" launch, ~1s poll, MatchRenderer synced to KickoffUtc, InMatchPanel subs+instructions → POST /change, finish/leave (new .cs: LiveMatchView, OnlineLiveMatchScreenPresenter). DEV TOOLING (test the live match solo): server `POST /internal/dev/leagues/{id}/live/{fixtureId}/bot` (`DevSeedService.BotLiveAsync` — the fixture's @dev.local bot opens/joins + optionally a legal `LineupPlan.From(BestEleven)` sub), client dev row "Bot: entra"/"Bot: sostituzione" (gated by `DevFlags.OnlineTestTools`); `DevSeedService` ctor now takes `ILiveMatchService` (DI-resolved → the 5 DevSeedTests stay green). NEXT: Phase 9 (public ranked mode) — 8.7 (private season end) is DONE [x] and 🏁 Phase 8 is COMPLETE. **8.7 summary:** SERVER-ONLY logic, NO Sim.Core change, NO migration (reuses `LeagueStatus.Completed`=2 + existing columns); `dotnet test Api.Tests` **92/92 green**, `[server-determinism] 0xCDEA5A2F7B9E5CF6` unchanged. `ResolveNextRoundAsync` flips the league to Completed on the last matchday; `GET /leagues/{id}/season/summary` → final table + champion / top scorer (aggregated from the stored MatchReport goal events) / best defence / wooden spoon; `POST /leagues/{id}/season/new` (creator, Completed only) = FULL reset → deletes fixtures/lineups/trainings/bids/auctions/live, un-assigns clubs, re-equalises the developed squads + re-seeds 25M budgets, resets condition to neutral, reopens the draft (players KEEP their developed ability). Client 8.7b: `SeasonSummaryDto`/`SeasonAwardDto`/`TopScorerDto` + `GetSeasonSummaryAsync`/`StartNewSeasonAsync`, new `Views/OnlineSeasonEndView` + `Presenters/OnlineSeasonEndScreenPresenter` (named `Online*` because `SeasonEndView`/`season_end.*` is the SP 2.7 screen; the online one owns `seasonend.*`), opened by a "Bilancio stagione" button that appears on the Season screen once complete; loc en+it 612/612 at parity. The user's monthly-public-league vision (per-player rating → matchmaking by level → auto-enrol with opt-out → 1-week break between seasons) is recorded as the Phase 9 direction.**
 
-## Current position — task 13.2 WRITTEN (2026-09-01): the choreographer is gone, the match is played by agents
+## Current position — 🏁 ENGINE REWORK PHASE 2 CLOSED (2026-09-03): the team is a BLOCK
+
+**THE USER'S RUN, 2026-09-03.** `dotnet test` **580/580 green, 0 failed, 0 skipped**, in 2467.2 s
+(Sim.Core.Tests **340/340** — the 334 of phase 1 plus the 6 new `BlockShapeTests` — and Api.Tests
+**240/240** in 445.2 s). `[DeterminismCheck]` and `[server-determinism]` both print
+**`0xB3C30BEEAA5781B2`**, **identical digit for digit** to the value computed in the container on
+.NET 8 AND .NET 10 — cross-runtime determinism survives engine v5. `.\tools\balance.ps1` **28/28
+PASS with every figure unchanged** (difficulty 6.9/6.6/9.5/7.6/10.1, 67.6 transfers, wages 69.8%,
+the whole world block). The `pitch` scenario reproduced **every single number** of the container's
+run — goals 2.52, shots 25.1, km 10.83, width 42.0/38.8, depth 48.3/47.8, **10/19 in band** — at
+**291.7 ms a match against the container's 497**. Its **exit code 1 is expected**: the red check is
+the held-ball-on-a-line bug of §1.7, which is phase 5's. **The new shape assertions printed the
+SAME numbers as the stand-in program** they were proved with in the container
+(`centre worst 15.7 m`, `attacking width 42.3 m depth 48.5 m back line spread 8.5 m`) — which is
+the evidence that the stand-in was measuring the real thing and not a cousin of it. Neither
+suspected fixture argued: `Teams_FaceEachOther_AtKickoff` and the two positioning sweeps are green.
+
+**THE ONE NUMBER THE RUN SURFACED, AND IT IS NOT PHASE 2's: `dotnet test` now costs 41 minutes**
+(2467 s for Sim.Core.Tests). The **212.7 s** this repo remembers is a **PHASE 0** figure, taken when
+a match with the stream cost milliseconds; since phase 1 one costs 0.29 s on his machine. Phase 2 is
+9% of that per-match cost (268 → 292 ms), i.e. at most 3.5 of the 41 minutes. **THE REST IS NOT YET
+EXPLAINED, and my first explanation was WRONG — worth keeping as a warning.** I blamed
+`SeasonProgressor._watchEngine` (`generatePositions: true`) and wrote it into three documents before
+checking. One grep disproves it: **no test anywhere passes `watchedClubId`**, and without it the
+progressor always uses the other engine — the watch engine never runs in the suite at all. Same
+lesson as phase 1, except this time the check cost a grep. **THE COMMAND THAT WILL ACTUALLY SAY:**
+`dotnet test shared/Sim.Core.Tests/Sim.Core.Tests.csproj --logger "trx;LogFileName=slow.trx"` — the
+.trx carries every individual test's duration, and §5's escape hatch (`[Category("Slow")]` +
+`--filter TestCategory!=Slow`) can then be aimed at the right fixtures instead of guessed at.
+
+**`MatchResolver.Resolve` — DECIDED (2026-09-03): the film stays, the FORMAT does not.** The
+decision had been open since phase 1. Read the code: `LeagueSeasonService.GetReplayAsync` hands
+`fixture.ReplayJson` to any league member, the client deserializes it into a `MatchReport` and draws
+it — there is even a dedicated `ReplayTooOld` error for an engine-version mismatch. Watching your own
+league match IS the feature, so the flag does not get turned off. **CPU is not the issue either**:
+0.5 s a fixture, five fixtures a matchday, in a background job. **What IS wrong is the encoding, and
+it now has numbers** (one match, 10,801 frames, 496,846 position values): the report **without** the
+film is **2 KB**; **with** it, **2077 KB** (gzip 754). The film is a THOUSAND times the rest of the
+report — half a million small integers written as decimal ASCII into a Postgres `text` column; a
+10-club league season is 90 fixtures, i.e. **180 MB**. **And §3's proposal, `int16`, is the WORSE of
+the two measured options: 1294 KB, against 649 KB (gzip 391) for delta + zigzag varint + base64** —
+an int16 in base64 costs 2.67 bytes a value while a man's delta between two frames almost always
+fits in ONE, because nobody moves more than a few decimetres in half a second. Only measuring shows
+that. **THE CODEC IS WRITTEN (2026-09-03, the user chose it over the cadence lever): 2077 KB → 794 KB,
+2.61x, and not one frame fewer in the replay.** `PositionStream.Pack()` moves the four integer
+tracks (ball, home, away, carrier) into a string — **per-lane delta, zigzag, varint, base64** —
+and `Unpack()` reverses it. Per-LANE because the arrays interleave frames: a man's X sits every
+`stride` values, and it is HIS movement that is small, so almost every delta fits in ONE byte.
+**The action list is deliberately left as readable JSON**: it is the commentary track, it weighs a
+fifteenth of the positions, and reading it inside a stored replay is worth more than the bytes.
+**It is explicit and symmetric rather than a serializer attribute**, because the server writes with
+System.Text.Json, the client reads with Newtonsoft, and Sim.Core has NO package references (which is
+what lets it build offline here). One place on the server knows —
+`Infrastructure/Leagues/ReplayStore`, used by the six sites that write a replay — and four places on
+the client that read one. **`ReplayCodecTests` pins three properties:** the round trip is lossless
+and **the report hashes the same** (so the packed form cannot move a golden master — hence NO version
+bump); a replay **stored before** the packed form still reads (it carries its arrays, `Unpack()` is a
+no-op); and a stream that arrives packed **draws itself anyway** (`TickCount`/`BallAt`/`HomeAt`/
+`AwayAt` unpack on demand, so a forgotten call costs a slow first frame, not a blank pitch).
+**NOT done, on purpose:** §3's `int16` proposal is the WORSE of the two measured codecs (1294 KB vs
+649 for the film alone — a fixed two bytes a value cannot beat a variable one), and the cadence lever
+(`StreamTicksPerFrame` 5 → 10, which would halve it again) is **left on the table**: it costs 30 fps
+instead of 60 in the replay, and picture quality is exactly what phases 1 and 2 bought.
+  **Proved in the container before hand-over:** lossless round trip on all four tracks, same report
+  hash, old replays still readable, lazy unpack working — plus the two that matter for everything
+  else, **`[DeterminismCheck] 0xB3C30BEEAA5781B2` unmoved** and the `pitch` scenario printing the
+  same figures digit for digit as before the codec. Both new test files (`BlockShapeTests`,
+  `ReplayCodecTests`) had never been compiled anywhere; they now type-check against the real
+  Sim.Core through a hand-written NUnit stub (`tools/TestTypeCheck`, container-only, not committed).
+  **Expected count on the user's machine: 584** (580 + the four of `ReplayCodecTests`). The server
+  and the client are, as always, only compilable on his machine — the six `ReplayStore` call sites
+  and the four client `Unpack()` calls are mechanical, but they are unbuilt here.
+
+**Read `docs/engine/MATCH_ENGINE_PLAN.md` first — it is the plan of record for the match engine,
+and §9 is the full write-up of this phase.** Phases 0, 1 and 2 are all closed and VERIFIED.
+
+- **WHAT CHANGED — the formation is laid out by LINE, not by role.** The width used to be spread
+  one role at a time, each group over the whole pitch on its own: in a 4-3-3 the two centre-backs
+  came out on 250 and 750 permille — **thirty-four metres apart** — because their pair was spread
+  over the same span the full-backs were (§1.3). A footballer does not stand relative to whoever
+  shares his job title; he stands in a LINE. `MatchBalance.FormationLineByRole` now says which band
+  a role belongs to, and `FormationGeometry.AnchorY` lays that line out as a unit: wide roles on the
+  touchline margin, the rest spaced 14 m apart around the centre. A back four reads
+  **`FB 8 · CB 27 · CB 41 · FB 60 m`** — centre-backs **34.0 → 13.9 m** apart. **From four men up, a
+  line always puts two on the touchline whatever the roles are called**, which is what finally moves
+  a 4-4-2's wide midfielders (encoded CM so they land in the midfield bucket) out of the middle.
+  All six presets still round-trip through `ZoneRole.Resolve`, so a clean preset is still the fixed
+  point of the map and "reset on formation change" still restores the preset roles.
+- **`HomeSpot` IS NOW A BLOCK TRANSFORM.** A team has three separate properties and they used to be
+  the same number. WHERE it is has one degree of freedom — **the height of the back line**, which
+  is the line a coach actually instructs — and every other line is spaced FORWARD off it, so the
+  back four is a line by construction. The line sits between 16.5 m (the edge of its own box) and
+  52 m, and takes **40% of the ball's advance, not 100%**: a line that follows the ball metre for
+  metre runs two extra kilometres a match. HOW DEEP follows from how many lines the shape actually
+  has (`FormationGeometry.LineRank` — a 4-4-2 has three, a 4-2-3-1 four). HOW WIDE follows only from
+  possession (66% of nominal without the ball, 118% with it). **The asymmetric shift falls out of
+  measuring forward from the back line**: losing the ball drops the striker ~40 m and moves his
+  centre-backs ~15.
+- **THE UNCAPPED LERP AT THE BALL IS GONE (§1.4).** It was a PER-PLAYER lerp toward the ball's Y, so
+  the man furthest from the ball moved MORE than the man nearest it — the team did not slide across,
+  it squeezed. Replaced by a **translation of the whole shape, capped at 10 m** from the middle. The
+  cap is now an invariant a test asserts; measured, the team centre never leaves 15.7 m of the
+  middle.
+- **THE HEADLINE NUMBERS (200 matches, seed 20260803). Readings in band 7/19 → 10/19.** Attacking
+  block width **34.6 → 42.0 m** (band 40-60 ✅ closed), attacking depth **55.7 → 48.3 m** (30-50 ✅
+  closed), biggest hole **16.6 → 14.9 m** (0-15 ✅ closed), defending width 32.1 → 38.8 m (held),
+  km per player **11.30 → 10.83** (held). **Goals 2.52 and shots 25.1 are STILL identical digit for
+  digit to phases 0 and 1**, and `balance.ps1` without `pitch` was **diffed line by line against the
+  pre-phase tree**: `[sweep]`, `[match-fatigue]`, `[fitness->result]`, difficulty, world, background
+  resolver — every figure identical, only milliseconds differ.
+- **`MatchEngine.Version` IS NOW 5** and the golden master moved to **`0xB3C30BEEAA5781B2`** (was
+  `0x214A70906A5180AC`), re-pinned in `SimulationDeterminismTests`, `SimulationService`,
+  `docs/ops/runbook.md`, `docs/store/release-checklist.md`. v4 replays are no longer renderable and
+  the client already rejects them by comparing `MatchEngine.Version`.
+- **TWO FIXES THE MEASUREMENT ASKED FOR AND THE PLAN DID NOT.** (1) **The shape has inertia**: it
+  takes four seconds to open up or close down. With the several hundred turnovers a match this
+  engine still produces (a passing defect, phase 4's), snapping between the two shapes moved
+  twenty-two men six metres sideways and back every time. (2) **A man WALKS to a place a few metres
+  away and jogs to one across the pitch** (`PlayerApproachDm`): the model had only jog and sprint and
+  set off at a jog for a five-metre correction. **That one change is worth 2.5 km a match per
+  player**, and it is also why a man chasing a jittering target now averages it out instead of
+  chasing it. Both were found by MEASURING — the first two hypotheses about where the kilometres
+  went (the line's tracking, the phase snapping) were both wrong, and only the per-branch distance
+  breakdown settled it. Same lesson as phase 1.
+- **THE KICKOFF FRAME IS LEGAL FOR THE FIRST TIME (Law 8).** Measured on the old code: **three men
+  a side** stood in the opponents' half at the kickoff — the two blocks simply overlapped across the
+  middle. Now zero, with the taker on the centre spot exempt.
+- **THE CLIENT NO LONGER KEEPS ITS OWN COPY OF THE GEOMETRY.** `client/.../FormationLayout.cs` had
+  the anchor constants duplicated; it now calls `FormationGeometry`, so the Tactics screen and the
+  match pitch cannot diverge in silence. **This means `.\tools\build-simcore.ps1` is mandatory
+  before opening Unity.**
+- **THE THREE DEFENDING BANDS STILL RED ARE NOT THIS PHASE'S, and it is measured, not argued.**
+  Counted inside a match, a man spends **41% of his ticks marking and 0.0% holding a zone**:
+  `AssignMarks` still puts a marker on every one of the ten opponents wherever he is (§1.5), so the
+  `Zone` branch of `Move` is dead code and **a defending side's shape IS the attacking side's shape**
+  offset by 5.8 m — which is why the two rows of the measurement agree to a tenth of a metre
+  (defending 38.8 × 47.8, attacking 42.0 × 48.3). Defending depth, back-line spread and the marked
+  share close with **phase 3** (zones and triggers), not here. What phase 2 could do on that front it
+  did: **a man on the back line holds the line** — he takes his opponent across the pitch but does not
+  follow him in depth, leaving it only for a man who has already got behind it. Back-line spread
+  14.4 → 9.2 m.
+- **THE COST: 523 → 497 ms a match in the container, but 268 → 292 ms (+9%) on the user's machine.**
+  The block position is computed ONCE A TICK PER SIDE and read by everything else instead of being
+  recomputed per man per question, and in the container that saving more than covers what the block
+  makes move; on his hardware it does not quite. That 9% is what phase 2 contributes to the 41-minute
+  `dotnet test` above.
+- **HOW IT WAS VERIFIED (the gap is now closed, keep the method).** The container this was written in
+  **cannot reach nuget.org**,
+  so NUnit could not be restored and **`dotnet test` was NOT run here**. `dotnet-sdk-8.0` AND
+  `dotnet-sdk-10.0` both install from the Ubuntu archive (`apt-get install -y dotnet-sdk-10.0` — the
+  projects target net10.0), and `Sim.Core` builds offline because it has no package references; the
+  balance harness was rebuilt as a scratch console project that compiles the REAL scenario sources
+  against Sim.Core only (`LadderScenario`/`EconomyScenario` are the only two that need
+  `server/Infrastructure`, so they are left out). The new `BlockShapeTests` assertions were run the
+  same way, as a plain program: all green. **The user's run then gave 580/580, and the new tests'
+  diagnostic lines printed the same numbers as the stand-in** — which is the evidence that the
+  stand-in measured the real thing. Keep this route: it is how a phase can be MEASURED here instead
+  of handed over unmeasured.
+- **WHAT THE USER HAS TO RUN:** `.\tools\build-simcore.ps1` → `dotnet test` →
+  `.\tools\balance.ps1 -Scenario pitch -PitchMatches 200 -PitchDump .\replay.html` (open it and
+  LOOK at the shape) → `.\tools\balance.ps1` (every figure of the other scenarios must be
+  identical). If a fixture argues, the likeliest place is `Teams_FaceEachOther_AtKickoff` — which is
+  now true by MORE than it was — and the two positioning sweeps, whose zero point is by construction
+  the delta from the anchors and so should not have moved.
+- **RESIDUE TO DELETE BY HAND:** the whole `_to_delete/` folder (the tarballs used to carry the
+  sources into the container, plus the small python scripts used to edit these docs in place). The
+  sandbox bridge has no delete permission in the synced folder — `Remove-Item` from PowerShell.
+- **NEXT: phase 3 — difendere: zona e trigger.** One `Presser` (sometimes two), a `Cover`, `Marker`
+  only for opponents in our own third or running in behind, and everybody else holding his ZONE —
+  which is the branch that runs 0.0% of the time today. Plus `Separate()` extended to opponents (a
+  marker currently stands literally on top of his man) and pressing triggers off the `Pressing`
+  instruction. **That is the phase where the video changes face**, and the three red defending bands
+  are its acceptance criteria.
+
+### Previous position — 🏁 ENGINE REWORK PHASE 1 CLOSED (2026-09-03): the sim runs at 10 Hz on real units
+
+**THE USER'S RUN, 2026-09-03.** `dotnet test server/Api.Tests` **240/240 green** with
+`[server-determinism] 0x214A70906A5180AC` — **the golden master computed on .NET 8 in the container
+and the one computed on his .NET 10/Windows are identical digit for digit**, so cross-runtime
+determinism survives engine v4. `.\tools\balance.ps1` **28/28 PASS with every figure unchanged**
+(difficulty 6.9/6.6/9.5/7.6/10.1, 67.6 transfers, wages 69.8%, the whole world block) — the proof
+that the movement layer consumes no randomness it must not. `dotnet test` on Sim.Core **334/334** once the frame-rounding defect below was fixed.
+The `pitch` scenario: 7/19 readings in band (was 6), km/player 11.3, and **268 ms per match on his
+machine against 523 in the container** — his hardware is about twice as quick.
+
+**THE ONE RED, and the defect it found is in the STREAM, not in the test.**
+`SavedShots_StopAtTheKeeper_AndMissesGoWide` failed on "a miss must not end up in the net either".
+Measured rather than guessed: an action was filed on frame `floor(tick / 5)`, i.e. **up to 0.4 s
+BEFORE it happened**. Under the old time base a tick was a frame and this could not arise; at 32 m/s
+a shot covers thirteen metres in that window, so the test was reading the ball while it was still
+short of the line. Counted: **18 of 23 goals and 4 of 131 misses** were misplaced by that alone
+(0 of 186 saves, because the keeper stands still), and the test stops at the first it meets.
+**Fixed in `Record`: an action is now filed on the first frame at or AFTER it happened** — which is
+also what the renderer should draw, since announcing a pass on the frame where the ball is still at
+the passer's feet is commentary running ahead of the picture. Rounding up is monotone, so action
+order is untouched. `Passes_AreFootballLength` consequently measures from the frame BEFORE the
+action. **Verified by the user: both fixtures green** — `[shots] 23 goals · 186 saves · 131 misses`,
+`[passes] 7214 · median 16m · p99 53m · longest 90m`.
+
+**THE GENERAL LESSON, worth carrying into every later phase:** decimating a stream is not merely
+dropping frames, it is deciding WHICH INSTANT each event belongs to. An action filed on the frame
+before it happened describes a world that has not happened yet, and the faster the tick the bigger
+the lie. Any phase that moves the time base has to ask the same question again.
+
+
+
+**Read `docs/engine/MATCH_ENGINE_PLAN.md` first — it is the plan of record for the match engine,
+and §8 is the full write-up of this phase.** Phase 0 (the `pitch` measuring bench) was closed and
+verified on 2026-09-02; phase 1 is written and MEASURED in the container on .NET 8, awaiting the
+user's run on his own machine.
+
+- **WHAT CHANGED.** The movement block of `MatchBalance` is now written in PHYSICAL UNITS: anything
+  with time in it is per SECOND or in MILLISECONDS and every tick count is DERIVED
+  (`TicksPerSecond` 10 → 600 ticks a minute, 54,000 a match; `TicksOfMs()` for every duration).
+  Players run at **5.5-8.5 m/s** from Pace and jog at 42% of that off the ball; a pass leaves at up
+  to **26 m/s** and a shot at 32; the ball keeps **74% of its speed per second** (multiplicative,
+  because a real ball is slowed by rolling resistance AND air), with the per-tick figure derived by
+  an integer binary search on the very recurrence the sim runs — no root, no log, no float. The
+  stream is DECIMATED: one frame every five ticks = 120 frames a minute = 10,801 a match, and
+  60 fps at the renderer's existing 30x compression. **A BallAction's Tick is in FRAME space.**
+- **THE HEADLINE NUMBERS (200 matches, seed 20260803, .NET 8 Release).** Ground covered per player
+  **1.28 km → 11.30 km** (band 9.5-11.5 ✅). Ball-to-player speed ratio **2:1 → 3.06:1** (band
+  3-4:1 ✅). **Goals 2.52 and shots 25.1 are IDENTICAL to the phase-0 baseline, digit for digit** —
+  the proof that the 1.4 result model was not touched. Still outside their bands and owned by later
+  phases: pass accuracy 56% (execution error, phase 4), corners 0.8 and fouls/offsides 0 (the laws,
+  phase 5), throw-ins 76 (shape and possession, phases 2-4).
+- **`MatchEngine.Version` IS NOW 4** and the golden master moved to **`0x214A70906A5180AC`**
+  (computed on .NET 8; v3 was `0xBD336A9B5F155792`), re-pinned in `SimulationDeterminismTests`,
+  `SimulationService`, `docs/ops/runbook.md` and `docs/store/release-checklist.md`. v3 replays are
+  no longer renderable — the client already rejects them because it compares against
+  `MatchEngine.Version` rather than a hand-written number, so no client change was needed.
+- **THE REAL DEFECT THE PHASE FOUND, and it is the kind only new units expose:** a strike that ran
+  out over a TOUCHLINE lost its outcome entirely — `Restart` clears the live shot in silence, so
+  the save or the miss the timeline had declared was never recorded. At 1.2 m/s it almost never
+  happened; at 32 m/s it happened constantly, and the mirror measured it at **149 of 190 outcomes
+  shown, 78%**, against an 85% floor. `SettleStrayStrike` fixed it: **190 of 190**.
+- **THE COST, and it is the open question.** 0.9 ms a match without the stream; **523 ms with it**
+  (Release, .NET 8, shared container) against the plan's < 30 ms target. Per TICK it is now about
+  four times cheaper than before — the ×50 in tick count is the rest. What was done, in the order
+  measurement (never guesswork) dictated: the integer square root rewritten digit-by-digit (worth
+  only 84 ms of 871 — **the first two hypotheses were both wrong and only the profiler said so**);
+  then SQUARED-distance comparisons wherever only "who is nearer" is asked, no root when the target
+  is within one step, `PassSafe` asking how far the ball has GOT (one table lookup) instead of when
+  it ARRIVES (a binary search per opponent per candidate), the support spot on a smaller grid once
+  a second, the block position computed once per defender instead of twice, and the team brain
+  (marking, support) on its own 2 Hz clock separate from the 10 Hz physics.
+- **THE STREAM IS NOW ~2 MB OF JSON A MATCH** (was 202 KB). That lands on
+  `server/Infrastructure/Leagues/MatchResolver.Resolve`, which generates a stream for EVERY league
+  fixture resolved server-side: a matchday is ~5 s of CPU and ~20 MB in `ReplayJson`. **Decision
+  carried forward** (§3 of the plan suggests int16 + client-side regeneration).
+- **TEST DISCIPLINE TIGHTENED IN THE SAME PHASE.** `MatchResimTests` and `PrematchPlanTests` swept
+  up to 800 matches per test with the picture on; those sweeps now pass `generatePositions: false`
+  and keep it ON for a single case, which is where the identity of the PICTURE actually has to be
+  shown. `PositionStreamTests` derives its thresholds from the config instead of hard-coding them,
+  and **the "the ball never changes direction untouched" invariant is now checked at the
+  SIMULATION's resolution** (`StreamTicksPerFrame = 1`) rather than the replay's: half a second is
+  long enough for a ball to be struck, roll, be collected and struck again, so a turn measured
+  across frames was evidence of nothing. At full resolution: **0 swerves over 68,929 moving ticks.**
+- **WHAT THE USER HAS TO RUN:** `.\tools\build-simcore.ps1` → `dotnet test` (expect the movement
+  thresholds to hold; paste `[movement]`, `[passes]`, `[swerve]`, `[outcomes]`) → `dotnet test
+  server/Api.Tests` (the new golden master is already pinned; if `[DeterminismCheck]` disagrees,
+  that printed value is the one to keep) → `.\tools\balance.ps1 -Scenario pitch -PitchMatches 200
+  -PitchDump .\replay.html` → `.\tools\balance.ps1`, where **every number of the other scenarios
+  must be unchanged**: those ~11,000 matches run without the stream and the result model was not
+  touched, so a single figure moving means the movement layer is consuming randomness where it
+  must not.
+- **SANDBOX NOTE (this worked, keep it):** `apt-get update && apt-get install -y dotnet-sdk-8.0`
+  installs in the container; nuget.org is blocked but `Sim.Core` has no package references, so a
+  scratch `net8.0` csproj with a `<clear/>` NuGet.config compiles it offline under
+  `TreatWarningsAsErrors`. A **hand-written NUnit stub** (attributes, `Assert.That`, `Is`, `Has`,
+  `Throws`, `TestContext`) type-checks the WHOLE of `Sim.Core.Tests` offline — it asserts nothing,
+  but it is what turns "written" into "compiles". The work tarball is parked in
+  `backups/claude-sandbox/simcore-phase1.tar.gz` (gitignored); delete when you like.
+- **NEXT: phase 2 — forma: formazione e blocco.** `AnchorY` laying out a LINE as a unit instead of
+  every role across the whole width, `HomeSpot` replaced by a capped block transform, an explicit
+  defensive line, and compactness. That is the phase where the video changes face.
+
+### Previous position — task 13.2 WRITTEN (2026-09-01): the choreographer is gone, the match is played by agents
 
 **After the second Play-mode recording the user asked for the engine to be RETHOUGHT, and he was right.** 13.1 was a choreographer — a script in tick space, acted out — and no amount of fixing could make it look like football, because nothing in it decided anything. His video was the proof: twenty men in one penalty area, half the pitch empty, tokens overlapping, the ball bouncing between a goal kick and a shot at the same end. **13.2 replaces it with the agent model the literature settles on** (Buckland, *Programming Game AI by Example* ch. 4 — Simple Soccer — plus RoboCup 2D's grouped marking): home regions from the formation, player states, steering WITH SEPARATION, a team brain choosing who chases / supports / marks, a support-spot grid that produces patterns of play, Buckland's pass rule (*"cannot be intercepted and as far forward of the receiver as possible"*), and a BALL WITH FRICTION so a pass can be cut out and crossing a line IS the throw-in. The 1.4 result model stays the authority through `MatchDirector`, and the coach's four instruction axes drive the shape — the user asked for both explicitly.
 - **STATE: written, compiles clean under `TreatWarningsAsErrors`, PARTIALLY measured.** Measured before the sandbox build service went down: passes median **15m** / p90 26m / longest **45m**, **135 passes · 34 tackles · 32 interceptions** a match, play spread over the whole pitch (ball X p10 300 · p50 518 · p90 755), **0%** of ticks with both teams crammed into one third, determinism holding. NOT yet measured: the director firing the scripted strike, the outcomes resolving, restarts, the tackle lock.

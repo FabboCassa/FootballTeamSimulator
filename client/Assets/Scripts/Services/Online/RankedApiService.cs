@@ -114,6 +114,11 @@ namespace Fts.Services.Online
             if (report?.Positions == null)
                 return RankedApiResult<MatchReport>.Fail(RankedApiError.Server);
 
+            // The stream crosses the wire PACKED since engine phase 2 (2077 KB of stored replay
+            // became 794 KB); this turns the blob back into the arrays the renderer walks, and it
+            // is a no-op on a replay stored in the old shape.
+            report.Positions.Unpack();
+
             // A replay stored before the movement model changed (13.1) carries a stream this
             // build cannot draw. Say so rather than rendering an empty pitch.
             return report.EngineVersion != MatchEngine.Version

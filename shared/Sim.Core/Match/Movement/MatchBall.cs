@@ -1,3 +1,5 @@
+using Sim.Core.Config;
+
 namespace Sim.Core.Match.Movement
 {
     /// <summary>
@@ -10,14 +12,46 @@ namespace Sim.Core.Match.Movement
     /// Because it slows down, a pass can be read and cut out: the whole of the passing
     /// model rests on <see cref="TicksToCover"/> — how long the ball needs to reach a
     /// point against how long a defender needs to get there.
+    ///
+    /// PHASE 1 OF THE ENGINE REWORK put the ball on real units. Friction is written per
+    /// SECOND in <see cref="MatchBalance.BallSpeedKeptPermillePerSecond"/> and the per-tick
+    /// figure is derived from the tick rate, so the ball decelerates the same way whatever
+    /// the simulation's frequency. It is multiplicative rather than a flat subtraction on
+    /// purpose: a real ball is slowed by rolling resistance AND by air, so it sheds roughly
+    /// seven metres per second squared at twenty-five metres a second and less than one at
+    /// walking pace — which is what an exponential gives and a constant does not.
+    ///
+    /// The three questions the passing model asks — how far does a ball struck this hard
+    /// go, how long does it take, how hard must it be struck — are answered from ONE
+    /// cumulative table built in the constructor, not by iterating a recurrence per
+    /// opponent per candidate pass. At 10 Hz that difference is the whole cost of a match.
     /// </summary>
     internal sealed class MatchBall
     {
-        /// <summary>Speed kept per tick, in permille. Lower = the ball pulls up sooner.</summary>
-        public const int FrictionPermille = 880;
+        /// <summary>A ball is unreachable at this many ticks: it will never get there.</summary>
+        public const int Unreachable = 9999;
 
-        /// <summary>A ball slower than this has stopped.</summary>
-        private const int RestSpeed = 6 * U.Scale / 10;
+        /// <summary>Speed kept per tick, in permille. Derived from the per-second figure.</summary>
+        private readonly int _frictionPermille;
+
+        /// <summary>A ball slower than this has stopped, in units per tick.</summary>
+        private readonly int _restSpeed;
+
+        /// <summary>
+        /// Ticks tracked by <see cref="_cumulative"/>. Long enough for any ball that is still
+        /// worth predicting: past this it is a ball rolling out of play, not a pass.
+        /// </summary>
+        private readonly int _trackedTicks;
+
+        /// <summary>
+        /// _cumulative[n] = 1000 * (1 + k + ... + k^(n-1)), so a ball struck at force F has
+        /// covered F * _cumulative[n] / 1000 after n ticks. Monotone, which is what lets
+        /// <see cref="TicksToCover"/> be a binary search instead of a loop.
+        /// </summary>
+        private readonly int[] _cumulative;
+
+        /// <summary>The longest flight the passing model will consider.</summary>
+        private readonly int _maxFlightTicks;
 
         public int X, Y;      // units
         public int Vx, Vy;    // units per tick
@@ -37,6 +71,59 @@ namespace Sim.Core.Match.Movement
         public bool Dead;
 
         public bool Free => OwnerSide < 0;
+
+        public MatchBall(MatchBalance cfg)
+        {
+            int perSecond = cfg.BallSpeedKeptPermillePerSecond;
+            if (perSecond < 1) perSecond = 1;
+            if (perSecond > 999) perSecond = 999;
+
+            _frictionPermille = PerTickRetention(perSecond, cfg.TicksPerSecond);
+            _restSpeed = cfg.BallRestSpeedDmPerSecond * U.Scale / cfg.TicksPerSecond;
+            if (_restSpeed < 1) _restSpeed = 1;
+
+            _maxFlightTicks = cfg.MaxFlightTicks;
+            _trackedTicks = cfg.BallTrackedSeconds * cfg.TicksPerSecond;
+            if (_trackedTicks < _maxFlightTicks) _trackedTicks = _maxFlightTicks;
+
+            _cumulative = new int[_trackedTicks + 1];
+            long sum = 0;
+            int term = 1000;
+            for (int n = 0; n <= _trackedTicks; n++)
+            {
+                _cumulative[n] = sum > int.MaxValue ? int.MaxValue : (int)sum;
+                sum += term;
+                term = term * _frictionPermille / 1000;
+            }
+        }
+
+        /// <summary>
+        /// The per-tick retention whose <paramref name="ticksPerSecond"/>-th power is closest to
+        /// the per-second one. Integer binary search on the very recurrence the simulation runs,
+        /// so the answer is identical on .NET, Mono and IL2CPP — no root, no logarithm, no float.
+        /// </summary>
+        private static int PerTickRetention(int perSecond, int ticksPerSecond)
+        {
+            if (ticksPerSecond <= 1) return perSecond;
+
+            int lo = perSecond, hi = 1000;   // the per-tick figure is never below the per-second one
+            while (lo < hi)
+            {
+                int mid = lo + (hi - lo) / 2;
+                if (Power(mid, ticksPerSecond) >= perSecond) hi = mid;
+                else lo = mid + 1;
+            }
+
+            return lo;
+        }
+
+        /// <summary>permille^n, folded through the same truncating integer step the ball takes.</summary>
+        private static int Power(int permille, int n)
+        {
+            int value = 1000;
+            for (int i = 0; i < n; i++) value = value * permille / 1000;
+            return value;
+        }
 
         public void Place(int x, int y)
         {
@@ -95,10 +182,10 @@ namespace Sim.Core.Match.Movement
             PrevY = Y;
             X += Vx;
             Y += Vy;
-            Vx = Vx * FrictionPermille / 1000;
-            Vy = Vy * FrictionPermille / 1000;
+            Vx = Vx * _frictionPermille / 1000;
+            Vy = Vy * _frictionPermille / 1000;
 
-            if (U.Length(Vx, Vy) < RestSpeed)
+            if (U.Length(Vx, Vy) < _restSpeed)
             {
                 Vx = 0;
                 Vy = 0;
@@ -107,93 +194,62 @@ namespace Sim.Core.Match.Movement
 
         public int Speed => U.Length(Vx, Vy);
 
+        /// <summary>How far a ball struck at <paramref name="force"/> rolls in <paramref name="ticks"/> ticks.</summary>
+        public int RangeInTicks(int force, int ticks)
+        {
+            if (ticks <= 0 || force <= 0) return 0;
+            if (ticks > _trackedTicks) ticks = _trackedTicks;
+            return (int)((long)force * _cumulative[ticks] / 1000);
+        }
+
+        /// <summary>
+        /// How far a ball struck at <paramref name="force"/> can be DELIVERED — the ground it
+        /// covers inside the longest flight the passing model will wait for. The asymptotic roll
+        /// is longer, but a ball still trickling four seconds later has not been passed to anyone.
+        /// </summary>
+        public int RangeOf(int force) => RangeInTicks(force, _maxFlightTicks);
+
         /// <summary>
         /// Ticks for a ball struck at <paramref name="force"/> to roll <paramref name="distance"/>,
-        /// or <see cref="Unreachable"/> if friction stops it first. Iterative on purpose: the
-        /// closed form needs a logarithm, and this has to give the same answer everywhere.
+        /// or <see cref="Unreachable"/> if it runs out of legs first. Binary search on the
+        /// cumulative table, which is monotone by construction.
         /// </summary>
-        public const int Unreachable = 9999;
-
-        public static int TicksToCover(int distance, int force)
+        public int TicksToCover(int distance, int force)
         {
             if (distance <= 0) return 0;
+            if (force <= 0) return Unreachable;
+            if ((long)force * _cumulative[_trackedTicks] / 1000 < distance) return Unreachable;
 
-            long travelled = 0;
-            int speed = force;
-            for (int t = 1; t <= 40; t++)
-            {
-                travelled += speed;
-                if (travelled >= distance) return t;
-                speed = speed * FrictionPermille / 1000;
-                if (speed < RestSpeed) break;
-            }
-
-            return Unreachable;
-        }
-
-        /// <summary>How far a ball struck at <paramref name="force"/> rolls before it stops.</summary>
-        public static int RangeOf(int force)
-        {
-            long travelled = 0;
-            int speed = force;
-            for (int t = 0; t < 40 && speed >= RestSpeed; t++)
-            {
-                travelled += speed;
-                speed = speed * FrictionPermille / 1000;
-            }
-
-            return travelled > int.MaxValue ? int.MaxValue : (int)travelled;
-        }
-
-        /// <summary>The force needed to send the ball <paramref name="distance"/>, capped at <paramref name="maxForce"/>.</summary>
-        public static int ForceFor(int distance, int maxForce)
-        {
-            // Binary search on RangeOf, which is monotone in force. ~11 iterations.
-            int lo = U.Scale, hi = maxForce;
+            int lo = 1, hi = _trackedTicks;
             while (lo < hi)
             {
                 int mid = lo + (hi - lo) / 2;
-                if (RangeOf(mid) >= distance) hi = mid;
+                if ((long)force * _cumulative[mid] / 1000 >= distance) hi = mid;
                 else lo = mid + 1;
             }
 
             return lo;
         }
 
+        /// <summary>The force needed to send the ball <paramref name="distance"/>, capped at <paramref name="maxForce"/>.</summary>
+        public int ForceFor(int distance, int maxForce) =>
+            ForceForTicks(distance, _maxFlightTicks, maxForce);
+
         /// <summary>
         /// The force that carries the ball <paramref name="distance"/> in about
         /// <paramref name="ticks"/> ticks. Using the WEAKEST force that eventually covers the
-        /// distance instead leaves passes trickling across the pitch for ten ticks, which is
-        /// both slow to watch and easy to intercept.
+        /// distance instead leaves passes trickling across the pitch, which is both slow to
+        /// watch and easy to intercept.
         /// </summary>
-        public static int ForceForTicks(int distance, int ticks, int maxForce)
+        public int ForceForTicks(int distance, int ticks, int maxForce)
         {
             if (ticks < 1) ticks = 1;
+            if (ticks > _trackedTicks) ticks = _trackedTicks;
 
-            long sum = 0, term = 1000;
-            for (int i = 0; i < ticks; i++)
-            {
-                sum += term;
-                term = term * FrictionPermille / 1000;
-            }
-
-            long force = (long)distance * 1000 / (sum <= 0 ? 1 : sum);
+            long span = _cumulative[ticks];
+            long force = span <= 0 ? maxForce : (long)distance * 1000 / span;
             if (force > maxForce) force = maxForce;
             return force < 1 ? 1 : (int)force;
-        }
-
-        /// <summary>How far a ball struck at <paramref name="force"/> rolls in <paramref name="ticks"/> ticks.</summary>
-        public static int RangeInTicks(int force, int ticks)
-        {
-            long travelled = 0;
-            int speed = force;
-            for (int t = 0; t < ticks; t++)
-            {
-                travelled += speed;
-                speed = speed * FrictionPermille / 1000;
-            }
-
-            return travelled > int.MaxValue ? int.MaxValue : (int)travelled;
         }
 
         /// <summary>Where the ball will be in <paramref name="ticks"/> ticks if nobody touches it.</summary>
@@ -206,9 +262,18 @@ namespace Sim.Core.Match.Movement
             {
                 x += vx;
                 y += vy;
-                vx = vx * FrictionPermille / 1000;
-                vy = vy * FrictionPermille / 1000;
+                vx = vx * _frictionPermille / 1000;
+                vy = vy * _frictionPermille / 1000;
             }
+        }
+
+        /// <summary>One tick of free flight applied to a running prediction (no allocation, no rewind).</summary>
+        public void StepPrediction(ref int x, ref int y, ref int vx, ref int vy)
+        {
+            x += vx;
+            y += vy;
+            vx = vx * _frictionPermille / 1000;
+            vy = vy * _frictionPermille / 1000;
         }
     }
 }

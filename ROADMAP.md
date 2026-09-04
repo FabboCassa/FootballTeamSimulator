@@ -427,6 +427,95 @@ Phases are sequential; each task is small and **individually testable** (✅ = h
 🏁 **Milestone: one product, two shapes.** Every screen is drawn from the same tokens, the same grammar and the same components, and the phone build is a phone build rather than a desktop layout squeezed sideways.
 
 
+## 🔧 Match engine rework — `docs/engine/MATCH_ENGINE_PLAN.md`
+
+The plan of record for the match engine lives in **`docs/engine/MATCH_ENGINE_PLAN.md`** (approved
+2026-09-02): eight phases that invert the causality — the pitch decides the result instead of
+acting one out — with the game playable at the end of every one of them.
+
+- [x] **Phase 0 — the measuring bench** (2026-09-02, verified by the user). The `pitch` scenario in
+  `tools/BalanceHarness`, `MatchAnalyzer`/`MatchMetrics` in Sim.Core, and a standalone HTML replay
+  viewer. 6 readings of 19 inside the band real football produces — that is the gap the eight
+  phases close, and it is measured rather than argued.
+- [x] **Phase 1 — units and the time base** (2026-09-03, VERIFIED by the user: Sim.Core 334/334,
+  Api.Tests 240/240, `balance.ps1` 28/28 with every figure unchanged, and the golden master computed
+  on .NET 8 identical to his .NET 10 — cross-runtime determinism survives engine v4). The simulation runs at **10 Hz** on physical units —
+  players 5.5-8.5 m/s from Pace and a jog off the ball, a pass up to 26 m/s, a ball that keeps 74%
+  of its speed per second — and the stream is written every fifth tick (120 frames a minute, 60 fps
+  at the renderer's existing compression). **Ground covered per player 1.28 km → 11.30 km** and the
+  **ball-to-player speed ratio 2:1 → 3.06:1**, both inside the real-football band; **goals 2.52 and
+  shots 25.1 unchanged digit for digit from phase 0**, which is the proof the 1.4 result model was
+  not touched. `MatchEngine.Version` → **4**, golden master → **`0x214A70906A5180AC`**, v3 replays
+  no longer renderable (the client already rejects them by comparing `MatchEngine.Version`).
+  Found and fixed TWO real defects the old units hid: a strike that ran out over a touchline lost
+  its outcome entirely (78% of saves and misses shown → 100%), and an action was filed on the stream
+  frame BEFORE it happened — at 32 m/s that is thirteen metres of flight, so a goal was drawn with
+  the ball still short of the line. Actions now land on the first frame at or after the event. Cost: 0.9 ms a match without the stream,
+  **523 ms with it in the container and 268 ms on the user's machine**, against the plan's < 30 ms target — carried forward as an open decision, along
+  with the stream's new size (~2 MB of JSON a match, which lands on the server's `MatchResolver`).
+  Full write-up in §8 of the plan.
+- [x] **Phase 2 — shape: formation and block** (2026-09-03, VERIFIED by the user: **`dotnet test`
+  580/580 green** — Sim.Core 340/340, the 334 of phase 1 plus the 6 new `BlockShapeTests`, and
+  Api.Tests 240/240 — with **`[DeterminismCheck]`/`[server-determinism]` `0xB3C30BEEAA5781B2`
+  identical digit for digit** to the container's .NET 8/10 figure, so cross-runtime determinism
+  survives engine v5; `balance.ps1` **28/28 with every figure unchanged**; the `pitch` scenario
+  reproducing **every single number** of the container's run at **291.7 ms a match** against its
+  497). A team is now a
+  **block**. The formation is laid out **by LINE** instead of by role: in a 4-3-3 the two
+  centre-backs sat 34 m apart because their pair was spread over the same width the full-backs
+  were, and a back four now reads `FB 8 · CB 27 · CB 41 · FB 60 m` — **centre-backs 34.0 m → 13.9 m
+  apart**. A line of four or more always puts two men on the touchline whatever their roles are
+  called, which is what finally moves a 4-4-2's wide midfielders (encoded CM) out of the middle.
+  Where a man stands comes from the **height of his back line** (16.5-52 m from his own goal,
+  taking 40% of the ball's advance), the number of lines his shape actually has (`LineRank`: a
+  4-4-2 has three, a 4-2-3-1 four), the block's width (66% of nominal without the ball, 118% with
+  it) and a **CAPPED** slide toward the ball — replacing the uncapped per-player lerp at the
+  ball's Y that made the far side of the block move more than the near side (§1.4). The asymmetric
+  shift falls out of measuring the spacing forward from the back line: losing the ball drops the
+  striker ~40 m and moves his centre-backs ~15. **Readings inside the band 7/19 → 10/19**:
+  attacking width **34.6 → 42.0 m**, attacking depth **55.7 → 48.3 m**, biggest hole **16.6 →
+  14.9 m** all closed; km per player **11.30 → 10.83** held. **Goals 2.52 and shots 25.1 are STILL
+  identical digit for digit** to phases 0 and 1, and `balance.ps1` without `pitch` was diffed line
+  by line against the pre-phase tree: not one figure of the result model moved.
+  `MatchEngine.Version` → **5**, golden master → **`0xB3C30BEEAA5781B2`**, v4 replays no longer
+  renderable. Two fixes the measurement asked for and the plan did not: the shape now takes **four
+  seconds** to open up or close down (snapping on every one of the several hundred turnovers a
+  match was most of a defender's mileage and none of his football), and a man **walks** to a place
+  a few metres away instead of jogging to it — worth 2.5 km a match on its own. **The kickoff frame
+  is legal for the first time** (Law 8): three men a side used to stand in the opponents' half, now
+  zero. Client `FormationLayout` no longer keeps its own copy of the anchor constants — it calls
+  `FormationGeometry`, so the Tactics screen and the match pitch cannot diverge in silence.
+  **The three defending bands still red are NOT this phase's**: counted inside a match, a man
+  spends **41% of his ticks marking and 0.0% holding a zone** — `AssignMarks` still puts a marker
+  on all ten opponents (§1.5), so a defending side's shape IS the attacking side's shape offset by
+  5.8 m. They close with phase 3. Full write-up in §9 of the plan. **The run also surfaced a cost that is NOT this phase's:
+  `dotnet test` now takes 41 minutes** (2467 s for Sim.Core.Tests) against the 212.7 s this repo
+  remembers — which is a PHASE 0 figure, from when a match with the stream cost milliseconds. Phase 2
+  is 9% of the per-match cost (268 → 292 ms), i.e. at most 3.5 of the 41 minutes; **the rest is not
+  yet explained** (my first culprit, `SeasonProgressor._watchEngine`, was disproved by one grep —
+  no test passes `watchedClubId`, so it never runs in the suite). `dotnet test --logger "trx"` gives
+  every test's duration and will settle it.
+  **`MatchResolver.Resolve` is now DECIDED: the film stays, the format does not.** `GetReplayAsync`
+  serves `ReplayJson` to league members and the client draws it, so watching your own match IS the
+  feature and the flag does not get turned off; 0.5 s a fixture in a background job is not a cost.
+  The encoding is: measured on one match, the report **without** the film is **2 KB** and **with** it
+  **2077 KB** — a 10-club league season is 180 MB of Postgres text. §3's `int16` proposal is the
+  worse of the two measured codecs (1294 KB) against **delta + zigzag varint + base64**, because a
+  man's delta between two frames fits in one byte. **The codec is written the same day: a stored
+  replay goes 2077 KB → 794 KB (2.61x) with not one frame fewer.** `PositionStream.Pack()`/
+  `Unpack()` carry the four integer tracks as a per-lane delta/varint/base64 string and leave the
+  action list as readable JSON; it is explicit rather than a serializer attribute because the server
+  writes with System.Text.Json, the client reads with Newtonsoft, and Sim.Core deliberately has no
+  package references. One place on the server knows (`Infrastructure/Leagues/ReplayStore`, used by
+  the six sites that write a replay), four on the client. `ReplayCodecTests` pins that the round trip
+  is lossless, that **the report hashes the same** (so no golden-master bump), that a replay stored
+  in the old shape still reads, and that a stream arriving packed draws itself anyway. The cadence
+  lever (`StreamTicksPerFrame` 5 → 10, which would halve it again at 30 fps instead of 60) is left
+  on the table, not pulled.
+- [ ] Phase 3 — defending: zones and triggers · [ ] Phase 4 — decisions on the ball ·
+  [ ] Phase 5 — the laws · [ ] Phase 6 — inverting the causality · [ ] Phase 7 — performance
+  data · [ ] Phase 8 — the instructions matter
+
 - [~] **13.2 The agent match engine** — 13.1's choreographer is retired. It wrote a script in TICK SPACE and had the players act it out, so nobody in it decided anything: the ball's owner was assigned rather than won, a pass happened because the script said so rather than because one was on, nothing knew the ball had gone out, and team shape was a formula on ball position — which is why the user's second Play-mode recording showed twenty men in one penalty area, half the pitch empty, and players standing on top of each other. That is not a defect list, it is what that architecture produces.
   **The model, from the literature the user asked me to go and find:** Mat Buckland's *Programming Game AI by Example* ch. 4 (Simple Soccer) is the canonical design for a believable 2D match, and it is agent-based. Each player has a home region from the formation, a small set of states and steering with SEPARATION (the missing separation is why the tokens overlapped). Each team has a brain: who chases, who supports, who marks. A **support-spot grid** in the attacking half is scored on whether the man on the ball could find it, whether a goal could be struck from it, and whether it is a comfortable distance — the best spot is where the attackers run, and that is what a viewer reads as a pattern of play. **Passing** follows the book's rule verbatim — *"the best pass is the pass that cannot be intercepted by an opponent and that is as far forward of the receiver as possible"* — with three candidate targets per team-mate. **Marking** takes the RoboCup 2D idea of grouped assignment (defenders take the most advanced opponents first, each opponent once) instead of "everyone marks his nearest", which is what puts three men on one opponent. And the **ball is an object** with velocity and friction: a pass can be read and cut out, and crossing a line IS the throw-in — restarts are DETECTED, not written.
   **The 1.4 result model stays the authority** (the user's decision, re-confirmed). `MatchDirector` opens a window ~3.5 match-minutes before each chance on the timeline: inside it the attacking side works the ball toward the man who is going to shoot, he keeps it rather than giving it back, and on his minute he strikes it with the outcome the timeline already decided. Outside a window nobody shoots — the teams just play. Score and events stay bit-identical.

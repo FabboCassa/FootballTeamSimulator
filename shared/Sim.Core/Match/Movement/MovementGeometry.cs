@@ -85,21 +85,42 @@ namespace Sim.Core.Match.Movement
 
         // ---------------------------------------------------------------- integer maths
 
-        /// <summary>Integer square root (floor). Deterministic on every runtime.</summary>
+        /// <summary>
+        /// Integer square root (floor). Deterministic on every runtime — no float, no library
+        /// call, so the answer is the same bit for bit on .NET, Mono and IL2CPP.
+        ///
+        /// This is the single hottest routine in the simulation: at 10 Hz the model asks for the
+        /// distance between two of twenty-three moving things some millions of times a match, and
+        /// the Newton iteration this replaced spent an integer DIVISION on every step. The
+        /// digit-by-digit method below uses nothing but shifts, adds and comparisons, which is
+        /// what makes ten times the tick rate affordable rather than ruinous.
+        /// </summary>
         public static int Sqrt(int value)
         {
             if (value <= 0) return 0;
-            if (value < 4) return 1;
 
-            int x = value;
-            int y = (x + 1) / 2;
-            while (y < x)
+            uint n = (uint)value;
+            uint result = 0;
+            uint bit = 1u << 30;
+            while (bit > n) bit >>= 2;
+
+            while (bit != 0)
             {
-                x = y;
-                y = (x + value / x) / 2;
+                uint step = result + bit;
+                if (n >= step)
+                {
+                    n -= step;
+                    result = (result >> 1) + bit;
+                }
+                else
+                {
+                    result >>= 1;
+                }
+
+                bit >>= 2;
             }
 
-            return x;
+            return (int)result;
         }
 
         /// <summary>Euclidean distance between two points, floored to a whole decimetre.</summary>

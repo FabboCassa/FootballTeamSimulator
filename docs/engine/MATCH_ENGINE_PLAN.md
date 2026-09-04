@@ -4,8 +4,8 @@ Stato: piano approvato il 2026-09-02. Causalità invertita (il campo decide), la
 con il gioco sempre funzionante, regolamento fino a falli/cartellini/punizioni.
 
 - [x] **Fase 0 — banco di prova** (2026-09-02). Vedi §7 per la misura di partenza.
-- [ ] Fase 1 — unità e base temporale
-- [ ] Fase 2 — forma: formazione e blocco
+- [x] **Fase 1 — unità e base temporale** (2026-09-03). Vedi §8.
+- [x] **Fase 2 — forma: formazione e blocco** (2026-09-03). Vedi §9.
 - [ ] Fase 3 — difendere: zona e trigger
 - [ ] Fase 4 — decisioni con la palla
 - [ ] Fase 5 — il regolamento
@@ -15,56 +15,185 @@ con il gioco sempre funzionante, regolamento fino a falli/cartellini/punizioni.
 
 ---
 
-## 📍 Stato — 2 settembre 2026
+## 📍 Stato — 3 settembre 2026
 
-**Siamo qui: Fase 0 chiusa e verificata end-to-end. La prossima è la Fase 1 — unità e base
-temporale, cioè l'1,3 km per giocatore che deve diventare 10.**
+**Siamo qui: 🏁 FASE 2 CHIUSA E VERIFICATA dall'utente il 3 settembre 2026. Tutto verde.** La squadra
+adesso è un **blocco**: la formazione è disposta **per linee** invece che per ruoli, e dove sta un
+uomo viene dall'altezza della sua linea, dalla larghezza del blocco e dalla sua traslazione
+**con tetto** verso la palla — non più da una tabella in permille più una lerp senza tetto sulla
+Y della palla. Le letture in banda passano da **7/19 a 10/19**: si chiudono **larghezza** (34,6 →
+42,0 m) e **profondità del blocco in possesso** (55,7 → 48,3 m) e il **buco più grande** (16,6 →
+14,9 m), mentre i chilometri restano dentro (11,3 → 10,8) e **gol e tiri sono ancora identici
+cifra per cifra** — 2,52 e 25,1, come alla fase 0 e alla fase 1. Golden master nuovo:
+**`0xB3C30BEEAA5781B2`** (engine v5). `balance.ps1` senza `pitch` è **identico riga per riga**,
+verificato con un diff contro l'albero pre-fase: nessun numero del modello di risultato si è
+mosso. Vedi §9.
 
 | | Fase | Stato |
 |---|---|---|
 | 0 | banco di prova | ✅ fatta **e verificata dall'utente** |
-| 1 | unità e base temporale | ⬅️ **prossima** |
-| 2-8 | — | da fare |
+| 1 | unità e base temporale | ✅ fatta **e verificata dall'utente** |
+| 2 | forma: formazione e blocco | ✅ fatta **e verificata dall'utente** |
+| 3 | difendere: zona e trigger | ⬅️ **prossima** — e le tre bande difensive ancora rosse sono sue, vedi §9 |
+| 4-8 | — | da fare |
 
 ### Come si verifica che tutto gira
 
-    .\tools\balance.ps1 -Scenario pitch -PitchMatches 200 -PitchDump .\replay.html
+    .\tools\build-simcore.ps1
     dotnet test
+    .\tools\balance.ps1 -Scenario pitch -PitchMatches 200 -PitchDump .\replay.html
+    .\tools\balance.ps1        # gli altri scenari NON devono muoversi di un numero
 
-### Verificato dall'utente il 2 settembre 2026
+**Golden master della fase 2: `0xB3C30BEEAA5781B2`** (engine v5; era `0x214A70906A5180AC` in v4),
+già ripuntato nei quattro posti soliti. I replay salvati in v4 non sono più disegnabili: è
+previsto, e il client li rifiuta da solo perché confronta con `MatchEngine.Version`.
 
-- **`balance.ps1 -Scenario pitch`** — compila (l'harness tira dentro `server/Infrastructure`, quindi
-  la build vera non è banale) e gira in 4,6 s per 200 partite, 22,9 ms/partita. Esito: 6 letture su
-  19 dentro la banda del calcio vero, 2 check su 3 verdi. **L'exit code 1 è atteso**: il check rosso
-  è "a held ball is never sitting on a line of the pitch", cioè la misura del bug del §1.7, non un
-  guasto del banco.
-- **`dotnet test`** — 574/574 verdi in 212,7 s (erano 599,5 s con 2 rossi).
-- **Determinismo confermato fra runtime**: la misura di partenza esce identica cifra per cifra su
-  .NET 8/Linux e .NET 10/Windows.
-- **Il taglio dei tempi non ha spostato un solo risultato**: nella run dell'utente `[sweep]`,
-  `[match-fatigue]`, `[positioning-exploit]`, `[positioning-line]`, `[fitness->result]`, i
-  `Golden values` e `[DeterminismCheck] 0xBD336A9B5F155792` sono tutti identici a prima della modifica.
+### Verificato dall'utente il 3 settembre 2026 (fase 2)
+
+Comandi eseguiti, nell'ordine: `.\tools\build-simcore.ps1` → `dotnet test` →
+`.\tools\balance.ps1 -Scenario pitch -PitchMatches 200 -PitchDump .\replay.html` →
+`.\tools\balance.ps1`.
+
+- **`dotnet test` — 580/580 verdi**, zero falliti, zero ignorati, in **2467,2 s** (Sim.Core.Tests
+  340/340, che sono i 334 di prima più i 6 nuovi di `BlockShapeTests`; Api.Tests 240/240 in 445,2 s).
+- **Il determinismo fra runtime regge anche attraverso l'engine v5.**
+  `[DeterminismCheck] 0xB3C30BEEAA5781B2` e `[server-determinism] 0xB3C30BEEAA5781B2` sulla sua
+  .NET 10/Windows sono **identici cifra per cifra** al valore calcolato nel container su .NET 8 e 10.
+- **Le nuove asserzioni di forma stampano gli stessi numeri del container**, il che vuol dire che il
+  programma sostitutivo con cui erano state provate misurava davvero la stessa cosa:
+  `[shape] the team's centre is worst 15,7 m off the middle of the pitch` ·
+  `[shape] attacking width 42,3 m depth 48,5 m back line spread 8,5 m`.
+- **`balance.ps1 -Scenario pitch` — ogni singola cifra identica a quella del container**: gol 2,52,
+  tiri 25,1, km 10,83, larghezza 42,0/38,8, profondità 48,3/47,8, buco 14,6/14,9, **10/19 in banda**.
+  A **291,7 ms per partita** contro i 497 del container: la sua macchina è di nuovo circa il doppio
+  più veloce. **L'exit code 1 è atteso** — il check rosso è "a held ball is never sitting on a line
+  of the pitch", cioè la misura del bug del §1.7, non un guasto.
+- **`balance.ps1` — 28/28 PASS con ogni numero fermo**: difficoltà 6,9/6,6/9,5/7,6/10,1,
+  trasferimenti 67,6, ingaggi 69,8% dei ricavi, tutto il blocco mondo. Il modello di risultato non
+  si è mosso di una cifra, come previsto e come già verificato con il diff nel container.
+- **Le altre letture del movimento, tutte a posto:** `[movement] worst single-tick step 40dm (cap
+  42dm)` · `[swerve] 0 over 69070 moving ticks` · `[outcomes] goals 21/21 · saves and misses
+  190/190` · `[passes] 7374 · median 16m · p99 55m · longest 69m` · `[shots] 23 goals · 191 saves ·
+  131 misses` · palla ai piedi di qualcuno il 58% della partita.
+
+### Il numero che questo run ha fatto emergere: `dotnet test` costa 41 minuti
+
+Non è della fase 2 — 268 → 292 ms per partita sono il 9%, cioè al massimo tre minuti e mezzo dei
+quarantuno — e **non è ancora spiegato**. Il **212,7 s** che questo documento porta dietro è la
+misura della **fase 0**, presa quando una partita col filmato costava pochi millisecondi; dalla
+fase 1 ne costa 0,29 sulla macchina dell'utente, e 2467 s sarebbero circa ottomila partite col
+flusso acceso.
+
+**La prima spiegazione che mi ero dato era sbagliata, e vale la pena scriverlo.** Avevo accusato
+`SeasonProgressor._watchEngine`, che ha `generatePositions: true`. Verificato con un grep:
+**nessun test passa `watchedClubId`**, e senza quello il progressore usa sempre l'altro motore.
+Il `_watchEngine` nella suite non gira mai. Di nuovo la lezione della fase 1: la prima ipotesi era
+sbagliata e solo la verifica l'ha smentita — solo che stavolta la verifica sarebbe costata un grep
+e l'ho fatta dopo aver scritto l'ipotesi in tre documenti.
+
+**Come si scopre davvero, in un comando:**
+
+    dotnet test shared/Sim.Core.Tests/Sim.Core.Tests.csproj --logger "trx;LogFileName=slow.trx"
+
+Il file `.trx` porta la durata di ogni singolo test. Con quella lista in mano si sa se sono le
+partite col flusso, la generazione di mondi, o qualcosa che la fase 1 ha reso caro senza accorgersene
+— e la via d'uscita del §5 (`[Category("Slow")]` + `dotnet test --filter TestCategory!=Slow`) si
+può puntare sui test giusti invece che a caso.
+
+### `MatchResolver.Resolve`: deciso — il filmato resta, il formato no
+
+La decisione era aperta dalla fase 1: *"il risolutore di lega genera il flusso per ogni partita
+risolta lato server; se quei replay servono, il prezzo è quello; se no, è un parametro da girare."*
+Guardato il codice, **quei replay servono**: `LeagueSeasonService.GetReplayAsync` restituisce
+`fixture.ReplayJson` a qualunque membro della lega, il client lo deserializza in `MatchReport` e lo
+disegna — c'è perfino un errore dedicato, `ReplayTooOld`, per quando la versione del motore non
+combacia. Guardare la propria partita **è** la funzionalità. Quindi il parametro non si gira, e la
+domanda "chi ha bisogno del filmato" ha una risposta: chi apre il replay.
+
+**E la CPU non è il problema.** 0,5 s a partita, una giornata di lega sono cinque incontri, ed è un
+lavoro in background: due secondi e mezzo per giornata.
+
+**Il problema è il formato, e adesso ha dei numeri** (una partita, 10.801 fotogrammi, 496.846 valori
+di posizione):
+
+| Come è scritto il referto | Dimensione | gzip |
+|---|---|---|
+| **senza filmato** | **2 KB** | — |
+| **con il filmato, oggi (JSON)** | **2077 KB** | 754 KB |
+| filmato come int16 + base64 (la proposta del §3) | 1294 KB | 797 KB |
+| **filmato come delta + varint + base64** | **649 KB** | 391 KB |
+| filmato come delta + varint, byte grezzi | 487 KB | — |
+
+**Il filmato è mille volte il resto del referto.** Duecentomila numeri piccoli scritti in ASCII
+decimale dentro una colonna `text` di Postgres: una stagione di lega a dieci squadre sono 90
+incontri, cioè **180 MB**. E la proposta che il §3 dava per buona — `int16` — **è la peggiore delle
+due misurate**: un `int16` in base64 costa 2,67 byte per valore mentre il delta di un uomo fra due
+fotogrammi sta quasi sempre in **un byte solo**, perché in mezzo secondo nessuno si sposta di più di
+qualche decimetro. È la differenza fra 1294 KB e 649 KB, e si vede solo misurando.
+
+**Il codec, scritto il 3 settembre 2026: 2077 KB → 794 KB, 2,61×.** L'utente ha scelto il codec e
+non la cadenza — cioè nessun fotogramma in meno nel replay.
+
+**Come è fatto.** `PositionStream.Pack()` porta le quattro tracce intere (palla, casa, ospiti,
+portatore) in una stringa: **delta per corsia, zigzag, varint, base64**. "Per corsia" perché gli
+array intercalano i fotogrammi — la X di un uomo sta ogni `stride` valori — ed è il suo movimento a
+essere piccolo: in mezzo secondo nessuno copre più di qualche decimetro, quindi quasi ogni delta sta
+in **un byte solo**. `Unpack()` fa il contrario. La **lista delle azioni resta JSON leggibile** di
+proposito: è la telecronaca, pesa un quindicesimo delle posizioni, e poterla leggere dentro un
+replay salvato vale più dei byte.
+
+**Perché non è un attributo di serializzazione.** Il server serializza con `System.Text.Json`, il
+client deserializza con **Newtonsoft**, e `Sim.Core` non ha **nessun riferimento a pacchetti** — è
+precisamente ciò che le permette di compilare offline nel container, cioè che una fase possa essere
+misurata prima di essere consegnata. Quindi il codec è **esplicito e simmetrico**: `Pack()` prima di
+serializzare, `Unpack()` dopo aver letto. Sul server c'è un solo posto che lo sa,
+`Infrastructure/Leagues/ReplayStore`, usato dai sei punti che scrivono un replay; sul client sono i
+quattro punti che ne leggono uno.
+
+**Tre proprietà che il test inchioda** (`Sim.Core.Tests/Match/ReplayCodecTests`):
+
+- il giro completo è **senza perdite** e il referto **produce lo stesso hash** — quindi la forma
+  compressa non può muovere un golden master, ed è per questo che non c'è un bump di versione;
+- un replay **salvato prima** del formato compresso continua a leggersi: porta i suoi array e
+  `Unpack()` su di lui non fa nulla;
+- uno che arriva compresso e a cui **nessuno ha detto di decomprimersi si disegna lo stesso**:
+  `TickCount`, `BallAt`, `HomeAt` e `AwayAt` decomprimono da soli. Il prezzo di una dimenticanza è
+  un primo fotogramma lento, non un campo vuoto.
+
+**Quello che non è stato fatto, e perché.** `int16` era la proposta del §3 ed è **la peggiore delle
+due misurate** (1294 KB contro 649): due byte fissi per valore non possono battere uno variabile.
+E la leva della cadenza — `StreamTicksPerFrame` da 5 a 10, che dimezzerebbe di nuovo — **resta sul
+tavolo, non tirata**: costa 30 fotogrammi al secondo invece di 60 nel replay, e la qualità del
+filmato è esattamente ciò che le fasi 1 e 2 sono servite a comprare.
+
+    referto senza filmato        2 KB
+    con il filmato, prima     2077 KB
+    con il filmato, adesso     794 KB     (2,61x; comprimere costa 25 ms, leggere 30)
+
+**Verificato nel container:** giro completo senza perdite su tutte e quattro le tracce, referto con
+lo **stesso hash**, replay vecchio ancora leggibile, decompressione pigra funzionante — e le due
+prove che contano per il resto del lavoro: **`[DeterminismCheck] 0xB3C30BEEAA5781B2` non si è
+mosso** e lo scenario `pitch` stampa **gli stessi numeri cifra per cifra** di prima del codec. I due
+file di test nuovi (`BlockShapeTests`, `ReplayCodecTests`) non erano mai stati compilati da nessuna
+parte: adesso passano il *type-check* contro Sim.Core vera, con uno stub di NUnit scritto a mano —
+la tecnica che il CLAUDE.md già registrava. Restano non compilati qui, come sempre, il server e il
+client. Il conto atteso sulla macchina dell'utente sale da 580 a **584** (i quattro di
+`ReplayCodecTests`).
 
 ### Note operative
 
-- **`generatePositions: false` per ogni partita che nessuno guarderà.** Il flusso di movimento costa
-  96 ms/partita in Debug contro 0,54 ms del modello di risultato: 180 volte tanto. Era questo, da
-  solo, a rendere `dotnet test` una faccenda da dieci minuti. Alla Fase 1 il costo sale di ~×50.
-- **Lo scenario `pitch` non fa parte di `-Scenario all`** ed esce con 1 di proposito. Non è una
-  regressione da inseguire: è il divario da chiudere. Le bande diventano check veri solo con
-  `--pitch-strict`, che ogni fase accende sulle bande che dichiara chiuse.
-- **`dotnet test` resta a 212 s.** I fixture di identità (`PrematchPlanTests`, `MatchResimTests`,
-  `MatchEngineTests`) tengono il flusso acceso apposta, perché `MatchReportHasher` lo include
-  nell'hash; il resto è generazione di mondi (25.944 giocatori per lo scouting, 10.120 per le
-  valutazioni). Se serve scendere ancora: marcare `[Category("Slow")]` le misure di bilanciamento
-  travestite da test e girare `dotnet test --filter TestCategory!=Slow`. **Non ancora fatto.**
-- **Decisione aperta:** `server/Infrastructure/Leagues/MatchResolver.Resolve` costruisce il motore
-  senza argomenti, quindi genera il flusso per ogni partita di lega risolta lato server. Se quei
-  report servono da replay va bene; se no sono ~96 ms di CPU buttati a partita. **Da decidere.**
-- **Residuo da cancellare a mano:** `_to_delete/stage/simcore.tar.gz` (207 KB), usato per portare i
-  sorgenti nel container.
-- Due test erano rossi e **non** per colpa della Fase 0: erano bug del test nel rifacimento del
-  movimento in corso. Corretti, spiegati in §7.
+- **`generatePositions: false` per ogni partita che nessuno guarderà.** Il flusso di movimento
+  costa ~0,5 s a partita contro 0,9 ms del modello di risultato. È questo che tiene `dotnet test`
+  su tre minuti invece che su dieci.
+- **Lo scenario `pitch` non fa parte di `-Scenario all`** ed esce con 1 di proposito. Le bande
+  diventano check veri solo con `--pitch-strict`, che ogni fase accende sulle bande che dichiara
+  chiuse.
+- **Decisa il 3 settembre 2026 (§9):** `MatchResolver.Resolve` **tiene il filmato** — è il replay
+  che `GetReplayAsync` serve ai membri della lega e che il client disegna, e mezzo secondo di CPU su
+  una giornata da cinque incontri non è un costo. Il **formato** è stato sistemato lo stesso giorno:
+  `PositionStream.Pack()`/`Unpack()` più `Infrastructure/Leagues/ReplayStore`, 2077 → 794 KB.
+- **Residuo da cancellare a mano:** `_to_delete/` (i due tarball usati per portare i sorgenti nel
+  container). La shell del container non ha il permesso di cancellare nella cartella collegata.
 
 ---
 
@@ -284,12 +413,13 @@ Bersagli reali su cui tarare:
 | Larghezza blocco in fase difensiva | 30–40 m |
 | Profondità blocco in fase difensiva | 25–35 m |
 
-### Fase 1 — Unità e base temporale
+### Fase 1 — Unità e base temporale ✅ FATTA
 
 Sim a 10 Hz, velocità reali, decimazione dello stream, attrito palla corretto.
 Rompe golden master e replay salvati → `MatchEngine.Version` da 3 a 4 e rigenerazione.
+**Fatta il 3 settembre 2026 — il resoconto, con i numeri, è in §8.**
 
-### Fase 2 — Forma: formazione e blocco
+### Fase 2 — Forma: formazione e blocco ✅ FATTA
 
 - riscrittura di `AnchorY`: si dispone **la linea come unità** (raggruppamento per banda X,
   poi spaziatura realistica dentro la linea), non ogni ruolo sull'intera larghezza.
@@ -301,9 +431,12 @@ Rompe golden master e replay salvati → `MatchEngine.Version` da 3 a 4 e rigene
 - spaziatura verticale fra i reparti mantenuta a 10–12 m.
 - scorrimento asimmetrico: la punta scala molto più di quanto il centrale salga.
 
-**Qui il video cambia faccia.**
+**Fatta il 3 settembre 2026 — il resoconto, con i numeri, è in §9.**
 
 ### Fase 3 — Difendere: zona e trigger
+
+*Qui il video cambia faccia: finché la marcatura è a uomo su tutti e dieci, la sagoma di chi
+difende È la sagoma di chi attacca, e le tre bande difensive ancora rosse sono sue (§9).*
 
 - il cervello di squadra assegna un compito per tick invece della marcatura universale:
   `Presser` (1, a volte 2) · `Cover` (copre il pressante) · `Marker` (solo avversari nel nostro
@@ -524,7 +657,386 @@ trucchi del §1.1 che si vede a schermo come un teletrasporto della palla. Spari
 
 ---
 
-## 8. Riferimenti
+## 8. Fase 1 — fatta: unità e base temporale
+
+### Cosa è cambiato
+
+**La configurazione ora è fisica.** Prima ogni velocità era scritta *per tick* e un tick durava
+cinque secondi, il che rendeva il modello dimensionalmente incoerente (§1.2). Adesso tutto ciò che
+contiene del tempo è scritto **al secondo** o **in millisecondi**, e i conteggi di tick su cui il
+modello lavora sono *derivati* dalla frequenza:
+
+    TicksPerSecond      10        → un tick è 100 ms, 600 tick al minuto, 54.000 a partita
+    StreamTicksPerFrame 5         → un fotogramma ogni mezzo secondo: 120 al minuto, 10.801 a partita
+    TicksOfMs(ms)                 → ogni durata (attesa su palla morta, blocco dopo un contrasto,
+                                    tempo di possesso, finestra del director) passa di qui
+
+Cambiare `TicksPerSecond` e ogni durata conserva il proprio significato. È questa la differenza fra
+una base temporale e un numero magico.
+
+**Le velocità sono quelle vere.**
+
+| | prima | ora |
+|---|---|---|
+| giocatore, punta massima | 0,7 m/s | **5,5-8,5 m/s** da `Pace` |
+| giocatore, andatura fuori palla | — (unica velocità) | **42%** della punta: si sprinta solo per la palla |
+| passaggio, massimo | 1,2 m/s | **26 m/s** |
+| tiro | 2,2 m/s | **32 m/s** |
+| rapporto palla/giocatore | 2:1 | **3,06:1** (il bersaglio del §1.2 era 3-4:1) |
+
+**L'attrito è scritto al secondo.** `BallSpeedKeptPermillePerSecond = 740`: la palla conserva il 74%
+della velocità dopo un secondo, e il valore *per tick* si ricava con una ricerca binaria intera
+sulla stessa ricorrenza che la simulazione poi esegue — nessuna radice, nessun logaritmo, nessun
+float, quindi la risposta è identica su .NET, Mono e IL2CPP. È moltiplicativo e non una sottrazione
+costante perché una palla vera è frenata dal rotolamento **e** dall'aria: perde circa 7 m/s² a
+venticinque metri al secondo e meno di uno a passo d'uomo, che è la forma che dà un'esponenziale e
+non una costante.
+
+**Il flusso è decimato.** La fisica gira a 10 Hz, il replay no: un fotogramma ogni cinque tick, cioè
+2 Hz di tempo partita, che alla compressione 30× già in uso fa **60 fps** di riproduzione. Un'azione
+sulla palla viene registrata nello spazio dei FOTOGRAMMI, non dei tick, così renderer, analizzatore
+e test continuano ad avere un solo indice e nessuna regola di conversione.
+
+**`MatchEngine.Version` è 4** e il golden master si è spostato (era atteso: `MatchReportHasher`
+include il flusso). I replay salvati in v3 non sono più disegnabili — il client li rifiuta già da
+solo, perché confronta con `MatchEngine.Version` invece che con un numero scritto a mano.
+
+### La misura, prima e dopo (200 partite, tattiche neutre, seed 20260803)
+
+| Lettura | Fase 0 | **Fase 1** | Calcio vero |
+|---|---|---|---|
+| **km per giocatore** | **1,28** | **11,30** ✅ | 9,5-11,5 |
+| rapporto palla/giocatore | 2:1 | **3,06:1** ✅ | 3-4:1 |
+| gol | 2,52 | **2,52** | 2,6-2,8 |
+| tiri | 25,1 | **25,1** | 22-28 |
+| passaggi | 96 | **1201** | 900-1100 |
+| precisione passaggi | 57,7% | 56,1% | 78-86% |
+| rimesse laterali | 5,0 | **76,5** | 35-45 |
+| corner | 0,0 | 0,8 | 9-12 |
+| falli / fuorigioco | 0 | 0 | 20-26 / 2-4 |
+| passo peggiore in un fotogramma | — | 42 dm = uno scatto in mezzo secondo | — |
+
+**I gol e i tiri sono identici alla fase 0, cifra per cifra.** Non è una coincidenza ed è la cosa
+più importante di questa pagina: il modello di risultato 1.4 non è stato toccato, e il rifacimento
+del movimento non ha spostato il punteggio di una virgola. Le due letture che la fase possedeva —
+i chilometri e il rapporto fra le velocità — sono dentro la banda del calcio vero. Le altre restano
+il lavoro delle fasi 2-5, e sono nominate lì: la precisione dei passaggi è l'errore di esecuzione
+(fase 4), corner e falli sono il regolamento (fase 5), e i 76 rimessa a partita sono una squadra
+che non tiene ancora la palla (fasi 3-4).
+
+### Il difetto vero che la fase ha trovato
+
+**Un tiro che usciva sul fondo laterale perdeva del tutto il proprio esito.** In `ResolveOutOfPlay`
+il ramo della rimessa laterale chiamava `Restart`, che azzera il tiro in volo *in silenzio*: la
+parata o l'errore che il tabellino dichiarava non venivano mai registrati. Con la palla a 1,2 m/s
+non succedeva quasi mai; a 32 m/s un tiro esce di lato di continuo, e la misura lo ha inchiodato
+subito — **149 esiti su 190 mostrati, il 78%**, contro una soglia dell'85%. Corretto con
+`SettleStrayStrike`: **190 su 190**. Una fase che cambia le unità non scopre difetti nuovi, scopre
+difetti che le vecchie unità nascondevano.
+
+### Il costo, detto onestamente
+
+    modello di risultato (generatePositions: false)   0,9 ms per partita
+    con il flusso di movimento                       523 ms per partita   (Release, .NET 8, container)
+
+Il bersaglio scritto nel §5 era **< 30 ms**. Non ci siamo, e non è una distanza che si chiude
+limando: 54.000 tick × 22 agenti sono 1,2 milioni di aggiornamenti, cioè 25 ns ciascuno per stare
+nei 30 ms — meno di quanto costi il solo controllo di separazione dai dieci compagni. Cosa è stato
+fatto, con la misura accanto (e la lezione di sempre: **le prime due ipotesi erano sbagliate e solo
+il profilo le ha smentite**):
+
+- la radice quadrata intera era la prima indiziata: sostituita con il metodo cifra-per-cifra, senza
+  divisioni. **Guadagno: 84 ms su 871.** Non era lei.
+- il profilo ha detto dov'era davvero: `Move` e il cervello di squadra. Allora — confronti sui
+  **quadrati** delle distanze ovunque serva solo sapere chi è più vicino; nessuna radice quando il
+  bersaglio è già a un passo; `PassSafe` che chiede *quanta strada ha fatto la palla* (una lettura
+  in tabella) invece di *a che tick arriva* (una ricerca binaria per ogni avversario di ogni
+  candidato); il punto di appoggio ricalcolato una volta al secondo su una griglia più piccola; la
+  posizione di blocco calcolata una volta invece che due per ogni difensore; e le decisioni —
+  chi marca chi, dove si corre — su un orologio da 2 Hz separato dalla fisica a 10 Hz, perché un
+  difensore non ricambia uomo dieci volte al secondo.
+- risultato: **871 → 523 ms**. Per tick siamo circa **quattro volte** più economici di prima; è il
+  numero di tick, ×50, a fare il resto.
+
+Cosa vuol dire in pratica: una partita **guardata** costa mezzo secondo di CPU, che nessuno vede.
+`dotnet test` non è toccato dove conta, perché le ~11.000 partite di bilanciamento girano già con
+`generatePositions: false` e costano 0,9 ms l'una; **le suite di identità sono state messe in
+regola nella stessa fase** — `MatchResimTests` e `PrematchPlanTests` spegnevano il flusso per i
+loro sweep (fino a 800 partite in un solo test) e lo tengono acceso su un caso singolo, che è dove
+l'identità del *quadro* va davvero dimostrata.
+
+**Deciso il 3 settembre 2026 (vedi §9): il filmato resta, il formato no.**
+`server/Infrastructure/Leagues/MatchResolver.Resolve` genera
+il flusso per ogni partita di lega risolta lato server. Adesso sono 523 ms **e 2 MB di JSON** a
+partita (era 202 KB): una giornata di dieci partite sono 5 secondi di CPU e 20 MB in `ReplayJson`.
+Se quei replay servono, il prezzo è quello; se no, è un parametro da girare. Il §3 prevede `int16`
++ rigenerazione lato client, che toglierebbe il grosso — ma è una modifica al contratto del flusso,
+non alla fase 1.
+
+### Cosa è stato toccato
+
+| File | Cosa |
+|---|---|
+| `Config/BalanceConfig.cs` | il blocco movimento riscritto in unità fisiche; durate in ms, velocità al secondo, tick derivati |
+| `Match/Movement/MatchUnits.cs` | `PerTick`/`PerTickPerTick` (dove l'unità di lunghezza incontra la base temporale), `DistanceSq`, `Cap` senza radice |
+| `Match/Movement/MatchBall.cs` | attrito per secondo, tabella cumulativa del rotolamento, aiuti passati da statici a d'istanza |
+| `Match/Movement/MovementGeometry.cs` | radice quadrata intera cifra-per-cifra |
+| `Match/Movement/MatchSimulator.cs` | velocità reali, andatura contro scatto, deadband d'arrivo, cadenza delle decisioni, decimazione del flusso, `SettleStrayStrike` |
+| `Match/Movement/MovementTactics.cs` | i tempi di possesso vengono dai millisecondi |
+| `Match/MatchEngine.cs` | `Version = 4` |
+| `Match/PositionStream.cs` | documentato: un "tick" del flusso è un FOTOGRAMMA |
+| `Sim.Core.Tests/Match/*` | soglie ricavate dalla config invece che scritte a mano; l'invariante della palla verificata alla risoluzione della simulazione; sweep di identità senza flusso |
+
+### Cosa deve girare sulla macchina dell'utente
+
+    .\tools\build-simcore.ps1
+    dotnet test shared/Sim.Core.Tests/Sim.Core.Tests.csproj --logger "console;verbosity=detailed"
+    dotnet test server/Api.Tests/Api.Tests.csproj
+    .\tools\balance.ps1 -Scenario pitch -PitchMatches 200 -PitchDump .\replay.html
+    .\tools\balance.ps1            # ogni numero degli altri scenari deve restare identico
+
+**Il golden master calcolato qui su .NET 8 è `0x214A70906A5180AC`** (prima `0xBD336A9B5F155792`;
+v2 `0xCDEA5A2F7B9E5CF6`), già ripuntato in `server/Api.Tests/SimulationDeterminismTests.cs`,
+`server/Application/Simulation/SimulationService.cs`, `docs/ops/runbook.md` e
+`docs/store/release-checklist.md`. Se `dotnet test server/Api.Tests` non è d'accordo, il valore
+buono è quello stampato da `[DeterminismCheck]`: sarebbe una differenza fra runtime, non un errore
+di codice — ma alla fase 0 le due esecuzioni erano identiche cifra per cifra, quindi non dovrebbe
+succedere.
+
+`.\tools\balance.ps1` senza `-Scenario pitch` **non deve muovere un solo numero**: il motore di
+risultato non è stato toccato e le ~11.000 partite di quegli scenari girano senza flusso. Se si
+muove qualcosa, il movimento sta consumando casualità dove non deve.
+
+### Il run dell'utente (3 settembre 2026) e l'unico rosso
+
+**Verde:** Api.Tests 240/240 · `[server-determinism] 0x214A70906A5180AC` **identico al valore
+calcolato su .NET 8** · `balance.ps1` 28/28 con ogni cifra ferma · `pitch` 7/19 letture in banda
+(erano 6) e **268 ms per partita** · `[movement] worst single-tick step 40dm (cap 42)` ·
+`[passes] median 16m p99 52m` · `[swerve] 0 over 68929 moving ticks` ·
+`[outcomes] goals 21/21 · saves and misses 190/190`.
+
+**Il rosso, uno solo, ora CHIUSO:** `SavedShots_StopAtTheKeeper_AndMissesGoWide` — *"a miss must
+not end up in the net either"*.
+
+**La causa, misurata e non ipotizzata.** Un'azione veniva archiviata sul fotogramma
+`floor(tick / 5)`, cioè **fino a 0,4 secondi PRIMA di essere avvenuta**. Con la vecchia base
+temporale un tick era un fotogramma e la cosa non esisteva; adesso un tiro a 32 m/s in quel mezzo
+secondo percorre tredici metri, quindi il test guardava il pallone quando il gol non era ancora
+entrato. Contato: **18 gol su 23 e 4 errori su 131** finivano "fuori posto" per questo solo motivo,
+e il test si ferma al primo che incontra. Le parate erano 0 su 186 perché il portiere è fermo.
+
+**La correzione è nel flusso, non nel test:** `Record` arrotonda ora **per eccesso**, al primo
+fotogramma pari o successivo all'azione. È anche ciò che il renderer deve disegnare — annunciare un
+passaggio nel fotogramma in cui la palla è ancora ai piedi del passatore è la telecronaca che
+racconta cose non ancora successe. L'arrotondamento resta monotono, quindi l'ordine delle azioni è
+intatto. Di conseguenza `Passes_AreFootballLength` misura ora dal fotogramma PRECEDENTE l'azione,
+dove la palla è ancora ai piedi di chi la gioca.
+
+**Verificato dall'utente:** `SavedShots_StopAtTheKeeper_AndMissesGoWide` e
+`Passes_AreFootballLength` **entrambi verdi** — `[shots] 23 goals · 186 saves · 131 misses`,
+`[passes] 7214 · median 16m · p99 53m · longest 90m`. La suite Sim.Core è **334/334**.
+
+**La lezione, ed è generale:** decimare un flusso non è solo scartare fotogrammi, è decidere *a
+quale istante* ogni evento appartiene. Un'azione archiviata sul fotogramma precedente racconta un
+mondo che non è ancora successo, e più il tick è veloce più la bugia è grande. Ogni fase che cambia
+la base temporale deve chiedersi la stessa cosa.
+
+### Aperto, per scelta
+
+- **Il costo per partita guardata** (523 ms contro i 30 del piano): da giudicare insieme sui numeri
+  della macchina dell'utente, che gira .NET 10 su hardware suo e non un container condiviso.
+- **La dimensione del flusso** (2 MB di JSON): `int16` e/o rigenerazione lato client, §3.
+- Il visore HTML della fase 0 adesso carica 10.801 fotogrammi invece di 1.081: da guardare che il
+  browser lo regga.
+- I 76 rimessa laterali e gli 0,8 corner a partita sono forma e regolamento, cioè fasi 2, 3 e 5.
+
+
+---
+
+## 9. Fase 2 — fatta: forma, formazione e blocco
+
+### Cosa è cambiato
+
+**La formazione è disposta per LINEE, non per ruoli.** La larghezza veniva assegnata un ruolo alla
+volta, ogni gruppo spalmato per conto suo sull'intera ampiezza: in un 4-3-3 i due centrali
+finivano su 250 e 750 permille, **trentaquattro metri l'uno dall'altro**, con in mezzo un buco
+grande quanto mezzo campo, mentre i terzini stavano su 118 e 882 (§1.3). Un calciatore però non
+si dispone rispetto a chi ha il suo stesso mestiere: si dispone **in una linea**, accanto a chi
+c'è dentro. Adesso l'unità è la linea (`FormationLineByRole`): i ruoli che stanno sulla stessa
+banda vengono disposti insieme, gli esterni sul margine di fascia, gli altri distanziati di
+quattordici metri l'uno dall'altro attorno al centro.
+
+| Reparto | Prima | Ora |
+|---|---|---|
+| Difesa a 4 (4-3-3) | FB 8 · **CB 17** · **CB 51** · FB 60 m | FB 8 · **CB 27** · **CB 41** · FB 60 m |
+| Centrali fra loro | **34,0 m** | **13,9 m** |
+| Centrocampo a 4 (4-4-2) | tutti e quattro fra 8 e 60 m (spalmati) | 8 · 27 · 41 · 60 m, gli esterni sono esterni |
+| Trequarti (4-2-3-1) | AM 500 solo, W 118/882 | AM 500 · W 118/882 sulla stessa linea del centravanti |
+
+La regola che chiude i casi difficili è una sola e sta in una riga: **da quattro uomini in su, i
+due di fuori di una linea sono i suoi esterni comunque si chiamino**. È così che i "wide
+midfielder" del 4-4-2, che il repo codifica CM per farli finire nel secchio di centrocampo, stanno
+sulla fascia e non stipati in mezzo. Tutti e sei i moduli continuano a fare il **round-trip** su
+`ZoneRole.Resolve`: un preset pulito resta il punto fisso della mappa, quindi il "reset al cambio
+modulo" restituisce ancora esattamente i ruoli del preset.
+
+**Il blocco ha sostituito `HomeSpot`.** Una squadra ha tre proprietà separate — **dov'è**, quanto è
+**profonda**, quanto è **larga** — e prima erano tutte e tre lo stesso numero.
+
+- **Dov'è** ha un solo grado di libertà: **l'altezza della linea difensiva**. È la linea che un
+  allenatore istruisce davvero ("tieni alto", "abbassati"), e ogni altra linea è distanziata in
+  avanti a partire da lei — per cui la difesa a quattro **è una linea per costruzione** invece che
+  per fortuna. La linea sta sopra il minimo di 16,5 m dalla propria porta (il limite dell'area),
+  sotto il massimo di 52 m, e prende il **40%** dell'avanzamento della palla: non il cento per
+  cento, perché una linea che segue la palla metro per metro fa due chilometri a partita che
+  nessun difensore fa. Il terzo vincolo del piano — la linea del fuorigioco — non esiste ancora:
+  arriva con la fase 5, e qui è detto e non fatto.
+- **Quanto è profonda** dipende da quante linee ha davvero il modulo, non da una tabella: un 4-4-2
+  ne ha tre e difende a 20 m, un 4-2-3-1 ne ha quattro e difende a 30. `LineRank` conta le linee
+  **occupate**, così la profondità del blocco segue la forma.
+- **Quanto è larga** dipende solo dal possesso: il 66% dell'ampiezza nominale senza palla, il 118%
+  con la palla.
+
+**Lo scorrimento asimmetrico esce da solo**, e non è un caso: la distanza fra le linee si misura
+**in avanti a partire dalla linea difensiva**, quindi perdere la palla fa arretrare la punta di
+una quarantina di metri e sposta i centrali di quindici. È esattamente quello che si vede quando
+una squadra si richiude nel proprio blocco, e in codice è una moltiplicazione.
+
+**La lerp verso la palla è sparita.** Al suo posto una **traslazione con tetto**: il blocco scorre
+verso la corsia della palla, come pezzo unico, e mai più di dieci metri dal centro del campo
+(§1.4). Prima era una lerp *per giocatore* verso la Y della palla, senza tetto — chi era lontano
+dalla palla si spostava **più** di chi era vicino, per cui la squadra non traslava, si restringeva
+del 25% e basta. Adesso il tetto è un'invariante che il test afferma; il centro squadra misurato
+non esce mai da 15,7 m dalla metà campo.
+
+**Il calcio d'inizio è finalmente legale.** Regola 8: si batte con entrambe le squadre nella
+propria metà campo. Prima i due blocchi si accavallavano attorno al centrocampo e il fotogramma
+del fischio d'inizio era regolamentare solo per caso — misurato, **tre uomini per parte** stavano
+nella metà campo avversaria. Adesso zero, e il battitore sul dischetto è l'unico ammesso.
+
+**Due cose sono cambiate perché la misura le ha chieste, non perché il piano le prevedesse.**
+
+- **La forma ha inerzia.** Con qualche centinaio di cambi di possesso a partita (che è un difetto
+  del passaggio, non della forma: se ne occupa la fase 4), passare di scatto dalla sagoma difensiva
+  a quella offensiva spostava ventidue uomini di sei metri di lato e ritorno, ogni volta. Adesso la
+  squadra ci mette **quattro secondi** ad aprirsi e altrettanti a chiudersi.
+- **Un uomo cammina verso un posto vicino e trotta verso uno lontano.** Il modello aveva due sole
+  andature, trotto e scatto, e faceva partire il trotto anche per una correzione di cinque metri.
+  Entro quindici metri l'andatura adesso scala con la distanza che resta. È la modifica che da
+  sola vale **due chilometri e mezzo a partita per giocatore**, ed è anche il motivo per cui un
+  uomo che insegue un punto che vibra non lo insegue più: al passo lo media, che è quello che
+  succede su un campo.
+
+### La misura, prima e dopo (200 partite, tattiche neutre, seed 20260803)
+
+| Lettura | Fase 1 | **Fase 2** | Calcio vero | |
+|---|---|---|---|---|
+| **larghezza del blocco in possesso** | 34,6 | **42,0 m** | 40-60 | ✅ **chiusa** |
+| **profondità del blocco in possesso** | 55,7 | **48,3 m** | 30-50 | ✅ **chiusa** |
+| **buco più grande fra due uomini** | 16,6 | **14,9 m** | 0-15 | ✅ **chiusa** |
+| larghezza del blocco senza palla | 32,1 | **38,8 m** | 28-42 | ✅ tenuta |
+| km per giocatore | 11,30 | **10,83** | 9,5-11,5 | ✅ tenuta |
+| un avversario entro 3 m | 12,4% | 19,0% | 5-25 | ✅ tenuta |
+| centrali fra loro (nominale) | 34,0 | **13,9 m** | 8-14 | ✅ |
+| uomini in campo avversario al fischio d'inizio | 3 per parte | **0** | 0 | ✅ |
+| profondità del blocco senza palla | 55,1 | 47,8 m | 22-38 | ❌ fase 3 |
+| dispersione della linea difensiva | 14,4 | 9,2 m | 0-6 | ❌ fase 3 |
+| **gol** | 2,52 | **2,52** | 2,6-2,8 | invariati |
+| **tiri** | 25,1 | **25,1** | 22-28 | invariati |
+
+**Letture in banda: da 7/19 a 10/19.** E ancora una volta la cosa più importante della pagina è la
+riga che non si muove: **gol e tiri sono identici cifra per cifra** a quelli della fase 0 e della
+fase 1. Il modello di risultato non è stato sfiorato, e `balance.ps1` senza `pitch` è stato
+verificato con un **diff riga per riga** contro l'albero pre-fase — `[sweep]`, `[match-fatigue]`,
+`[fitness->result]`, difficoltà, mondo, risolutore di sfondo: tutto identico, tranne i millisecondi.
+
+### Le tre bande difensive che restano rosse, e perché non sono di questa fase
+
+Vale la pena essere precisi, perché "profondità 47,8 contro una banda 22-38" sembra un fallimento e
+non lo è. Contato dentro una partita, **il 41% dei tick di un uomo lo passa a marcare** e lo **0,0%**
+lo passa a tenere la zona: `AssignMarks` assegna tuttora un marcatore a **ognuno** dei dieci
+avversari, ovunque si trovi (§1.5), e il ramo "tieni la posizione di blocco" del movimento non viene
+eseguito mai. Quindi la sagoma di chi difende **è la sagoma di chi attacca**, traslata di cinque
+metri e ottanta verso la propria porta — ed è per questo che le due righe della misura si somigliano
+a un decimo di metro:
+
+    difendendo   larghezza 38,8 m   profondità 47,8 m
+    attaccando   larghezza 42,0 m   profondità 48,3 m
+
+Non è un difetto della forma: è la marcatura. Le tre bande si chiudono quando i compiti diventano
+`Presser` / `Cover` / `Marker` / `Zone`, che è precisamente la fase 3 — e a quel punto il ramo che
+oggi non gira mai diventerà quello che gira quasi sempre.
+
+Quello che la fase 2 poteva fare su quel fronte l'ha fatto: **un uomo della linea difensiva tiene
+la linea**. Prende il suo avversario in larghezza, ma non lo segue in profondità — se lo facessero
+tutti e quattro la difesa smetterebbe di essere una linea e diventerebbe quattro duelli separati.
+La abbandona solo per chi le è già passato dietro, che è l'unica cosa per cui la linea esiste. La
+dispersione della linea è scesa da 14,4 a 9,2 m; il resto lo prende la marcatura.
+
+### Il costo
+
+    modello di risultato (generatePositions: false)   invariato
+    con il flusso di movimento    523 ms → 497 ms per partita   (container)
+                                  268 ms → 292 ms per partita   (macchina dell'utente)
+
+Nel container è **meno** della fase 1, perché la posizione di blocco adesso si calcola **una volta
+a tick per squadra** e viene letta da tutto il resto invece di essere ricalcolata per ogni uomo a
+ogni domanda. Sulla macchina dell'utente è invece salita del **9%**, 268 → 292 ms: il risparmio del
+ricalcolo non copre del tutto quello che il blocco fa muovere in più. È il nove per cento che pesa
+sui quarantuno minuti di `dotnet test`, ed è nominato sopra.
+
+### Cosa è stato toccato
+
+| File | Cosa |
+|---|---|
+| `Tactics/FormationGeometry.cs` | `AnchorY` riscritta per linee; `LineOf` e `LineRank` nuove |
+| `Config/BalanceConfig.cs` | la tabella delle linee, la geometria della linea, e il blocco: altezza, inseguimento della palla, distanza fra le linee, larghezza con e senza palla, tetto laterale, transizione, andatura di avvicinamento |
+| `Match/Movement/MatchSimulator.cs` | `UpdateBlock` (nuova) e `HomeSpot` riscritta; la linea difensiva dentro `MarkSpot`; il calcio d'inizio nella propria metà; l'andatura che scala con la distanza |
+| `Match/Movement/MovementTactics.cs` | la mentalità è l'altezza della linea in decimetri, non due spostamenti in permille |
+| `Match/MatchEngine.cs` | `Version = 5` |
+| `Sim.Core.Tests/Match/BlockShapeTests.cs` | **nuovo**: la linea è una linea, il blocco è un blocco, il calcio d'inizio è legale |
+| `client/.../FormationLayout.cs` | non ha più la sua copia delle costanti: chiama `FormationGeometry`, così la schermata Tattiche e il campo non possono più divergere in silenzio |
+| `Api.Tests` · `SimulationService` · `runbook.md` · `release-checklist.md` | golden master ripuntato |
+
+### Cosa deve girare sulla macchina dell'utente
+
+    .\tools\build-simcore.ps1
+    dotnet test shared/Sim.Core.Tests/Sim.Core.Tests.csproj --logger "console;verbosity=detailed"
+    dotnet test server/Api.Tests/Api.Tests.csproj
+    .\tools\balance.ps1 -Scenario pitch -PitchMatches 200 -PitchDump .\replay.html
+    .\tools\balance.ps1            # ogni numero degli altri scenari deve restare identico
+
+**Il golden master è `0xB3C30BEEAA5781B2`** (prima `0x214A70906A5180AC`) — calcolato nel container
+su .NET 8/10 e **confermato identico dalla .NET 10/Windows dell'utente** — già ripuntato in `server/Api.Tests/SimulationDeterminismTests.cs`,
+`server/Application/Simulation/SimulationService.cs`, `docs/ops/runbook.md` e
+`docs/store/release-checklist.md`.
+
+**Come è stata verificata, e cosa questo dice del metodo.** Il container in cui la fase è stata
+scritta non arriva a NuGet, quindi NUnit non si è potuto restaurare e `dotnet test` non è stato
+eseguito lì: le asserzioni di `BlockShapeTests` sono state provate ricompilandole come programma a
+sé contro Sim.Core. **Il run dell'utente ha poi dato 580/580** e — questo è il punto — le righe di
+diagnostica dei nuovi test hanno stampato **gli stessi numeri del programma sostitutivo**
+(`centre worst 15,7 m`, `attacking width 42,3 m depth 48,5 m back line spread 8,5 m`), il che è la
+prova che il sostituto misurava davvero la stessa cosa e non una sua parente. Nessuno dei due posti
+sospettati ha avuto qualcosa da ridire: né `Teams_FaceEachOther_AtKickoff`, né i due sweep di
+posizionamento.
+
+### Aperto, per scelta
+
+- **Le tre bande difensive** restano alla fase 3, per il motivo misurato qui sopra.
+- **Il ramo `Zone` del movimento gira lo 0,0% del tempo.** È codice morto finché la marcatura non
+  diventa zonale: vale la pena saperlo prima di aprirlo.
+- **`FindSupportSpot` calcola un punto solo per squadra** (§1.8): gli uomini di supporto corrono
+  ancora tutti nello stesso posto, e sono l'8,3% dei tick. Restringe la larghezza in possesso più
+  di quanto faccia la forma, ed è della fase 4.
+- **La linea del fuorigioco** non entra ancora nel vincolo della linea difensiva: fase 5.
+- **La cadenza del flusso.** Il codec è fatto (2077 → 794 KB); `StreamTicksPerFrame` da 5 a 10
+  dimezzerebbe ancora, al prezzo di 30 fotogrammi al secondo invece di 60. Non tirata.
+- **Dove vanno i 41 minuti di `dotnet test`**, che il `.trx` dirà in un comando.
+
+---
+
+## 10. Riferimenti
 
 - RoboCup Soccer Simulator — https://rcsoccersim.readthedocs.io/en/latest/overview.html
 - RoboCup 2D Soccer Simulation League — https://en.wikipedia.org/wiki/RoboCup_2D_Soccer_Simulation_League
