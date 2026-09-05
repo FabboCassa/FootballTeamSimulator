@@ -1107,15 +1107,6 @@
         public int PassReactionMs { get; set; } = 300;
         public int PassReactionTicks => TicksOfMs(PassReactionMs);
 
-        /// <summary>
-        /// Chance per SECOND, in permille, that a challenger takes the ball off the man in
-        /// possession. Written per second because at 10 Hz a per-tick percentage would be a
-        /// coarse, tick-rate-dependent number: ~45% a second is a duel that resolves in a
-        /// second or two, which is what a challenge inside two metres looks like.
-        /// </summary>
-        public int TackleChancePermillePerSecond { get; set; } = 450;
-        public int TackleChancePermillePerTick => TackleChancePermillePerSecond / TicksPerSecond;
-
         /// <summary>How long after a challenge before the ball can change hands again, so it does not ping-pong.</summary>
         public int TackleLockMs { get; set; } = 700;
         public int TackleLockTicks => TicksOfMs(TackleLockMs);
@@ -1152,12 +1143,6 @@
         /// <summary>How far ahead the ball's roll is tabulated for the passing model to consult.</summary>
         public int BallTrackedSeconds { get; set; } = 12;
 
-        /// <summary>
-        /// How quickly an ordinary pass is meant to arrive, in decimetres per second. It sets
-        /// the FLIGHT TIME the passer aims for; the force needed follows from the distance.
-        /// </summary>
-        public int NominalPassSpeedDmPerSecond { get; set; } = 150;
-
         /// <summary>The longest a ball may be asked to spend reaching its target.</summary>
         public int MaxFlightMs { get; set; } = 4000;
         public int MaxFlightTicks => TicksOfMs(MaxFlightMs);
@@ -1178,8 +1163,7 @@
         public int PassLeadDm { get; set; } = 60;
         public int LongBallFromDm { get; set; } = 300;
 
-        /// <summary>How far ahead a carrier knocks the ball when he runs with it, and for how long.</summary>
-        public int DribbleDistanceDm { get; set; } = 80;
+        /// <summary>How long a carrier's knock ahead of himself takes to settle.</summary>
         public int DribbleFlightMs { get; set; } = 900;
         public int DribbleFlightTicks => TicksOfMs(DribbleFlightMs);
 
@@ -1403,6 +1387,186 @@
 
         public int OpponentSeparationRadiusDm { get; set; } = 24;
         public int OpponentSeparationStrengthPercent { get; set; } = 70;
+
+        // --- Decisions with the ball (engine phase 4) ---
+
+        /// <summary>
+        /// What a turnover costs, in decimetres of forward progress, by the third of the pitch
+        /// it happens in (own third, middle, final third). Losing it on the edge of your own box
+        /// is a chance conceded; losing it on the byline is a goal kick. Every option a player
+        /// weighs is priced in the same currency — expected metres gained, minus the price of
+        /// giving it away here — which is what lets a pass, a run and a clearance be COMPARED
+        /// instead of tried in a fixed order.
+        /// </summary>
+        public int[] TurnoverCostDm { get; set; } = { 900, 480, 240 };
+
+        /// <summary>
+        /// The completion a pass must promise before it is worth playing at all. Below it the
+        /// option is not considered — except a ball to the man whose chance it is, which a team
+        /// plays whatever the odds.
+        /// </summary>
+        public int MinPassCompletionPermille { get; set; } = 300;
+
+        /// <summary>
+        /// How much room the receiver needs before the pass counts as safely received. Inside
+        /// this the nearest opponent is contesting it, and the odds fall off linearly to
+        /// <see cref="ContestedReceptionFloorPermille"/> when he is standing on him.
+        /// </summary>
+        public int ReceiverFreeSpaceDm { get; set; } = 90;
+        public int ContestedReceptionFloorPermille { get; set; } = 280;
+
+        /// <summary>
+        /// A lane an opponent reaches before the ball does is not automatically a lost ball —
+        /// he has to control it — but it is close to one. A lane he reaches late is close to
+        /// certain. Between the two the odds run linearly over this many ticks of margin.
+        /// </summary>
+        public int InterceptMarginDm { get; set; } = 110;
+        public int CutOutCompletionPermille { get; set; } = 90;
+        public int ClearLaneCompletionPermille { get; set; } = 960;
+
+        /// <summary>
+        /// Execution error, the heart of the phase. A struck ball misses its target sideways by
+        /// this share of the distance it travels at worst — a player with nothing in Passing or
+        /// Technique, tightly pressed, hitting it long. The floor is what even the best miss by.
+        /// </summary>
+        public int PassErrorMaxPermille { get; set; } = 300;
+        public int PassErrorFloorPermille { get; set; } = 18;
+
+        /// <summary>Extra error, in percent, when he is pressed and when the ball is a long one.</summary>
+        public int PassErrorPressurePercent { get; set; } = 130;
+        public int PassErrorLongBallPercent { get; set; } = 55;
+
+        /// <summary>
+        /// How fast the ball should still be going when it reaches the man it is for, in
+        /// decimetres per second. This is the WEIGHT of the pass: a ball struck to arrive dying
+        /// can be taken in his stride, and one struck to merely reach him runs on past him and
+        /// out of play. Higher is a firmer ball — quicker to arrive, harder to control.
+        /// </summary>
+        public int PassArrivalSpeedDmPerSecond { get; set; } = 110;
+
+        /// <summary>
+        /// How much further the man a ball is played TO can stretch for it than anyone else. He
+        /// is facing it and running onto it; the defender behind him is turning. Without this the
+        /// two of them are judged purely on who is the nearer centimetre, which is not how
+        /// receiving a football works.
+        /// </summary>
+        public int ReceiveReachDm { get; set; } = 25;
+
+        /// <summary>The same, for a man knocking it ahead of himself and running onto it.</summary>
+        public int CarryArrivalSpeedDmPerSecond { get; set; } = 25;
+
+        /// <summary>Error on the WEIGHT of the pass, as a share of the force, scaled the same way.</summary>
+        public int PassWeightErrorPermille { get; set; } = 130;
+
+        /// <summary>
+        /// Weight of Passing against Technique in the execution of a pass, out of ten. Passing
+        /// is what the attribute is called; Technique is the foot that carries it out.
+        /// </summary>
+        public int PassSkillPassingWeight { get; set; } = 7;
+
+        /// <summary>
+        /// How well a player reads the options in front of him, from Positioning: a low reader
+        /// weighs a pass by little more than how far forward it goes, a high one prices the risk
+        /// properly. Expressed as the share of the risk term he actually sees.
+        /// </summary>
+        public int VisionRiskFloorPercent { get; set; } = 45;
+
+        /// <summary>
+        /// What simply keeping the ball is worth, in decimetres of forward progress. Without it
+        /// the only pass with a positive value is a forward one and a side never builds: a square
+        /// ball to a free man gains no ground, and it is still the right pass.
+        /// </summary>
+        public int PossessionValueDm { get; set; } = 55;
+
+        /// <summary>The man whose chance it is: what a ball to him is worth on top of its own value.</summary>
+        public int ChanceOptionBonusDm { get; set; } = 520;
+
+        /// <summary>What a ball played back to the keeper costs, and what a runner showing for it is worth.</summary>
+        public int BackToKeeperCostDm { get; set; } = 130;
+        public int SupportingRunBonusDm { get; set; } = 70;
+
+        /// <summary>How far a clearance is hit, and how often the side that hit it gets it back.</summary>
+        public int ClearanceDistanceDm { get; set; } = 400;
+        public int ClearanceRetentionPermille { get; set; } = 260;
+
+        /// <summary>Appetite for running with it rather than playing it, as a percentage of its value.</summary>
+        public int CarryValuePercent { get; set; } = 45;
+
+        // --- The duel (engine phase 4) ---
+
+        /// <summary>
+        /// How often a challenge is resolved at all, per second of contact. Split between the
+        /// two men by their ratings, so this sets the PACE of duels and the attributes decide
+        /// who wins them.
+        /// </summary>
+        public int DuelChancePermillePerSecond { get; set; } = 620;
+        public int DuelChancePermillePerTick => DuelChancePermillePerSecond / TicksPerSecond;
+
+        /// <summary>
+        /// Weights of the carrier's Dribbling / Technique / Strength / Pace and of the
+        /// challenger's Defending / Positioning / Pace, out of ten each.
+        /// </summary>
+        public int[] DribbleDuelCarrierWeights { get; set; } = { 4, 2, 2, 2 };
+        public int[] DribbleDuelChallengerWeights { get; set; } = { 5, 3, 2 };
+
+        /// <summary>
+        /// Of the duels the challenger wins, how many he wins CLEANLY (he comes away with it);
+        /// the rest the ball simply runs loose and both of them go after it.
+        /// </summary>
+        public int DuelCleanTacklePercent { get; set; } = 50;
+
+        /// <summary>
+        /// How close to the goal line a man running with the ball stops going straight on and
+        /// starts cutting in at the goal, and how far short of the line he aims.
+        /// </summary>
+        public int CarryCutInsideDm { get; set; } = 260;
+        public int CarryGoalStandOffDm { get; set; } = 110;
+
+        /// <summary>How far a knocked-loose ball runs, in decimetres.</summary>
+        public int DuelLooseBallDm { get; set; } = 55;
+
+        /// <summary>
+        /// The touch a man running with the ball takes: shorter when he is being pressed,
+        /// longer when he has room, and stretched by Dribbling and Pace.
+        /// </summary>
+        public int CarryTouchPressedDm { get; set; } = 40;
+        public int CarryTouchFreeDm { get; set; } = 105;
+        public int CarryTouchSkillDm { get; set; } = 35;
+
+        // --- Striking it (engine phase 4) ---
+
+        /// <summary>
+        /// How good a chance this is, on the way to phase 6 where it will decide the goal. Full
+        /// marks from six metres straight in front, falling with distance and with the angle,
+        /// and cut by the bodies in the way. Finishing lifts it; the outcome itself is still the
+        /// result model's until the causality is inverted.
+        /// </summary>
+        public int ShotQualityRangeDm { get; set; } = 300;
+        public int ShotQualityAngleDm { get; set; } = 260;
+        public int ShotQualityPressurePercent { get; set; } = 45;
+        public int ShotQualityFinishingPercent { get; set; } = 60;
+
+        /// <summary>
+        /// Placement, as a share of the way from the middle of the goal to the post: where a
+        /// strike of no quality at all is aimed. Quality carries it the rest of the way, so a
+        /// good finisher's goal is placed inside the post while a poor one creeps in beside the
+        /// keeper. The miss spread is the other half of the same idea — a bad finisher's miss
+        /// is a balloon into the stand.
+        /// </summary>
+        public int ShotPlacementCentrePermille { get; set; } = 380;
+        public int ShotMissSpreadDm { get; set; } = 165;
+
+        /// <summary>
+        /// Does the keeper HOLD it? Goalkeeping says how often; a fierce strike is parried more
+        /// often than a tame one, and a parry is a live ball in the box rather than the end of
+        /// the move.
+        /// </summary>
+        public int KeeperHoldBasePercent { get; set; } = 34;
+        public int KeeperHoldSkillPercent { get; set; } = 46;
+        public int KeeperHoldQualityPercent { get; set; } = 45;
+
+        /// <summary>How far the keeper pushes a parry away from his goal, in decimetres.</summary>
+        public int KeeperParryDm { get; set; } = 150;
 
         // --- Goalkeeper ---
 

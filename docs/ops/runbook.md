@@ -105,7 +105,7 @@ Rules the server enforces, and why:
 
 World *generation* is deliberately **not** affected: `WorldFactory` still builds worlds from the balance
 embedded in the build, so a seed keeps generating the same world forever and the golden master
-`0xABC7B41DC6F258C2` stays meaningful. The push covers the live knobs — match, condition, development,
+`0xF8BE4A32C28421A1` stays meaningful. The push covers the live knobs — match, condition, development,
 market, finance, tactics.
 
 If a pushed revision turns out to be unreadable, every instance logs it and **stays on the balance it

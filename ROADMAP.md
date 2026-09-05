@@ -583,8 +583,118 @@ acting one out — with the game playable at the end of every one of them.
   the movement layer's draws shift the matches that follow it. The claim it makes is a comparative
   one (wide creates more than narrow) and the gap is unchanged at +18 against +19, but a sweep that
   shares an RNG across matches is not a figure to quote as fixed.
-- [ ] Phase 4 — decisions on the ball · [ ] Phase 5 — the laws · [ ] Phase 6 — inverting the
-  causality · [ ] Phase 7 — performance data · [ ] Phase 8 — the instructions matter
+- [x] **Phase 4 — decisions on the ball, driven by the attributes** (2026-09-04, **CLOSED AND
+  VERIFIED by the user on 2026-09-05**: `dotnet test` **595/595 green, 0 failed, in 378.8 s**
+  — Sim.Core.Tests **355** (the 349 of phase 3 plus the 6 new `BallDecisionTests`) and Api.Tests
+  **240** — with `[DeterminismCheck]`/`[server-determinism]` **`0xF8BE4A32C28421A1` identical digit
+  for digit** to the container's .NET 10 value, so cross-runtime determinism survives engine v7;
+  **and every diagnostic line of the phase reproduced the container's number to one decimal on a
+  different machine and OS** — `[ball-skill]` 56.6% of the ball / 154 vs 111 into the final third /
+  18.1 vs 21.0 given away at home, 53.9% (passing only), 54.4% (dribbling only), `[passing]` 887 at
+  79.2%, `[keeper]` 30.0% vs 52.7% parried — which makes the difference between two players a
+  property of the engine rather than of the bench; `.\tools\balance.ps1`
+  **28/28 PASS with every figure unchanged** — the proof the result model was untouched, since every
+  number matches the container's A/B against the pre-phase-4 tree (top tactic 45.0% / worst 42.5%,
+  formations 37.4%/49.9%, season +6.5, difficulty 6.9/6.6/9.5/7.6/10.1, 67.6 transfers, wages 69.8%,
+  the whole world block); and the `pitch` scenario reproducing **every single number** of the
+  container's run — 14/19, goals 2.52, shots 25.1, passes 877 at 78.5%, throw-ins 18.4, km 11.31,
+  defending 38.8 x 31.8 with a 5.6 m back line, attacking 44.4 x 38.6 — at **307.3 ms a match against
+  the container's 504**, the same 1.6x hardware ratio phase 3 saw. Its exit code 1 is the expected
+  red: the held-ball-on-a-line bug of §1.7, **48.7 ticks a match against phase 3's 550.8**, which is
+  phase 5's. The result model's own calibrations all came back
+  untouched (2.44 goals / 24.8% draws / 48.4% home, strong 82%, condition-live 2.59 & 21.3%, counter
+  56.0%, familiarity 49.3 vs 23.9, sweep top 53.8%, positioning 487→513 and 549 vs 531), while the
+  readings that moved are all the movement layer's: `[duties]` defending 38.7 x 31.9 with a 5.6 m
+  back line, **402 tackles and 235 interceptions a match against 180/318** — the duel replaced the
+  interception — `[bodies]` 0.131% → 0.072%, team centre 15.7 → 13.5 m off the middle, ball at
+  somebody's feet 60% → 81% of the match. **One thing to watch, not a red: the pressing trigger has
+  lost its low-vs-medium monotonicity** — `[press]` reads low 5.50 / medium 5.56 / high 4.98 where
+  phase 3 read 6.76 / 6.56 / 5.96; the extreme holds and it is the only thing asserted, but two
+  neighbouring press settings now coincide inside the noise, plausibly because possession surviving
+  shrinks the space left on the ball for everybody. That is **phase 8's** question, to be measured
+  there rather than tuned by eye. **And `[movement] worst single-tick step 40dm against a 42dm cap`**
+  (29 of 34 at phase 1) is the first test that breaks if a later phase raises speeds again. The only
+  thing left open is the eye: **open `replay.html` and LOOK**). Until this phase the only
+  attribute the picture read was `Pace` (§1.6): a pass was aimed at a mathematically safe line and
+  executed exactly, a run with the ball was a fixed eight-metre touch, and a challenge was one flat
+  dice roll a tick that a winger and a centre-half won equally often. The question this game is
+  built on — which players play better — had no answer the simulation could give.
+  **The man on the ball now WEIGHS his options instead of walking down a fixed ladder.** A pass, a
+  run and a hoof are quoted in one currency — the decimetres of forward progress he expects, less
+  what giving it away *where it would be lost* is worth to the other side — and that is what makes
+  them comparable at all. Losing it is priced at the place the ball ends up, not the place it is
+  now, which is exactly why a clearance can be the right answer: it moves the turnover forty metres
+  up the pitch. How much of that risk he SEES comes off `Positioning`, so a poor reader of the game
+  plays the ball that looks best.
+  **The passing test is no longer binary, and the marker on the receiver is no longer free.** The
+  old `PassSafe` judged the lane and **excluded the last 7.5 m in front of the receiver**, so a man
+  marked at two metres was invisible to the only test being run. Measured: **44.2% of passes went
+  straight to an opponent.** Now there are three separate questions — the lane (odds, not a
+  boolean), the receiver's room (priced), and whether this player can hit it.
+  **Execution misses**, sideways off the line plus a little on the weight, scaled by `Passing` /
+  `Technique` and by the pressure on him, drawn as the average of two uniforms so most balls are
+  near their line and the wild one is rare. The perpendicular offset is exact integer arithmetic —
+  no angle, no trigonometry, nothing that could round differently on another runtime.
+  **The duel** replaces the flat 45‰-a-tick roll: the config sets the PACE of duels and the two men
+  decide who wins them (`Dribbling`/`Technique`/`Strength`/`Pace` against
+  `Defending`/`Positioning`/`Pace`, ratio squared). Half of the duels won are a ball taken, the
+  other half a ball that runs loose. The carry touch is short under pressure, long in space,
+  stretched by `Dribbling` and `Pace`, and **capped by the pitch actually in front of him**.
+  **The shot has a quality** — an xG-shaped reading of distance, angle, bodies and finisher — spent
+  on WHERE the ball goes and on whether the keeper HOLDS it (`Goalkeeping`; a parry puts a live ball
+  back in the box). The outcome stays the timeline's: inverting the causality is phase 6, with its
+  own recalibration, and that was the user's decision up front.
+  **THE DEFECT THE PHASE FOUND, and it was not in the plan: the WEIGHT of a pass.** The model had no
+  notion of one. Every ball was struck at the force that REACHES its target in the nominal flight
+  time and then ran on at almost the speed it left with — **an eleven-metre pass rolled fifty-six
+  metres**, and the receiver had a two-tick window to step into its path. `MatchBall.ForceToArrive`
+  now finds the force that delivers it and has it DYING as it arrives, by binary search on the two
+  tables the ball is built from. And there is a measurable optimum: **at 5.5 m/s of arrival speed
+  56% of passes arrive, at 11 m/s 69%, at 14 m/s 65%** — too slow and the lane cuts it out, too
+  hard and it runs past the man.
+  **Two things the measurement asked for and the plan did not.** (1) **The receiver runs to MEET
+  it** — he used to steer to the spot it was aimed at and stand there while it rolled past two or
+  three metres away, which is the whole of a footballer's control radius; a pass into twelve metres
+  of clear space was still lost 27% of the time, and this was why. (2) **A supporting run is a
+  BURST, not a ninety-minute sprint**: with possession surviving, team-mates make many more support
+  runs and all of them were flat out — 12.07 km a player with the busiest at 19.5 km, which is not
+  football. Now 11.31 km, busiest 16.6.
+  **Readings inside the band 12/19 → 14/19**, and they are the two the phase declared: **pass
+  accuracy 54.6% → 78.5%** (band 76-88) and **passes 1347 → 877** (band 850-1150). Throw-ins fall
+  81.8 → 18.4 (below band now, and the missing throw-ins are the ones the laws do not detect yet,
+  §1.7 — phase 5's) and the held-ball-on-a-line red drops **550.8 → 48.7 ticks a match**. **Goals
+  2.52 and shots 25.1 are STILL identical digit for digit** to phases 0-3: the result model was not
+  touched.
+  **And the difference between two players is finally measurable.** The same twenty-two men, played
+  twice, with `Passing`/`Technique`/`Dribbling` at 88 on one side and 24 on the other and everything
+  else identical: **56.6% of the ball against 43.4%, 154 balls into the final third against 111,
+  18.1 given away in his own third against 21.0.** Passing alone (53.9/46.1) and dribbling alone
+  (54.4/45.6, measured over 16 seeds because it is the narrowest of the three) each do it on their own, so neither is carrying the other.
+  **An hypothesis the measurement disproved, and it is worth keeping:** *"a bigger execution error
+  means more misplaced passes"* is FALSE at league level. Tripling `PassErrorMaxPermille` moves the
+  league's accuracy by three tenths of a point, because the DECISION model compensates — a poor
+  passer prices his own error and picks passes he can hit. It changes **which** passes get played,
+  not how many arrive, which is exactly what a real league looks like. A test that had gone looking
+  for the difference between two players in the completion percentage alone would not have found it:
+  it lives in **possession** and **progression**.
+  `MatchEngine.Version` → **7**, golden master → **`0xF8BE4A32C28421A1`**, v6 replays no longer
+  renderable (the client rejects them itself by comparing `MatchEngine.Version`). Cost **444 → 504
+  ms a match in the container (+13%)**, and it is paid only on the ticks where somebody actually
+  decides something. New `BallDecisionTests` (6), all read off the POSITION STREAM rather than off
+  an internal number that could be wrong itself. Verified here with the offline route: the
+  hand-written NUnit stub compiles the whole test project and a reflection runner **ran the entire
+  suite — 355 green, 0 red, in 4m28s** (349 + 6). Full write-up in §11 of the plan.
+  **What the user has to run:** `.\tools\build-simcore.ps1` → `dotnet test` (expect **595**; paste
+  `[ball-skill]`, `[passing]`, `[keeper]`) → `dotnet test server/Api.Tests` (the new golden master
+  is already pinned) → `.\tools\balance.ps1 -Scenario pitch -PitchMatches 200 -PitchDump .\replay.html`
+  and **open it and LOOK** → `.\tools\balance.ps1` (every other figure must be identical).
+  **Open, on purpose:** the ball passes through the middle third only 25.5% of the time (was 38.8%
+  — before, the ball lived in midfield because that is where it kept being lost); throw-ins,
+  corners, offsides and fouls are the laws (phase 5); shots on target 14.9 of 25.1 is the result
+  model's share, not the picture's (phase 6).
+
+- [ ] Phase 5 — the laws · [ ] Phase 6 — inverting the causality · [ ] Phase 7 — performance data ·
+  [ ] Phase 8 — the instructions matter
 
 - [~] **13.2 The agent match engine** — 13.1's choreographer is retired. It wrote a script in TICK SPACE and had the players act it out, so nobody in it decided anything: the ball's owner was assigned rather than won, a pass happened because the script said so rather than because one was on, nothing knew the ball had gone out, and team shape was a formula on ball position — which is why the user's second Play-mode recording showed twenty men in one penalty area, half the pitch empty, and players standing on top of each other. That is not a defect list, it is what that architecture produces.
   **The model, from the literature the user asked me to go and find:** Mat Buckland's *Programming Game AI by Example* ch. 4 (Simple Soccer) is the canonical design for a believable 2D match, and it is agent-based. Each player has a home region from the formation, a small set of states and steering with SEPARATION (the missing separation is why the tokens overlapped). Each team has a brain: who chases, who supports, who marks. A **support-spot grid** in the attacking half is scored on whether the man on the ball could find it, whether a goal could be struck from it, and whether it is a comfortable distance — the best spot is where the attackers run, and that is what a viewer reads as a pattern of play. **Passing** follows the book's rule verbatim — *"the best pass is the pass that cannot be intercepted by an opponent and that is as far forward of the receiver as possible"* — with three candidate targets per team-mate. **Marking** takes the RoboCup 2D idea of grouped assignment (defenders take the most advanced opponents first, each opponent once) instead of "everyone marks his nearest", which is what puts three men on one opponent. And the **ball is an object** with velocity and friction: a pass can be read and cut out, and crossing a line IS the throw-in — restarts are DETECTED, not written.

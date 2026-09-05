@@ -35,7 +35,7 @@ namespace Sim.Core.Match
         // ball. The SCORE and EVENT model is still unchanged from v1; what moved, again, is the
         // picture, and it moved enough that a v4 replay cannot be rendered by a v5 client —
         // which is exactly what this number is for.
-        public const int Version = 6;
+        public const int Version = 7;
 
         private const int MatchMinutes = 90;
 

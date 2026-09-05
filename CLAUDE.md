@@ -16,9 +16,204 @@ Read ARCHITECTURE.md (design) and ROADMAP.md (plan + current status via checkbox
 - After ANY change in `shared/`, the user must run `.\tools\build-simcore.ps1` so Unity gets fresh DLLs (Sim.Core.dll + Fts.Contracts.dll → `client/Assets/Plugins/SimCore/`, gitignored, .meta committed).
 - Test command: `dotnet test` (all) or with harness output:
   `dotnet test shared/Sim.Core.Tests/Sim.Core.Tests.csproj --logger "console;verbosity=detailed"`
-- Current test count: **589 green** (Sim.Core.Tests 349 + Api.Tests 240), golden master **0xABC7B41DC6F258C2** (engine v6, engine rework phase 3, verified on the user's machine 2026-09-04), and `dotnet test` takes ~6 minutes. The paragraph below is the historical note it replaced: 212 green (through 8.4a, +4 OnlineSeasonTick tests over 6.10a's 208). Golden master 0xCDEA5A2F7B9E5CF6. **STALE as of 13.1: the golden master changes with engine v3 — see the current position below.** Server Api.Tests: 70 green (through 8.5a, +11 LeagueAuctionTests over 8.4a's 59) + DevSeedTests (5) from the dev-seed tooling; **8.6 (live match control) DONE [x] — 8.6a (server) 85/85 green + 8.6b (Unity client) + dev "simulate the opponent" tooling Play-mode VERIFIED & ACCEPTED by the user (docker `up --build` healthy, the live match kicks off and the bot opponent joins/subs from the live screen). `[server-determinism] 0xCDEA5A2F7B9E5CF6` unchanged, NO Sim.Core change → 212 Sim.Core + golden master stand, no save bump. Still standing: commit `Migrations/AddLiveMatch*` for a clean Postgres/docker deploy (the running dev DB already has `live_matches`). Client: Season "▶ Live" launch, ~1s poll, MatchRenderer synced to KickoffUtc, InMatchPanel subs+instructions → POST /change, finish/leave (new .cs: LiveMatchView, OnlineLiveMatchScreenPresenter). DEV TOOLING (test the live match solo): server `POST /internal/dev/leagues/{id}/live/{fixtureId}/bot` (`DevSeedService.BotLiveAsync` — the fixture's @dev.local bot opens/joins + optionally a legal `LineupPlan.From(BestEleven)` sub), client dev row "Bot: entra"/"Bot: sostituzione" (gated by `DevFlags.OnlineTestTools`); `DevSeedService` ctor now takes `ILiveMatchService` (DI-resolved → the 5 DevSeedTests stay green). NEXT: Phase 9 (public ranked mode) — 8.7 (private season end) is DONE [x] and 🏁 Phase 8 is COMPLETE. **8.7 summary:** SERVER-ONLY logic, NO Sim.Core change, NO migration (reuses `LeagueStatus.Completed`=2 + existing columns); `dotnet test Api.Tests` **92/92 green**, `[server-determinism] 0xCDEA5A2F7B9E5CF6` unchanged. `ResolveNextRoundAsync` flips the league to Completed on the last matchday; `GET /leagues/{id}/season/summary` → final table + champion / top scorer (aggregated from the stored MatchReport goal events) / best defence / wooden spoon; `POST /leagues/{id}/season/new` (creator, Completed only) = FULL reset → deletes fixtures/lineups/trainings/bids/auctions/live, un-assigns clubs, re-equalises the developed squads + re-seeds 25M budgets, resets condition to neutral, reopens the draft (players KEEP their developed ability). Client 8.7b: `SeasonSummaryDto`/`SeasonAwardDto`/`TopScorerDto` + `GetSeasonSummaryAsync`/`StartNewSeasonAsync`, new `Views/OnlineSeasonEndView` + `Presenters/OnlineSeasonEndScreenPresenter` (named `Online*` because `SeasonEndView`/`season_end.*` is the SP 2.7 screen; the online one owns `seasonend.*`), opened by a "Bilancio stagione" button that appears on the Season screen once complete; loc en+it 612/612 at parity. The user's monthly-public-league vision (per-player rating → matchmaking by level → auto-enrol with opt-out → 1-week break between seasons) is recorded as the Phase 9 direction.**
+- Current test count: **595 green** (Sim.Core.Tests 355 + Api.Tests 240), golden master **0xF8BE4A32C28421A1** (engine v7, engine rework phase 4, verified on the user's machine 2026-09-05 and identical digit for digit to the container's .NET 10 value; phase 3's was 0xABC7B41DC6F258C2 on engine v6), and `dotnet test` takes ~6.3 minutes (378.8 s: Sim.Core.Tests 310.7 s + Api.Tests 378.1 s in parallel). The paragraph below is the historical note it replaced: 212 green (through 8.4a, +4 OnlineSeasonTick tests over 6.10a's 208). Golden master 0xCDEA5A2F7B9E5CF6. **STALE as of 13.1: the golden master changes with engine v3 — see the current position below.** Server Api.Tests: 70 green (through 8.5a, +11 LeagueAuctionTests over 8.4a's 59) + DevSeedTests (5) from the dev-seed tooling; **8.6 (live match control) DONE [x] — 8.6a (server) 85/85 green + 8.6b (Unity client) + dev "simulate the opponent" tooling Play-mode VERIFIED & ACCEPTED by the user (docker `up --build` healthy, the live match kicks off and the bot opponent joins/subs from the live screen). `[server-determinism] 0xCDEA5A2F7B9E5CF6` unchanged, NO Sim.Core change → 212 Sim.Core + golden master stand, no save bump. Still standing: commit `Migrations/AddLiveMatch*` for a clean Postgres/docker deploy (the running dev DB already has `live_matches`). Client: Season "▶ Live" launch, ~1s poll, MatchRenderer synced to KickoffUtc, InMatchPanel subs+instructions → POST /change, finish/leave (new .cs: LiveMatchView, OnlineLiveMatchScreenPresenter). DEV TOOLING (test the live match solo): server `POST /internal/dev/leagues/{id}/live/{fixtureId}/bot` (`DevSeedService.BotLiveAsync` — the fixture's @dev.local bot opens/joins + optionally a legal `LineupPlan.From(BestEleven)` sub), client dev row "Bot: entra"/"Bot: sostituzione" (gated by `DevFlags.OnlineTestTools`); `DevSeedService` ctor now takes `ILiveMatchService` (DI-resolved → the 5 DevSeedTests stay green). NEXT: Phase 9 (public ranked mode) — 8.7 (private season end) is DONE [x] and 🏁 Phase 8 is COMPLETE. **8.7 summary:** SERVER-ONLY logic, NO Sim.Core change, NO migration (reuses `LeagueStatus.Completed`=2 + existing columns); `dotnet test Api.Tests` **92/92 green**, `[server-determinism] 0xCDEA5A2F7B9E5CF6` unchanged. `ResolveNextRoundAsync` flips the league to Completed on the last matchday; `GET /leagues/{id}/season/summary` → final table + champion / top scorer (aggregated from the stored MatchReport goal events) / best defence / wooden spoon; `POST /leagues/{id}/season/new` (creator, Completed only) = FULL reset → deletes fixtures/lineups/trainings/bids/auctions/live, un-assigns clubs, re-equalises the developed squads + re-seeds 25M budgets, resets condition to neutral, reopens the draft (players KEEP their developed ability). Client 8.7b: `SeasonSummaryDto`/`SeasonAwardDto`/`TopScorerDto` + `GetSeasonSummaryAsync`/`StartNewSeasonAsync`, new `Views/OnlineSeasonEndView` + `Presenters/OnlineSeasonEndScreenPresenter` (named `Online*` because `SeasonEndView`/`season_end.*` is the SP 2.7 screen; the online one owns `seasonend.*`), opened by a "Bilancio stagione" button that appears on the Season screen once complete; loc en+it 612/612 at parity. The user's monthly-public-league vision (per-player rating → matchmaking by level → auto-enrol with opt-out → 1-week break between seasons) is recorded as the Phase 9 direction.**
 
-## Current position — 🏁 ENGINE REWORK PHASE 3 CLOSED (2026-09-04): the team DEFENDS
+## Current position — 🏁 ENGINE REWORK PHASE 4 CLOSED (2026-09-05): the ball is DECIDED with, and by the attributes
+
+**THE USER'S RUN, 2026-09-05. `dotnet test` 595/595 green, 0 failed, in 378.8 s** (`Sim.Core.Tests`
+**355** — the 349 of phase 3 plus the 6 new `BallDecisionTests` — and `Api.Tests` **240**), with
+`[DeterminismCheck]` and `[server-determinism]` both printing `0xF8BE4A32C28421A1`,
+**identical digit for digit** to the value computed in the container on .NET 10: cross-runtime
+determinism survives engine v7. `.\tools\balance.ps1` **28/28 PASS with every figure unchanged** —
+and that is the PROOF the result model was not touched, because every number matches the A/B run in
+the container against the pre-phase-4 tree (top tactic 45.0% / worst 42.5%, formations F433
+37.4%/49.9% and F352 51.4%, season +6.5 pts, difficulty 6.9/6.6/9.5/7.6/10.1, 67.6 transfers, wages
+69.8%, the whole world block). The `pitch` scenario reproduced **every single number** of the
+container's run — 14/19 in band, goals 2.52, shots 25.1 (14.9), passes 877 at 78.5%, throw-ins 18.4,
+km 11.31 (busiest 16.56), defending 38.8 × 31.8 with a 5.6 m back line, attacking 44.4 × 38.6 — at
+**307.3 ms a match against the container's 504** (1.64x, the same ratio phase 3 saw: 263.6 vs 444,
+so the +13% cost of this phase is confirmed on his hardware too). **Two machines printing the same
+figures to one decimal over 200 matches is itself the proof that the MOVEMENT layer is
+cross-runtime deterministic, not just the result model.**
+
+**Its exit code 1 is EXPECTED**: the one red is "a held ball is never sitting on a line of the
+pitch", **48.7 ticks a match against phase 3's 550.8** — the §1.7 defect (a carrier who runs over
+the line is only clamped back in instead of conceding a throw-in), which is phase 5's, and which
+this phase cut by eleven times as a side effect of the carrier attacking the goal instead of the
+byline.
+
+**AND THE FIGURE THAT MATTERS MOST: EVERY diagnostic line of the phase reproduced the container's
+number to one decimal, on a different machine and a different OS.** `[ball-skill]` 56.6% of the ball
+· 154 vs 111 into the final third · 18.1 vs 21.0 given away at home (all three skills); 53.9% ·
+160 vs 121 · 22.4 vs 28.2 (passing and technique only); 54.4% · 152 vs 130 · 20.9 vs 23.2 (dribbling
+only); `[passing]` 887 passes at 79.2%; `[keeper]` 30.0% parried by a 90 keeper against 52.7% by a
+20. **The difference between two players is a property of the engine, not an artefact of the bench.**
+
+**The result model's own calibrations came back untouched, every one of them:**
+`Avg goals/match 2.44 | draws 24.8% | home wins 48.4%`, `Strong wins 82%`,
+`[condition-live calibration] 2.59 goals, 21.3% draws`, `[counter] 56.0%`,
+`[familiarity] 49.3% vs 23.9%`, `[sweep] top 53.8%`, `[positioning-line] 487→513 / 467→513`,
+`[positioning-width] 549 vs 531`, `[match-fatigue] 481 → 580`, `[fitness->result] 517 vs 318`.
+
+**The lines that DID move are all the movement layer's, and that is the phase.** `[duties]`
+defending **38.7 × 31.9** with a 5.6 m back line and a 10.8 m hole (was 40.6 × 36.2 / 5.9 / 11.5),
+attacking 44.4 × 38.6; **`[duties] 402 tackles and 235 interceptions` a match against 180/318** —
+the duel replaced the interception; `[bodies]` 0.131% → 0.072%; `[shape]` the team centre at worst
+**13.5 m** off the middle, was 15.7; `[movement]` the ball at somebody's feet **81%** of the match,
+was 60%. Every assertion in those fixtures still holds — the readings moved, the bands did not open.
+
+**ONE THING TO WATCH, and it is not a red: the pressing trigger has lost its low-vs-medium
+monotonicity.** `[press]` now prints **low 5.50 m · medium 5.56 m · high 4.98 m**, where phase 3 read
+6.76 / 6.56 / 5.96. The extreme holds (high against low is the only thing the test asserts) but low
+and medium now coincide inside the noise. Likely cause: with possession surviving and duels
+replacing interceptions, the space left to a man on the ball in his own third is smaller for
+everybody, so two neighbouring press settings compress together. **That is precisely phase 8's
+question** ("the instructions matter"), and it should be measured there rather than tuned by eye now.
+
+**A second figure near its limit:** `[movement] worst single-tick step 40dm (cap 42dm)` — it was 29
+of 34 at phase 1. If a later phase raises speeds again, that test is the first thing that breaks.
+
+**STATE: 🏁 CLOSED.** The only thing left is the eye: **open `replay.html` and LOOK** — the numbers
+are in band, the visual half of the acceptance is not a test. Until this
+phase the only attribute the picture read was `Pace` (§1.6 of the plan): a pass was aimed at a
+mathematically safe line and executed exactly, a run with the ball was a fixed 8 m touch, and a
+challenge was one flat dice roll a tick that a winger and a centre-half won equally often. **The
+question this whole game is built on — which players play better — had no answer the simulation
+could give.**
+
+Read `docs/engine/MATCH_ENGINE_PLAN.md` first — **§11 is the full write-up of this phase**.
+
+**WHAT CHANGED — the man on the ball WEIGHS his options instead of walking down a fixed ladder.**
+It was `TryPass` → else hoof it if pressed → else run with it. Now a pass, a run and a clearance are
+quoted in ONE currency — *the decimetres of forward progress he expects, less what giving it away
+where it would be lost is worth to the other side* — which is what makes them comparable at all.
+The turnover is priced **at the place the ball ends up**, not the place it is now, and that is
+exactly why a clearance can be right: it moves the loss forty metres up the pitch, where it costs a
+fraction. How much of that risk he SEES comes off `Positioning` (`VisionRiskFloorPercent`), so a
+poor reader plays the ball that LOOKS best. Knobs: `TurnoverCostDm {900,480,240}`,
+`PossessionValueDm 55`, `CarryValuePercent 45`, `ClearanceRetentionPermille 260`.
+
+- **THE MARKER ON THE RECEIVER IS NO LONGER FREE.** The old `PassSafe` judged the lane and
+  **excluded the last 7.5 m in front of the receiver** (`ReceiverSpaceDm`), so a man marked at two
+  metres was invisible to the only test being run. Measured with a probe: **44.2% of passes went
+  straight to an opponent.** Now three separate questions — `LaneCompletion` (odds, not a boolean),
+  the receiver's room (`BallSkill.ReceptionPermille`, priced instead of ignored), and whether this
+  player can hit it.
+- **EXECUTION MISSES**: sideways off the line plus a little on the weight, scaled by
+  `Passing`/`Technique` and by the pressure on him, drawn as the average of two uniforms. The
+  perpendicular offset is exact integer arithmetic — no angle, no trigonometry, nothing that could
+  round differently on another runtime.
+- **THE DUEL** replaces the flat 45‰-a-tick roll: `DuelChancePermillePerSecond` sets the PACE and
+  the two men decide who wins (`Dribbling`/`Technique`/`Strength`/`Pace` against
+  `Defending`/`Positioning`/`Pace`, ratio SQUARED so a 60 does not beat a 30 on a coin toss and a 90
+  is not unplayable). Half the duels won are a ball taken, half a ball that runs loose.
+- **THE CARRY** touch is short under pressure, long in space, stretched by `Dribbling`/`Pace`, and
+  **capped by the pitch actually in front of him**; a carrier inside the last 26 m cuts in at the
+  goal instead of running at the byline.
+- **THE SHOT HAS A QUALITY** (`BallSkill.ShotQualityPermille`, xG-shaped: distance, angle, bodies,
+  finisher) spent on WHERE the ball goes and on whether the keeper HOLDS it (`Goalkeeping`; a parry
+  puts a live ball back in the box). **The OUTCOME stays the timeline's** — that was the user's
+  decision up front, and inverting the causality is phase 6 with its own recalibration. The model is
+  a standalone component precisely so phase 6 can take it as it is.
+
+**THE DEFECT THE PHASE FOUND, AND IT WAS NOT IN THE PLAN: the WEIGHT of a pass.** The model had no
+notion of one. Every ball was struck at the force that REACHES the target in the nominal flight time
+and then ran on at almost the speed it left with — **an eleven-metre pass rolled fifty-six metres**,
+and the receiver had a two-tick window to step into its path. `MatchBall.ForceToArrive` now finds
+the force that delivers it and has it DYING as it arrives (binary search on the two tables the ball
+is built from — ground covered in n ticks, speed left after n ticks). There is a measurable optimum:
+**arrival speed 5.5 m/s → 56% of passes arrive · 11 m/s → 69% · 14 m/s → 65%** (too slow and the
+lane cuts it out, too hard and it runs past him). `PassArrivalSpeedDmPerSecond = 110`.
+
+**TWO THINGS THE MEASUREMENT ASKED FOR AND THE PLAN DID NOT.** (1) **The receiver runs to MEET it**
+(`InterceptSpot`, the same predictive chase the designated chaser uses) — he used to steer to the
+spot it was aimed at and stand there while the ball rolled past two or three metres away, which is
+the whole of a footballer's control radius; a pass into TWELVE metres of clear space was still lost
+27% of the time and this was why. He also gets `ReceiveReachDm 25` of extra stretch, because he is
+facing it while the man behind him is turning. (2) **A supporting run is a BURST, not a
+ninety-minute sprint**: with possession surviving, team-mates make far more support runs and every
+one was flat out — **12.07 km a player, busiest 19.5 km**, which is not football. Now flat out while
+the ground is to be covered and a jog once he is there: **11.31 km, busiest 16.6**.
+
+**THE HEADLINE NUMBERS (200 matches, seed 20260803). Readings in band 12/19 → 14/19**, and they are
+the two the phase declared: **pass accuracy 54.6% → 78.5%** (band 76-88 ✅) and **passes 1347 → 877**
+(850-1150 ✅). Throw-ins 81.8 → 18.4 (LOW now — the missing ones are the throw-ins the laws do not
+detect yet, §1.7, phase 5's) and the held-ball-on-a-line red drops **550.8 → 48.7 ticks a match**.
+**Goals 2.52 and shots 25.1 are STILL identical digit for digit** to phases 0-3. Also: long balls
+98.8 → 39.4, crosses 111.6 → 25.8, dribbles 34.0 → 279.3, tackles won 180.9 → 394.6, interceptions
+318.8 → 218.8, nobody on the ball 38.0% → 18.5%, defending 40.6 × 36.2 → 38.8 × 31.8 (back line 5.6,
+biggest hole 10.7), attacking 42.9 × 39.4 → 44.4 × 38.6.
+
+**AND THE DIFFERENCE BETWEEN TWO PLAYERS IS FINALLY MEASURABLE.** The same twenty-two men played
+twice, `Passing`/`Technique`/`Dribbling` at 88 on one side and 24 on the other, everything else
+identical: **56.6% of the ball against 43.4%, 154 balls into the final third against 111, 18.1 given
+away in his own third against 21.0.** Passing alone (53.9/46.1) and dribbling alone (54.4/45.6, over 16 seeds — the narrowest of the three effects) each
+do it on their own, so neither is carrying the other.
+
+**AN HYPOTHESIS THE MEASUREMENT DISPROVED — keep it.** *"A bigger execution error means more
+misplaced passes"* is **FALSE at league level**: tripling `PassErrorMaxPermille` (190 → 300 → 420)
+moves league accuracy by three tenths of a point. The DECISION model compensates — a poor passer
+prices his own error and picks passes he can hit. It changes **which** passes get played, not how
+many arrive, which is exactly what a real league looks like (a modest side's centre-back completes
+85% of his passes, all of them sideways). A test that had looked for the difference between two
+players in completion percentage ALONE would not have found it: it lives in **possession** and
+**progression**. That is why `BallDecisionTests` asserts on those.
+
+**`MatchEngine.Version` IS NOW 7** and the golden master moved to **`0xF8BE4A32C28421A1`** (was
+`0xABC7B41DC6F258C2`), computed in the container on .NET 10 and already re-pinned in
+`SimulationDeterminismTests`, `SimulationService`, `docs/ops/runbook.md`,
+`docs/store/release-checklist.md`. v6 replays are no longer renderable and the client already
+rejects them by comparing `MatchEngine.Version`.
+
+**THE COST: 444 → 504 ms a match in the container (+13%)**, paid only on the ticks where somebody
+actually decides something (the carrier, and only when his hold has expired) rather than on every
+tick of every player. On the user's machine the absolute figure will differ (phase 3 ran at 263 ms
+there against the container's 444), but the sign should hold.
+
+**HOW IT WAS VERIFIED HERE.** `dotnet-sdk-10.0` installs from the Ubuntu archive (disable
+`/etc/apt/sources.list.d/docker.list` first — that repo 403s and breaks `apt-get update`);
+Sim.Core has no package references, so a scratch `net10.0` csproj compiles it offline. The
+**hand-written NUnit stub** compiles the WHOLE of `Sim.Core.Tests`, and a reflection runner then
+**RAN THE ENTIRE SUITE: 355 green, 0 red, in 4m28s** (the 349 of phase 3 plus the 6 new
+`BallDecisionTests`) — the first phase where the whole suite was executed here, not just
+type-checked. The `pitch` scenario was rebuilt as a scratch console project against Sim.Core only,
+and every figure above comes from it.
+
+**WHAT THE USER HAS TO RUN:** `.\tools\build-simcore.ps1` (**mandatory**, `shared/` changed) →
+`dotnet test` (expect **595** = 589 + 6; paste `[ball-skill]`, `[passing]`, `[keeper]`) →
+`dotnet test server/Api.Tests` (the new golden master is already pinned; if `[DeterminismCheck]`
+disagrees, the printed value is the one to keep) → `.\tools\balance.ps1 -Scenario pitch
+-PitchMatches 200 -PitchDump .\replay.html` and **OPEN it and LOOK** → `.\tools\balance.ps1` (every
+other scenario's figures must be identical — the result model was not touched).
+
+**NEW/CHANGED FILES:** **new** `Match/Movement/BallSkill.cs` (the whole pure model: execution error,
+lane odds, reception, option value, duel, shot quality, the keeper's hands),
+`Match/Movement/MatchSimulator.cs` (`Act` weighing options, `FindPass`/`PlayPass` replacing
+`TryPass`, `LaneCompletion` replacing `PassSafe`, `PressurePermille`, `TurnoverCostDm`,
+`CarryValue`/`ClearValue`/`CarryTouchDm`/`CarryTarget`, the duel inside `ResolveControl`, quality
+and the keeper's hands in `TakeShot`/`ResolveControl`, the receiver meeting the ball, the support
+burst), `Match/Movement/MatchBall.cs` (`ForceToArrive`), `Config/BalanceConfig.cs` (the "decisions
+with the ball" block; **removed** `NominalPassSpeedDmPerSecond`, `DribbleDistanceDm` and
+`TackleChancePermille*`, which the new model no longer uses), `Match/MatchEngine.cs`
+(`Version = 7`), **new** `Sim.Core.Tests/Match/BallDecisionTests.cs`.
+
+**RESIDUE TO DELETE BY HAND:** `_stage/` (the phase-3 leftovers plus `phase4-src.tar.gz`,
+`phase4_head.md`, `phase4_body.md`, `roadmap_p4.md` used to carry this phase's sources and docs
+across). The sandbox bridge cannot delete in the synced folder — `Remove-Item` from PowerShell.
+
+**OPEN, ON PURPOSE:** the ball passes through the middle third only **25.5%** of the time (was 38.8%
+— before, the ball LIVED in midfield because that is where it kept being lost; the residue is a
+question for the defending side, and a passing knob does not move it: `PossessionValueDm` 55 → 140
+shifts the middle third by one point); throw-ins, corners, offsides and fouls are the laws (phase
+5); shots on target 14.9 of 25.1 is the result model's `SavedShareOfFailedChancesPercent`, not the
+picture's (phase 6); and the shot does not decide the goal yet, by choice (phase 6).
+
+**NEXT: phase 5 — il regolamento (modulo arbitro).** Fuorigioco, palla fuori anche a giocatore in
+possesso (con il punto di attraversamento sub-tick), falli, punizioni, rigori, cartellini, cambio
+campo all'intervallo. È la fase che riporta in banda rimesse, corner, fuorigioco e falli — quattro
+delle cinque letture ancora rosse.
+
+### Previous position — 🏁 ENGINE REWORK PHASE 3 CLOSED (2026-09-04): the team DEFENDS
 
 **THE USER'S RUN, 2026-09-04.** `dotnet test` **589/589 green, 0 failed, in 360.5 s**
 (`Sim.Core.Tests` **349** — the 340 of phase 2, plus the 4 `ReplayCodecTests` he had not yet run,

@@ -7,7 +7,7 @@ con il gioco sempre funzionante, regolamento fino a falli/cartellini/punizioni.
 - [x] **Fase 1 — unità e base temporale** (2026-09-03). Vedi §8.
 - [x] **Fase 2 — forma: formazione e blocco** (2026-09-03). Vedi §9.
 - [x] **Fase 3 — difendere: zona e trigger** (2026-09-04). Vedi §10.
-- [ ] Fase 4 — decisioni con la palla
+- [x] **Fase 4 — decisioni con la palla** (2026-09-04, misurata nel container). Vedi §11.
 - [ ] Fase 5 — il regolamento
 - [ ] Fase 6 — inversione della causalità
 - [ ] Fase 7 — dati sulle prestazioni
@@ -15,18 +15,36 @@ con il gioco sempre funzionante, regolamento fino a falli/cartellini/punizioni.
 
 ---
 
-## 📍 Stato — 4 settembre 2026
+## 📍 Stato — 5 settembre 2026
 
-**Siamo qui: 🏁 FASE 3 CHIUSA E VERIFICATA dall'utente il 4 settembre 2026. Tutto verde.** La squadra
-adesso **difende**: il cervello assegna un compito per uomo — va sulla palla, copre chi ci è andato,
-prende un uomo *solo dove è pericoloso*, oppure tiene la sua zona — al posto della marcatura a uomo
-su tutti e dieci. Il ramo "tieni la zona", che girava lo **0,0%** del tempo, adesso gira il
-**71,5%**, e la marcatura scende dal 41% all'11,8%. Le letture in banda passano da **10/19 a
-12/19**: si chiudono le due che la fase 2 aveva lasciato rosse — **profondità del blocco senza
-palla** (47,8 → **36,2 m**) e **dispersione della linea difensiva** (9,2 → **5,9 m**) — senza far
-uscire di banda nient'altro, e **gol e tiri restano identici cifra per cifra** (2,52 e 25,1, come
-alle fasi 0, 1 e 2). Per la prima volta la sagoma di chi difende **non è** quella di chi attacca:
-40,6 × 36,2 contro 42,9 × 39,4. Golden master nuovo: **`0xABC7B41DC6F258C2`** (engine v6). Vedi §10.
+**Siamo qui: 🏁 FASE 4 CHIUSA E VERIFICATA dall'utente il 5 settembre 2026. Tutto verde.**
+`dotnet test` **595/595 in 378,8 s** (Sim.Core.Tests 355 + Api.Tests 240),
+`[DeterminismCheck]`/`[server-determinism]` **`0xF8BE4A32C28421A1`** identico cifra per cifra al
+container, `.\tools\balance.ps1` **28/28 PASS con ogni cifra invariata**, e lo scenario `pitch` che
+riproduce **ogni singolo numero** del run del container a 307,3 ms a partita contro 504. **E ogni
+riga diagnostica della fase — `[ball-skill]`, `[passing]`, `[keeper]` — stampa gli stessi numeri su
+due macchine diverse**: la differenza fra due giocatori non è un artefatto del banco. Resta solo
+l'occhio: aprire `replay.html` e guardare.
+
+Adesso il giocatore con la palla **decide**, e decide con i suoi attributi. Fino a questa fase l'unico
+attributo che la simulazione leggeva era `Pace` (§1.6): il passaggio era mirato su una linea
+matematicamente sicura ed eseguito esatto, la conduzione era un tocco fisso di otto metri, e il
+contrasto era un dado piatto identico per un'ala e per un centrale. La domanda su cui è costruito
+tutto il gioco — *quali giocatori rendono meglio* — non aveva risposta che la partita potesse dare.
+
+Le letture in banda passano da **12/19 a 14/19**, e si chiudono le due che questa fase dichiarava:
+**precisione dei passaggi 54,6% → 78,5%** (banda 76-88) e **numero di passaggi 1347 → 877** (banda
+850-1150). In più rientrano le **rimesse laterali** (81,8 → 18,4: sotto banda adesso, e il motivo è
+noto — le rimesse che mancano sono quelle che il regolamento non rileva ancora, §1.7, fase 5) e
+crolla di 3,6 volte il rosso della palla tenuta su una linea (**550,8 → 48,7 tick a partita**).
+**Gol 2,52 e tiri 25,1 restano identici cifra per cifra** alle fasi 0, 1, 2 e 3: il modello
+risultato non è stato toccato, e non lo sarà fino alla fase 6.
+
+E la differenza fra due giocatori adesso si misura: gli stessi ventidue uomini, con le abilità di
+palla a 88 da una parte e a 24 dall'altra e tutto il resto identico, non giocano più la stessa
+partita — **56,6% di possesso contro 43,4%**, **154 palloni nell'ultimo terzo contro 111**, e
+**18,1 palle perse nella propria trequarti contro 21,0**. Golden master nuovo:
+**`0xF8BE4A32C28421A1`** (engine v7). Vedi §11.
 
 | | Fase | Stato |
 |---|---|---|
@@ -34,8 +52,9 @@ alle fasi 0, 1 e 2). Per la prima volta la sagoma di chi difende **non è** quel
 | 1 | unità e base temporale | ✅ fatta **e verificata dall'utente** |
 | 2 | forma: formazione e blocco | ✅ fatta **e verificata dall'utente** |
 | 3 | difendere: zona e trigger | ✅ fatta **e verificata dall'utente** |
-| 4 | decisioni con la palla | ⬅️ **prossima** — ed è la fase in cui nascono le differenze fra giocatori |
-| 5-8 | — | da fare |
+| 4 | decisioni con la palla | ✅ fatta **e verificata dall'utente** |
+| 5 | il regolamento | ⬅️ **prossima** — riporta in banda rimesse, corner, fuorigioco e falli |
+| 6-8 | — | da fare |
 
 ### Come si verifica che tutto gira
 
@@ -44,11 +63,63 @@ alle fasi 0, 1 e 2). Per la prima volta la sagoma di chi difende **non è** quel
     .\tools\balance.ps1 -Scenario pitch -PitchMatches 200 -PitchDump .\replay.html
     .\tools\balance.ps1        # gli altri scenari NON devono muoversi di un numero
 
-**Golden master della fase 3: `0xABC7B41DC6F258C2`** (engine v6; era `0xB3C30BEEAA5781B2` in v5),
-già ripuntato nei quattro posti soliti. I replay salvati in v5 non sono più disegnabili: è
+**Golden master della fase 4: `0xF8BE4A32C28421A1`** (engine v7; era `0xABC7B41DC6F258C2` in v6),
+già ripuntato nei quattro posti soliti. I replay salvati in v6 non sono più disegnabili: è
 previsto, e il client li rifiuta da solo perché confronta con `MatchEngine.Version`.
 
-### Verificato dall'utente il 4 settembre 2026 (fase 3)
+
+### Verificato dall'utente il 5 settembre 2026 (fase 4) — 🏁 CHIUSA
+
+**`dotnet test` → 595 su 595 verdi, zero rossi, in 378,8 s** (`Sim.Core.Tests` **355** in 310,7 s —
+i 349 della fase 3 più i 6 nuovi `BallDecisionTests` — e `Api.Tests` **240** in 378,1 s).
+`[DeterminismCheck]` e `[server-determinism]` stampano entrambi **`0xF8BE4A32C28421A1`**,
+**identico cifra per cifra** al valore calcolato nel container su .NET 10: il determinismo fra
+runtime sopravvive a engine v7.
+
+**E qui c'è il fatto che vale più di tutti: OGNI riga diagnostica della fase riproduce il numero del
+container, alla prima decimale.**
+
+    [ball-skill] passaggio+tecnica+dribbling  56,6% di palla · 154 vs 111 nell'ultimo terzo · 18,1 vs 21,0 perse in casa propria
+    [ball-skill] solo passaggio e tecnica     53,9% · 160 vs 121 · 22,4 vs 28,2
+    [ball-skill] solo dribbling               54,4% · 152 vs 130 · 20,9 vs 23,2
+    [passing]                                 887 passaggi a partita al 79,2%
+    [keeper]                                  respinte 30,0% da un portiere a 90, 52,7% da uno a 20
+
+Due macchine diverse, due sistemi operativi diversi, gli stessi numeri: la differenza fra due
+giocatori non è un artefatto del banco di prova, è una proprietà del motore.
+
+**Il modello risultato è intatto, e lo dicono le sue stesse calibrazioni**, tutte identiche ai
+valori accettati da fasi precedenti: `Avg goals/match 2,44 | draws 24,8% | home wins 48,4%`,
+`Strong wins 82%`, `[condition-live calibration] 2,59 gol/partita, pareggi 21,3%`,
+`[counter] 56,0%`, `[familiarity] 49,3% contro 23,9%`, `[sweep] top 53,8%`,
+`[positioning-line] 487→513 / 467→513`, `[positioning-width] 549 contro 531`,
+`[match-fatigue] 481 → 580`, `[fitness->result] 517 contro 318`.
+
+**Le righe che SI SONO mosse sono tutte del livello movimento, ed è previsto** (la fase l'ha
+riscritto): `[duties]` difendendo **38,7 × 31,9** con linea 5,6 e buco 10,8 (era 40,6 × 36,2 / 5,9 /
+11,5), attaccando 44,4 × 38,6; `[duties] 402 contrasti e 235 intercetti` a partita contro i 180/318
+di prima — il duello ha sostituito l'intercetto; `[bodies]` 0,131% → 0,072% (era 0,116% → 0,066%);
+`[shape]` il centro squadra al massimo **13,5 m** fuori dalla mediana, era 15,7; `[movement]` palla
+ai piedi di qualcuno per l'**81%** della partita, era il 60%. Le asserzioni di quei test tengono
+tutte: sono misure che si sono spostate, non bande uscite.
+
+**UNA COSA DA GUARDARE, e non è un rosso: il trigger di pressing ha perso la monotonia fra basso e
+medio.** `[press]` stampa **low 5,50 m · medium 5,56 m · high 4,98 m**, dove alla fase 3 leggeva
+6,76 / 6,56 / 5,96. L'estremo tiene (alto contro basso: 4,98 contro 5,50, ed è l'unica cosa che il
+test asserisce), ma basso e medio ormai coincidono dentro il rumore. Il motivo è plausibilmente
+questo: con il possesso che sopravvive e i duelli al posto degli intercetti, lo spazio lasciato a
+un uomo sulla palla nel proprio terzo è più piccolo per tutti, e la differenza fra due tarature di
+pressing si comprime. **È esattamente la domanda della fase 8** ("le istruzioni contano davvero"),
+e va misurata lì invece di essere ritoccata adesso a occhio.
+
+**Un altro numero al limite da tenere d'occhio:** `[movement] worst single-tick step 40dm (cap
+42dm)`. Alla fase 1 era 29 su 34. Il passo più lungo di un tick è vicino al suo tetto, quindi se una
+fase futura alza ancora le velocità quel test diventa il primo a rompersi.
+
+**COSA RESTA, ed è solo l'occhio:** aprire `replay.html` e GUARDARE. I numeri sono in banda; la
+metà visiva dell'accettazione non è un test.
+
+### Verificato dall'utente il 4 settembre 2026 (fase 3, quella precedente)
 
 `dotnet test` **589 su 589, zero rossi, in 360,5 s** — `Sim.Core.Tests` **349** (i 340 della fase 2,
 più i 4 `ReplayCodecTests` che non aveva ancora girato, più i 5 nuovi `DefensiveDutyTests`) e
@@ -468,7 +539,9 @@ difende È la sagoma di chi attacca, e le tre bande difensive ancora rosse sono 
 - trigger di pressing da istruzione `Pressing`: zona di innesco + distanza + situazione
   (retropassaggio, controllo sporco, ricezione sull'esterno).
 
-### Fase 4 — Decisioni con la palla, guidate dagli attributi
+### Fase 4 — Decisioni con la palla, guidate dagli attributi ✅ FATTA
+
+*Scritta e misurata il 4 settembre 2026 — il resoconto, con i numeri, è in §11.*
 
 - `TryPass` diventa una **valutazione di opzioni**: passaggio a ciascun compagno ×3 varianti,
   conduzione, dribbling, tiro, spazzata. Punteggio su guadagno in avanti, rischio, pressione.
@@ -1230,7 +1303,220 @@ Sulla macchina dell'utente gli stessi quattro test valgono grosso modo **7.000 p
 
 ---
 
-## 11. Riferimenti
+## 11. Fase 4 — fatta: decisioni con la palla, guidate dagli attributi
+
+Scritta e misurata nel container il 4 settembre 2026. Le due scelte prese con l'utente prima di
+cominciare: **tutta la fase in un giro** (passaggio, dribbling e tiro insieme, perché sotto c'è
+un'unica misura coerente) e **l'esito del tiro resta della timeline** — il modello risultato 1.4
+continua a decidere gol, parata e fuori, e l'inversione della causalità resta dichiaratamente la
+fase 6, con la sua ricalibrazione. Quello che la fase 4 aggiunge al tiro è la QUALITÀ: dove va la
+palla, e se il portiere la trattiene.
+
+### Cosa è cambiato
+
+**Il giocatore con la palla PESA le sue opzioni, invece di scendere una scala fissa.** Prima era
+`TryPass` → altrimenti spazza se sei pressato → altrimenti conduci. Adesso passaggio, conduzione e
+spazzata sono quotati **nella stessa moneta**: *i decimetri di avanzamento che si aspetta,
+meno quanto vale a chi la riceve perderla nel punto in cui la perderebbe*. È quella moneta comune
+che rende le tre cose confrontabili, e prezza il rischio **dove la palla finisce**, non dove sta
+adesso — ed è il motivo per cui una spazzata può essere la risposta giusta: sposta la perdita di
+quaranta metri, dove costa una frazione di quello che costa sul proprio limite dell'area.
+
+- **il valore di ogni opzione** = `completamento × (guadagno + valore del possesso) − rischio ×
+  costo del turnover lì`. Il costo del turnover è una tabella per terzo di campo
+  (`TurnoverCostDm` 900 / 480 / 240 dm).
+- **quanto di quel rischio il giocatore VEDE** viene da `Positioning`: un cattivo lettore di gioco
+  gioca il pallone che *sembra* migliore. Nasce così una seconda dimensione, distinta da chi il
+  pallone lo sa colpire.
+
+**Il passaggio non è più un test sì/no, e la marcatura sul ricevente non è più gratis.** Il vecchio
+`PassSafe` giudicava la corsia e **escludeva gli ultimi 7,5 metri davanti al ricevente**, così un
+uomo marcato a due metri era invisibile all'unico test che veniva fatto. Misurato: **il 44,2% dei
+passaggi finiva direttamente a un avversario.** Adesso ci sono tre domande separate — la corsia
+(`LaneCompletion`, odds invece di un booleano), **lo spazio del ricevente** (prezzato, non ignorato)
+e se quel giocatore quel pallone lo sa colpire.
+
+**L'esecuzione sbaglia.** Errore laterale sulla linea del passaggio più errore sul peso, scalati da
+`Passing`/`Technique` e dalla pressione subita, pescati come **media di due uniformi** perché quasi
+tutte le palle siano vicine alla loro linea e quella storta sia rara. La deviazione perpendicolare
+è un'operazione intera esatta: nessun angolo, nessuna trigonometria, niente che possa arrotondare
+diversamente su un altro runtime.
+
+**Il duello.** Il contrasto era un dado piatto a 45‰ per tick di contatto, identico per chiunque.
+Adesso il config decide il RITMO dei duelli e i due uomini decidono chi li vince: `Dribbling`,
+`Technique`, `Strength` e `Pace` del portatore contro `Defending`, `Positioning` e `Pace` dello
+sfidante, col rapporto **al quadrato** (un 60 non batte un 30 a testa o croce, e un 90 non è
+ingiocabile). Metà dei duelli vinti sono un pallone tolto, l'altra metà una palla che schizza via e
+se la giocano entrambi — che è da dove arrivano le palle vaganti.
+
+**Il tocco della conduzione** non è più fisso: corto quando è pressato, lungo quando ha spazio,
+allungato da `Dribbling` e `Pace`, e **limitato dal campo che ha davanti**.
+
+**Il tiro ha una qualità** (`BallSkill.ShotQualityPermille`): una lettura in stile xG di distanza,
+angolo, corpi in mezzo e di chi lo calcia. La fase 4 la spende su **dove va la palla** (il gol di un
+buon finalizzatore è piazzato dentro il palo, quello di uno scarso passa vicino al portiere; il suo
+errore è di un metro, quello dello scarso è in curva) e sulle **mani del portiere**: `Goalkeeping`
+dice quanto spesso la trattiene, e una respinta rimette la palla viva in area invece di chiudere
+l'azione. L'esito resta della timeline. Il modello è scritto come componente a sé proprio perché la
+fase 6 lo prenda com'è e gli faccia decidere il gol.
+
+### Il difetto vero che la fase ha trovato, e che non era nel piano: il PESO del passaggio
+
+Il modello non aveva alcuna nozione del peso di un pallone. Ogni palla veniva colpita con la forza
+che **raggiunge** il bersaglio nel tempo di volo nominale, e poi continuava a rotolare quasi alla
+velocità con cui era partita: **un passaggio di undici metri rotolava cinquantasei metri.** Il
+ricevente aveva due tick per infilarsi sulla sua traiettoria, o era andata.
+
+Si vede in una traccia, presa da una partita vera — per ogni mezzo secondo, la distanza del
+ricevente dalla palla:
+
+    passaggio 11 m, ricevente con 12 m di spazio:  10 → 6 → 6 → 9 → 13 → 18 → 19 → 20 m
+
+`MatchBall.ForceToArrive` calcola la forza che consegna la palla **e la fa morire mentre arriva**,
+con una ricerca binaria sulle due tabelle da cui la palla è costruita (terreno coperto in n tick,
+velocità rimasta dopo n tick), che sono monotone per costruzione. E c'è un **ottimo misurabile**:
+troppo lenta e la corsia la taglia, troppo forte e supera l'uomo.
+
+| velocità d'arrivo | passaggi che arrivano |
+|---|---|
+| 5,5 m/s | 56,2% |
+| 9,5 m/s | 66,3% |
+| **11 m/s** | **68,7%** |
+| 12,5 m/s | 66,3% |
+| 14 m/s | 64,8% |
+
+### Due cose che la misura ha chiesto, e che il piano non prevedeva
+
+**(1) Il ricevente corre a INCONTRARLA.** Andava al punto in cui la palla era stata mirata, e restava
+lì mentre gli passava a due o tre metri — e due o tre metri sono tutto il raggio di controllo di un
+calciatore. Adesso usa lo stesso inseguimento predittivo del `chaser`. **Un passaggio dentro dodici
+metri di spazio libero si perdeva ancora nel 27% dei casi**: era questo.
+
+**(2) Una corsa di supporto è uno SCATTO, non uno sprint di novanta minuti.** Con il possesso che
+sopravvive, i compagni fanno molte più corse d'appoggio, e correvano tutte a tavoletta: **12,07 km a
+giocatore, con il più laborioso a 19,5 km** — che non è calcio. Adesso è a tavoletta finché il
+terreno è da coprire e un trotto una volta arrivato nello spazio: **11,31 km, il più laborioso 16,6**.
+
+### La misura, prima e dopo (200 partite, tattiche neutre, seed 20260803)
+
+| | fase 3 | fase 4 |
+|---|---|---|
+| gol | 2,52 | **2,52** |
+| tiri (in porta) | 25,1 (14,9) | **25,1 (14,9)** |
+| passaggi | 1347 | **877** ✅ |
+| precisione passaggi | 54,6% | **78,5%** ✅ |
+| palloni lunghi · cross | 98,8 · 111,6 | 39,4 · 25,8 |
+| conduzioni · spazzate | 34,0 · 283,0 | 279,3 · 295,2 |
+| contrasti vinti · intercetti | 180,9 · 318,8 | 394,6 · 218,8 |
+| rimesse · rinvii | 81,8 · 40,2 | 18,4 · 46,8 |
+| nessuno sulla palla | 38,0% | 18,5% |
+| palla per terzo | 30,1 / 38,8 / 31,2 | 36,7 / 25,5 / 37,8 |
+| km per giocatore | 11,56 | 11,31 |
+| difendendo (largh. × prof.) | 40,6 × 36,2 | 38,8 × 31,8 |
+| linea difensiva · buco più grande | 5,9 · 11,5 | 5,6 · 10,7 |
+| attaccando (largh. × prof.) | 42,9 × 39,4 | 44,4 × 38,6 |
+| **letture in banda** | **12/19** | **14/19** |
+| palla tenuta su una linea | 550,8 tick | **48,7 tick** |
+| costo per partita (container) | 444 ms | 504 ms |
+
+### E la differenza fra due giocatori, finalmente misurabile
+
+Gli stessi ventidue uomini, giocati due volte: da una parte `Passing`, `Technique` e `Dribbling` a
+**88**, dall'altra a **24**, e **tutto il resto identico** — Pace, Strength, Defending, Positioning,
+il modulo, le istruzioni, il seme. Prima di questa fase le due squadre giocavano una partita
+indistinguibile.
+
+| | palla | nell'ultimo terzo | perse nella propria trequarti |
+|---|---|---|---|
+| passaggio + tecnica + dribbling | **56,6%** vs 43,4% | 154 vs 111 | 18,1 vs 21,0 |
+| solo passaggio e tecnica | 53,9% vs 46,1% | 160 vs 121 | 22,4 vs 28,2 |
+| solo dribbling | 54,4% vs 45,6% | 152 vs 130 | 20,9 vs 23,2 |
+
+Le due abilità lavorano **ognuna per conto suo**, quindi nessuna delle due sta portando l'altra. E
+sul campionato così com'è generato, la percentuale di passaggi che arrivano sale con `Passing`:
+76,3% (54-65) → 77,4% (66-77) → **78,5%** (78-89).
+
+### Un'ipotesi smentita dalla misura, e vale tenerla
+
+**"Errore di esecuzione più grande ⇒ più passaggi sbagliati" è FALSO a livello di campionato.**
+Portando `PassErrorMaxPermille` da 190 a 300 a 420 la precisione di lega si muove di tre decimi di
+punto (76,5% → 76,8% → 76,5%). Il motivo è che il modello di DECISIONE compensa: un passatore
+scarso prezza il proprio errore e sceglie palloni che sa colpire. Non cambia **quanti** passaggi
+arrivano, cambia **quali** vengono giocati — ed è esattamente ciò che si vede in un campionato vero,
+dove il difensore centrale di una squadra modesta completa l'85% dei suoi passaggi, tutti di lato.
+Un test che avesse cercato la differenza fra due giocatori nella sola percentuale di passaggi
+riusciti non l'avrebbe trovata: sta nel **possesso** e nella **progressione**.
+
+### I test nuovi
+
+`Sim.Core.Tests/Match/BallDecisionTests.cs` (6), tutti letti **dalla figura** — dal position stream,
+come li legge l'harness — e non da un numero interno che potrebbe essere sbagliato di suo:
+`BetterFootballers_KeepTheBall_AndGetItForward` (la ✅), `Passing_AloneMovesTheGame`,
+`Dribbling_AloneMovesTheGame` (su 16 semi, perché è il più stretto dei tre effetti), `Passes_ArriveLikeRealFootball` (banda 76-88%),
+`TheKeepersHands_DependOnHim` (respinte 30,0% da un portiere a 90, **52,7%** da uno a 20) e
+`TheSameSeed_PlaysTheSameMatch`.
+
+### Il costo
+
+**444 → 504 ms a partita nel container (+13%).** Il conto lo fa la valutazione delle opzioni: per
+ogni decisione, dieci compagni × tre varianti, e per ognuna la corsia contro undici avversari più lo
+spazio del ricevente. Gira però **solo sui tick in cui qualcuno decide davvero** (il portatore, e
+solo quando la sua attesa è scaduta), non su ogni tick di ogni giocatore. Sulla macchina dell'utente
+la cifra assoluta sarà diversa — la fase 3 girava a 263 ms lì contro i 444 del container — ma il
+segno dovrebbe tenere.
+
+### Come è stata verificata qui
+
+`dotnet-sdk-10.0` si installa dall'archivio Ubuntu; `Sim.Core` non ha package reference, quindi un
+csproj `net10.0` di comodo lo compila offline sotto `TreatWarningsAsErrors`. Lo **stub NUnit scritto
+a mano** compila TUTTO `Sim.Core.Tests`, e un runner a riflessione **ha eseguito l'intera suite:
+355 test verdi, zero rossi, in 4 minuti e 28 secondi** (i 349 della fase 3 più i 6 nuovi). Lo
+scenario `pitch` è stato ricostruito come progetto console contro il solo Sim.Core: è da lì che
+viene ogni cifra qui sopra.
+
+### Aperto, per scelta
+
+- **la palla passa poco dal mezzo**: 36,7 / 25,5 / 37,8 per terzo, contro 30,1 / 38,8 / 31,2 della
+  fase 3. Prima la palla viveva in mezzo al campo perché lì la si perdeva in continuazione; adesso
+  le squadre progrediscono. Il residuo è una domanda per chi difende — il blocco recupera la palla
+  troppo tardi — e non si chiude con un knob del passaggio (misurato: `PossessionValueDm` da 55 a
+  140 sposta la quota del terzo centrale di un punto).
+- **rimesse laterali 18,4, sotto banda.** Le rimesse che mancano sono quelle che il regolamento non
+  rileva ancora: un portatore che esce dal campo viene solo riportato dentro (§1.7). È della fase 5,
+  e la stessa fase 5 le riporterà su.
+- **corner 0,3, fuorigioco 0, falli 0**: il regolamento, fase 5.
+- **tiri in porta 14,9 su 25,1**: è la quota `SavedShareOfFailedChancesPercent` del modello
+  risultato, non della figura. Si sistema quando la causalità si inverte (fase 6).
+- il tiro non decide ancora il gol, per scelta: fase 6.
+
+### Cosa deve girare sulla macchina dell'utente
+
+1. `.\tools\build-simcore.ps1` — **obbligatorio**, `shared/` è cambiato.
+2. `dotnet test` → attesi **595** verdi (589 + i 6 `BallDecisionTests`). Incollare le righe
+   `[ball-skill]`, `[passing]` e `[keeper]`.
+3. `dotnet test server/Api.Tests` → il golden master nuovo è già puntato; se `[DeterminismCheck]`
+   stampa un altro valore, quello stampato è quello da tenere.
+4. `.\tools\balance.ps1 -Scenario pitch -PitchMatches 200 -PitchDump .\replay.html` — e poi
+   **aprire `replay.html` e GUARDARE**: i numeri sono in banda, l'occhio è l'altra metà.
+5. `.\tools\balance.ps1` — ogni cifra degli altri scenari deve essere identica.
+
+### File toccati
+
+`Match/Movement/BallSkill.cs` (**nuovo**: tutto il modello puro — errore di esecuzione, odds della
+corsia, ricezione, valore di un'opzione, duello, qualità del tiro, mani del portiere),
+`Match/Movement/MatchSimulator.cs` (`Act` che pesa le opzioni, `FindPass`/`PlayPass` al posto di
+`TryPass`, `LaneCompletion` al posto di `PassSafe`, `PressurePermille`, `TurnoverCostDm`,
+`CarryValue`/`ClearValue`/`CarryTouchDm`/`CarryTarget`, il duello dentro `ResolveControl`, la
+qualità e le mani del portiere dentro `TakeShot`/`ResolveControl`, il ricevente che va a incontrarla,
+lo scatto di supporto), `Match/Movement/MatchBall.cs` (`ForceToArrive`),
+`Config/BalanceConfig.cs` (il blocco "decisioni con la palla"; via `NominalPassSpeedDmPerSecond`,
+`DribbleDistanceDm` e `TackleChancePermille*`, che il modello nuovo non usa più),
+`Match/MatchEngine.cs` (`Version = 7`), **nuovo** `Sim.Core.Tests/Match/BallDecisionTests.cs`.
+
+
+---
+
+## 12. Riferimenti
 
 - RoboCup Soccer Simulator — https://rcsoccersim.readthedocs.io/en/latest/overview.html
 - RoboCup 2D Soccer Simulation League — https://en.wikipedia.org/wiki/RoboCup_2D_Soccer_Simulation_League

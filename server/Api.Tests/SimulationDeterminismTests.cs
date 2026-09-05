@@ -17,7 +17,7 @@ public class SimulationDeterminismTests
     // report hash, so replacing the movement layer necessarily moved this value; the
     // score/event model is untouched. Every change to the movement model moves it, because the stream is part of the
     // report hash. Earlier values: v2 0xCDEA5A2F7B9E5CF6, first v3 0x3421951276465473.
-    private const ulong GoldenCombinedHash = 0xABC7B41DC6F258C2UL;
+    private const ulong GoldenCombinedHash = 0xF8BE4A32C28421A1UL;
 
     [Test]
     public void ServerRuntime_DeterminismCheck_MatchesTheClientGoldenHash()
@@ -45,7 +45,7 @@ public class SimulationDeterminismTests
 
         Assert.That(response.MatchCount, Is.EqualTo(DeterminismCheck.DefaultMatches));
         Assert.That(response.CombinedHash, Is.EqualTo(GoldenCombinedHash));
-        Assert.That(response.CombinedHashHex, Is.EqualTo("0xABC7B41DC6F258C2"));
+        Assert.That(response.CombinedHashHex, Is.EqualTo("0xF8BE4A32C28421A1"));
         Assert.That(response.MatchesGolden, Is.True);
         Assert.That(response.GoldenHashHex, Is.EqualTo(response.CombinedHashHex));
         Assert.That(sim.GoldenCombinedHash, Is.EqualTo(GoldenCombinedHash));

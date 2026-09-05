@@ -50,6 +50,9 @@ namespace Sim.Core.Match.Movement
         /// </summary>
         private readonly int[] _cumulative;
 
+        /// <summary>Speed left after n ticks, in permille of the force it was struck with.</summary>
+        private readonly int[] _remaining;
+
         /// <summary>The longest flight the passing model will consider.</summary>
         private readonly int _maxFlightTicks;
 
@@ -87,11 +90,13 @@ namespace Sim.Core.Match.Movement
             if (_trackedTicks < _maxFlightTicks) _trackedTicks = _maxFlightTicks;
 
             _cumulative = new int[_trackedTicks + 1];
+            _remaining = new int[_trackedTicks + 1];
             long sum = 0;
             int term = 1000;
             for (int n = 0; n <= _trackedTicks; n++)
             {
                 _cumulative[n] = sum > int.MaxValue ? int.MaxValue : (int)sum;
+                _remaining[n] = term;
                 sum += term;
                 term = term * _frictionPermille / 1000;
             }
@@ -241,6 +246,38 @@ namespace Sim.Core.Match.Movement
         /// distance instead leaves passes trickling across the pitch, which is both slow to
         /// watch and easy to intercept.
         /// </summary>
+        /// <summary>
+        /// The force that delivers the ball <paramref name="distance"/> and has it DYING as it
+        /// arrives — down to <paramref name="arrivalSpeed"/>, a speed a footballer can take in
+        /// his stride (engine phase 4). This is what "the weight of the pass" means, and until
+        /// this phase the model had no notion of it at all: every ball was struck at the force
+        /// that REACHES the target in the nominal flight time and then ran on at almost the
+        /// speed it left with. An eleven-metre pass rolled fifty-six metres. The receiver had a
+        /// two-tick window to step into its path or it was gone — which is why a pass into
+        /// twelve metres of clear space was still lost more than a quarter of the time, and why
+        /// there were eighty throw-ins a match.
+        ///
+        /// Binary search on the two tables the ball is built from, which are monotone by
+        /// construction: the ground covered in n ticks, and the speed left after them.
+        /// </summary>
+        public int ForceToArrive(int distance, int arrivalSpeed, int maxForce, out int ticks)
+        {
+            ticks = _maxFlightTicks;
+            if (distance <= 0 || arrivalSpeed <= 0) return ForceForTicks(distance, 1, maxForce);
+
+            int lo = 1, hi = _maxFlightTicks;
+            while (lo < hi)
+            {
+                int mid = lo + (hi - lo) / 2;
+                // force(mid) * remaining(mid) / 1000 <= arrivalSpeed, with force(mid) = distance * 1000 / cumulative(mid)
+                if ((long)distance * _remaining[mid] <= (long)arrivalSpeed * _cumulative[mid]) hi = mid;
+                else lo = mid + 1;
+            }
+
+            ticks = lo;
+            return ForceForTicks(distance, lo, maxForce);
+        }
+
         public int ForceForTicks(int distance, int ticks, int maxForce)
         {
             if (ticks < 1) ticks = 1;
