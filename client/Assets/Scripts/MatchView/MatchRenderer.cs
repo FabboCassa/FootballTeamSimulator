@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using Fts.Views;
 using Sim.Core.Match;
@@ -64,6 +64,20 @@ namespace Fts.MatchView
         private readonly int _lastTick;
         private readonly float _ticksPerSecond;
 
+        /// <summary>
+        /// The frame the referee blew for half-time on (int.MaxValue when the stream has no interval —
+        /// a replay stored before engine phase 5). From this frame on the picture is MIRRORED, which
+        /// is how the two sides change ends (Law 7).
+        ///
+        /// The simulation does not swap them: the pitch is symmetric, home advantage is a strength
+        /// bonus and not a place, and every part of the model carries its own attacking direction, so
+        /// flipping the two sides in Sim.Core would change no football and would oblige every consumer
+        /// of the stream — the analyzer, the harness's dump, this renderer — to flip back. Changing
+        /// ends is therefore a property of the PICTURE, and it lives here: one rotation of the pitch
+        /// through 180 degrees, applied in the two methods every drawn point goes through.
+        /// </summary>
+        private readonly int _secondHalfFrom = int.MaxValue;
+
         private IVisualElementScheduledItem _pump;
         private float _tickPos;
         private float _speed = 1f;
@@ -107,6 +121,13 @@ namespace Fts.MatchView
             _ticksPerMinute = _stream.TicksPerMinute > 0 ? _stream.TicksPerMinute : 1;
             _lastTick = _stream.TickCount > 0 ? _stream.TickCount - 1 : 0;
             _ticksPerSecond = _lastTick > 0 ? _lastTick / BaseSecondsAt1x : 0f;
+
+            foreach (BallAction action in _actions)
+                if (action.Kind == BallActionKind.HalfTime)
+                {
+                    _secondHalfFrom = action.Tick;
+                    break;
+                }
 
             // Fill the host container (its alignItems must not shrink us to content).
             style.position = Position.Absolute;
@@ -319,6 +340,11 @@ namespace Fts.MatchView
         private void DrawTrail(Painter2D p, Rect fit, int ta)
         {
             int from = Mathf.Max(0, ta - TrailTicks);
+
+            // A trail drawn across the change of ends is a stripe across the pitch: it is the
+            // mirror, not the ball.
+            if (SecondHalf(ta) && from < _secondHalfFrom)
+                from = _secondHalfFrom;
             if (ta - from < 2)
                 return;
 
@@ -376,7 +402,9 @@ namespace Fts.MatchView
 
         private void DrawBall(Painter2D p, Rect fit, float scale, int ta, int tb, float f)
         {
-            Vector2 pos = Vector2.Lerp(BallPixel(fit, ta), BallPixel(fit, tb), f);
+            Vector2 pos = SecondHalf(ta) != SecondHalf(tb)
+                ? BallPixel(fit, tb)
+                : Vector2.Lerp(BallPixel(fit, ta), BallPixel(fit, tb), f);
             float radius = Mathf.Max(2.5f, BallRadiusDm * scale);
 
             p.fillColor = BallColor;
@@ -393,17 +421,37 @@ namespace Fts.MatchView
 
         // ------------------------------------------------------------- coordinates
 
+        /// <summary>True once the sides have changed ends (see <see cref="_secondHalfFrom"/>).</summary>
+        private bool SecondHalf(int tick) => tick >= _secondHalfFrom;
+
         private Vector2 BallPixel(Rect fit, int tick) =>
-            PitchGraphics.ToPixelDm(fit, _stream.BallXY[tick * 2], _stream.BallXY[tick * 2 + 1]);
+            Pixel(fit, tick, _stream.BallXY[tick * 2], _stream.BallXY[tick * 2 + 1]);
 
         private Vector2 PlayerPixel(Rect fit, int[] side, int tick, int slot)
         {
             int i = (tick * _players + slot) * 2;
-            return PitchGraphics.ToPixelDm(fit, side[i], side[i + 1]);
+            return Pixel(fit, tick, side[i], side[i + 1]);
         }
 
-        private Vector2 Lerp(Rect fit, int[] side, int ta, int tb, int slot, float f) =>
-            Vector2.Lerp(PlayerPixel(fit, side, ta, slot), PlayerPixel(fit, side, tb, slot), f);
+        /// <summary>
+        /// One point of the stream, on screen — rotated through 180 degrees in the second half, which
+        /// is the change of ends. Both axes turn, because that is what swapping ends IS: the same
+        /// football seen from the other touchline.
+        /// </summary>
+        private Vector2 Pixel(Rect fit, int tick, int xDm, int yDm) =>
+            SecondHalf(tick)
+                ? PitchGraphics.ToPixelDm(fit, Pitch.LengthDm - xDm, Pitch.WidthDm - yDm)
+                : PitchGraphics.ToPixelDm(fit, xDm, yDm);
+
+        private Vector2 Lerp(Rect fit, int[] side, int ta, int tb, int slot, float f)
+        {
+            // Never interpolate ACROSS the interval: the two frames are in mirrored coordinate
+            // systems, and blending them would slide every player across the pitch for one frame.
+            if (SecondHalf(ta) != SecondHalf(tb))
+                return PlayerPixel(fit, side, tb, slot);
+
+            return Vector2.Lerp(PlayerPixel(fit, side, ta, slot), PlayerPixel(fit, side, tb, slot), f);
+        }
 
         // ------------------------------------------------------------- colours
 

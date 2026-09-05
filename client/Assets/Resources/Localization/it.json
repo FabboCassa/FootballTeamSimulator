@@ -1,4 +1,4 @@
-{
+﻿{
   "app.title": "Football Team Simulator",
   "common.back": "Indietro",
   "common.continue": "Continua",
@@ -164,6 +164,12 @@
   "match.action.throwin": "Rimessa laterale, {0}",
   "match.action.goalkick": "Rinvio dal fondo, {0}",
   "match.action.freekick": "Punizione — batte {0}",
+  "match.action.offside": "Fuorigioco di {0}",
+  "match.action.foul": "Fallo di {0}",
+  "match.action.yellowcard": "Ammonito {0}",
+  "match.action.redcard": "ESPULSO — {0} lascia il campo",
+  "match.action.penalty": "RIGORE — sul dischetto {0}",
+  "match.action.halftime": "Intervallo — si cambia campo",
   "match.clock": "{0}'",
   "match.speed_1x": "1x",
   "match.speed_2x": "2x",

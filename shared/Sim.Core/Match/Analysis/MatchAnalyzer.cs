@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace Sim.Core.Match.Analysis
@@ -184,6 +184,15 @@ namespace Sim.Core.Match.Analysis
                     case BallActionKind.ThrowIn: Bump(ref home, ref away, isHome, SideCounter.ThrowIn); break;
                     case BallActionKind.Corner: Bump(ref home, ref away, isHome, SideCounter.Corner); break;
                     case BallActionKind.GoalKick: Bump(ref home, ref away, isHome, SideCounter.GoalKick); break;
+
+                    // The referee (engine phase 5). An offside is recorded against the side caught
+                    // by it and a foul against the side that committed it, which is how both are
+                    // counted in a real match's statistics.
+                    case BallActionKind.Offside: Bump(ref home, ref away, isHome, SideCounter.Offside); break;
+                    case BallActionKind.Foul: Bump(ref home, ref away, isHome, SideCounter.Foul); break;
+                    case BallActionKind.YellowCard: Bump(ref home, ref away, isHome, SideCounter.Yellow); break;
+                    case BallActionKind.RedCard: Bump(ref home, ref away, isHome, SideCounter.Red); break;
+                    case BallActionKind.Penalty: Bump(ref home, ref away, isHome, SideCounter.Penalty); break;
                 }
             }
 
@@ -192,7 +201,8 @@ namespace Sim.Core.Match.Analysis
 
         private enum SideCounter
         {
-            Dribble, Clearance, Tackle, Interception, ThrowIn, Corner, GoalKick
+            Dribble, Clearance, Tackle, Interception, ThrowIn, Corner, GoalKick,
+            Offside, Foul, Yellow, Red, Penalty
         }
 
         private static void Bump(ref SideMetrics home, ref SideMetrics away, bool isHome, SideCounter counter)
@@ -212,6 +222,11 @@ namespace Sim.Core.Match.Analysis
                 case SideCounter.ThrowIn: side.ThrowIns++; break;
                 case SideCounter.Corner: side.Corners++; break;
                 case SideCounter.GoalKick: side.GoalKicks++; break;
+                case SideCounter.Offside: side.Offsides++; break;
+                case SideCounter.Foul: side.Fouls++; break;
+                case SideCounter.Yellow: side.YellowCards++; break;
+                case SideCounter.Red: side.RedCards++; break;
+                case SideCounter.Penalty: side.Penalties++; break;
             }
         }
 
@@ -257,6 +272,7 @@ namespace Sim.Core.Match.Analysis
             || kind == BallActionKind.Corner
             || kind == BallActionKind.GoalKick
             || kind == BallActionKind.FreeKick
+            || kind == BallActionKind.Penalty
             || kind == BallActionKind.Goal
             || kind == BallActionKind.Kickoff;
 

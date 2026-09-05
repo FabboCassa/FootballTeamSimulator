@@ -1113,7 +1113,37 @@
 
         /// <summary>How often a defender only gets something on the ball instead of controlling it.</summary>
         public int DeflectPercent { get; set; } = 45;
+
+        /// <summary>
+        /// What a deflection does to the ball (engine phase 5). It KEEPS the incoming line — the
+        /// share of its speed it comes off with, how far sideways it can be turned, and how much
+        /// of it can come straight back off the man who blocked it. This is where a large part of
+        /// football's throw-ins and nearly all of its corners come from: a cross flicked behind, a
+        /// shot blocked out for a throw. Before this phase the ball was simply hoofed up the pitch
+        /// whatever it had been doing, which is why there were 0.3 corners a match.
+        /// </summary>
         public int DeflectForcePercent { get; set; } = 85;
+        public int DeflectSpreadPermille { get; set; } = 900;
+        public int DeflectBackPermille { get; set; } = 700;
+
+        /// <summary>
+        /// A body in the way of a shot (engine phase 5). How far a defender will stretch to charge
+        /// one down, on top of his usual intercept reach, and the odds per tick that he gets
+        /// something on it. A quarter of the shots in a real match are blocked, and the corners
+        /// that follow are most of football's ten a match. A GOAL on the timeline can never be
+        /// blocked: the score is the result model's until phase 6.
+        /// </summary>
+        /// <summary>
+        /// A ball a defender only gets something on INSIDE HIS OWN BOX is a clearance, not a
+        /// deflection: how hard he gets it away, and how often he simply puts it behind for the
+        /// corner.
+        /// </summary>
+        public int DeflectClearForcePercent { get; set; } = 100;
+        public int DeflectBehindPermille { get; set; } = 265;
+        public int DeflectIntoTouchPermille { get; set; } = 170;
+
+        public int BlockReachDm { get; set; } = 8;
+        public int BlockPermillePerTick { get; set; } = 320;
 
         // --- Striking the ball ---
 
@@ -1299,6 +1329,13 @@
         /// frame was legal only by accident.
         /// </summary>
         public int KickoffHalfwayGapDm { get; set; } = 20;
+
+        /// <summary>
+        /// How far behind the ball the man taking a kickoff stands, in decimetres. On the centre
+        /// spot itself he would be a stride into the other side's half, which Law 8 does not allow
+        /// (engine phase 5).
+        /// </summary>
+        public int KickoffStandOffDm { get; set; } = 12;
 
         /// <summary>
         /// Half-width of the block as a percent of the formation's nominal spread, without the
@@ -1489,6 +1526,42 @@
         public int ClearanceDistanceDm { get; set; } = 400;
         public int ClearanceRetentionPermille { get; set; } = 260;
 
+        /// <summary>
+        /// How much pitch a clearance needs in front of it. A hoof is "get rid of it", and there
+        /// has to be somewhere to get rid of it TO: with the landing point merely clamped to the
+        /// goal line, a forward in the last twenty metres could "clear" the ball at a point on the
+        /// line he was attacking, which is a goal kick by construction (engine phase 5).
+        /// </summary>
+        public int MinClearanceDm { get; set; } = 200;
+        public int ClearanceGoalGapDm { get; set; } = 200;
+
+        /// <summary>
+        /// Putting it out (engine phase 5). Deep in his own third with a man on him, a defender
+        /// stops trying to play football and puts the ball out of the ground — behind for a corner
+        /// or into touch for a throw, whichever line is nearer. How deep he has to be, how hard he
+        /// has to be pressed, and how often he takes that way out.
+        /// </summary>
+        public int ClearBehindDepthDm { get; set; } = 260;
+        public int ClearOutPressurePermille { get; set; } = 380;
+        public int ClearBehindPermille { get; set; } = 600;
+
+        /// <summary>
+        /// And into touch — the same decision made by a man with a touchline near him instead of a
+        /// goal line, at any height of the pitch. This is football's commonest way of putting the
+        /// ball out, and where most of its forty throw-ins a match come from.
+        /// </summary>
+        public int ClearIntoTouchDm { get; set; } = 260;
+        public int ClearIntoTouchPermille { get; set; } = 600;
+
+        /// <summary>
+        /// How much pace a clearance still has when it lands, as a percentage of a PASS's arrival
+        /// speed. A clearance is not a pass: it arrives with something on it, and it runs on.
+        /// </summary>
+        public int ClearanceArrivalPercent { get; set; } = 120;
+
+        /// <summary>How far off the middle of his own goal a defender slices it when he puts it behind.</summary>
+        public int ClearBehindOffCentreDm { get; set; } = 230;
+
         /// <summary>Appetite for running with it rather than playing it, as a percentage of its value.</summary>
         public int CarryValuePercent { get; set; } = 45;
 
@@ -1568,6 +1641,13 @@
         /// <summary>How far the keeper pushes a parry away from his goal, in decimetres.</summary>
         public int KeeperParryDm { get; set; } = 150;
 
+        /// <summary>
+        /// And how often he pushes it BEHIND rather than back into play — which is a corner, and
+        /// one of the two things that were missing when the engine produced under two corners a
+        /// match (engine phase 5).
+        /// </summary>
+        public int KeeperParryBehindPercent { get; set; } = 55;
+
         // --- Goalkeeper ---
 
         public int KeeperDepthDm { get; set; } = 45;
@@ -1627,6 +1707,132 @@
         /// <summary>How long before the man who played the ball may take it back.</summary>
         public int ReleaseLockMs { get; set; } = 400;
         public int ReleaseLockTicks => TicksOfMs(ReleaseLockMs);
+
+        // --- The laws: the referee module (engine phase 5) ---
+        //
+        // Four of the five readings still outside the band real football produces are the laws'
+        // — throw-ins, corners, offsides and fouls — and they were all zero or near it for the
+        // same reason: nobody was refereeing. The ball only went out when it was LOOSE (§1.7, a
+        // carrier was quietly clamped back inside), there was no offside line, and a challenge
+        // could only ever be won or lost, never mistimed. Everything below is a law of the game
+        // priced as a knob, and every one of them is integer and drawn from the seeded source in
+        // the simulator's own order, so the stream stays bit-identical across runtimes.
+
+        /// <summary>
+        /// How far inside the touchline a player's POSITION is allowed to be, in decimetres. The
+        /// shape, the pass and the run with the ball all respect it: a footballer does not stand
+        /// ON the line, because half of him would be off the pitch. Without it the widest man of
+        /// an attacking block is simply clamped onto the touchline and a ball played to him sits
+        /// there — which is what the "held ball on a line" contract check was mostly counting
+        /// once the referee started giving the throw-ins.
+        /// </summary>
+        public int TouchlineInsetDm { get; set; } = 8;
+
+        /// <summary>
+        /// How long after a restart the taker cannot be judged to have carried the ball out
+        /// again. A throw-in is taken FROM the touchline: without this the taker is standing on
+        /// a line with the ball at his feet on the tick he collects it, and the two sides trade
+        /// throw-ins from the same spot until the whistle.
+        /// </summary>
+        public int RestartGraceMs { get; set; } = 700;
+        public int RestartGraceTicks => TicksOfMs(RestartGraceMs);
+
+        // --- Offside (Law 11) ---
+
+        /// <summary>
+        /// How far beyond the second-rearmost defender a man has to be before the flag goes up,
+        /// in decimetres. Not zero: "level is onside" is in the law itself, and a threshold of a
+        /// few centimetres would turn every ball played into the channel into an offside.
+        /// </summary>
+        public int OffsideMarginDm { get; set; } = 8;
+
+        /// <summary>
+        /// How badly a passer reads the line, in decimetres, at Positioning 1 and at Positioning
+        /// 100. This is the whole model of WHY offsides happen: the man on the ball plays what he
+        /// believes is on, the referee judges what actually was, and the gap between the two is
+        /// the flag. A passer who read the line perfectly would never play anybody offside and
+        /// the reading would stay at zero, which is what it was before this phase.
+        /// </summary>
+        public int OffsideJudgementDm { get; set; } = 22;
+        public int OffsideJudgementFloorDm { get; set; } = 6;
+
+        // --- Fouls, cards and free kicks (Laws 12, 13, 14) ---
+
+        /// <summary>
+        /// Of the challenges a defender wins, how many he wins with his foot on the ball and how
+        /// many are fouls — at Defending 1 and at Defending 100. This is what makes a good
+        /// tackler worth having: the same challenge, made by a worse defender, is a free kick
+        /// against him. (The domain has no separate Aggression attribute; Defending IS the
+        /// tackling skill here, and the mistimed challenge is what it buys.)
+        /// </summary>
+        public int FoulPermilleOfChallengesWorst { get; set; } = 235;
+        public int FoulPermilleOfChallengesBest { get; set; } = 56;
+
+        /// <summary>
+        /// And what a defender does differently in his own penalty area: he stays on his feet.
+        /// A percentage applied to the foul odds inside the box, which is why penalties are rare
+        /// without being impossible.
+        /// </summary>
+        public int FoulInBoxPermille { get; set; } = 11;
+
+        /// <summary>How long the game is stopped for a foul, on top of the usual dead-ball pause.</summary>
+        public int FoulStoppageMs { get; set; } = 3000;
+        public int FoulStoppageTicks => TicksOfMs(FoulStoppageMs);
+
+        /// <summary>
+        /// How far the defending side must retire from a free kick, in decimetres (9.15 m), and
+        /// how many men stand in the wall when the kick is inside shooting range of their goal.
+        /// </summary>
+        public int FreeKickRetreatDm { get; set; } = 92;
+        public int WallMen { get; set; } = 3;
+        public int WallSpacingDm { get; set; } = 8;
+
+        /// <summary>Where the penalty spot is, in decimetres from the goal line (11 m).</summary>
+        public int PenaltySpotDm { get; set; } = 110;
+
+        /// <summary>
+        /// Cards. A yellow for a share of fouls, doubled for the cynical ones — a foul that stops
+        /// a man running at a defence — and a straight red for the rare one. A second yellow is a
+        /// red by the law rather than by a knob, and a sent-off man leaves the field of play for
+        /// the rest of the match: his side finishes it with ten.
+        /// </summary>
+        public int YellowPercentOfFouls { get; set; } = 13;
+        public int YellowCynicalPercent { get; set; } = 220;
+
+        /// <summary>
+        /// And how careful a man who is ALREADY booked is, as a percentage of the usual odds. A
+        /// second yellow is a red, and a professional on a booking knows it: without this the
+        /// engine sent somebody off in three matches out of four.
+        /// </summary>
+        public int BookedCarePercent { get; set; } = 30;
+        public int RedPermilleOfFouls { get; set; } = 6;
+
+        /// <summary>
+        /// A penalty the timeline has no chance left to lend it: the keeper saves it, or it goes
+        /// wide. See the note on <see cref="Match.Movement.MatchSimulator"/>'s penalty — the goal
+        /// is the result model's until phase 6 inverts the causality.
+        /// </summary>
+        public int PenaltySavedPercent { get; set; } = 65;
+
+        /// <summary>
+        /// What makes a foul cynical: the man fouled was running with the ball, in the attacking
+        /// half, with this much clear ground in front of him.
+        /// </summary>
+        public int CynicalFoulSpaceDm { get; set; } = 120;
+
+        // --- Half-time (Law 7) ---
+
+        /// <summary>
+        /// The interval, in milliseconds of match time. The second half is kicked off by the side
+        /// that did not kick off the first, from the centre spot, with both sides in their own
+        /// half — which is the only part of Law 7 that has a consequence on the pitch. (Changing
+        /// ENDS is a rendering convention, not a simulation fact: the pitch is symmetric and both
+        /// sides carry their own attacking direction everywhere in the model, so flipping them
+        /// would only oblige every consumer of the stream — the analyzer, the dump, the client's
+        /// renderer — to flip back. See the phase 5 note in docs/engine/MATCH_ENGINE_PLAN.md.)
+        /// </summary>
+        public int HalfTimeMs { get; set; } = 12000;
+        public int HalfTimeTicks => TicksOfMs(HalfTimeMs);
 
         // --- What the coach's instructions mean on the pitch (task 13.2) ---
         // Each table is indexed by the enum: Mentality Defensive/Balanced/Attacking,

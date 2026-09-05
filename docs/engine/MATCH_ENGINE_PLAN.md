@@ -8,7 +8,7 @@ con il gioco sempre funzionante, regolamento fino a falli/cartellini/punizioni.
 - [x] **Fase 2 — forma: formazione e blocco** (2026-09-03). Vedi §9.
 - [x] **Fase 3 — difendere: zona e trigger** (2026-09-04). Vedi §10.
 - [x] **Fase 4 — decisioni con la palla** (2026-09-04, misurata nel container). Vedi §11.
-- [ ] Fase 5 — il regolamento
+- [x] **Fase 5 — il regolamento** (2026-09-05, verificata dall'utente). Vedi §12.
 - [ ] Fase 6 — inversione della causalità
 - [ ] Fase 7 — dati sulle prestazioni
 - [ ] Fase 8 — le istruzioni contano
@@ -17,34 +17,25 @@ con il gioco sempre funzionante, regolamento fino a falli/cartellini/punizioni.
 
 ## 📍 Stato — 5 settembre 2026
 
-**Siamo qui: 🏁 FASE 4 CHIUSA E VERIFICATA dall'utente il 5 settembre 2026. Tutto verde.**
-`dotnet test` **595/595 in 378,8 s** (Sim.Core.Tests 355 + Api.Tests 240),
-`[DeterminismCheck]`/`[server-determinism]` **`0xF8BE4A32C28421A1`** identico cifra per cifra al
-container, `.\tools\balance.ps1` **28/28 PASS con ogni cifra invariata**, e lo scenario `pitch` che
-riproduce **ogni singolo numero** del run del container a 307,3 ms a partita contro 504. **E ogni
-riga diagnostica della fase — `[ball-skill]`, `[passing]`, `[keeper]` — stampa gli stessi numeri su
-due macchine diverse**: la differenza fra due giocatori non è un artefatto del banco. Resta solo
-l'occhio: aprire `replay.html` e guardare.
+**Siamo qui: 🏁 FASE 5 CHIUSA E VERIFICATA dall'utente il 5 settembre 2026. Tutto verde, e lo
+scenario `pitch` esce con codice 0 per la prima volta da quando esiste.**
 
-Adesso il giocatore con la palla **decide**, e decide con i suoi attributi. Fino a questa fase l'unico
-attributo che la simulazione leggeva era `Pace` (§1.6): il passaggio era mirato su una linea
-matematicamente sicura ed eseguito esatto, la conduzione era un tocco fisso di otto metri, e il
-contrasto era un dado piatto identico per un'ala e per un centrale. La domanda su cui è costruito
-tutto il gioco — *quali giocatori rendono meglio* — non aveva risposta che la partita potesse dare.
+**C'è un arbitro.** Fino a questa fase la palla usciva solo se era libera — un giocatore che la
+portava oltre la linea veniva riportato dentro, e l'harness contava quel difetto a 48,7 tick a
+partita (§1.7) — non esisteva una linea del fuorigioco, e un contrasto poteva solo essere vinto o
+perso, mai sbagliato. Quattro delle cinque letture ancora fuori banda erano quelle, e adesso sono
+tutte dentro: **rimesse 18,4 → 39,0** (banda 30-50), **corner 0,3 → 10,7** (8-13), **fuorigioco 0 →
+4,0** (1,5-5), **falli 0 → 20,6** (18-28). Le letture in banda passano da **14/19 a 19/20**, e
+**per la prima volta i tre check di contratto passano tutti e tre**: la palla tenuta su una linea
+legge **0,0 tick a partita** e lo scenario `pitch` esce con codice 0. Vedi §12.
 
-Le letture in banda passano da **12/19 a 14/19**, e si chiudono le due che questa fase dichiarava:
-**precisione dei passaggi 54,6% → 78,5%** (banda 76-88) e **numero di passaggi 1347 → 877** (banda
-850-1150). In più rientrano le **rimesse laterali** (81,8 → 18,4: sotto banda adesso, e il motivo è
-noto — le rimesse che mancano sono quelle che il regolamento non rileva ancora, §1.7, fase 5) e
-crolla di 3,6 volte il rosso della palla tenuta su una linea (**550,8 → 48,7 tick a partita**).
-**Gol 2,52 e tiri 25,1 restano identici cifra per cifra** alle fasi 0, 1, 2 e 3: il modello
-risultato non è stato toccato, e non lo sarà fino alla fase 6.
-
-E la differenza fra due giocatori adesso si misura: gli stessi ventidue uomini, con le abilità di
-palla a 88 da una parte e a 24 dall'altra e tutto il resto identico, non giocano più la stessa
-partita — **56,6% di possesso contro 43,4%**, **154 palloni nell'ultimo terzo contro 111**, e
-**18,1 palle perse nella propria trequarti contro 21,0**. Golden master nuovo:
-**`0xF8BE4A32C28421A1`** (engine v7). Vedi §11.
+**Il modello risultato è intatto, ed è la cosa che questa fase rischiava di più**: un rigore o un
+tiro deviato che segna sarebbe un gol che il tabellino non ha. Un rigore prende in prestito
+l'occasione della timeline quando ce n'è una, un gol della timeline non è respingibile, e ogni
+calibrazione del modello risultato torna identica cifra per cifra
+(`Avg goals/match 2,44 | draws 24,8% | home wins 48,4%`, `Strong wins 82%`, `[counter] 56,0%`,
+`[familiarity] 49,3% contro 23,9%`, `[sweep] top 53,8%`, `[match-fatigue] 481 → 580`,
+`[fitness->result] 517 contro 318`).
 
 | | Fase | Stato |
 |---|---|---|
@@ -53,8 +44,9 @@ partita — **56,6% di possesso contro 43,4%**, **154 palloni nell'ultimo terzo 
 | 2 | forma: formazione e blocco | ✅ fatta **e verificata dall'utente** |
 | 3 | difendere: zona e trigger | ✅ fatta **e verificata dall'utente** |
 | 4 | decisioni con la palla | ✅ fatta **e verificata dall'utente** |
-| 5 | il regolamento | ⬅️ **prossima** — riporta in banda rimesse, corner, fuorigioco e falli |
-| 6-8 | — | da fare |
+| 5 | il regolamento | ✅ fatta **e verificata dall'utente** |
+| 6 | inversione della causalità | ⬅️ **prossima** — il tiro decide il gol |
+| 7-8 | — | da fare |
 
 ### Come si verifica che tutto gira
 
@@ -63,10 +55,65 @@ partita — **56,6% di possesso contro 43,4%**, **154 palloni nell'ultimo terzo 
     .\tools\balance.ps1 -Scenario pitch -PitchMatches 200 -PitchDump .\replay.html
     .\tools\balance.ps1        # gli altri scenari NON devono muoversi di un numero
 
-**Golden master della fase 4: `0xF8BE4A32C28421A1`** (engine v7; era `0xABC7B41DC6F258C2` in v6),
-già ripuntato nei quattro posti soliti. I replay salvati in v6 non sono più disegnabili: è
-previsto, e il client li rifiuta da solo perché confronta con `MatchEngine.Version`.
+**Golden master della fase 5: `0x436E4440B6350A7B`** (engine v8; era `0xF8BE4A32C28421A1` in v7 e
+`0xABC7B41DC6F258C2` in v6), già ripuntato nei quattro posti soliti. I replay salvati in v7 non sono
+più disegnabili: è previsto, e il client li rifiuta da solo perché confronta con
+`MatchEngine.Version`. Attesi **364 test verdi** in `Sim.Core.Tests` (i 355 della fase 4 più i 9 di
+`RefereeTests`) e lo scenario `pitch` che esce con **codice 0**.
 
+
+### Verificato dall'utente il 5 settembre 2026 (fase 5) — 🏁 CHIUSA
+
+**`dotnet test` → 604 su 604 verdi, zero rossi, in 518,5 s** (`Sim.Core.Tests` **364** — i 355 della
+fase 4 più i 9 nuovi `RefereeTests` — e `Api.Tests` **240**). `[DeterminismCheck]` e
+`[server-determinism]` stampano entrambi **`0x436E4440B6350A7B`**, **identico cifra per cifra** al
+valore calcolato nel container su .NET 8: il determinismo fra runtime sopravvive a engine v8.
+
+**E lo scenario `pitch` ha riprodotto OGNI SINGOLO NUMERO del run del container** — gol 2,52, tiri
+25,1 (15,0), passaggi 863 al 77,8%, **rimesse 39,0, corner 10,7, rinvii dal fondo 17,4, fuorigioco
+4,0, falli 20,6**, 2,82 gialli / 0,19 rossi / 0,11 rigori, difendendo 38,8 × 32,1 con linea 5,9 e
+buco 10,8, attaccando 45,2 × 39,6, km 11,08 (il più attivo 16,49) — **19/20 in banda e 3/3 check di
+contratto PASS**, a **318,2 ms a partita contro i 621,4 del container** (1,95x, in linea col 1,64x
+delle fasi 3 e 4). **`Balance checks PASSED`: l'exit code è 0.** Alla fase 4 quello stesso comando
+usciva con 1 per costruzione — era il rosso della palla tenuta su una linea — quindi da adesso **un
+exit code diverso da zero sul `pitch` è una regressione vera e va inseguito.**
+
+**Anche ogni riga diagnostica della fase riproduce il numero del container**, sulla sua macchina e
+sul suo OS:
+
+    [laws-restarts] 40,5 rimesse · 10,7 corner · 18,3 rinvii dal fondo a partita,
+                    e 0 frame in 30 partite con una palla tenuta su una linea
+    [laws-offside]  4,7 fuorigioco a partita, 56 bandierine controllate
+    [laws-fouls]    22,3 falli · 3,05 gialli · 0,15 rossi · 0,20 rigori a partita (446 controllati)
+    [laws-tackling] una squadra di marcatori a 90 ha commesso 8,5 falli e preso 1,50 cartellini a
+                    partita; una a 20 ne ha commessi 12,1 e presi 1,90
+    [laws-cards]    7 espulsi in 40 partite
+    [laws-halftime] intervallo controllato in 6 partite
+
+**`.\tools\balance.ps1` 28/28 PASS con ogni cifra invariata** (tattiche 45,0% / 42,5%, formazioni
+F433 37,4%/49,9% e F352 51,4%, stagione +6,5 pts, difficoltà 6,9/6,6/9,5/7,6/10,1, 67,6
+trasferimenti, ingaggi 69,8%, tutto il blocco mondo) — **ed è la prova che il modello risultato non è
+stato toccato**, insieme alle sue calibrazioni tutte identiche: `Avg goals/match 2,44 | draws 24,8% |
+home wins 48,4%`, `Strong wins 82%`, `[condition-live] 2,59 gol, 21,3% pareggi`, `[counter] 56,0%`,
+`[familiarity] 49,3% contro 23,9%`, `[sweep] top 53,8%`, `[positioning-line] 487→513 / 467→513`,
+`[positioning-width] 549 contro 531`, `[match-fatigue] 481 → 580`, `[fitness->result] 517 contro 318`.
+
+**E L'OCCHIO: guardato e accettato dall'utente lo stesso giorno.** Ha aperto il dump e visto le
+rimesse, i corner, la barriera e l'intervallo. La metà visiva dell'accettazione non è un test, ed è
+data: **🏁 la fase 5 è chiusa in tutto e per tutto.**
+
+**Il CAMBIO DI CAMPO era la decisione aperta, ed è decisa: si vede** (l'utente ha chiesto di vederlo
+lo stesso giorno). Resta fuori dalla simulazione — Sim.Core tiene le squadre sullo stesso lato — e
+sono i due VISORI a specchiare la ripresa, entrambi leggendo il frame del fischio dall'azione
+`BallActionKind.HalfTime`: il dump dell'harness (**verificato nel container e accettato dall'utente**)
+e `MatchRenderer` del client (**scritto, Play-mode ancora da guardare** — il client non si compila
+qui). Il dettaglio è in §12.
+
+**E il dump ha finalmente un OROLOGIO che si vede.** C'era, ma era uno `<span>` grigio dentro una
+riga muta dell'header: mentre guardi il campo quel numero non lo trova nessuno. Adesso è due volte —
+grande e ambra nell'header accanto al titolo, e nella fascia sopra il campo insieme al punteggio
+corrente — in **minuti E secondi**, perché un frame è mezzo secondo e senza i secondi il numero
+sembra fermo.
 
 ### Verificato dall'utente il 5 settembre 2026 (fase 4) — 🏁 CHIUSA
 
@@ -554,7 +601,9 @@ difende È la sagoma di chi attacca, e le tre bande difensive ancora rosse sono 
   pressione, `Finishing`; parata su `Reflexes` e piazzamento. **Il gol c'è perché la
   simulazione lo ha segnato.**
 
-### Fase 5 — Il regolamento (modulo arbitro)
+### Fase 5 — Il regolamento (modulo arbitro) ✅ FATTA
+
+*Scritta e misurata il 5 settembre 2026 — il resoconto, con i numeri, è in §12.*
 
 - **fuorigioco**: linea calcolata a ogni tick, passaggio verso un uomo oltre la linea →
   bandierina e punizione.
@@ -1516,7 +1565,252 @@ lo scatto di supporto), `Match/Movement/MatchBall.cs` (`ForceToArrive`),
 
 ---
 
-## 12. Riferimenti
+## 12. Fase 5 — fatta: il regolamento (modulo arbitro)
+
+*Scritta e misurata nel container il 5 settembre 2026 (200 partite, .NET 8) e **verificata
+dall'utente lo stesso giorno**: 604 test verdi, golden master identico cifra per cifra, e lo scenario
+`pitch` che riproduce ogni numero a 318 ms a partita. Il resoconto della sua esecuzione è nel blocco
+di stato in cima al file.*
+
+Quattro delle cinque letture ancora fuori banda alla fine della fase 4 erano dell'arbitro, ed erano
+tutte a zero o quasi per lo stesso motivo: **nessuno arbitrava**. La palla usciva solo se era
+LIBERA — un giocatore che la portava oltre la linea veniva semplicemente riportato dentro (§1.7), e
+il check di contratto dell'harness contava quel difetto a 48,7 tick a partita — non esisteva alcuna
+linea del fuorigioco, e un contrasto poteva solo essere vinto o perso, mai sbagliato.
+
+| lettura | fase 4 | fase 5 | banda |
+|---|---|---|---|
+| rimesse laterali | 18,4 | **39,0** | 30-50 |
+| corner | 0,3 | **10,7** | 8-13 |
+| fuorigioco | 0,0 | **4,0** | 1,5-5 |
+| falli | 0,0 | **20,6** | 18-28 |
+
+E il rosso di contratto del §1.7 è **chiuso**: `a held ball is never sitting on a line of the pitch`
+legge **0,0 tick a partita**, e per la prima volta da quando esistono **i tre check di contratto
+passano tutti e tre** (lo scenario `pitch` esce con codice 0). Le letture dentro la banda del calcio
+vero passano da **14/19 a 19/20**: l'unica ancora fuori è **tiri in porta 15,0 su 25,1** (banda
+6-11), che è `SavedShareOfFailedChancesPercent` del modello risultato e non del campo — è della fase
+6, come il gol.
+
+**E il modello risultato non è stato toccato, ed è la cosa che questa fase rischiava di più**: un
+rigore o un tiro deviato che segna sarebbe un gol che il tabellino non ha. Un rigore *prende in
+prestito* l'occasione della timeline quando ce n'è una, un gol della timeline non è respingibile, e
+il check `the picture and the result agree on the score` passa su tutte le 200 partite. Ogni
+calibrazione del modello risultato torna **identica cifra per cifra** ai valori accettati nelle fasi
+precedenti: `Avg goals/match 2,44 | draws 24,8% | home wins 48,4%`, `Strong wins 82%`,
+`[condition-live] 2,59 gol/partita, pareggi 21,3%`, `[counter] 56,0%`,
+`[familiarity] 49,3% contro 23,9%`, `[sweep] top 53,8%`, `[positioning-line] 487→513 / 467→513`,
+`[positioning-width] 549 contro 531`, `[match-fatigue] 481 → 580`,
+`[fitness->result] 517 contro 318`.
+
+### Cosa fa l'arbitro
+
+**Palla fuori anche a giocatore in possesso, con punto di attraversamento sub-tick.** Il passo di
+ogni giocatore viene ora registrato *prima* che il campo lo riporti dentro (`_stepToX/_stepToY`), e
+il portatore che esce viene giudicato su quel passo: quale linea ha attraversato per prima e in che
+punto, con la stessa interpolazione che `MatchBall.CrossingOf*` usa da sempre per una palla libera.
+La rimessa si batte dal punto in cui la palla è uscita davvero; se il portatore l'ha portata oltre la
+propria linea di fondo è un corner, oltre quella che attacca è una rimessa dal fondo.
+
+Tre conseguenze che sembrano dettagli e non lo sono:
+
+- **la palla ai piedi sta SUL CAMPO** (`BallToFeet`). Un giocatore può essere mezzo passo oltre la
+  linea con la palla ancora in gioco al piede interno; quello che non può succedere è che la palla
+  stia appoggiata su una linea, perché la legge la chiama rimessa. Era il grosso di quel rosso:
+  l'uomo più esterno del blocco in attacco veniva schiacciato SULLA linea laterale e una palla giocata
+  a lui restava lì nei suoi piedi per secondi.
+- **la forma, il passaggio e la conduzione stanno dentro la linea** di `TouchlineInsetDm` (0,8 m). Un
+  calciatore non sta *sulla* linea: metà di lui sarebbe fuori dal campo. L'inset è deliberatamente
+  più corto di una falcata a velocità massima, così chi la vuole portare fuori può ancora farlo.
+- **le rimesse e i corner si battono da un passo dentro la linea.** Le leggi le fanno battere dalla
+  linea con il battitore FUORI dal campo, e un'immagine dall'alto di ventidue punti non ha dove
+  metterlo. Lo stesso punto per l'occhio, e mantiene "una palla tenuta non sta mai su una linea" un
+  invariante vero invece di un check che scatta ogni volta che l'arbitro azzecca una rimessa.
+
+**Fuorigioco (Legge 11).** La linea è il penultimo avversario (`OffsideLineDepth`), con la palla e la
+metà campo come vincoli aggiuntivi. Il modello del *perché* i fuorigioco succedono è la parte che
+conta: **il portatore gioca quello che crede sia buono, l'arbitro giudica quello che era**. Il
+passatore legge la linea con un errore che dipende dal suo `Positioning`
+(`PerceivedOffsideLine`, `OffsideJudgementDm`), scarta ogni opzione oltre la linea che *crede* ci
+sia, e quando ciò che crede è sbagliato la bandierina si alza. Un passatore che leggesse la linea
+perfettamente non metterebbe mai nessuno in fuorigioco — ed è esattamente perché la lettura era zero
+prima di questa fase. La bandierina si alza al momento del passaggio, si risponde solo se uno dei
+segnalati tocca la palla, e la punizione si batte dal punto in cui era quando la palla è stata
+giocata.
+
+**Falli, cartellini, rigori e barriera (Leggi 12, 13, 14).** Il contrasto vinto non è più
+automaticamente palla vinta: quanto spesso il piede arriva invece della palla dipende dal
+`Defending` di chi contrasta (`FoulPermilleOfChallenges*`). È ciò che rende un buon marcatore utile
+nell'immagine e non solo nel modello risultato: **lo stesso contrasto, fatto da un difensore
+peggiore, è una punizione contro** — misurato, 8,5 falli a partita da una squadra di marcatori a 90
+contro 12,1 da una a 20. Dentro la propria area resta in piedi (`FoulInBoxPermille`), che è perché i
+rigori sono rari (0,11 a partita) senza essere impossibili. Il cartellino: una quota dei falli è
+ammonizione, raddoppiata per il fallo cinico — quello su un uomo lanciato con poca gente davanti
+(`StoppedAnAttack`) — e chi è già ammonito diventa molto più prudente (`BookedCarePercent`, senza il
+quale il motore espelleva qualcuno in tre partite su quattro). La seconda ammonizione è rossa per
+legge e non per manopola, **e un espulso lascia il campo**: cammina fino alla linea laterale
+all'altezza del centrocampo (a passo d'uomo — niente teletrasporti, il contratto dello stream lo
+vieta) e ogni ciclo che legge il campo lo salta, così la sua squadra finisce la partita davvero in
+dieci — le consegne difensive si dividono fra dieci, la linea del fuorigioco si traccia su dieci, e
+ci sono dieci uomini a cui passarla. La barriera e i nove metri e quindici sono in `RetreatSpot`.
+
+**Il rigore, e il nodo del punteggio.** Il gol appartiene al modello risultato 1.4 fino alla fase 6:
+un rigore *non può* inventare un gol. Quindi se la squadra ha una sua occasione della timeline
+abbastanza vicina, **il rigore È quella occasione**, battuta adesso e con il suo esito — lo stesso
+meccanismo con cui il direttore tiene insieme l'immagine e il tabellino da tre fasi. Quando non c'è
+nulla da rivendicare, il portiere para o il tiro va fuori (`PenaltySavedPercent`). È un residuo
+dichiarato, ed è della fase 6.
+
+**Il tiro può essere RESPINTO da un corpo** (`BlockStrike`). Un quarto dei tiri di una partita vera
+finisce su un difensore, e da lì viene una fetta dei corner: il motore non aveva modo di mettere un
+corpo davanti alla palla. Un gol della timeline non è respingibile — il punteggio non si tocca —
+tutto il resto sì, l'esito della timeline viene comunque registrato, e dove finisce la palla è affare
+dell'arbitro come per ogni altro pallone libero.
+
+**La deviazione tiene la linea della palla** (`Deflect`). Prima veniva spedita ordinatamente in
+avanti a forza fissa qualunque cosa stesse facendo la palla, così un cross deviato di stinco usciva
+come una spazzata pulita di quaranta metri e i corner non arrivavano mai. Adesso la palla
+*continua*: la linea d'arrivo, sparpagliata di lato e a volte rimandata indietro, alla quota di
+velocità che il config le concede. E vicino alla propria porta o alla linea laterale **non è una
+deviazione, è una spazzata**: di testa o di punta, verso qualsiasi posto che non sia la propria
+porta, e ogni difensore del mondo la mette volentieri dietro per un corner o in fallo laterale.
+
+**La spazzata ha un errore di esecuzione, ha bisogno di spazio davanti, ed è colpita per coprire la
+distanza a cui è mirata.** La fase 4 aveva dato l'errore a ogni palla *passata* e aveva lasciato la
+spazzata esatta al centimetro; ed era colpita alla forza massima qualunque fosse la distanza, per cui
+un pallone spazzato dalla propria area attraversava tutto il campo e usciva: **ventisette delle
+trentanove rimesse dal fondo a partita erano quello** (adesso sono 17,4 in tutto, e otto su dieci
+vengono da un tiro fuori bersaglio, che è quello che sono nel calcio vero). E non è nemmeno
+un'opzione se davanti non c'è campo — un attaccante negli ultimi venti metri non "spazza" verso una
+linea che sta attaccando, che è una rimessa dal fondo per costruzione. Infine il difensore ha la
+decisione che gli mancava: **buttarla fuori**, dietro per un corner o in fallo laterale, che è il
+modo più comune di far uscire un pallone nel calcio.
+
+**Il portiere respinge anche DIETRO** (`KeeperParryBehindPercent`): una parata su un tiro forte
+diventa un corner tanto spesso quanto rimette la palla in gioco.
+
+**Intervallo (Legge 7).** Al 45' si fischia — e il fischio *aspetta*: non mentre un tiro è in volo e
+non mentre la timeline ha un'occasione da giocare, perché un arbitro non fischia con la palla in
+area. Poi la palla torna sul centro del campo e il secondo tempo lo batte la squadra che non ha
+battuto il primo, con entrambe le squadre nella propria metà. Il calcio d'inizio adesso è anche
+*legale*: nessuno fa più un movimento di sostegno nella metà campo avversaria mentre l'arbitro
+aspetta di fischiare (era esattamente quello che facevano i sostegni della squadra in possesso), chi
+è nella metà sbagliata torna di corsa, chi batte sta un passo *dietro* la palla invece che sul punto
+del centro, e la linea di metà campo è un **muro**: il passo con cui uno la attraverserebbe viene
+annullato, invece di riportarlo indietro di trenta metri in un tick (che è l'unica cosa che il
+contratto dello stream vieta, vedi `PositionStreamTests.NobodyTeleports`). Il fischio è anche
+un'azione dello stream, `BallActionKind.HalfTime`, così la commentary può dire "intervallo".
+
+**Il CAMBIO DI CAMPO è nell'IMMAGINE, non nella simulazione — e adesso si vede.** Il campo è
+simmetrico, il fattore campo è un bonus di forza e non un posto, e ogni parte del modello porta con sé
+la propria direzione d'attacco (`MovementGeometry.Direction`): invertire i due lati dentro Sim.Core
+non cambierebbe niente del calcio giocato e obbligherebbe ogni consumatore dello stream — l'analizzatore,
+il dump HTML, il renderer del client — a invertirle di nuovo. Quindi la simulazione tiene le squadre
+sullo stesso lato per novanta minuti e **sono i due visori a specchiare il secondo tempo**, che è dove
+l'occhio guarda:
+
+- `tools/BalanceHarness/PitchDump.cs` legge il frame del fischio dall'azione
+  `BallActionKind.HalfTime` e ruota il campo di 180° da lì in poi (`mx`/`my`/`ownGoalIsLeft`): il
+  riquadro squadra, la linea difensiva, la palla e la sua scia seguono da sole perché passano tutte da
+  quelle tre funzioni, la scia si interrompe al fischio (una linea disegnata attraverso il cambio di
+  campo è lo specchio, non la palla), e il **tabellone** in cima al campo — una fascia sopra il
+  rettangolo, non sopra il gioco, perché una scritta nell'angolo in alto a sinistra sta esattamente
+  dove sta la bandierina del corner — porta punteggio corrente, **minuti E secondi** (un frame è mezzo
+  secondo: senza i secondi il numero sembra fermo) e il tempo in corso, "1st half" oppure
+  "2nd half · ends changed";
+- `client/Assets/Scripts/MatchView/MatchRenderer.cs` fa la stessa cosa nei due soli metodi da cui
+  passa ogni punto disegnato (`BallPixel`/`PlayerPixel` → `Pixel`), con la guardia che **non
+  interpola mai attraverso l'intervallo** (due frame in sistemi di coordinate specchiati, mescolati,
+  farebbero scivolare ventidue uomini per un frame).
+
+Ruotano ENTRAMBI gli assi, perché è quello che il cambio di campo è: lo stesso calcio visto dall'altra
+linea laterale. **Nessuna modifica a Sim.Core**, quindi golden master e test restano dove sono.
+
+### La misura (200 partite, tattiche neutre, seed 20260803)
+
+    goals 2.52   shots 25.1 (15.0 on target)   passes 863 at 77.8% accuracy
+    long balls 27.6   crosses 41.2   dribbles 293.0   clearances 256.1
+    tackles won 359.3   interceptions 205.2
+    throw-ins 39.0   corners 10.7   goal kicks 17.4   offsides 4.0   fouls 20.6
+    yellow cards 2.82   red cards 0.19   penalties 0.11
+    possession home 50.6%   nobody on the ball 20.8% of frames
+    ball by third (home->away) 35.4% / 27.4% / 37.1%
+    ground covered 11.08 km per player (busiest 16.49, laziest 8.88)
+
+    defending  width 38.8 m   depth 32.1 m   back line spread 5.9 m   biggest hole 10.8 m
+    attacking  width 45.2 m   depth 39.6 m   back line spread 5.4 m   biggest hole 12.9 m
+
+    19/20 inside the band · 3/3 contract checks PASS · 621.4 ms a partita
+
+**I nuovi test** sono `Sim.Core.Tests/Match/RefereeTests.cs` (9), e ognuno stampa la sua riga:
+
+    [laws-restarts] 40.5 throw-ins · 10.7 corners · 18.3 goal kicks a match, and 0 frames in
+                    30 matches with a held ball on a line
+    [laws-offside]  4.7 offsides a match, 56 flags checked
+    [laws-fouls]    22.3 fouls · 3.05 yellows · 0.15 reds · 0.20 penalties a match (446 checked)
+    [laws-tackling] a side of 90 tacklers gave away 8.5 fouls a match and 1.50 cards;
+                    a side of 20 tacklers 12.1 and 1.90
+    [laws-cards]    7 men sent off in 40 matches
+    [laws-halftime] the interval checked in 6 matches
+
+`[laws-tackling]` è **la ✅ della fase**, ed è la controparte di `[ball-skill]` della fase 4: gli
+stessi ventidue calciatori, due volte, con il `Defending` di una squadra alzato e quello dell'altra
+abbassato e tutto il resto identico. Gli altri quattro test fissano la *legge* e non la taratura: che
+la rimessa vada dalla parte giusta, che la bandierina appartenga alla squadra che passava e non si
+alzi mai nella propria metà, che un fallo fermi il gioco e restituisca la palla, che un espulso non
+tocchi più il pallone. E `TheReferee_NeverChangesTheScore` fissa la cosa che l'arbitro non può fare.
+
+**Le righe del livello movimento che si sono mosse, ed è previsto:** `[duties]` 348 contrasti e 210
+intercetti a partita (erano 402 e 235: il gioco si ferma più spesso), difendendo 39,1 × 32,2 e
+attaccando 45,5 × 39,5; `[movement]` palla ai piedi di qualcuno per il **78%** della partita (era
+81%); `[keeper]` respinte 47,2% da un portiere a 90 contro 60,3% da uno a 20 (erano 30,0 e 52,7 —
+adesso una parte dei tiri viene respinta da un difensore prima che il portiere ci arrivi, e un tiro
+murato conta come non trattenuto); `[shape]` il centro squadra al massimo 15,2 m fuori dalla mediana
+(era 13,5); `[bodies]` 0,129% → 0,078%; `[passing]` 879 passaggi a partita al 77,2%.
+`[movement] worst single-tick step 40dm (cap 42dm)` è invariato: **nessun corpo si teletrasporta**,
+espulsi compresi.
+
+**`[press]` legge 5,58 / 5,70 / 5,09 m** (basso / medio / alto): la monotonia fra basso e medio resta
+persa come alla fase 4, l'estremo tiene, ed è la domanda della fase 8 come già scritto lì.
+
+### Cosa resta aperto, per scelta
+
+- **tiri in porta 15,0 su 25,1** (banda 6-11): è `SavedShareOfFailedChancesPercent` del modello
+  risultato, cosmetico per definizione, e si sistema quando la causalità si inverte (fase 6). È
+  anche la ragione per cui `--pitch-strict` resta spento: 19 bande su 20 sono chiuse, e la ventesima
+  è della fase che viene.
+- **il rigore che non può segnare** quando la timeline non ha un'occasione da prestargli: stessa
+  radice, stessa fase.
+- **le squalifiche**: i cartellini stanno nell'immagine (nello stream, con il loro tipo di azione).
+  Portarli nella carriera — `MatchReport`, il tabellino, la squalifica alla giornata dopo — vuol dire
+  toccare `MatchEventType`, che è la timeline del modello risultato, e la timeline è della fase 6.
+  È il primo pezzo del wiring client (5b).
+- **`Aggression` non esiste nel dominio.** Il piano la citava insieme a `Tackling`: in questo gioco
+  gli attributi sono dieci e quello del contrasto è `Defending`, che è ciò che il fallo legge.
+  Aggiungerne uno nuovo toccherebbe generazione, allenamento e valutazione — cioè ogni golden master
+  del mondo, non solo quello del motore — e non è di questa fase.
+- **un espulso sta sulla linea laterale all'altezza del centrocampo**, dentro le coordinate del
+  campo: l'analizzatore lo conta ancora fra i dieci di movimento, quindi una partita con un rosso ha
+  la larghezza del blocco leggermente gonfiata. Con 0,19 rossi a partita è dentro il rumore, ed è
+  scritto qui perché si sappia.
+
+### Come si verifica questa fase
+
+    .\tools\build-simcore.ps1
+    dotnet test
+    .\tools\balance.ps1 -Scenario pitch -PitchMatches 200 -PitchDump .\replay.html
+    .\tools\balance.ps1        # gli altri scenari NON devono muoversi di un numero
+
+Attesi — **e tutti confermati dall'utente il 5 settembre 2026**: **364 test verdi** in
+`Sim.Core.Tests` (604 in totale con `Api.Tests`), `[DeterminismCheck]` e `[server-determinism]` che
+stampano **`0x436E4440B6350A7B`**, lo scenario `pitch` che esce con **codice 0** e 19/20 in banda, e
+`balance.ps1` 28/28 con ogni cifra invariata. Il file `.cs` nuovo (`RefereeTests.cs`) ha bisogno del
+`.meta` di Unity al primo import. Resta l'occhio: aprire `replay.html` e guardare le rimesse, i
+corner, le punizioni con la barriera e l'intervallo.
+
+---
+
+## 13. Riferimenti
 
 - RoboCup Soccer Simulator — https://rcsoccersim.readthedocs.io/en/latest/overview.html
 - RoboCup 2D Soccer Simulation League — https://en.wikipedia.org/wiki/RoboCup_2D_Soccer_Simulation_League

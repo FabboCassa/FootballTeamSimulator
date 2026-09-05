@@ -1,4 +1,4 @@
-namespace Sim.Core.Match.Analysis
+﻿namespace Sim.Core.Match.Analysis
 {
     /// <summary>
     /// What a team's SHAPE looked like over the ticks it was sampled on (phase 0 of the match
@@ -75,11 +75,20 @@ namespace Sim.Core.Match.Analysis
         public int GoalKicks { get; set; }
 
         /// <summary>
-        /// Offsides and fouls conceded. The engine has neither today — a zero here is the
-        /// measurement, not a missing reading.
+        /// Offsides caught and fouls conceded. Both were structurally zero until the referee
+        /// module of engine phase 5: there was no offside line, and a challenge could only be won
+        /// or lost, never mistimed.
         /// </summary>
         public int Offsides { get; set; }
         public int Fouls { get; set; }
+
+        /// <summary>
+        /// Cards and penalties (engine phase 5). Real football: three or four yellows a match,
+        /// a red every fifth or sixth match, a penalty every fourth.
+        /// </summary>
+        public int YellowCards { get; set; }
+        public int RedCards { get; set; }
+        public int Penalties { get; set; }
 
         /// <summary>Ticks on which a player of this side held the ball.</summary>
         public int PossessionTicks { get; set; }
@@ -149,6 +158,9 @@ namespace Sim.Core.Match.Analysis
         public int TotalCorners => Home.Corners + Away.Corners;
         public int TotalOffsides => Home.Offsides + Away.Offsides;
         public int TotalFouls => Home.Fouls + Away.Fouls;
+        public int TotalYellowCards => Home.YellowCards + Away.YellowCards;
+        public int TotalRedCards => Home.RedCards + Away.RedCards;
+        public int TotalPenalties => Home.Penalties + Away.Penalties;
 
         public double TotalPassAccuracyPercent
         {

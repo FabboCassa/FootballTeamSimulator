@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace Sim.Core.Match
@@ -26,7 +26,21 @@ namespace Sim.Core.Match
         Corner = 12,
         ThrowIn = 13,
         GoalKick = 14,
-        FreeKick = 15
+        FreeKick = 15,
+
+        // The referee (engine phase 5). The whistle and the card are recorded as their own
+        // actions, and the RESTART that follows is a FreeKick or a Penalty like any other, so
+        // every consumer that already knows how to draw a restart keeps working. Appended at
+        // the end of the enum on purpose: a replay stored before this phase carries no value
+        // above 15, so its actions still mean what they meant.
+        Offside = 16,
+        Foul = 17,
+        YellowCard = 18,
+        RedCard = 19,
+        Penalty = 20,
+
+        /// <summary>The whistle at the end of the first half. The second half's Kickoff follows it.</summary>
+        HalfTime = 21
     }
 
     /// <summary>

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Sim.Core.Match;
 
 namespace Fts.MatchView
@@ -51,6 +51,16 @@ namespace Fts.MatchView
                 case BallActionKind.Corner: return "match.action.corner";
                 case BallActionKind.ThrowIn: return "match.action.throwin";
                 case BallActionKind.GoalKick: return "match.action.goalkick";
+
+                // The referee (engine phase 5). Without these the whistle, the flag and the cards
+                // all fell through to "free kick", which is the RESTART and not the decision.
+                case BallActionKind.Offside: return "match.action.offside";
+                case BallActionKind.Foul: return "match.action.foul";
+                case BallActionKind.YellowCard: return "match.action.yellowcard";
+                case BallActionKind.RedCard: return "match.action.redcard";
+                case BallActionKind.Penalty: return "match.action.penalty";
+                case BallActionKind.HalfTime: return "match.action.halftime";
+
                 default: return "match.action.freekick";
             }
         }
@@ -67,7 +77,10 @@ namespace Fts.MatchView
 
             string key = KeyOf(action.Kind);
             string actor = nameOf != null && action.Slot >= 0 ? nameOf(action.Home, action.Slot) : string.Empty;
-            string target = nameOf != null && action.TargetSlot >= 0
+            // A foul's TargetSlot is the man FOULED, and he plays for the other side — so he is not
+            // looked up here, where the side is the offender's. Everything else that carries a target
+            // (a pass, a cross) is naming a team-mate.
+            string target = nameOf != null && action.TargetSlot >= 0 && action.Kind != BallActionKind.Foul
                 ? nameOf(action.Home, action.TargetSlot)
                 : string.Empty;
 

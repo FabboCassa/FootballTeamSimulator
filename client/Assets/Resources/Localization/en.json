@@ -1,4 +1,4 @@
-{
+﻿{
   "app.title": "Football Team Simulator",
   "common.back": "Back",
   "common.continue": "Continue",
@@ -164,6 +164,12 @@
   "match.action.throwin": "Throw-in, {0}",
   "match.action.goalkick": "Goal kick, {0}",
   "match.action.freekick": "Free kick — {0} over it",
+  "match.action.offside": "Offside against {0}",
+  "match.action.foul": "Foul by {0}",
+  "match.action.yellowcard": "Yellow card — {0}",
+  "match.action.redcard": "RED CARD — {0} is sent off",
+  "match.action.penalty": "PENALTY — {0} steps up",
+  "match.action.halftime": "Half-time — the sides change ends",
   "match.clock": "{0}'",
   "match.speed_1x": "1x",
   "match.speed_2x": "2x",

@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using NUnit.Framework;
@@ -300,8 +300,17 @@ namespace Sim.Core.Tests.Match
                 owned++;
                 PitchPoint carrier = home ? stream.HomeAt(t, slot) : stream.AwayAt(t, slot);
                 PitchPoint ball = stream.BallAt(t);
-                Assert.That(carrier.X, Is.EqualTo(ball.X), $"tick {t}: the ball is not on its carrier");
-                Assert.That(carrier.Y, Is.EqualTo(ball.Y), $"tick {t}: the ball is not on its carrier");
+
+                // At his feet — and the ball is ON THE PITCH, which since engine phase 5 is not
+                // the same point when the carrier himself is over a line. A player can be a stride
+                // outside the touchline with the ball still in play at his inside foot; what
+                // cannot happen is the ball resting on a line, because the laws call that a
+                // throw-in and the referee now gives it (see MatchBalance.TouchlineInsetDm).
+                int inset = new BalanceConfig().Match.TouchlineInsetDm;
+                Assert.That(System.Math.Abs(carrier.X - ball.X), Is.LessThanOrEqualTo(inset),
+                    $"tick {t}: the ball is not at its carrier's feet");
+                Assert.That(System.Math.Abs(carrier.Y - ball.Y), Is.LessThanOrEqualTo(inset),
+                    $"tick {t}: the ball is not at its carrier's feet");
             }
 
             int percent = owned * 100 / checkedTicks;

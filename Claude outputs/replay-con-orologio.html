@@ -25,12 +25,20 @@
              border-top:1px solid #262b36; font-variant-numeric:tabular-nums; }
   .readout b { font-weight:600; }
   code { background:#1a1f29; padding:1px 6px; border-radius:4px; }
+
+  /* The clock. It was a grey span inside a muted line and nobody could find it while he was
+     watching the football, which is the whole reason it is now this size and this colour — and
+     drawn a second time onto the pitch itself, where the eye already is. */
+  #clock { font: 700 30px ui-monospace, Menlo, Consolas, monospace; color:#ffd166;
+           font-variant-numeric:tabular-nums; letter-spacing:1px; }
+  #half { font-weight:600; }
 </style>
 </head>
 <body>
 <header>
   <h1>Inter Rigoria 2-3 SS Capocannona</h1>
-  <span class="muted">replay dump &mdash; <b id="clock" style="color:#e8ecf4;font-variant-numeric:tabular-nums">00:00</b></span>
+  <span id="clock">00:00</span>
+  <span class="muted" id="half">1st half</span>
   <span class="muted" id="caption"></span>
 </header>
 <main>
@@ -285,8 +293,10 @@ function draw() {
 
   scoreboard(t);
 
-  document.getElementById("clock").textContent =
-    stamp(t) + (second(t) ? " \u00b7 2nd half, ends changed" : " \u00b7 1st half");
+  document.getElementById("clock").textContent = stamp(t);
+  const half = document.getElementById("half");
+  half.textContent = second(t) ? "2nd half \u00b7 ends changed" : "1st half";
+  half.style.color = second(t) ? "#ffd166" : "";
   document.getElementById("caption").textContent = caption(t);
   const set = (id,v) => document.getElementById(id).textContent = v.toFixed(1);
   set("hw", sh[0].width); set("hd", sh[0].depth); set("hb", sh[0].back);

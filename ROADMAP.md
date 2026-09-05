@@ -693,7 +693,69 @@ acting one out — with the game playable at the end of every one of them.
   corners, offsides and fouls are the laws (phase 5); shots on target 14.9 of 25.1 is the result
   model's share, not the picture's (phase 6).
 
-- [ ] Phase 5 — the laws · [ ] Phase 6 — inverting the causality · [ ] Phase 7 — performance data ·
+- [x] **Phase 5 — the laws: there is a REFEREE** (2026-09-05, **verified by the user**: `dotnet test`
+  **604/604 green in 518.5 s** (Sim.Core.Tests 364 + Api.Tests 240), `[DeterminismCheck]` and
+  `[server-determinism]` both **`0x436E4440B6350A7B`** identical digit for digit to the container's,
+  the `pitch` scenario reproducing **every single number** of the container's 200-match run at 318.2
+  ms a match against 621.4 — **and exiting 0 for the first time in the rewrite** — and
+  `.\tools\balance.ps1` **28/28 PASS with every figure unchanged**. Only the eye is left: open
+  `replay.html` and look. Open decision: changing ENDS at half-time, deliberately not modelled). Four of the five readings still outside football's band were the
+  referee's, and they were all zero or near it because **nobody was refereeing**: the ball only went
+  out while it was LOOSE (a carrier over the touchline was clamped back inside — 48.7 ticks a match
+  of the §1.7 defect), there was no offside line, and a challenge could only be won or lost, never
+  mistimed. **All four are now in band: throw-ins 18.4 → 39.0** (30-50), **corners 0.3 → 10.7**
+  (8-13), **offsides 0 → 4.0** (1.5-5), **fouls 0 → 20.6** (18-28) — plus 2.82 yellows, 0.19 reds and
+  0.11 penalties a match. Readings inside the band **14/19 → 19/20**, and for the first time **all
+  three contract checks PASS** (the `pitch` scenario exits 0): a held ball never rests on a line.
+  A ball at a carrier's feet is judged on his UNCLAMPED step with the sub-tick crossing point; the
+  offside line is the second-rearmost defender and the passer READS it with an error off his
+  Positioning (he plays what he believes is on, the referee judges what was — that gap IS the flag);
+  a challenge won is not always the ball won, and how often the foot arrives instead is the
+  challenger's `Defending` (**8.5 fouls a match from a side of 90 tacklers against 12.1 from a side of
+  20** — the phase's ✅, and the counterpart of phase 4's `[ball-skill]`); a second yellow is a red by
+  the law and a sent-off man WALKS off and takes no further part, so his side really plays with ten;
+  penalties with the wall and the 9.15 m retreat; a shot can be BLOCKED by a body; a deflection keeps
+  the ball's own line, and near his own goal it is a clearance a defender is happy to put behind;
+  a clearance has execution error, needs room in front of it and is struck to cover the distance it is
+  aimed at (hit at maximum force it flew the length of the pitch — 27 of the 39 goal kicks a match);
+  the keeper parries BEHIND as often as back into play; and half-time is a whistle, the centre spot,
+  and the other side kicking off with both blocks legally in their own half.
+  **The result model is untouched, which is what this phase risked most** — a penalty borrows the
+  timeline's next chance when there is one, a goal on the timeline can never be blocked, the picture
+  and the scoresheet agree on all 200 matches, and every result-model calibration comes back
+  identical digit for digit (2.44 goals, 24.8% draws, 48.4% home wins, `Strong wins 82%`,
+  `[counter] 56.0%`, `[familiarity] 49.3/23.9`, `[sweep] 53.8%`, `[match-fatigue] 481 → 580`).
+  `MatchEngine.Version` → **8**, golden master → **`0x436E4440B6350A7B`** (v7 replays no longer
+  renderable, the client rejects them itself). New `RefereeTests` (9), all read off the POSITION
+  STREAM. Ran here with the offline route: **364 green, 0 red** (355 + 9). Cost 621 ms a match in the
+  container. Full write-up in §12 of the plan.
+  **His run, line by line:** `[laws-restarts]` 40.5 throw-ins · 10.7 corners · 18.3 goal kicks and 0
+  frames in 30 matches with a held ball on a line · `[laws-offside]` 4.7 · `[laws-fouls]` 22.3 fouls ·
+  3.05 yellows · 0.15 reds · 0.20 penalties · `[laws-tackling]` 8.5 fouls and 1.50 cards from a side of
+  90 tacklers against 12.1 and 1.90 from a side of 20 · `[laws-cards]` 7 sent off in 40 matches ·
+  `[laws-halftime]` 6 intervals — every one of them the container's number to one decimal, on a
+  different machine and a different OS. `RefereeTests.cs` still needs its Unity `.meta` on first
+  import.
+  **Open, on purpose:** shots on target 15.0 of 25.1 is the result model's share (phase 6), so
+  `--pitch-strict` stays off until then; a penalty with no chance to borrow cannot score (same
+  phase); **suspensions** need `MatchEventType`, i.e. the timeline, so they are the first piece of the
+  client wiring (5b); `Aggression` does not exist in this domain and `Defending` is the tackling
+  skill the foul reads; and **changing ENDS at half-time is deliberately not modelled** — the pitch is
+  symmetric and every part of the model carries its own attacking direction, so a flip would change
+  no football and would oblige the analyzer, the dump and the client renderer to flip back. If the
+  picture wants it, it belongs in the renderer — **and after the user asked to see it, that is exactly
+  where it now is** (2026-09-05): `PitchDump.cs` and `MatchRenderer.cs` both read the stream's
+  `HalfTime` action and rotate the pitch 180° from that frame on, the renderer never interpolating
+  across the interval; `MatchCommentary` + en/it also gained the referee's six action kinds, which had
+  been falling through to "free kick" (1117/1117 at parity). NO Sim.Core change → the 604 tests and the
+  golden master stand. The dump is verified in the container **and the user looked at it and accepted
+  it** — with the corners, the wall, the interval and the change of ends on screen — so the visual half
+  of the phase's acceptance is given too; only `MatchRenderer`'s Play-mode look is left. The dump also
+  gained a clock that can actually be found (header + a strip above the pitch, minutes AND seconds,
+  with the running score), after the user reported that the old grey one in the header was invisible
+  while watching.
+
+- [ ] Phase 6 — inverting the causality · [ ] Phase 7 — performance data ·
   [ ] Phase 8 — the instructions matter
 
 - [~] **13.2 The agent match engine** — 13.1's choreographer is retired. It wrote a script in TICK SPACE and had the players act it out, so nobody in it decided anything: the ball's owner was assigned rather than won, a pass happened because the script said so rather than because one was on, nothing knew the ball had gone out, and team shape was a formula on ball position — which is why the user's second Play-mode recording showed twenty men in one penalty area, half the pitch empty, and players standing on top of each other. That is not a defect list, it is what that architecture produces.

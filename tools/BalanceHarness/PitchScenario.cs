@@ -24,8 +24,11 @@ namespace Fts.BalanceHarness;
 ///
 /// Three readings are checks from the start, because they are contract, not calibration: the
 /// picture and the result must agree on the score, every match must produce a stream, and a ball a
-/// player is holding must never be sitting on a line of the pitch (the laws call that a throw-in;
-/// the engine currently clamps the carrier back inside instead, and this is that bug, counted).
+/// player is holding must never be sitting on a line of the pitch (the laws call that a throw-in).
+/// The third one FAILED from phase 0 to phase 4 — the engine clamped a carrier who ran over the
+/// line back inside instead of giving the throw-in, at fifty ticks a match — and closing it was
+/// engine phase 5's, along with the four readings the referee owns: throw-ins, corners, offsides
+/// and fouls. All three pass since phase 5.
 /// </summary>
 internal static class PitchScenario
 {
@@ -183,6 +186,7 @@ internal sealed class PitchTotals
     private double _goals, _shots, _onTarget, _passes, _completed, _longBalls, _crosses;
     private double _dribbles, _clearances, _tackles, _interceptions;
     private double _throwIns, _corners, _goalKicks, _offsides, _fouls;
+    private double _yellows, _reds, _penalties;
     private double _homePossession, _loose, _homeThird, _middleThird, _awayThird, _ticks;
     private double _kmPerPlayer, _kmMax, _kmMin;
 
@@ -212,6 +216,9 @@ internal sealed class PitchTotals
         _goalKicks += h.GoalKicks + a.GoalKicks;
         _offsides += m.TotalOffsides;
         _fouls += m.TotalFouls;
+        _yellows += m.TotalYellowCards;
+        _reds += m.TotalRedCards;
+        _penalties += m.TotalPenalties;
 
         _homePossession += m.HomePossessionPercent;
         _loose += m.LoosePercent;
@@ -260,6 +267,8 @@ internal sealed class PitchTotals
         Console.WriteLine($"    throw-ins {Fmt.N(_throwIns / n, 1)}   corners {Fmt.N(_corners / n, 1)}   " +
                           $"goal kicks {Fmt.N(_goalKicks / n, 1)}   offsides {Fmt.N(_offsides / n, 1)}   " +
                           $"fouls {Fmt.N(_fouls / n, 1)}");
+        Console.WriteLine($"    yellow cards {Fmt.N(_yellows / n, 2)}   red cards {Fmt.N(_reds / n, 2)}   " +
+                          $"penalties {Fmt.N(_penalties / n, 2)}");
         Console.WriteLine($"    possession home {Fmt.N(_homePossession / n, 1)}%   " +
                           $"nobody on the ball {Fmt.N(_loose / n, 1)}% of frames   " +
                           $"({Fmt.N(_ticks / n, 0)} frames per match)");
@@ -291,6 +300,7 @@ internal sealed class PitchTotals
         bands.Add("corners per match", _corners / n, 8, 13);
         bands.Add("offsides per match", _offsides / n, 1.5, 5);
         bands.Add("fouls per match", _fouls / n, 18, 28);
+        bands.Add("yellow cards per match", _yellows / n, 2.0, 5.5);
         bands.Add("km per player", _kmPerPlayer / n, 9.0, 12.0, " km");
         bands.Add("frames with nobody on the ball", _loose / n, 15, 45, "%");
         bands.Add("defending: block width", _defWidth / s, 28, 42, " m");

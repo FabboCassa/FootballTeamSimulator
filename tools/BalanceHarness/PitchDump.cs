@@ -39,6 +39,9 @@ internal static class PitchDump
             .Replace("__HOME_XY__", Ints(stream.HomeXY))
             .Replace("__AWAY_XY__", Ints(stream.AwayXY))
             .Replace("__OWNER__", Ints(stream.Owner))
+            .Replace("__HOME_SHORT__", Escape(Short(homeName)))
+            .Replace("__AWAY_SHORT__", Escape(Short(awayName)))
+            .Replace("__HALFTIME__", HalfTimeFrame(stream).ToString(System.Globalization.CultureInfo.InvariantCulture))
             .Replace("__HOME_SHIRTS__", Ints(stream.HomeShirts))
             .Replace("__AWAY_SHIRTS__", Ints(stream.AwayShirts))
             .Replace("__HOME_PLAYERS__", Names(home))
@@ -55,6 +58,33 @@ internal static class PitchDump
         for (int i = 0; i < lineup.Slots.Count; i++)
             if (lineup.Slots[i].Role == PositionRole.Goalkeeper) return i;
         return 0;
+    }
+
+    /// <summary>
+    /// A club name short enough for a scoreboard: the first three letters of its longest word, which
+    /// is how a television caption abbreviates one and is enough to tell two clubs apart.
+    /// </summary>
+    private static string Short(string name)
+    {
+        string longest = "";
+        foreach (string word in (name ?? "").Split(' '))
+            if (word.Length > longest.Length) longest = word;
+        if (longest.Length == 0) return "???";
+        return longest.Substring(0, System.Math.Min(3, longest.Length)).ToUpperInvariant();
+    }
+
+    /// <summary>
+    /// The frame the referee blew for half-time on, or -1 if the stream has no interval (a replay
+    /// stored before engine phase 5). From this frame on the two sides have CHANGED ENDS, which is a
+    /// property of the picture and not of the simulation: the model keeps both sides attacking the
+    /// end they attacked all match (MovementGeometry.Direction), and this viewer mirrors the second
+    /// half so the eye sees what the laws say happens at the interval.
+    /// </summary>
+    private static int HalfTimeFrame(PositionStream stream)
+    {
+        foreach (BallAction action in stream.Actions)
+            if (action.Kind == BallActionKind.HalfTime) return action.Tick;
+        return -1;
     }
 
     private static string Ints(int[] values)
@@ -132,11 +162,11 @@ internal static class PitchDump
 <body>
 <header>
   <h1>__TITLE__</h1>
-  <span class="muted">phase 0 replay dump &mdash; <span id="clock">0'</span></span>
+  <span class="muted">replay dump &mdash; <b id="clock" style="color:#e8ecf4;font-variant-numeric:tabular-nums">00:00</b></span>
   <span class="muted" id="caption"></span>
 </header>
 <main>
-  <canvas id="pitch" width="1260" height="837"></canvas>
+  <canvas id="pitch" width="1260" height="883"></canvas>
 
   <div class="bar">
     <button id="play">Pause</button>
@@ -177,7 +207,11 @@ const SHIRTS = [[__HOME_SHIRTS__], [__AWAY_SHIRTS__]];
 const NAMES = [[__HOME_PLAYERS__], [__AWAY_PLAYERS__]];
 const ACTIONS = [__ACTIONS__];
 const KINDS = ["kick-off","pass","long ball","cross","dribble","tackle","interception","clearance",
-               "shot","save","GOAL","miss","corner","throw-in","goal kick","free kick"];
+               "shot","save","GOAL","miss","corner","throw-in","goal kick","free kick",
+               "OFFSIDE","foul","yellow card","RED CARD","PENALTY","half-time"];
+const HALFTIME = __HALFTIME__;
+const SHORT = ["__HOME_SHORT__", "__AWAY_SHORT__"];
+const GOAL_KIND = KINDS.indexOf("GOAL");
 const COLOR = ["#e8375a", "#4f6df0"];
 
 const TICKS = BALL.length / 2;
@@ -189,10 +223,28 @@ const layers = { box:true, line:true, mark:true, trail:true, names:false };
 let tick = 0, playing = true, speed = 1, last = 0;
 
 const PAD = 30;
+
+// A strip above the pitch for the scoreboard. It is not drawn OVER the football on purpose: a
+// caption in the top-left corner of the picture sits exactly where the corner flag is, and the
+// corners are one of the things this dump exists to let you watch.
+const TOP = 46;
 const sx = t => PAD + (cv.width - 2*PAD) * t / LEN;
-const sy = t => PAD + (cv.height - 2*PAD) * t / WID;
-const px = (side, t, i) => XY[side][(t*N + i)*2];
-const py = (side, t, i) => XY[side][(t*N + i)*2 + 1];
+const sy = t => TOP + PAD + (cv.height - TOP - 2*PAD) * t / WID;
+
+// CHANGING ENDS (Law 7). The simulation keeps every side attacking the same end for ninety
+// minutes — the pitch is symmetric, so flipping it would change no football — and the second
+// half is mirrored HERE, where the eye is. One rotation of the pitch through 180 degrees, so
+// both axes turn: everything drawn goes through these three functions, which is why the team
+// boxes, the back lines, the ball and its trail all follow without a line of their own.
+const second = t => HALFTIME >= 0 && t >= HALFTIME;
+const mx = (t, x) => second(t) ? LEN - x : x;
+const my = (t, y) => second(t) ? WID - y : y;
+const ownGoalIsLeft = (side, t) => (side === 0) !== second(t);
+
+const px = (side, t, i) => mx(t, XY[side][(t*N + i)*2]);
+const py = (side, t, i) => my(t, XY[side][(t*N + i)*2 + 1]);
+const bx = t => mx(t, BALL[t*2]);
+const by = t => my(t, BALL[t*2 + 1]);
 
 function outfield(side, t) {
   const out = [];
@@ -203,21 +255,25 @@ function outfield(side, t) {
 function shape(side, t) {
   const p = outfield(side, t);
   const xs = p.map(q => q[0]), ys = p.map(q => q[1]);
-  const depthOf = q => side === 0 ? q : LEN - q;
+
+  // Depth is measured from the goal this side is defending, which after the interval is the
+  // other one — so the back line reads as the back line in both halves.
+  const left = ownGoalIsLeft(side, t);
+  const depthOf = q => left ? q : LEN - q;
   const sorted = xs.map(depthOf).sort((a,b) => a-b);
+  const meanBack = (sorted[0]+sorted[1]+sorted[2]+sorted[3])/4;
   return {
     minX: Math.min(...xs), maxX: Math.max(...xs),
     minY: Math.min(...ys), maxY: Math.max(...ys),
     width: (Math.max(...ys) - Math.min(...ys)) / 10,
     depth: (Math.max(...xs) - Math.min(...xs)) / 10,
     back: (sorted[3] - sorted[0]) / 10,
-    backX: side === 0 ? (sorted[0]+sorted[1]+sorted[2]+sorted[3])/4
-                      : LEN - (sorted[0]+sorted[1]+sorted[2]+sorted[3])/4
+    backX: left ? meanBack : LEN - meanBack
   };
 }
 
 function pitch() {
-  ctx.fillStyle = "#1f6b34"; ctx.fillRect(0,0,cv.width,cv.height);
+  ctx.fillStyle = "#1f6b34"; ctx.fillRect(0, TOP, cv.width, cv.height - TOP);
   ctx.strokeStyle = "rgba(255,255,255,.65)"; ctx.lineWidth = 2;
   ctx.strokeRect(sx(0), sy(0), sx(LEN)-sx(0), sy(WID)-sy(0));
   ctx.beginPath(); ctx.moveTo(sx(LEN/2), sy(0)); ctx.lineTo(sx(LEN/2), sy(WID)); ctx.stroke();
@@ -230,13 +286,60 @@ function pitch() {
   }
 }
 
+// The clock, the half and the running score, drawn ON the pitch (a grey span in the page header is
+// a number nobody finds while he is watching the football). Minutes AND seconds, because a frame is
+// half a second and a match minute is 120 of them: without the seconds the number looks frozen.
+function stamp(t) {
+  const total = Math.floor(t * 60 / TPM);
+  const mm = Math.floor(total / 60), ss = total % 60;
+  return String(mm).padStart(2,"0") + ":" + String(ss).padStart(2,"0");
+}
+
+function scoreAt(t) {
+  let h = 0, a = 0;
+  for (let k = 0; k < ACTIONS.length; k += 4) {
+    if (ACTIONS[k] > t || ACTIONS[k+1] !== GOAL_KIND) continue;
+    ACTIONS[k+2] === 1 ? h++ : a++;
+  }
+  return [h, a];
+}
+
+function scoreboard(t) {
+  const [h, a] = scoreAt(t);
+  const line1 = SHORT[0] + "  " + h + " - " + a + "  " + SHORT[1];
+  const line2 = second(t) ? "2nd half \u00b7 ends changed" : "1st half";
+
+  ctx.fillStyle = "#12161e";
+  ctx.fillRect(0, 0, cv.width, TOP);
+
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  ctx.font = "bold 27px ui-monospace, Menlo, Consolas, monospace";
+  ctx.fillStyle = "#fff";
+  ctx.fillText(line1, PAD, TOP / 2 + 1);
+
+  // The clock is the biggest number on the page, because it is the one you look for.
+  ctx.font = "bold 30px ui-monospace, Menlo, Consolas, monospace";
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#ffd166";
+  ctx.fillText(stamp(t), cv.width / 2, TOP / 2 + 1);
+
+  ctx.font = "600 15px ui-monospace, Menlo, Consolas, monospace";
+  ctx.textAlign = "right";
+  ctx.fillStyle = second(t) ? "#ffd166" : "rgba(255,255,255,.75)";
+  ctx.fillText(line2, cv.width - PAD, TOP / 2 + 1);
+  ctx.textBaseline = "alphabetic";
+}
+
 function caption(t) {
   let best = null;
   for (let a = 0; a < ACTIONS.length; a += 4)
     if (ACTIONS[a] <= t && (best === null || ACTIONS[a] >= ACTIONS[best])) best = a;
   if (best === null) return "";
   const side = ACTIONS[best+2] === 1 ? 0 : 1;
-  return KINDS[ACTIONS[best+1]] + " - " + NAMES[side][ACTIONS[best+3]];
+  const slot = ACTIONS[best+3];
+  const kind = KINDS[ACTIONS[best+1]] || "?";
+  return slot < 0 ? kind : kind + " - " + NAMES[side][slot];
 }
 
 function draw() {
@@ -245,9 +348,12 @@ function draw() {
 
   if (layers.trail) {
     ctx.strokeStyle = "rgba(255,255,255,.5)"; ctx.lineWidth = 2; ctx.beginPath();
-    for (let k = Math.max(0, t-24); k <= t; k++) {
-      const fx = sx(BALL[k*2]), fy = sy(BALL[k*2+1]);
-      k === Math.max(0, t-24) ? ctx.moveTo(fx,fy) : ctx.lineTo(fx,fy);
+    // The trail stops at the interval: a line drawn across the change of ends would be a
+    // stripe across the pitch, which is the mirror and not the ball.
+    const from = Math.max(0, HALFTIME >= 0 && t >= HALFTIME ? Math.max(t-24, HALFTIME) : t-24);
+    for (let k = from; k <= t; k++) {
+      const fx = sx(bx(k)), fy = sy(by(k));
+      k === from ? ctx.moveTo(fx,fy) : ctx.lineTo(fx,fy);
     }
     ctx.stroke();
   }
@@ -306,10 +412,13 @@ function draw() {
     }
 
   ctx.fillStyle = "#fff"; ctx.beginPath();
-  ctx.arc(sx(BALL[t*2]), sy(BALL[t*2+1]), 6, 0, 7); ctx.fill();
+  ctx.arc(sx(bx(t)), sy(by(t)), 6, 0, 7); ctx.fill();
   ctx.strokeStyle = "#222"; ctx.lineWidth = 1.5; ctx.stroke();
 
-  document.getElementById("clock").textContent = Math.floor(t/TPM) + "'";
+  scoreboard(t);
+
+  document.getElementById("clock").textContent =
+    stamp(t) + (second(t) ? " \u00b7 2nd half, ends changed" : " \u00b7 1st half");
   document.getElementById("caption").textContent = caption(t);
   const set = (id,v) => document.getElementById(id).textContent = v.toFixed(1);
   set("hw", sh[0].width); set("hd", sh[0].depth); set("hb", sh[0].back);

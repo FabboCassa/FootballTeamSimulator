@@ -30,11 +30,11 @@
 <body>
 <header>
   <h1>Inter Rigoria 2-3 SS Capocannona</h1>
-  <span class="muted">replay dump &mdash; <b id="clock" style="color:#e8ecf4;font-variant-numeric:tabular-nums">00:00</b></span>
+  <span class="muted">replay dump &mdash; <span id="clock">0'</span></span>
   <span class="muted" id="caption"></span>
 </header>
 <main>
-  <canvas id="pitch" width="1260" height="883"></canvas>
+  <canvas id="pitch" width="1260" height="837"></canvas>
 
   <div class="bar">
     <button id="play">Pause</button>
@@ -78,8 +78,6 @@ const KINDS = ["kick-off","pass","long ball","cross","dribble","tackle","interce
                "shot","save","GOAL","miss","corner","throw-in","goal kick","free kick",
                "OFFSIDE","foul","yellow card","RED CARD","PENALTY","half-time"];
 const HALFTIME = 5401;
-const SHORT = ["RIG", "CAP"];
-const GOAL_KIND = KINDS.indexOf("GOAL");
 const COLOR = ["#e8375a", "#4f6df0"];
 
 const TICKS = BALL.length / 2;
@@ -91,13 +89,8 @@ const layers = { box:true, line:true, mark:true, trail:true, names:false };
 let tick = 0, playing = true, speed = 1, last = 0;
 
 const PAD = 30;
-
-// A strip above the pitch for the scoreboard. It is not drawn OVER the football on purpose: a
-// caption in the top-left corner of the picture sits exactly where the corner flag is, and the
-// corners are one of the things this dump exists to let you watch.
-const TOP = 46;
 const sx = t => PAD + (cv.width - 2*PAD) * t / LEN;
-const sy = t => TOP + PAD + (cv.height - TOP - 2*PAD) * t / WID;
+const sy = t => PAD + (cv.height - 2*PAD) * t / WID;
 
 // CHANGING ENDS (Law 7). The simulation keeps every side attacking the same end for ninety
 // minutes — the pitch is symmetric, so flipping it would change no football — and the second
@@ -141,7 +134,7 @@ function shape(side, t) {
 }
 
 function pitch() {
-  ctx.fillStyle = "#1f6b34"; ctx.fillRect(0, TOP, cv.width, cv.height - TOP);
+  ctx.fillStyle = "#1f6b34"; ctx.fillRect(0,0,cv.width,cv.height);
   ctx.strokeStyle = "rgba(255,255,255,.65)"; ctx.lineWidth = 2;
   ctx.strokeRect(sx(0), sy(0), sx(LEN)-sx(0), sy(WID)-sy(0));
   ctx.beginPath(); ctx.moveTo(sx(LEN/2), sy(0)); ctx.lineTo(sx(LEN/2), sy(WID)); ctx.stroke();
@@ -152,51 +145,6 @@ function pitch() {
     const g0 = near ? 0 : LEN-55, g1 = near ? 55 : LEN;
     ctx.strokeRect(sx(g0), sy(WID/2-91), sx(g1)-sx(g0), sy(WID/2+91)-sy(WID/2-91));
   }
-}
-
-// The clock, the half and the running score, drawn ON the pitch (a grey span in the page header is
-// a number nobody finds while he is watching the football). Minutes AND seconds, because a frame is
-// half a second and a match minute is 120 of them: without the seconds the number looks frozen.
-function stamp(t) {
-  const total = Math.floor(t * 60 / TPM);
-  const mm = Math.floor(total / 60), ss = total % 60;
-  return String(mm).padStart(2,"0") + ":" + String(ss).padStart(2,"0");
-}
-
-function scoreAt(t) {
-  let h = 0, a = 0;
-  for (let k = 0; k < ACTIONS.length; k += 4) {
-    if (ACTIONS[k] > t || ACTIONS[k+1] !== GOAL_KIND) continue;
-    ACTIONS[k+2] === 1 ? h++ : a++;
-  }
-  return [h, a];
-}
-
-function scoreboard(t) {
-  const [h, a] = scoreAt(t);
-  const line1 = SHORT[0] + "  " + h + " - " + a + "  " + SHORT[1];
-  const line2 = second(t) ? "2nd half \u00b7 ends changed" : "1st half";
-
-  ctx.fillStyle = "#12161e";
-  ctx.fillRect(0, 0, cv.width, TOP);
-
-  ctx.textAlign = "left";
-  ctx.textBaseline = "middle";
-  ctx.font = "bold 27px ui-monospace, Menlo, Consolas, monospace";
-  ctx.fillStyle = "#fff";
-  ctx.fillText(line1, PAD, TOP / 2 + 1);
-
-  // The clock is the biggest number on the page, because it is the one you look for.
-  ctx.font = "bold 30px ui-monospace, Menlo, Consolas, monospace";
-  ctx.textAlign = "center";
-  ctx.fillStyle = "#ffd166";
-  ctx.fillText(stamp(t), cv.width / 2, TOP / 2 + 1);
-
-  ctx.font = "600 15px ui-monospace, Menlo, Consolas, monospace";
-  ctx.textAlign = "right";
-  ctx.fillStyle = second(t) ? "#ffd166" : "rgba(255,255,255,.75)";
-  ctx.fillText(line2, cv.width - PAD, TOP / 2 + 1);
-  ctx.textBaseline = "alphabetic";
 }
 
 function caption(t) {
@@ -283,10 +231,8 @@ function draw() {
   ctx.arc(sx(bx(t)), sy(by(t)), 6, 0, 7); ctx.fill();
   ctx.strokeStyle = "#222"; ctx.lineWidth = 1.5; ctx.stroke();
 
-  scoreboard(t);
-
   document.getElementById("clock").textContent =
-    stamp(t) + (second(t) ? " \u00b7 2nd half, ends changed" : " \u00b7 1st half");
+    Math.floor(t/TPM) + "'" + (second(t) ? " \u00b7 second half, ends changed" : "");
   document.getElementById("caption").textContent = caption(t);
   const set = (id,v) => document.getElementById(id).textContent = v.toFixed(1);
   set("hw", sh[0].width); set("hd", sh[0].depth); set("hb", sh[0].back);

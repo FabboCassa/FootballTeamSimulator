@@ -35,7 +35,16 @@ namespace Sim.Core.Match
         // ball. The SCORE and EVENT model is still unchanged from v1; what moved, again, is the
         // picture, and it moved enough that a v4 replay cannot be rendered by a v5 client —
         // which is exactly what this number is for.
-        public const int Version = 7;
+        // v6: phase 3 — the team DEFENDS. One duty per man off the ball (go to the ball, cover the
+        // man who does, pick up a genuinely dangerous opponent, hold your place in the block).
+        // v7: phase 4 — the man on the ball DECIDES, and decides with his attributes: options
+        // weighed in one currency, execution error on every struck ball, the challenge as a duel.
+        // v8: phase 5 — there is a REFEREE. A ball at a carrier's feet is out when it crosses a
+        // line (sub-tick crossing point), there is an offside line and a flag, a challenge can be
+        // mistimed into a foul with a card and a penalty, a shot can be blocked, a defender can
+        // put it behind, and the second half is kicked off by the other side. The SCORE model is
+        // still untouched: the strike does not decide the goal until phase 6.
+        public const int Version = 8;
 
         private const int MatchMinutes = 90;
 
