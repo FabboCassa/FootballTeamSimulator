@@ -695,17 +695,18 @@ acting one out — with the game playable at the end of every one of them.
 
 - [x] **Phase 5 — the laws: there is a REFEREE** (2026-09-05, **verified by the user**: `dotnet test`
   **604/604 green in 518.5 s** (Sim.Core.Tests 364 + Api.Tests 240), `[DeterminismCheck]` and
-  `[server-determinism]` both **`0x436E4440B6350A7B`** identical digit for digit to the container's,
+  `[server-determinism]` both **`0x222F723B4993ED25`** identical digit for digit to the container's,
   the `pitch` scenario reproducing **every single number** of the container's 200-match run at 318.2
-  ms a match against 621.4 — **and exiting 0 for the first time in the rewrite** — and
+  ms a match against 621.4 (311.7 against 684.2 on the 6 September re-run, after the wall fix)
+  — **and exiting 0 for the first time in the rewrite** — and
   `.\tools\balance.ps1` **28/28 PASS with every figure unchanged**. Only the eye is left: open
   `replay.html` and look. Open decision: changing ENDS at half-time, deliberately not modelled). Four of the five readings still outside football's band were the
   referee's, and they were all zero or near it because **nobody was refereeing**: the ball only went
   out while it was LOOSE (a carrier over the touchline was clamped back inside — 48.7 ticks a match
   of the §1.7 defect), there was no offside line, and a challenge could only be won or lost, never
-  mistimed. **All four are now in band: throw-ins 18.4 → 39.0** (30-50), **corners 0.3 → 10.7**
-  (8-13), **offsides 0 → 4.0** (1.5-5), **fouls 0 → 20.6** (18-28) — plus 2.82 yellows, 0.19 reds and
-  0.11 penalties a match. Readings inside the band **14/19 → 19/20**, and for the first time **all
+  mistimed. **All four are now in band: throw-ins 18.4 → 33.4** (30-50), **corners 0.3 → 10.7**
+  (8-13), **offsides 0 → 4.1** (1.5-5), **fouls 0 → 20.9** (18-28) — plus 2.85 yellows, 0.14 reds and
+  0.16 penalties a match. Readings inside the band **14/19 → 19/20**, and for the first time **all
   three contract checks PASS** (the `pitch` scenario exits 0): a held ball never rests on a line.
   A ball at a carrier's feet is judged on his UNCLAMPED step with the sub-tick crossing point; the
   offside line is the second-rearmost defender and the passer READS it with an error off his
@@ -725,7 +726,7 @@ acting one out — with the game playable at the end of every one of them.
   and the scoresheet agree on all 200 matches, and every result-model calibration comes back
   identical digit for digit (2.44 goals, 24.8% draws, 48.4% home wins, `Strong wins 82%`,
   `[counter] 56.0%`, `[familiarity] 49.3/23.9`, `[sweep] 53.8%`, `[match-fatigue] 481 → 580`).
-  `MatchEngine.Version` → **8**, golden master → **`0x436E4440B6350A7B`** (v7 replays no longer
+  `MatchEngine.Version` → **8**, golden master → **`0x222F723B4993ED25`** (v7 replays no longer
   renderable, the client rejects them itself). New `RefereeTests` (9), all read off the POSITION
   STREAM. Ran here with the offline route: **364 green, 0 red** (355 + 9). Cost 621 ms a match in the
   container. Full write-up in §12 of the plan.
@@ -754,6 +755,40 @@ acting one out — with the game playable at the end of every one of them.
   gained a clock that can actually be found (header + a strip above the pitch, minutes AND seconds,
   with the running score), after the user reported that the old grey one in the header was invisible
   while watching.
+  **5c — THE WALL (2026-09-05, **verified by the user 2026-09-06**: `dotnet test` **604/604 green in
+  577.6 s**, `[DeterminismCheck]` and `[server-determinism]` both **`0x222F723B4993ED25`** identical
+  digit for digit to the container's, the `pitch` scenario reproducing **every single number** of the
+  container's 200-match run at **311.7 ms a match** and exiting 0, and `.\tools\balance.ps1`
+  **28/28 PASS with every figure unchanged** — which is the proof the wall fix did not reach the
+  result model).** The numbers were in band and the eye was not satisfied: the
+  wall at a free kick was three men scattered five metres from the ball. Three causes, all in the
+  movement layer, **none in the laws**, and all found by measuring after looking had failed:
+  (a) **team separation was pulling the wall apart** — the block wants 6.2 m between team-mates and
+  a wall wants 0.8, and separation won → a man in the wall is EXEMPT from team separation (`_inWall`)
+  and `WallSpacingDm` went 8 → 20; (b) **the wall chased itself** — the three were re-ranked by
+  distance to the ball every tick, so whoever arrived was replaced by whoever was nearest now
+  → `FormWall(side)` picks the slots ONCE, at the whistle; (c) **the steering was wrong for standing
+  on a mark in both gears** — sprinting overshot by 8 m and orbited, jogging crawled and the deadband
+  parked men 3 m short, so the wall stood at 5 m instead of 9.15 → `WalkTo(k, tx, ty)`, no inertia,
+  no deadband, step capped so it cannot pass the mark, and it now places the wall, the retreating
+  defenders, the restart taker and the kickoff — every DEAD-BALL placement, live play untouched.
+  A fourth fell out of it: `UpdateBlock` HELD the block through a kickoff and left wingers 1.9 m in
+  the wrong half → a kickoff RE-FORMS the block. Verified with numbers, not the eye: every defender
+  in the wall stands **91-95 dm from the ball** (9.1-9.5 m, the law's 9.15) and stays. Re-measured in
+  the container: **364 green**, **19/20 in band, 3/3 contract checks PASS**, throw-ins 33.4, corners
+  10.7, offsides 4.1, fouls 20.9, goals **still 2.52**. **Golden master → `0x222F723B4993ED25`**
+  (the phase-5 run before it read `0x436E4440B6350A7B`, which this invalidated: the stream changed,
+  the result model did not). Two files moved: `MatchSimulator.cs`, `BalanceConfig.cs`.
+  **His run, line by line:** `[laws-restarts]` 37.0 throw-ins · 11.0 corners · 17.5 goal kicks and 0
+  frames in 30 matches with a held ball on a line · `[laws-offside]` 4.2 · `[laws-fouls]` 21.9 fouls ·
+  2.95 yellows · 0.15 reds · 0.10 penalties · `[laws-tackling]` 8.5 fouls and 1.20 cards from a side
+  of 90 tacklers against 11.2 and 1.60 from a side of 20 · `[laws-cards]` 10 sent off in 40 matches ·
+  `[laws-halftime]` 6 intervals — every one the container's number to one decimal, on a different
+  machine, a different OS and a different runtime. Expected non-faults in that output: `[HIGH ] shots
+  on target 15.0` is the one band left open for phase 6 and does not fail the run (`--pitch-strict`
+  is off), and the `NU1903 SQLitePCLRaw` advisory on `Api.Tests` is pre-existing and unrelated.
+  🏁 **Phase 5 is CLOSED**; only `MatchRenderer`'s Play-mode look at the change of ends is left, and
+  that is a client-side look, not engine work.
 
 - [ ] Phase 6 — inverting the causality · [ ] Phase 7 — performance data ·
   [ ] Phase 8 — the instructions matter

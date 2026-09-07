@@ -151,6 +151,17 @@ namespace Sim.Core.Match.Movement
         private bool[] _booked = System.Array.Empty<bool>();
         private readonly int[] _tenMen = new int[SideCount];
 
+        /// <summary>
+        /// In the wall, this tick. A wall is made of men standing on each other's shoulders, so the
+        /// one thing that must not apply to them is the separation that keeps team-mates apart — at
+        /// a six-metre radius it opens the wall before it has finished forming, which is exactly
+        /// what the eye caught in the replay dump.
+        /// </summary>
+        private bool[] _inWall = System.Array.Empty<bool>();
+
+        /// <summary>The lineup slots making up the wall at the current free kick, or -1.</summary>
+        private readonly int[] _wall = { -1, -1, -1, -1, -1 };
+
         private bool[] _flagged = System.Array.Empty<bool>();
         private int[] _flaggedX = System.Array.Empty<int>();
         private int[] _flaggedY = System.Array.Empty<int>();
@@ -391,6 +402,7 @@ namespace Sim.Core.Match.Movement
             _py = new int[total];
             _vx = new int[total];
             _vy = new int[total];
+            _inWall = new bool[total];
             _sentOff = new bool[total];
             _booked = new bool[total];
             _tenMen[0] = 0;
@@ -1614,28 +1626,42 @@ namespace Sim.Core.Match.Movement
             {
                 // He goes to the ball — and at a kickoff he stands just BEHIND it, in his own half,
                 // because that is where the man taking a kickoff stands (Law 8) and standing on the
-                // centre spot itself puts him a stride into the other half.
-                tx = _deadKind == BallActionKind.Kickoff
-                    ? _ball.X - MovementGeometry.Direction(home) * U.Units(_cfg.KickoffStandOffDm)
-                    : _ball.X;
-                ty = _ball.Y;
-                sprint = true;
+                // centre spot itself puts him a stride into the other half. Placed, not steered:
+                // the deadband would leave him three metres off the ball, which at a kickoff is
+                // three metres inside the other side's half.
+                WalkTo(
+                    k,
+                    _deadKind == BallActionKind.Kickoff
+                        ? _ball.X - MovementGeometry.Direction(home) * U.Units(_cfg.KickoffStandOffDm)
+                        : _ball.X,
+                    _ball.Y);
+                return;
             }
             else if (_ball.Dead && _deadKind == BallActionKind.Kickoff)
             {
-                // A kickoff is taken with both sides in their own half (Law 8). Nobody makes a
-                // supporting run into the other half while the referee is waiting to whistle —
-                // which is exactly what the attacking side's supporters used to do, standing the
-                // kickoff frame in a position the laws do not allow (engine phase 5).
+                // A kickoff is taken with both sides in their own half (Law 8), and it is a
+                // PLACEMENT like the wall: nobody makes a supporting run into the other half while
+                // the referee waits, and a man caught over the line WALKS back onto his mark rather
+                // than steering at it — steering leaves him a metre or two the wrong side of
+                // halfway, because inside fifteen metres the approach paces him down to a crawl.
                 HomeSpot(side, slot, out tx, out ty);
-                sprint = MovementGeometry.Direction(home) * (_px[k] - U.CenterXU) > 0;
+                WalkTo(k, tx, ty);
+                return;
             }
             else if (RetreatSpot(side, slot, out int retreatX, out int retreatY))
             {
-                // Ten yards, and the wall (Laws 13 and 14).
-                tx = retreatX;
-                ty = retreatY;
-                sprint = true;
+                // Ten yards, and the wall (Laws 13 and 14) — WALKED TO, not steered at.
+                //
+                // This is the one place in the model where a man is going to a MARK rather than to
+                // the football, and the steering is wrong for it in both of its gears, which is
+                // what the replay dump showed: sprinting, he carries his momentum straight past the
+                // spot and spends the stoppage orbiting it (measured eight metres beyond); walking,
+                // the approach slowdown paces him down to a fifth of a jog inside fifteen metres and
+                // the arrival deadband stops him three metres short — so he never makes the nine
+                // fifteen and the wall stands at five metres, which is against the law he is
+                // standing there to obey. A referee walks a wall onto its mark and it stays there.
+                WalkTo(k, retreatX, retreatY);
+                return;
             }
             else if (_ball.OwnerSide == side && _ball.OwnerSlot == slot)
             {
@@ -1769,6 +1795,46 @@ namespace Sim.Core.Match.Movement
             }
         }
 
+        /// <summary>
+        /// To a mark: the movement of a man being placed for a dead ball rather than one chasing a
+        /// ball. No inertia to carry him past the spot and no deadband to stop him short of it — he
+        /// runs while it is a long way off and walks the last stretch, and he ends up ON it.
+        ///
+        /// This exists because the steering is wrong for a mark in both its gears, which the replay
+        /// dump showed three times over: sprinting, a man carries his momentum eight metres past the
+        /// spot and orbits it; jogging, the approach slowdown paces him to a crawl inside fifteen
+        /// metres and the arrival deadband parks him three metres short — so a wall stood at five
+        /// metres instead of nine fifteen, and men were left standing over the halfway line at a
+        /// kickoff. Capped at his own running speed, so it can no more teleport a body than the
+        /// steering can (PositionStreamTests.NobodyTeleports).
+        /// </summary>
+        private void WalkTo(int k, int tx, int ty)
+        {
+            _stepFromX[k] = _px[k];
+            _stepFromY[k] = _py[k];
+
+            int dx = tx - _px[k], dy = ty - _py[k];
+            int gap = U.Length(dx, dy);
+            int step = gap > _approachU ? _maxSpeed[k] : _cruise[k];
+            if (step < 1) step = 1;
+
+            if (gap <= step)
+            {
+                _px[k] = U.ClampX(tx);
+                _py[k] = U.ClampY(ty);
+            }
+            else
+            {
+                _px[k] = U.ClampX(_px[k] + (int)((long)dx * step / gap));
+                _py[k] = U.ClampY(_py[k] + (int)((long)dy * step / gap));
+            }
+
+            _vx[k] = 0;
+            _vy[k] = 0;
+            _stepToX[k] = _px[k];
+            _stepToY[k] = _py[k];
+        }
+
         private void Steer(int k, int tx, int ty, bool sprint)
         {
             // Flat out only when the ball is the reason; otherwise a jog. A match where every
@@ -1840,7 +1906,9 @@ namespace Sim.Core.Match.Movement
             int side = k / _n;
             int pushX = 0, pushY = 0;
 
-            for (int j = 0; j < _n; j++)
+            // A man in the wall stands shoulder to shoulder with the two beside him: the separation
+            // that keeps team-mates six metres apart is the one rule a wall exists to break.
+            for (int j = 0; j < _n && !_inWall[k]; j++)
             {
                 int other = side * _n + j;
                 if (other == k || _sentOff[other]) continue;
@@ -1972,7 +2040,13 @@ namespace Sim.Core.Match.Movement
             int held = _blockLine[side];
             int drift = line - held;
             if (drift < 0) drift = -drift;
-            if (!_blockSet[side] || drift > _cfg.BackLineHoldDm)
+
+            // A KICKOFF re-forms the shape rather than holding it. The deadband is what stops the
+            // line creeping after every sideways pass, but at a kickoff the block has just been
+            // squeezed behind the halfway line by the cap above, and holding the old line six metres
+            // deeper leaves the front two men standing in the other side's half — which is against
+            // Law 8, and was measured doing exactly that (engine phase 5).
+            if (!_blockSet[side] || drift > _cfg.BackLineHoldDm || kickoff)
             {
                 held = line;
                 _blockSet[side] = true;
@@ -2883,6 +2957,14 @@ namespace Sim.Core.Match.Movement
                     : NearestTo(side, _ball.X, _ball.Y, includeKeeper: false);
             _deadAt = tick + _cfg.DeadBallTicks;
 
+            // And the wall, decided here and once (Law 13): the three men nearest the ball at the
+            // whistle, when the kick is inside shooting range of the goal they are defending.
+            int defending = 1 - side;
+            int defendedGoalX = U.Units(MovementGeometry.OwnGoalX(defending == 0));
+            bool walled = kind == BallActionKind.FreeKick
+                && U.Distance(_ball.X, _ball.Y, defendedGoalX, U.CenterYU) < U.Units(_cfg.MaxShootRangeDm);
+            FormWall(walled ? defending : -1);
+
             Record(tick, kind, side == 0, _deadTaker, -1);
         }
 
@@ -3089,6 +3171,7 @@ namespace Sim.Core.Match.Movement
             x = 0;
             y = 0;
             int k = side * _n + slot;
+            _inWall[k] = false;
             if (!_ball.Dead || _deadSide == side) return false;
             if (_deadKind != BallActionKind.FreeKick && _deadKind != BallActionKind.Penalty) return false;
             if (_keeper[k]) return false;
@@ -3108,13 +3191,13 @@ namespace Sim.Core.Match.Movement
             int retreat = U.Units(_cfg.FreeKickRetreatDm);
             int away = U.Distance(_px[k], _py[k], _ball.X, _ball.Y);
 
-            // The wall, for the men nearest the ball, when the kick is worth walling off.
+            // The wall — the three men picked at the whistle, each keeping the place he was given.
             int goalX = U.Units(MovementGeometry.OwnGoalX(side == 0));
-            bool shootingRange = U.Distance(_ball.X, _ball.Y, goalX, U.CenterYU) < U.Units(_cfg.MaxShootRangeDm);
-            int rank = NearerToBall(side, slot);
+            int place = WallPlace(slot);
 
-            if (shootingRange && rank < _cfg.WallMen)
+            if (place >= 0)
             {
+                _inWall[k] = true;
                 int dx = goalX - _ball.X, dy = U.CenterYU - _ball.Y;
                 int span = U.Length(dx, dy);
                 if (span <= 0) span = 1;
@@ -3124,7 +3207,7 @@ namespace Sim.Core.Match.Movement
 
                 // Shoulder to shoulder ACROSS the line of the kick, centred on it.
                 int step = U.Units(_cfg.WallSpacingDm);
-                int offset = (rank - (_cfg.WallMen - 1) / 2) * step;
+                int offset = (place - (_cfg.WallMen - 1) / 2) * step;
                 x = U.ClampX(alongX + (int)((long)(-dy) * offset / span));
                 y = Inside(alongY + (int)((long)dx * offset / span));
                 return true;
@@ -3141,22 +3224,47 @@ namespace Sim.Core.Match.Movement
             return true;
         }
 
-        /// <summary>How many of his own side are nearer the ball than he is (his place in the wall).</summary>
-        private int NearerToBall(int side, int slot)
+        /// <summary>
+        /// Who makes up the wall, decided ONCE when the free kick is given — the three men nearest
+        /// the ball at the whistle, and they keep their places.
+        ///
+        /// Re-ranking them every tick, which is what this replaced, made the wall chase itself: two
+        /// men swap places as they run, so each sets off for the spot the other has just left and
+        /// neither arrives. Deciding it at the whistle is also what happens on a pitch — the
+        /// referee walks THOSE men back — and it is one O(n) pass a restart instead of one per man
+        /// per tick.
+        /// </summary>
+        private void FormWall(int side)
         {
-            int k = side * _n + slot;
-            long mine = U.DistanceSq(_px[k], _py[k], _ball.X, _ball.Y);
-            int nearer = 0;
-            for (int i = 0; i < _n; i++)
-            {
-                int other = side * _n + i;
-                if (other == k || _keeper[other] || _sentOff[other]) continue;
-                long d = U.DistanceSq(_px[other], _py[other], _ball.X, _ball.Y);
-                if (d < mine || (d == mine && i < slot)) nearer++;
-            }
+            for (int w = 0; w < _wall.Length; w++) _wall[w] = -1;
+            if (side < 0) return;
 
-            return nearer;
+            for (int w = 0; w < _cfg.WallMen && w < _wall.Length; w++)
+            {
+                int best = -1;
+                long bestDistance = long.MaxValue;
+                for (int i = 0; i < _n; i++)
+                {
+                    int k = side * _n + i;
+                    if (_keeper[k] || _sentOff[k] || InWall(i)) continue;
+                    long d = U.DistanceSq(_px[k], _py[k], _ball.X, _ball.Y);
+                    if (d < bestDistance) { bestDistance = d; best = i; }
+                }
+
+                if (best < 0) break;
+                _wall[w] = best;
+            }
         }
+
+        /// <summary>His place in the wall, or -1 if he is not in it.</summary>
+        private int WallPlace(int slot)
+        {
+            for (int w = 0; w < _wall.Length; w++)
+                if (_wall[w] == slot) return w;
+            return -1;
+        }
+
+        private bool InWall(int slot) => WallPlace(slot) >= 0;
 
         private void ClearFlags()
         {

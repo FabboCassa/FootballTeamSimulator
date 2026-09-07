@@ -16,32 +16,88 @@ Read ARCHITECTURE.md (design) and ROADMAP.md (plan + current status via checkbox
 - After ANY change in `shared/`, the user must run `.\tools\build-simcore.ps1` so Unity gets fresh DLLs (Sim.Core.dll + Fts.Contracts.dll → `client/Assets/Plugins/SimCore/`, gitignored, .meta committed).
 - Test command: `dotnet test` (all) or with harness output:
   `dotnet test shared/Sim.Core.Tests/Sim.Core.Tests.csproj --logger "console;verbosity=detailed"`
-- Current test count: **604 green** (Sim.Core.Tests **364** — the 355 of phase 4 plus the 9 `RefereeTests` of phase 5 — + Api.Tests 240) in 518.5 s, golden master **0x436E4440B6350A7B** (engine v8, engine rework phase 5, verified on the user's machine 2026-09-05 and identical digit for digit to the container's .NET 8 value; phase 4's was 0xF8BE4A32C28421A1 on v7, verified on his machine 2026-09-05 and identical digit for digit to the container's .NET 10 value; phase 3's was 0xABC7B41DC6F258C2 on engine v6), and `dotnet test` takes ~6.3 minutes (378.8 s: Sim.Core.Tests 310.7 s + Api.Tests 378.1 s in parallel). The paragraph below is the historical note it replaced: 212 green (through 8.4a, +4 OnlineSeasonTick tests over 6.10a's 208). Golden master 0xCDEA5A2F7B9E5CF6. **STALE as of 13.1: the golden master changes with engine v3 — see the current position below.** Server Api.Tests: 70 green (through 8.5a, +11 LeagueAuctionTests over 8.4a's 59) + DevSeedTests (5) from the dev-seed tooling; **8.6 (live match control) DONE [x] — 8.6a (server) 85/85 green + 8.6b (Unity client) + dev "simulate the opponent" tooling Play-mode VERIFIED & ACCEPTED by the user (docker `up --build` healthy, the live match kicks off and the bot opponent joins/subs from the live screen). `[server-determinism] 0xCDEA5A2F7B9E5CF6` unchanged, NO Sim.Core change → 212 Sim.Core + golden master stand, no save bump. Still standing: commit `Migrations/AddLiveMatch*` for a clean Postgres/docker deploy (the running dev DB already has `live_matches`). Client: Season "▶ Live" launch, ~1s poll, MatchRenderer synced to KickoffUtc, InMatchPanel subs+instructions → POST /change, finish/leave (new .cs: LiveMatchView, OnlineLiveMatchScreenPresenter). DEV TOOLING (test the live match solo): server `POST /internal/dev/leagues/{id}/live/{fixtureId}/bot` (`DevSeedService.BotLiveAsync` — the fixture's @dev.local bot opens/joins + optionally a legal `LineupPlan.From(BestEleven)` sub), client dev row "Bot: entra"/"Bot: sostituzione" (gated by `DevFlags.OnlineTestTools`); `DevSeedService` ctor now takes `ILiveMatchService` (DI-resolved → the 5 DevSeedTests stay green). NEXT: Phase 9 (public ranked mode) — 8.7 (private season end) is DONE [x] and 🏁 Phase 8 is COMPLETE. **8.7 summary:** SERVER-ONLY logic, NO Sim.Core change, NO migration (reuses `LeagueStatus.Completed`=2 + existing columns); `dotnet test Api.Tests` **92/92 green**, `[server-determinism] 0xCDEA5A2F7B9E5CF6` unchanged. `ResolveNextRoundAsync` flips the league to Completed on the last matchday; `GET /leagues/{id}/season/summary` → final table + champion / top scorer (aggregated from the stored MatchReport goal events) / best defence / wooden spoon; `POST /leagues/{id}/season/new` (creator, Completed only) = FULL reset → deletes fixtures/lineups/trainings/bids/auctions/live, un-assigns clubs, re-equalises the developed squads + re-seeds 25M budgets, resets condition to neutral, reopens the draft (players KEEP their developed ability). Client 8.7b: `SeasonSummaryDto`/`SeasonAwardDto`/`TopScorerDto` + `GetSeasonSummaryAsync`/`StartNewSeasonAsync`, new `Views/OnlineSeasonEndView` + `Presenters/OnlineSeasonEndScreenPresenter` (named `Online*` because `SeasonEndView`/`season_end.*` is the SP 2.7 screen; the online one owns `seasonend.*`), opened by a "Bilancio stagione" button that appears on the Season screen once complete; loc en+it 612/612 at parity. The user's monthly-public-league vision (per-player rating → matchmaking by level → auto-enrol with opt-out → 1-week break between seasons) is recorded as the Phase 9 direction.**
+- Current test count: **604 green** (Sim.Core.Tests **364** — the 355 of phase 4 plus the 9 `RefereeTests` of phase 5 — + Api.Tests 240) in 518.5 s, golden master **0x222F723B4993ED25** (engine v8, engine rework phase 5 + the wall fix 5c, verified on the user's machine 2026-09-06 in 577.6 s and identical digit for digit to the container's .NET 8 value; the value BEFORE the wall fix was 0x436E4440B6350A7B, also verified on his machine, and the wall fix invalidated it; phase 4's was 0xF8BE4A32C28421A1 on v7, verified on his machine 2026-09-05 and identical digit for digit to the container's .NET 10 value; phase 3's was 0xABC7B41DC6F258C2 on engine v6), and `dotnet test` takes ~6.3 minutes (378.8 s: Sim.Core.Tests 310.7 s + Api.Tests 378.1 s in parallel). The paragraph below is the historical note it replaced: 212 green (through 8.4a, +4 OnlineSeasonTick tests over 6.10a's 208). Golden master 0xCDEA5A2F7B9E5CF6. **STALE as of 13.1: the golden master changes with engine v3 — see the current position below.** Server Api.Tests: 70 green (through 8.5a, +11 LeagueAuctionTests over 8.4a's 59) + DevSeedTests (5) from the dev-seed tooling; **8.6 (live match control) DONE [x] — 8.6a (server) 85/85 green + 8.6b (Unity client) + dev "simulate the opponent" tooling Play-mode VERIFIED & ACCEPTED by the user (docker `up --build` healthy, the live match kicks off and the bot opponent joins/subs from the live screen). `[server-determinism] 0xCDEA5A2F7B9E5CF6` unchanged, NO Sim.Core change → 212 Sim.Core + golden master stand, no save bump. Still standing: commit `Migrations/AddLiveMatch*` for a clean Postgres/docker deploy (the running dev DB already has `live_matches`). Client: Season "▶ Live" launch, ~1s poll, MatchRenderer synced to KickoffUtc, InMatchPanel subs+instructions → POST /change, finish/leave (new .cs: LiveMatchView, OnlineLiveMatchScreenPresenter). DEV TOOLING (test the live match solo): server `POST /internal/dev/leagues/{id}/live/{fixtureId}/bot` (`DevSeedService.BotLiveAsync` — the fixture's @dev.local bot opens/joins + optionally a legal `LineupPlan.From(BestEleven)` sub), client dev row "Bot: entra"/"Bot: sostituzione" (gated by `DevFlags.OnlineTestTools`); `DevSeedService` ctor now takes `ILiveMatchService` (DI-resolved → the 5 DevSeedTests stay green). NEXT: Phase 9 (public ranked mode) — 8.7 (private season end) is DONE [x] and 🏁 Phase 8 is COMPLETE. **8.7 summary:** SERVER-ONLY logic, NO Sim.Core change, NO migration (reuses `LeagueStatus.Completed`=2 + existing columns); `dotnet test Api.Tests` **92/92 green**, `[server-determinism] 0xCDEA5A2F7B9E5CF6` unchanged. `ResolveNextRoundAsync` flips the league to Completed on the last matchday; `GET /leagues/{id}/season/summary` → final table + champion / top scorer (aggregated from the stored MatchReport goal events) / best defence / wooden spoon; `POST /leagues/{id}/season/new` (creator, Completed only) = FULL reset → deletes fixtures/lineups/trainings/bids/auctions/live, un-assigns clubs, re-equalises the developed squads + re-seeds 25M budgets, resets condition to neutral, reopens the draft (players KEEP their developed ability). Client 8.7b: `SeasonSummaryDto`/`SeasonAwardDto`/`TopScorerDto` + `GetSeasonSummaryAsync`/`StartNewSeasonAsync`, new `Views/OnlineSeasonEndView` + `Presenters/OnlineSeasonEndScreenPresenter` (named `Online*` because `SeasonEndView`/`season_end.*` is the SP 2.7 screen; the online one owns `seasonend.*`), opened by a "Bilancio stagione" button that appears on the Season screen once complete; loc en+it 612/612 at parity. The user's monthly-public-league vision (per-player rating → matchmaking by level → auto-enrol with opt-out → 1-week break between seasons) is recorded as the Phase 9 direction.**
 
-## Current position — 🏁 ENGINE REWORK PHASE 5 CLOSED (2026-09-05): there is a REFEREE
+## Current position — 🏁 ENGINE REWORK PHASE 5 CLOSED, WALL FIX INCLUDED (2026-09-06): there is a REFEREE
+
+**5c — THE WALL, FIXED AFTER HIS FIRST RUN AND RE-VERIFIED ON HIS MACHINE 2026-09-06.**
+Phase 5 was verified on his machine, then the eye found the one thing the numbers
+could not: **the wall at a free kick was not a wall**. Three separate causes, all in the movement
+layer, none in the laws — found by measuring, not by looking:
+
+1. **team separation was pulling the wall apart.** The block's "don't stand on each other" rule wants
+   6.2 m between team-mates; a wall wants 0.8 m, and separation won. → a man in the wall is EXEMPT
+   from team separation (`_inWall`), and `WallSpacingDm` went 8 → 20 (shoulder to shoulder rather
+   than overlapping).
+2. **the wall chased itself.** The three men were re-ranked by distance to the ball EVERY TICK, so
+   whoever got there first was replaced by whoever was nearest now, and nobody ever arrived.
+   → `FormWall(side)` picks the slots ONCE, at the whistle, and they hold.
+3. **the steering was wrong for standing on a mark, in both gears.** Sprinting overshot by 8 m and
+   then orbited the spot; jogging crawled, and the movement deadband parked men 3 m short — the wall
+   stood at **5 m** from the ball instead of 9.15. → `WalkTo(k, tx, ty)`: no inertia, no deadband,
+   and the step capped so it cannot pass the mark. It is now what places the wall, the retreating
+   defenders, the restart taker and the kickoff — every DEAD-BALL placement. Live play is untouched.
+
+A fourth thing fell out of it: `UpdateBlock` HELD the block through a kickoff, which left wingers
+1.9 m inside the wrong half. A kickoff now RE-FORMS the block instead of holding it.
+
+Verified numerically rather than by eye: every defender in the wall stands **91-95 dm from the ball**
+— 9.1 to 9.5 m, the law's 9.15 — and stays there. Re-measured in the container after the fix:
+**364 tests green**, **19/20 in band, 3/3 contract checks PASS**, and the numbers below are that run.
+**Golden master → `0x222F723B4993ED25`**; the phase-5 run before the fix read `0x436E4440B6350A7B`,
+which the wall fix invalidated — the stream changed, the result model did not (goals still 2.52).
+Only two files moved: `MatchSimulator.cs` and `BalanceConfig.cs`.
+
+### Verified by the user, 2026-09-06 (the wall fix)
+
+    .\tools\build-simcore.ps1                                          Sim.Core + Contracts OK
+    dotnet test                                                         604/604 green, 0 failed, 577.6 s
+                                                                        (Sim.Core.Tests 364 + Api.Tests 240)
+    .\tools\balance.ps1 -Scenario pitch -PitchMatches 200 -PitchDump .\replay.html
+                                                                        19/20 in band · 3/3 checks PASS
+                                                                        311.7 ms a match · "Balance checks PASSED"
+    .\tools\balance.ps1                                                28/28 PASS, every figure unchanged
+
+`[DeterminismCheck]` and `[server-determinism]` both printed **`0x222F723B4993ED25`** — cross-runtime
+determinism (his .NET 10 against the container's .NET 8) survives the wall fix. The `pitch` scenario
+reproduced **every single number** of the container's 200-match run: throw-ins 33.4, corners 10.7,
+offsides 4.1, fouls 20.9, goals 2.52, shots 25.2 (15.0), passes 877.4 at 78.2%, defending 38.7 × 32.1,
+attacking 45.2 × 39.6, 11.07 km. `[laws-*]` likewise to one decimal: 37.0 throw-ins / 11.0 corners /
+17.5 goal kicks and 0 held-ball-on-a-line frames, 4.2 offsides, 21.9 fouls · 2.95 yellows · 0.15 reds
+· 0.10 penalties, 8.5 fouls from a side of 90 tacklers against 11.2 from a side of 20, 10 sent off in
+40 matches, 6 intervals. And `balance.ps1` came back **28/28 with every figure unchanged**, which is
+the proof the wall fix did not touch the result model.
+
+**Outputs that look like faults and are not:** `[HIGH ] shots on target 15.0 want 6.0-11.0` is the
+one band left open on purpose (the result model's share — phase 6), and it does NOT fail the run
+because `--pitch-strict` is off; the `NU1903 SQLitePCLRaw.lib.e_sqlite3` advisory on `Api.Tests` is
+pre-existing and unrelated; and the `Application started / shutting down` blocks are `Api.Tests`
+spinning the test host up and down.
+
 
 **THE USER'S RUN, 2026-09-05. `dotnet test` 604/604 green, 0 failed, in 518.5 s** (`Sim.Core.Tests`
 **364** — the 355 of phase 4 plus the 9 new `RefereeTests` — and `Api.Tests` **240**), with
-`[DeterminismCheck]` and `[server-determinism]` both printing **`0x436E4440B6350A7B`**, **identical
+`[DeterminismCheck]` and `[server-determinism]` both printing **`0x222F723B4993ED25`**, **identical
 digit for digit** to the value computed in the container on .NET 8: cross-runtime determinism
 survives engine v8. `.\tools\balance.ps1` **28/28 PASS with every figure unchanged** — which is the
 PROOF the result model was not touched. And the `pitch` scenario reproduced **every single number**
-of the container's run — 19/20 in band, throw-ins 39.0, corners 10.7, offsides 4.0, fouls 20.6,
-goals 2.52, shots 25.1 (15.0), passes 863 at 77.8%, defending 38.8 × 32.1, attacking 45.2 × 39.6, km
-11.08 — at **318.2 ms a match against the container's 621.4** (1.95x, in line with the 1.64x of
-phases 3 and 4). **`Balance checks PASSED`: the exit code is 0.** At phase 4 that same command exited
+of the container's run (the figures below are the 6 September run, after the wall fix; the 5
+September one, before it, matched just as exactly) — 19/20 in band, throw-ins 33.4, corners 10.7,
+offsides 4.1, fouls 20.9, goals 2.52, shots 25.2 (15.0), passes 877 at 78.2%, defending 38.7 × 32.1,
+attacking 45.2 × 39.6, km 11.07 — at **311.7 ms a match against the container's 684.2** (2.20x, in
+line with the 1.64x of phases 3 and 4). **`Balance checks PASSED`: the exit code is 0.** At phase 4 that same command exited
 1 BY CONSTRUCTION (the held-ball-on-a-line red), so from now on **a non-zero exit code on the `pitch`
 scenario is a real regression and must be chased.**
 
 **And every diagnostic line of the phase reproduced the container's number on his machine:**
 
-    [laws-restarts] 40.5 throw-ins · 10.7 corners · 18.3 goal kicks a match, and 0 frames in
+    [laws-restarts] 37.0 throw-ins · 11.0 corners · 17.5 goal kicks a match, and 0 frames in
                     30 matches with a held ball on a line
-    [laws-offside]  4.7 offsides a match, 56 flags checked
-    [laws-fouls]    22.3 fouls · 3.05 yellows · 0.15 reds · 0.20 penalties a match (446 checked)
-    [laws-tackling] a side of 90 tacklers gave away 8.5 fouls a match and 1.50 cards;
-                    a side of 20 tacklers 12.1 and 1.90
-    [laws-cards]    7 men sent off in 40 matches
+    [laws-offside]  4.2 offsides a match, 50 flags checked
+    [laws-fouls]    21.9 fouls · 2.95 yellows · 0.15 reds · 0.10 penalties a match (437 checked)
+    [laws-tackling] a side of 90 tacklers gave away 8.5 fouls a match and 1.20 cards;
+                    a side of 20 tacklers 11.2 and 1.60
+    [laws-cards]    10 men sent off in 40 matches
     [laws-halftime] the interval checked in 6 matches
 
 **AND THE EYE: looked at and ACCEPTED by the user the same day** — he opened the dump and watched the
@@ -76,9 +132,9 @@ ball only went out of play while it was LOOSE — a man carrying it over the tou
 clamped back inside, the §1.7 defect, which the harness's own contract check counted at 48.7 ticks a
 match — there was no offside line at all, and a challenge could only be won or lost, never mistimed.
 
-**All four are now inside the band**: throw-ins **18.4 → 39.0** (30-50), corners **0.3 → 10.7**
-(8-13), offsides **0 → 4.0** (1.5-5), fouls **0 → 20.6** (18-28), plus 2.82 yellows, 0.19 reds and
-0.11 penalties a match. Readings inside football's band go from **14/19 to 19/20**, and **for the
+**All four are now inside the band**: throw-ins **18.4 → 33.4** (30-50), corners **0.3 → 10.7**
+(8-13), offsides **0 → 4.1** (1.5-5), fouls **0 → 20.9** (18-28), plus 2.85 yellows, 0.14 reds and
+0.16 penalties a match. Readings inside football's band go from **14/19 to 19/20**, and **for the
 first time all three contract checks pass** — `a held ball is never sitting on a line of the pitch`
 reads **0.0 ticks a match** and the `pitch` scenario exits **0**.
 
@@ -93,34 +149,34 @@ result-model calibration came back identical digit for digit:**
 `[sweep] top 53.8%`, `[positioning-line] 487→513 / 467→513`, `[positioning-width] 549 vs 531`,
 `[match-fatigue] 481 → 580`, `[fitness->result] 517 vs 318`.
 
-**Golden master: `0x436E4440B6350A7B`** (engine v8; phase 4's was `0xF8BE4A32C28421A1` on v7),
+**Golden master: `0x222F723B4993ED25`** (engine v8; phase 4's was `0xF8BE4A32C28421A1` on v7),
 already re-pointed in the four usual places. **364 tests green, 0 red** in `Sim.Core.Tests` (the 355
 of phase 4 plus the 9 new `RefereeTests`), run here with the offline route (the hand-written NUnit
 stub plus a reflection runner), in 441.6 s.
 
 **The measurement (200 matches, neutral tactics, seed 20260803):**
 
-    goals 2.52   shots 25.1 (15.0 on target)   passes 863 at 77.8% accuracy
-    long balls 27.6   crosses 41.2   dribbles 293.0   clearances 256.1
-    tackles won 359.3   interceptions 205.2
-    throw-ins 39.0   corners 10.7   goal kicks 17.4   offsides 4.0   fouls 20.6
-    yellow cards 2.82   red cards 0.19   penalties 0.11
-    possession home 50.6%   nobody on the ball 20.8% of frames
-    ball by third (home->away) 35.4% / 27.4% / 37.1%
-    ground covered 11.08 km per player (busiest 16.49, laziest 8.88)
-    defending  width 38.8 m  depth 32.1 m  back line spread 5.9 m  biggest hole 10.8 m
-    attacking  width 45.2 m  depth 39.6 m  back line spread 5.4 m  biggest hole 12.9 m
-    19/20 inside the band · 3/3 contract checks PASS · 621.4 ms a match
+    goals 2.52   shots 25.2 (15.0 on target)   passes 877 at 78.2% accuracy
+    long balls 29.2   crosses 41.3   dribbles 297.5   clearances 257.6
+    tackles won 364.4   interceptions 207.7
+    throw-ins 33.4   corners 10.7   goal kicks 17.5   offsides 4.1   fouls 20.9
+    yellow cards 2.85   red cards 0.14   penalties 0.16
+    possession home 50.4%   nobody on the ball 19.5% of frames
+    ball by third (home->away) 35.7% / 27.3% / 37.0%
+    ground covered 11.07 km per player (busiest 16.45, laziest 8.92)
+    defending  width 38.7 m  depth 32.1 m  back line spread 5.9 m  biggest hole 10.8 m
+    attacking  width 45.2 m  depth 39.6 m  back line spread 5.3 m  biggest hole 12.9 m
+    19/20 inside the band · 3/3 contract checks PASS · 684.2 ms a match
 
 **And the phase's diagnostic lines**, each printed by its own test:
 
-    [laws-restarts] 40.5 throw-ins · 10.7 corners · 18.3 goal kicks a match, and 0 frames in
+    [laws-restarts] 37.0 throw-ins · 11.0 corners · 17.5 goal kicks a match, and 0 frames in
                     30 matches with a held ball on a line
-    [laws-offside]  4.7 offsides a match, 56 flags checked
-    [laws-fouls]    22.3 fouls · 3.05 yellows · 0.15 reds · 0.20 penalties a match (446 checked)
-    [laws-tackling] a side of 90 tacklers gave away 8.5 fouls a match and 1.50 cards;
-                    a side of 20 tacklers 12.1 and 1.90
-    [laws-cards]    7 men sent off in 40 matches
+    [laws-offside]  4.2 offsides a match, 50 flags checked
+    [laws-fouls]    21.9 fouls · 2.95 yellows · 0.15 reds · 0.10 penalties a match (437 checked)
+    [laws-tackling] a side of 90 tacklers gave away 8.5 fouls a match and 1.20 cards;
+                    a side of 20 tacklers 11.2 and 1.60
+    [laws-cards]    10 men sent off in 40 matches
     [laws-halftime] the interval checked in 6 matches
 
 `[laws-tackling]` is **THE assertion of the phase** and the counterpart of phase 4's `[ball-skill]`:
@@ -221,7 +277,7 @@ have `Defending` as the tackling skill and that is what the foul reads, and addi
 touch generation, training and valuation, i.e. every golden master in the world and not just the
 engine's; a sent-off man stands on the touchline at the halfway line INSIDE the pitch coordinates, so
 the analyzer still counts him among the ten outfielders and a match with a red has a slightly inflated
-block width (0.19 reds a match, inside the noise, written down so it is known).
+block width (0.14 reds a match, inside the noise, written down so it is known).
 
 **NEXT: phase 6 — inversione della causalità.** `MatchSimulator` produce punteggio ed eventi,
 `MatchDirector` e i knob `Chance*` spariscono, `MatchEngine` retrocede a percorso veloce per il mondo

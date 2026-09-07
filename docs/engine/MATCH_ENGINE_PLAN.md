@@ -8,24 +8,26 @@ con il gioco sempre funzionante, regolamento fino a falli/cartellini/punizioni.
 - [x] **Fase 2 — forma: formazione e blocco** (2026-09-03). Vedi §9.
 - [x] **Fase 3 — difendere: zona e trigger** (2026-09-04). Vedi §10.
 - [x] **Fase 4 — decisioni con la palla** (2026-09-04, misurata nel container). Vedi §11.
-- [x] **Fase 5 — il regolamento** (2026-09-05, verificata dall'utente). Vedi §12.
+- [x] **Fase 5 — il regolamento** (2026-09-05, verificata dall'utente; la correzione della
+      barriera §12.5 è arrivata dopo ed è stata riverificata il 2026-09-06). Vedi §12.
 - [ ] Fase 6 — inversione della causalità
 - [ ] Fase 7 — dati sulle prestazioni
 - [ ] Fase 8 — le istruzioni contano
 
 ---
 
-## 📍 Stato — 5 settembre 2026
+## 📍 Stato — 6 settembre 2026
 
-**Siamo qui: 🏁 FASE 5 CHIUSA E VERIFICATA dall'utente il 5 settembre 2026. Tutto verde, e lo
-scenario `pitch` esce con codice 0 per la prima volta da quando esiste.**
+**Siamo qui: 🏁 FASE 5 CHIUSA E VERIFICATA dall'utente — il corpo della fase il 5 settembre 2026, la
+correzione della barriera (§12.5) il 6. Tutto verde, e lo scenario `pitch` esce con codice 0 per la
+prima volta da quando esiste.**
 
 **C'è un arbitro.** Fino a questa fase la palla usciva solo se era libera — un giocatore che la
 portava oltre la linea veniva riportato dentro, e l'harness contava quel difetto a 48,7 tick a
 partita (§1.7) — non esisteva una linea del fuorigioco, e un contrasto poteva solo essere vinto o
 perso, mai sbagliato. Quattro delle cinque letture ancora fuori banda erano quelle, e adesso sono
-tutte dentro: **rimesse 18,4 → 39,0** (banda 30-50), **corner 0,3 → 10,7** (8-13), **fuorigioco 0 →
-4,0** (1,5-5), **falli 0 → 20,6** (18-28). Le letture in banda passano da **14/19 a 19/20**, e
+tutte dentro: **rimesse 18,4 → 33,4** (banda 30-50), **corner 0,3 → 10,7** (8-13), **fuorigioco 0 →
+4,1** (1,5-5), **falli 0 → 20,9** (18-28). Le letture in banda passano da **14/19 a 19/20**, e
 **per la prima volta i tre check di contratto passano tutti e tre**: la palla tenuta su una linea
 legge **0,0 tick a partita** e lo scenario `pitch` esce con codice 0. Vedi §12.
 
@@ -44,7 +46,7 @@ calibrazione del modello risultato torna identica cifra per cifra
 | 2 | forma: formazione e blocco | ✅ fatta **e verificata dall'utente** |
 | 3 | difendere: zona e trigger | ✅ fatta **e verificata dall'utente** |
 | 4 | decisioni con la palla | ✅ fatta **e verificata dall'utente** |
-| 5 | il regolamento | ✅ fatta **e verificata dall'utente** |
+| 5 | il regolamento | ✅ fatta **e verificata dall'utente**, barriera (§12.5) compresa |
 | 6 | inversione della causalità | ⬅️ **prossima** — il tiro decide il gol |
 | 7-8 | — | da fare |
 
@@ -55,7 +57,7 @@ calibrazione del modello risultato torna identica cifra per cifra
     .\tools\balance.ps1 -Scenario pitch -PitchMatches 200 -PitchDump .\replay.html
     .\tools\balance.ps1        # gli altri scenari NON devono muoversi di un numero
 
-**Golden master della fase 5: `0x436E4440B6350A7B`** (engine v8; era `0xF8BE4A32C28421A1` in v7 e
+**Golden master della fase 5: `0x222F723B4993ED25`** (engine v8; era `0xF8BE4A32C28421A1` in v7 e
 `0xABC7B41DC6F258C2` in v6), già ripuntato nei quattro posti soliti. I replay salvati in v7 non sono
 più disegnabili: è previsto, e il client li rifiuta da solo perché confronta con
 `MatchEngine.Version`. Attesi **364 test verdi** in `Sim.Core.Tests` (i 355 della fase 4 più i 9 di
@@ -66,15 +68,16 @@ più disegnabili: è previsto, e il client li rifiuta da solo perché confronta 
 
 **`dotnet test` → 604 su 604 verdi, zero rossi, in 518,5 s** (`Sim.Core.Tests` **364** — i 355 della
 fase 4 più i 9 nuovi `RefereeTests` — e `Api.Tests` **240**). `[DeterminismCheck]` e
-`[server-determinism]` stampano entrambi **`0x436E4440B6350A7B`**, **identico cifra per cifra** al
+`[server-determinism]` stampano entrambi **`0x222F723B4993ED25`**, **identico cifra per cifra** al
 valore calcolato nel container su .NET 8: il determinismo fra runtime sopravvive a engine v8.
 
-**E lo scenario `pitch` ha riprodotto OGNI SINGOLO NUMERO del run del container** — gol 2,52, tiri
-25,1 (15,0), passaggi 863 al 77,8%, **rimesse 39,0, corner 10,7, rinvii dal fondo 17,4, fuorigioco
-4,0, falli 20,6**, 2,82 gialli / 0,19 rossi / 0,11 rigori, difendendo 38,8 × 32,1 con linea 5,9 e
-buco 10,8, attaccando 45,2 × 39,6, km 11,08 (il più attivo 16,49) — **19/20 in banda e 3/3 check di
-contratto PASS**, a **318,2 ms a partita contro i 621,4 del container** (1,95x, in linea col 1,64x
-delle fasi 3 e 4). **`Balance checks PASSED`: l'exit code è 0.** Alla fase 4 quello stesso comando
+**E lo scenario `pitch` ha riprodotto OGNI SINGOLO NUMERO del run del container** (cifre del run del
+6 settembre, dopo la correzione della barriera; quelle del 5, prima, tornavano identiche allo stesso
+modo) — gol 2,52, tiri 25,2 (15,0), passaggi 877 al 78,2%, **rimesse 33,4, corner 10,7, rinvii dal
+fondo 17,5, fuorigioco 4,1, falli 20,9**, 2,85 gialli / 0,14 rossi / 0,16 rigori, difendendo
+38,7 × 32,1 con linea 5,9 e buco 10,8, attaccando 45,2 × 39,6, km 11,07 (il più attivo 16,45) —
+**19/20 in banda e 3/3 check di contratto PASS**, a **311,7 ms a partita contro i 684,2 del
+container** (2,20x, in linea col 1,64x delle fasi 3 e 4). **`Balance checks PASSED`: l'exit code è 0.** Alla fase 4 quello stesso comando
 usciva con 1 per costruzione — era il rosso della palla tenuta su una linea — quindi da adesso **un
 exit code diverso da zero sul `pitch` è una regressione vera e va inseguito.**
 
@@ -1572,6 +1575,12 @@ dall'utente lo stesso giorno**: 604 test verdi, golden master identico cifra per
 `pitch` che riproduce ogni numero a 318 ms a partita. Il resoconto della sua esecuzione è nel blocco
 di stato in cima al file.*
 
+*Dopo quella verifica è arrivata la correzione della barriera (§12.5), che ha cambiato il golden
+master in **`0x222F723B4993ED25`**: i numeri di questo capitolo sono quelli DOPO la correzione, e
+**anche quelli sono stati verificati dall'utente, il 6 settembre 2026** — 604 test verdi in 577,6 s,
+i due hash identici, `pitch` 19/20 + 3/3 a 311,7 ms a partita con ogni numero uguale a quello del
+container, e `balance.ps1` 28/28 con ogni cifra invariata.*
+
 Quattro delle cinque letture ancora fuori banda alla fine della fase 4 erano dell'arbitro, ed erano
 tutte a zero o quasi per lo stesso motivo: **nessuno arbitrava**. La palla usciva solo se era
 LIBERA — un giocatore che la portava oltre la linea veniva semplicemente riportato dentro (§1.7), e
@@ -1580,10 +1589,10 @@ linea del fuorigioco, e un contrasto poteva solo essere vinto o perso, mai sbagl
 
 | lettura | fase 4 | fase 5 | banda |
 |---|---|---|---|
-| rimesse laterali | 18,4 | **39,0** | 30-50 |
+| rimesse laterali | 18,4 | **33,4** | 30-50 |
 | corner | 0,3 | **10,7** | 8-13 |
-| fuorigioco | 0,0 | **4,0** | 1,5-5 |
-| falli | 0,0 | **20,6** | 18-28 |
+| fuorigioco | 0,0 | **4,1** | 1,5-5 |
+| falli | 0,0 | **20,9** | 18-28 |
 
 E il rosso di contratto del §1.7 è **chiuso**: `a held ball is never sitting on a line of the pitch`
 legge **0,0 tick a partita**, e per la prima volta da quando esistono **i tre check di contratto
@@ -1728,29 +1737,29 @@ linea laterale. **Nessuna modifica a Sim.Core**, quindi golden master e test res
 
 ### La misura (200 partite, tattiche neutre, seed 20260803)
 
-    goals 2.52   shots 25.1 (15.0 on target)   passes 863 at 77.8% accuracy
-    long balls 27.6   crosses 41.2   dribbles 293.0   clearances 256.1
-    tackles won 359.3   interceptions 205.2
-    throw-ins 39.0   corners 10.7   goal kicks 17.4   offsides 4.0   fouls 20.6
-    yellow cards 2.82   red cards 0.19   penalties 0.11
-    possession home 50.6%   nobody on the ball 20.8% of frames
-    ball by third (home->away) 35.4% / 27.4% / 37.1%
-    ground covered 11.08 km per player (busiest 16.49, laziest 8.88)
+    goals 2.52   shots 25.2 (15.0 on target)   passes 877 at 78.2% accuracy
+    long balls 29.2   crosses 41.3   dribbles 297.5   clearances 257.6
+    tackles won 364.4   interceptions 207.7
+    throw-ins 33.4   corners 10.7   goal kicks 17.5   offsides 4.1   fouls 20.9
+    yellow cards 2.85   red cards 0.14   penalties 0.16
+    possession home 50.4%   nobody on the ball 19.5% of frames
+    ball by third (home->away) 35.7% / 27.3% / 37.0%
+    ground covered 11.07 km per player (busiest 16.45, laziest 8.92)
 
-    defending  width 38.8 m   depth 32.1 m   back line spread 5.9 m   biggest hole 10.8 m
-    attacking  width 45.2 m   depth 39.6 m   back line spread 5.4 m   biggest hole 12.9 m
+    defending  width 38.7 m   depth 32.1 m   back line spread 5.9 m   biggest hole 10.8 m
+    attacking  width 45.2 m   depth 39.6 m   back line spread 5.3 m   biggest hole 12.9 m
 
-    19/20 inside the band · 3/3 contract checks PASS · 621.4 ms a partita
+    19/20 inside the band · 3/3 contract checks PASS · 684.2 ms a partita
 
 **I nuovi test** sono `Sim.Core.Tests/Match/RefereeTests.cs` (9), e ognuno stampa la sua riga:
 
-    [laws-restarts] 40.5 throw-ins · 10.7 corners · 18.3 goal kicks a match, and 0 frames in
+    [laws-restarts] 37.0 throw-ins · 11.0 corners · 17.5 goal kicks a match, and 0 frames in
                     30 matches with a held ball on a line
-    [laws-offside]  4.7 offsides a match, 56 flags checked
-    [laws-fouls]    22.3 fouls · 3.05 yellows · 0.15 reds · 0.20 penalties a match (446 checked)
-    [laws-tackling] a side of 90 tacklers gave away 8.5 fouls a match and 1.50 cards;
-                    a side of 20 tacklers 12.1 and 1.90
-    [laws-cards]    7 men sent off in 40 matches
+    [laws-offside]  4.2 offsides a match, 50 flags checked
+    [laws-fouls]    21.9 fouls · 2.95 yellows · 0.15 reds · 0.10 penalties a match (437 checked)
+    [laws-tackling] a side of 90 tacklers gave away 8.5 fouls a match and 1.20 cards;
+                    a side of 20 tacklers 11.2 and 1.60
+    [laws-cards]    10 men sent off in 40 matches
     [laws-halftime] the interval checked in 6 matches
 
 `[laws-tackling]` è **la ✅ della fase**, ed è la controparte di `[ball-skill]` della fase 4: gli
@@ -1773,6 +1782,51 @@ espulsi compresi.
 **`[press]` legge 5,58 / 5,70 / 5,09 m** (basso / medio / alto): la monotonia fra basso e medio resta
 persa come alla fase 4, l'estremo tiene, ed è la domanda della fase 8 come già scritto lì.
 
+### 12.5 La barriera — il difetto che ha trovato l'occhio, non il numero
+
+Le venti letture erano in banda e i tre check passavano, e la barriera **non era una barriera**: tre
+uomini sparpagliati a cinque metri dalla palla. È il motivo per cui questa fase si chiude anche
+guardando e non solo misurando. Le cause erano tre, tutte nel livello movimento e **nessuna nel
+regolamento**, e le ho trovate misurando dopo che guardare non era bastato:
+
+1. **la separazione di squadra apriva la barriera.** La regola "non stare addosso a un compagno" del
+   blocco vuole 6,2 m fra due uomini; una barriera ne vuole 0,8, e vinceva la separazione. → chi è
+   in barriera è **esente** dalla separazione di squadra (`_inWall`), e `WallSpacingDm` passa da 8 a
+   **20** (spalla a spalla, non sovrapposti).
+2. **la barriera inseguiva se stessa.** I tre uomini venivano ri-ordinati per distanza dalla palla a
+   OGNI TICK: chi arrivava primo veniva sostituito da chi era più vicino adesso, e nessuno arrivava
+   mai. → `FormWall(side)` assegna gli slot **una volta sola**, al fischio, e non li cambia più.
+3. **lo sterzo era sbagliato per stare su un punto, in entrambe le marce.** Di corsa superava il
+   punto di 8 m e poi gli girava attorno; al trotto strisciava, e la banda morta del movimento
+   parcheggiava gli uomini 3 m prima — la barriera stava a **5 m** dalla palla invece che a 9,15.
+   → `WalkTo(k, tx, ty)`: nessuna inerzia, nessuna banda morta, e il passo tagliato perché non
+   possa oltrepassare il punto. È quello che adesso piazza la barriera, i difensori che arretrano,
+   il battitore della punizione e il calcio d'inizio — **ogni piazzamento a palla ferma**. Il gioco
+   in movimento non è toccato.
+
+Ne è caduta fuori una quarta: `UpdateBlock` **teneva** il blocco anche a un calcio d'inizio, e
+lasciava le ali 1,9 m dentro la metà sbagliata. Un calcio d'inizio adesso **ri-forma** il blocco
+invece di tenerlo.
+
+**Verificato con i numeri, non con l'occhio**: ogni difensore della barriera sta a **91-95 dm dalla
+palla** — 9,1-9,5 m, i 9,15 della regola — e ci resta. La misura del capitolo è quella dopo la
+correzione: 364 test verdi, 19/20 in banda, 3/3 check PASS. **Golden master →
+`0x222F723B4993ED25`** (era `0x436E4440B6350A7B` nella verifica precedente): è cambiato lo stream,
+non il modello risultato — i gol restano 2,52. File toccati: **`MatchSimulator.cs` e
+`BalanceConfig.cs`**, nient'altro.
+
+**Verificata dall'utente il 6 settembre 2026**, con gli stessi quattro comandi della sezione "Come si
+verifica questa fase": `build-simcore` a posto, `dotnet test` **604/604 verdi in 577,6 s**,
+`[DeterminismCheck]` e `[server-determinism]` entrambi **`0x222F723B4993ED25`** (il suo .NET 10
+contro il .NET 8 del container: **la determinatezza fra runtime regge anche la correzione**), lo
+scenario `pitch` che esce con codice 0 a **311,7 ms a partita** riproducendo **ogni singolo numero**
+del container — rimesse 33,4, corner 10,7, fuorigioco 4,1, falli 20,9, gol 2,52, tiri 25,2 (15,0),
+passaggi 877,4 al 78,2% — e `balance.ps1` **28/28 con ogni cifra invariata**, che è la prova che la
+barriera non ha toccato il modello risultato. Le righe `[laws-*]` tornano al decimale: 37,0 rimesse /
+11,0 corner / 17,5 rinvii con 0 frame di palla tenuta su una linea, 4,2 fuorigioco, 21,9 falli · 2,95
+gialli · 0,15 rossi · 0,10 rigori, 8,5 falli da una squadra di 90 di contrasto contro 11,2 da una di
+20, 10 espulsi in 40 partite, 6 intervalli.
+
 ### Cosa resta aperto, per scelta
 
 - **tiri in porta 15,0 su 25,1** (banda 6-11): è `SavedShareOfFailedChancesPercent` del modello
@@ -1791,7 +1845,7 @@ persa come alla fase 4, l'estremo tiene, ed è la domanda della fase 8 come già
   del mondo, non solo quello del motore — e non è di questa fase.
 - **un espulso sta sulla linea laterale all'altezza del centrocampo**, dentro le coordinate del
   campo: l'analizzatore lo conta ancora fra i dieci di movimento, quindi una partita con un rosso ha
-  la larghezza del blocco leggermente gonfiata. Con 0,19 rossi a partita è dentro il rumore, ed è
+  la larghezza del blocco leggermente gonfiata. Con 0,14 rossi a partita è dentro il rumore, ed è
   scritto qui perché si sappia.
 
 ### Come si verifica questa fase
@@ -1801,9 +1855,10 @@ persa come alla fase 4, l'estremo tiene, ed è la domanda della fase 8 come già
     .\tools\balance.ps1 -Scenario pitch -PitchMatches 200 -PitchDump .\replay.html
     .\tools\balance.ps1        # gli altri scenari NON devono muoversi di un numero
 
-Attesi — **e tutti confermati dall'utente il 5 settembre 2026**: **364 test verdi** in
+Attesi — **confermati dall'utente il 5 settembre 2026 sul corpo della fase e di nuovo il 6 settembre
+2026 dopo la correzione della barriera (§12.5), che ha cambiato il golden master**: **364 test verdi** in
 `Sim.Core.Tests` (604 in totale con `Api.Tests`), `[DeterminismCheck]` e `[server-determinism]` che
-stampano **`0x436E4440B6350A7B`**, lo scenario `pitch` che esce con **codice 0** e 19/20 in banda, e
+stampano **`0x222F723B4993ED25`**, lo scenario `pitch` che esce con **codice 0** e 19/20 in banda, e
 `balance.ps1` 28/28 con ogni cifra invariata. Il file `.cs` nuovo (`RefereeTests.cs`) ha bisogno del
 `.meta` di Unity al primo import. Resta l'occhio: aprire `replay.html` e guardare le rimesse, i
 corner, le punizioni con la barriera e l'intervallo.

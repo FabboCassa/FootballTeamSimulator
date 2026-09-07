@@ -1779,13 +1779,22 @@
         public int FoulStoppageMs { get; set; } = 3000;
         public int FoulStoppageTicks => TicksOfMs(FoulStoppageMs);
 
+
         /// <summary>
         /// How far the defending side must retire from a free kick, in decimetres (9.15 m), and
         /// how many men stand in the wall when the kick is inside shooting range of their goal.
         /// </summary>
         public int FreeKickRetreatDm { get; set; } = 92;
         public int WallMen { get; set; } = 3;
-        public int WallSpacingDm { get; set; } = 8;
+
+        /// <summary>
+        /// How far apart two men in the wall stand, in decimetres. A real wall is shoulder to
+        /// shoulder — half a metre — but three dots half a metre apart are one dot: this is the
+        /// spacing at which three of them READ as a wall in the viewers. The men in it are exempt
+        /// from the usual team separation, which is six metres and would open the wall before it
+        /// had formed.
+        /// </summary>
+        public int WallSpacingDm { get; set; } = 20;
 
         /// <summary>Where the penalty spot is, in decimetres from the goal line (11 m).</summary>
         public int PenaltySpotDm { get; set; } = 110;
