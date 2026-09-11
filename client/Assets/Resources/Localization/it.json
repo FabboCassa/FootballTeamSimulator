@@ -160,6 +160,7 @@
   "match.action.save": "Para {0}",
   "match.action.goal": "GOL — {0}",
   "match.action.miss": "{0} la manda a lato",
+  "match.action.block": "Conclusione di {0} murata",
   "match.action.corner": "Calcio d'angolo — batte {0}",
   "match.action.throwin": "Rimessa laterale, {0}",
   "match.action.goalkick": "Rinvio dal fondo, {0}",

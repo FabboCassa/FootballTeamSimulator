@@ -47,14 +47,14 @@ namespace Sim.Core.Tests.Match
             (Cfg.PlayerTopSpeedDmPerSecond + Cfg.PlayerTopSpeedPaceDmPerSecond)
             * Cfg.StreamTicksPerFrame / Cfg.TicksPerSecond;
 
-        /// <summary>Simulation ticks the director may hold a strike back from its minute.</summary>
-        private static int StrikeSlackTicksRaw =>
-            Cfg.ChanceGraceTicks + Cfg.ShotResolveTicks + 1 + Cfg.GoalCelebrationTicks + Cfg.DeadBallTicks;
-
-        // A chance belongs to a MINUTE, not to a tick: the strike waits for the move to arrive,
-        // and a chance that lands on top of the previous one waits for that one to be settled.
-        // Both are bounded and deterministic (see MatchDirector).
-        private static int StrikeSlackFrames => StrikeSlackTicksRaw / Cfg.StreamTicksPerFrame + 2;
+        /// <summary>
+        /// How far from the START of its minute an event's action can be. Since engine phase 6
+        /// there is no director holding a strike back to meet a scheduled minute: the strike
+        /// happens, and the minute it is filed under is the minute it happened in. So the window
+        /// is simply the minute itself, plus the frames the strike then takes to be settled.
+        /// </summary>
+        private static int StrikeSlackFrames =>
+            Cfg.FramesPerMinute + Cfg.ShotResolveTicks / Cfg.StreamTicksPerFrame + 2;
 
         /// <summary>Frames a strike may take to become a goal, a save or a ball out of play.</summary>
         private static int ShotResolveFrames =>
@@ -83,25 +83,47 @@ namespace Sim.Core.Tests.Match
             Assert.That(b, Is.Not.EqualTo(a));
         }
 
+        /// <summary>
+        /// THE INVERSION, stated as a test (engine phase 6). Until this phase the stream was a
+        /// re-enactment and this test asserted the opposite of what it asserts now: that turning
+        /// the picture on could not move the result by one bit. It cannot say that any more,
+        /// because the picture IS the result — a match with the stream on is PLAYED, and the two
+        /// paths are two different engines that answer to two different needs. What has to be
+        /// true is that each is deterministic, that the fast path still skips the stream, and that
+        /// they are recognisably the same sport.
+        /// </summary>
         [Test]
-        public void SkippingTheStream_LeavesTheResultUntouched()
+        public void SkippingTheStream_TakesTheFastPath_AndBothAreDeterministic()
         {
             Lineup home = LineupSelector.BestEleven(_midA);
             Lineup away = LineupSelector.BestEleven(_midB);
+            int played = 0, fast = 0;
 
-            for (ulong seed = 500; seed < 505; seed++)
+            for (ulong seed = 500; seed < 520; seed++)
             {
-                MatchReport withStream = new MatchEngine()
+                MatchReport onThePitch = new MatchEngine()
                     .Simulate(LineupSelector.BestEleven(_midA), LineupSelector.BestEleven(_midB), new Pcg32(seed));
-                MatchReport without = new MatchEngine(generatePositions: false)
+                MatchReport again = new MatchEngine()
+                    .Simulate(LineupSelector.BestEleven(_midA), LineupSelector.BestEleven(_midB), new Pcg32(seed));
+                MatchReport quick = new MatchEngine(generatePositions: false)
                     .Simulate(LineupSelector.BestEleven(_midA), LineupSelector.BestEleven(_midB), new Pcg32(seed));
 
-                Assert.That(without.Positions, Is.Null, "the opt-out must skip the stream");
-                withStream.Positions = null;
+                Assert.That(quick.Positions, Is.Null, "the fast path must skip the stream");
+                Assert.That(onThePitch.Positions, Is.Not.Null, "the watched path must produce one");
                 Assert.That(
-                    JsonSerializer.Serialize(without), Is.EqualTo(JsonSerializer.Serialize(withStream)),
-                    $"seed {seed}: generating the movement stream must not move the result by one bit");
+                    MatchReportHasher.Hash(again), Is.EqualTo(MatchReportHasher.Hash(onThePitch)),
+                    $"seed {seed}: the played match must reproduce exactly");
+
+                played += onThePitch.HomeGoals + onThePitch.AwayGoals;
+                fast += quick.HomeGoals + quick.AwayGoals;
             }
+
+            TestContext.Out.WriteLine($"[paths] 20 matches: played {played} goals, fast model {fast} goals");
+
+            // Same sport, not the same match: two engines calibrated on each other, so twenty
+            // matches of one must not be a different game from twenty of the other.
+            Assert.That(played, Is.InRange(30, 90), "the played matches must produce football scores");
+            Assert.That(fast, Is.InRange(30, 90), "and so must the fast model");
 
             Assert.That(home.Slots, Has.Count.EqualTo(Lineup.Size));
             Assert.That(away.Slots, Has.Count.EqualTo(Lineup.Size));
@@ -123,20 +145,28 @@ namespace Sim.Core.Tests.Match
 
                 foreach (MatchEvent e in r.Events)
                 {
-                    int tick = stream.TickOfMinute(e.Minute);
+                    int tick = stream.TickOfMinute(e.Minute - 1);
                     bool homeShoots = e.ClubId == r.HomeClubId;
                     int slot = SlotIndexOf(homeShoots ? home : away, e.PlayerId);
                     Assert.That(slot, Is.GreaterThanOrEqualTo(0), "Shooter must be in the lineup");
 
                     // Since 13.2 the ball is not teleported onto the named player: the strike
                     // leaves from where the ball actually is, and the ACTION carries his name.
-                    // A ball that jumps thirty metres onto a foot is a far more visible lie
-                    // than a shot credited to the man the timeline says it belongs to.
+                    // Since phase 6 the event is WRITTEN by that action, so what this pins is the
+                    // minute it is filed under and the man it is credited to.
+                    //
+                    // A GOAL does not have to be his strike, and that is football rather than a
+                    // loophole: a shot charged down that loops in, a cross that goes in off him, a
+                    // scramble. Those are credited to the last man of the scoring side to touch it
+                    // and carry a Goal in his name with no Shot of his own before it — which the
+                    // engine could not produce at all while the score belonged to a timeline.
                     Assert.That(
                         stream.Actions.Any(a => a.Tick >= tick && a.Tick <= tick + StrikeSlackFrames
-                                                && a.Kind == BallActionKind.Shot
-                                                && a.Home == homeShoots && a.Slot == slot),
-                        Is.True, $"seed {seed} minute {e.Minute}: no shot credited to the scorer");
+                                                && a.Home == homeShoots && a.Slot == slot
+                                                && (a.Kind == BallActionKind.Shot
+                                                    || (e.Type == MatchEventType.Goal
+                                                        && a.Kind == BallActionKind.Goal))),
+                        Is.True, $"seed {seed} minute {e.Minute}: nothing in the picture credited to him");
                     checkedEvents++;
                 }
             }
@@ -156,13 +186,18 @@ namespace Sim.Core.Tests.Match
 
                 foreach (MatchEvent e in r.Events)
                 {
-                    int tick = stream.TickOfMinute(e.Minute);
-                    BallActionKind expected = e.Type == MatchEventType.Goal ? BallActionKind.Goal
-                        : e.Type == MatchEventType.ChanceSaved ? BallActionKind.Save
-                        : BallActionKind.Miss;
+                    int tick = stream.TickOfMinute(e.Minute - 1);
 
+                    // A missed chance is drawn as a shot going wide OR as one charged down by a
+                    // defender (engine phase 6 gave the block its own action): both are the same
+                    // line on the scoresheet and two different things to watch.
                     bool shown = stream.Actions.Any(a =>
-                        a.Kind == expected && a.Tick >= tick && a.Tick <= tick + ShotResolveFrames);
+                        a.Tick >= tick && a.Tick <= tick + StrikeSlackFrames
+                        && (e.Type == MatchEventType.Goal
+                                ? a.Kind == BallActionKind.Goal
+                            : e.Type == MatchEventType.ChanceSaved
+                                ? a.Kind == BallActionKind.Save
+                                : a.Kind == BallActionKind.Miss || a.Kind == BallActionKind.Block));
 
                     if (e.Type == MatchEventType.Goal)
                     {
@@ -179,11 +214,11 @@ namespace Sim.Core.Tests.Match
 
             TestContext.Out.WriteLine($"[outcomes] goals {goalsShown}/{goals} · saves and misses {othersShown}/{others}");
 
-            // A GOAL is not allowed to go unshown: the score says one was scored and the
-            // viewer has to see it. A save or a miss can occasionally be swallowed by the next
-            // chance arriving; that is a shrug, not a lie about the scoreline.
-            Assert.That(goalsShown, Is.EqualTo(goals), "every goal on the timeline must be played out");
-            Assert.That(othersShown * 100 / others, Is.GreaterThan(85), "saves and misses should nearly always show");
+            // Since engine phase 6 this is a tautology rather than a contract — the events ARE
+            // the actions, written by the same strike — and it is kept precisely because it would
+            // catch the day that stops being true.
+            Assert.That(goalsShown, Is.EqualTo(goals), "every goal must be played out");
+            Assert.That(othersShown, Is.EqualTo(others), "and so must every save and every miss");
         }
 
         // ------------------------------------------------------------ structure & bounds
@@ -388,9 +423,12 @@ namespace Sim.Core.Tests.Match
                     }
                     else
                     {
+                        // A miss is a ball going wide, or one that pulled up somewhere without
+                        // being settled by anybody. What it may never be is a ball IN THE NET:
+                        // that is a goal, and since phase 6 the crossing decides which.
                         misses++;
-                        Assert.That(offCentre > 40 || depth > 20, Is.True,
-                            "a miss must not end up in the net either");
+                        Assert.That(depth <= 6 && offCentre <= 37, Is.False,
+                            "a miss must not end up in the net");
                     }
                 }
             }

@@ -160,6 +160,7 @@
   "match.action.save": "Saved by {0}",
   "match.action.goal": "GOAL — {0}",
   "match.action.miss": "{0} drags it wide",
+  "match.action.block": "{0}'s effort is blocked",
   "match.action.corner": "Corner — {0} to take it",
   "match.action.throwin": "Throw-in, {0}",
   "match.action.goalkick": "Goal kick, {0}",

@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using Sim.Core.Condition;
 using Sim.Core.Config;
 using Sim.Core.Domain;
 using Sim.Core.Random;
@@ -20,9 +21,14 @@ namespace Sim.Core.Match.Movement
     /// with velocity and friction, so a pass can be read and cut out, and crossing a line
     /// IS the throw-in.
     ///
-    /// The score still belongs to the 1.4 result model — see <see cref="MatchDirector"/>,
-    /// which works the ball toward the scripted shooter and lets him strike it on his
-    /// minute. Everything else emerges.
+    /// AND THE SCORE IS ITS OWN (engine phase 6). Until this phase the result belonged to
+    /// the 1.4 minute model and a director worked the ball toward a shooter the timeline had
+    /// already elected, switching on super-powers to get it there. That is gone. A man on the
+    /// ball now weighs the SHOT against the pass, the run and the clearance in the one currency
+    /// they are all quoted in, strikes it where his Shooting and Technique let him, and the ball
+    /// decides: a body in the way blocks it, the keeper's dive reaches it or does not, and a goal
+    /// is the ball crossing the line between the posts. Nothing scripts a single touch, and the
+    /// report this fills in IS the match that was played.
     ///
     /// Deterministic: integer arithmetic in sixteenths of a decimetre, a fixed iteration
     /// order, and every random draw taken from the seeded source in that same order.
@@ -32,12 +38,27 @@ namespace Sim.Core.Match.Movement
         private const int SideCount = 2;
         private const int MaxSupporters = 3;
 
+        /// <summary>
+        /// "He cannot do this at all". Every option a man weighs answers with what it is worth in
+        /// decimetres of forward progress, and one that is not open to him has to answer with
+        /// something no real option can beat — but the comparison then has to EXCLUDE it, or a man
+        /// with nothing open does the first thing on the list. That is not hypothetical: it put a
+        /// goalkeeper who had just won the ball in his own six-yard box through
+        /// <see cref="TakeShot"/>, and the scoresheet counted his hoof upfield as a shot.
+        /// </summary>
+        private const int NoOption = int.MinValue / 4;
+
         private readonly MatchBalance _cfg;
 
         private IRandomSource _rng = null!;
         private MatchBall _ball = null!;
-        private MatchDirector _director = null!;
         private PositionStream _stream = new PositionStream();
+
+        /// <summary>The report this match fills in. Since phase 6 the pitch writes the score.</summary>
+        private MatchReport _report = null!;
+        private Lineup _home = null!;
+        private Lineup _away = null!;
+        private MatchInputFeed? _feed;
 
         private int _n;
         private int[] _px = System.Array.Empty<int>();
@@ -116,9 +137,6 @@ namespace Sim.Core.Match.Movement
         private readonly int[] _supportY = new int[SideCount];
         private readonly int[] _supporters = new int[SideCount * MaxSupporters];
 
-        /// <summary>The man whose chance is coming: the other side marks him a shade less tightly.</summary>
-        private readonly int[] _looseMan = new int[SideCount];
-
         // Dead ball: what it is, who takes it, and when it may be taken.
         private BallActionKind _deadKind;
         private int _deadSide = -1;
@@ -167,11 +185,19 @@ namespace Sim.Core.Match.Movement
         private int[] _flaggedY = System.Array.Empty<int>();
         private bool _anyFlag;
 
-        // A scripted strike in flight, and what the timeline says it becomes.
+        // A strike in flight. What it becomes is the ball's business, not a script's.
         private bool _shotLive;
         private bool _shotHome;
         private int _shotSlot;
-        private MatchEventType _shotOutcome;
+
+        /// <summary>
+        /// Whether the strike, as it actually left his foot, is going between the posts. It is
+        /// the one thing about a shot that has to be settled the moment it is struck rather than
+        /// when it arrives, because it decides WHOSE ball it is on the way: an effort on target is
+        /// the keeper's to deal with, and one flying wide is nobody's — a keeper does not gather
+        /// a ball going a metre past his post, he watches it go out for a goal kick.
+        /// </summary>
+        private bool _shotOnTarget;
 
         /// <summary>No second challenge for a moment after one is won, or the ball ping-pongs.</summary>
         private int _tackleLock;
@@ -179,10 +205,7 @@ namespace Sim.Core.Match.Movement
         /// <summary>When a live strike must have become a goal, a save or a ball out of play.</summary>
         private int _shotExpires;
 
-        /// <summary>How often the director had to hand the shooter the ball. Diagnostic.</summary>
-        private int _forcedShots;
         private readonly bool[] _driving = new bool[SideCount];
-        private readonly bool[] _urgent = new bool[SideCount];
         private readonly int[] _second = new int[SideCount];
         private int _releasedBy = -1;
         private int _releasedUntil = -1;
@@ -215,6 +238,21 @@ namespace Sim.Core.Match.Movement
         private int[] _skPace = System.Array.Empty<int>();
         private int[] _vision = System.Array.Empty<int>();
 
+        // What a man is worth TODAY rather than on paper (engine phase 6). The cached skills
+        // above are the scaled ones — his attributes times this — so every decision, every duel
+        // and every stride already reads the player as he is this afternoon, and nothing at the
+        // call sites had to learn about it. Condition and home advantage are fixed for the match;
+        // tiredness is folded in at each minute boundary, which is when the skills are rebuilt.
+        private int[] _scalePermille = System.Array.Empty<int>();
+        private int[] _stamina = System.Array.Empty<int>();
+
+        /// <summary>The last man of each side to touch the ball: the one a goal is credited to.</summary>
+        private readonly int[] _lastTouch = new int[SideCount];
+
+        private readonly ConditionBalance _condition;
+        private readonly bool _applyCondition;
+        private readonly bool _applyMatchFatigue;
+
         /// <summary>How good the strike in the air was, for the keeper who has to deal with it.</summary>
         private int _shotQuality;
         private int _pressureU;
@@ -230,18 +268,40 @@ namespace Sim.Core.Match.Movement
         private int _insetU;
 
         public MatchSimulator(MatchBalance cfg)
+            : this(cfg, new ConditionBalance(), false, false)
         {
-            _cfg = cfg;
         }
 
-        /// <summary>How many scripted strikes needed the ball handing to the shooter (diagnostic).</summary>
-        public int ForcedShots => _forcedShots;
+        /// <summary>
+        /// The watched match reads the same three things the result model always read — the home
+        /// side's advantage, each man's condition and how he tires — because since phase 6 it IS
+        /// the result. A neutral squad with both flags off is the identity, so a caller that opts
+        /// into nothing gets the attributes exactly as they are written.
+        /// </summary>
+        public MatchSimulator(MatchBalance cfg, ConditionBalance condition, bool applyCondition, bool applyMatchFatigue)
+        {
+            _cfg = cfg;
+            _condition = condition;
+            _applyCondition = applyCondition;
+            _applyMatchFatigue = applyMatchFatigue;
+        }
 
         // ------------------------------------------------------------------ entry point
 
+        /// <summary>
+        /// Plays the match. <paramref name="report"/> comes in carrying the two club ids and goes
+        /// out carrying the SCORE AND THE EVENTS the pitch produced (engine phase 6);
+        /// <paramref name="feed"/> is the kickoff input plus whatever substitutions and tactical
+        /// changes are due, asked for at each minute boundary against the live score.
+        /// </summary>
+        public PositionStream Generate(MatchInputFeed feed, MatchReport report, IRandomSource rng)
+        {
+            _feed = feed;
+            return Generate(feed.Current.Home, feed.Current.Away, report, rng, feed.Current.Tactics);
+        }
+
         public PositionStream Generate(
-            Lineup home, Lineup away, MatchReport report, IRandomSource rng,
-            MatchTactics? tactics, int homePossessionPermille)
+            Lineup home, Lineup away, MatchReport report, IRandomSource rng, MatchTactics? tactics)
         {
             _rng = rng;
             int lastTick = 90 * _cfg.TicksPerMinute;
@@ -269,45 +329,12 @@ namespace Sim.Core.Match.Movement
 
         private void Tick(int tick)
         {
-            _director.Advance(tick);
+            // The minute boundary: the legs get a little heavier, and whatever the bench has
+            // decided by now comes on. Both are read off the LIVE score, which since phase 6 is
+            // the score the pitch has produced.
+            if (tick % _cfg.TicksPerMinute == 0) MinuteBoundary(tick);
+
             UpdateTeams(tick);
-
-            // His minute has come. By now the window should have worked the ball to him; if it
-            // has not, he is given it — the one place this engine overrides the play, and the
-            // number to watch.
-            if (_director.ShotDue(tick, out MatchDirector.Chance due))
-            {
-                int side = due.Home ? 0 : 1;
-                bool deadline = _director.ShotDeadline(tick);
-
-                // Who actually strikes it. The timeline says WHO the chance belongs to, and the
-                // toast will name him; the picture has to show the ball leaving a real foot in
-                // a real position. So the named man takes it when he is on the ball, and
-                // otherwise it is struck by whoever of his side is nearest to it — the ball is
-                // never carried to him, because a ball crossing the pitch on its own is a far
-                // louder lie than the one nobody can see.
-                int striker = due.Slot;
-                int k = side * _n + striker;
-                if (U.Distance(_px[k], _py[k], _ball.X, _ball.Y) > _kickU)
-                    striker = _ball.OwnerSide == side
-                        ? _ball.OwnerSlot
-                        : NearestTo(side, _ball.X, _ball.Y, includeKeeper: false);
-
-                // Chances can be a minute apart while a strike takes longer than that to run its
-                // course. The one already in the air has to be called first — and the new one
-                // then waits a tick, because settling a goal puts the ball in the net and a
-                // strike struck from there is a goal frame with the ball nowhere near the line.
-                if (_shotLive) ForceResolveShot(tick);
-
-                if (deadline || Shootable(side, striker))
-                {
-                    if (!Shootable(side, striker)) _forcedShots++;
-                    if (_ball.Dead) { _ball.Dead = false; _deadTaker = -1; }
-
-                    TakeShot(tick, side, striker, due.Outcome, due.Slot);
-                    _director.MarkTaken();
-                }
-            }
 
             for (int side = 0; side < SideCount; side++)
                 for (int slot = 0; slot < _n; slot++)
@@ -329,7 +356,7 @@ namespace Sim.Core.Match.Movement
             // The whistle WAITS: not while a strike is in the air, and not while the timeline has a
             // chance due — a referee does not blow for half-time with the ball in the box, and the
             // director would un-dead the ball for the strike and cancel the restart if he did.
-            if (!_secondHalf && tick >= _halfTime && !_shotLive && !_director.ShotDue(tick, out _))
+            if (!_secondHalf && tick >= _halfTime && !_shotLive)
             {
                 _secondHalf = true;
                 HalfTime(tick);
@@ -392,6 +419,11 @@ namespace Sim.Core.Match.Movement
 
         private void Setup(Lineup home, Lineup away, MatchReport report, MatchTactics? tactics, int lastTick)
         {
+            _report = report;
+            _home = home;
+            _away = away;
+            _lastTouch[0] = -1;
+            _lastTouch[1] = -1;
             _n = home.Slots.Count;
             int total = _n * SideCount;
             _streamStride = _cfg.StreamTicksPerFrame < 1 ? 1 : _cfg.StreamTicksPerFrame;
@@ -440,6 +472,8 @@ namespace Sim.Core.Match.Movement
             _skGoalkeeping = new int[total];
             _skPace = new int[total];
             _vision = new int[total];
+            _scalePermille = new int[total];
+            _stamina = new int[total];
 
             _arrivalU = U.Units(_cfg.PlayerArrivalRadiusDm);
             _approachU = U.Units(_cfg.PlayerApproachDm);
@@ -499,48 +533,9 @@ namespace Sim.Core.Match.Movement
 
                 for (int i = 0; i < _n; i++)
                 {
-                    int k = side * _n + i;
-                    LineupSlot slot = lineup.Slots[i];
-                    SlotPosition? custom = slot.Position;
-
-                    // His place in the SHAPE: which line he stands in, how far across it he
-                    // stands, and — if the user has dragged him off his anchor (task 6.10) — how
-                    // far off his own line he has been put. Free positioning is a displacement
-                    // FROM the line rather than a position on the pitch, so a man moved forward
-                    // ten metres stays ten metres in front of his line wherever the block goes.
-                    _lineRank[k] = FormationGeometry.LineRank(roles, i, _cfg, out int lines);
-                    _lineCount[side] = lines;
-                    _baseY[k] = custom.HasValue ? custom.Value.YPermille : FormationGeometry.AnchorY(roles, i, _cfg);
-                    _forward[k] = FormationGeometry.AnchorX(roles[i], _cfg);
-                    _offsetXDm[k] = custom.HasValue
-                        ? (custom.Value.XPermille - _forward[k]) * Pitch.LengthDm / 1000
-                        : 0;
-                    _keeper[k] = roles[i] == PositionRole.Goalkeeper;
-
-                    // A footballer's top speed is 5.5 to 8.5 m/s and Pace spans that band; what he
-                    // does off the ball is a jog, not a sprint, which is why cruising is a
-                    // separate figure rather than "top speed unless sprinting".
-                    PlayerAttributes attributes = slot.Player.Attributes;
-                    _skPassing[k] = attributes.Passing;
-                    _skTechnique[k] = attributes.Technique;
-                    _skDribbling[k] = attributes.Dribbling;
-                    _skDefending[k] = attributes.Defending;
-                    _skPositioning[k] = attributes.Positioning;
-                    _skStrength[k] = attributes.Strength;
-                    _skShooting[k] = attributes.Shooting;
-                    _skGoalkeeping[k] = attributes.Goalkeeping;
-                    _skPace[k] = attributes.Pace;
-                    _vision[k] = BallSkill.VisionPercent(attributes.Positioning, _cfg);
-
-                    int pace = attributes.Pace;
-                    int topDmPerSecond = _cfg.PlayerTopSpeedDmPerSecond + _cfg.PlayerTopSpeedPaceDmPerSecond * pace / 100;
-                    _maxSpeed[k] = U.PerTick(topDmPerSecond, _cfg);
-                    if (_maxSpeed[k] < 1) _maxSpeed[k] = 1;
-                    _cruise[k] = _maxSpeed[k] * _cfg.PlayerCruisePercent / 100;
-                    if (_cruise[k] < 1) _cruise[k] = 1;
-                    _accel[k] = U.PerTickPerTick(_cfg.PlayerAccelDmPerSecond2, _cfg);
-                    if (_accel[k] < 1) _accel[k] = 1;
-                    _mark[k] = -1;
+                    BindPlace(side, i, lineup, roles);
+                    BindSkills(side, i, lineup, 1000);
+                    _mark[side * _n + i] = -1;
                 }
 
                 _chaser[side] = -1;
@@ -559,8 +554,6 @@ namespace Sim.Core.Match.Movement
                     _py[k] = hy;
                 }
             }
-
-            _director = new MatchDirector(report, home, away, _cfg, lastTick);
 
             _stream = new PositionStream
             {
@@ -588,6 +581,158 @@ namespace Sim.Core.Match.Movement
             Record(0, BallActionKind.Kickoff, true, _deadTaker, -1);
         }
 
+        /// <summary>
+        /// His place in the SHAPE: which line he stands in, how far across it he stands, and — if
+        /// the user has dragged him off his anchor (task 6.10) — how far off his own line he has
+        /// been put. Free positioning is a displacement FROM the line rather than a position on
+        /// the pitch, so a man moved forward ten metres stays ten metres in front of his line
+        /// wherever the block goes.
+        /// </summary>
+        private void BindPlace(int side, int i, Lineup lineup, List<PositionRole> roles)
+        {
+            int k = side * _n + i;
+            SlotPosition? custom = lineup.Slots[i].Position;
+
+            _lineRank[k] = FormationGeometry.LineRank(roles, i, _cfg, out int lines);
+            _lineCount[side] = lines;
+            _baseY[k] = custom.HasValue ? custom.Value.YPermille : FormationGeometry.AnchorY(roles, i, _cfg);
+            _forward[k] = FormationGeometry.AnchorX(roles[i], _cfg);
+            _offsetXDm[k] = custom.HasValue
+                ? (custom.Value.XPermille - _forward[k]) * Pitch.LengthDm / 1000
+                : 0;
+            _keeper[k] = roles[i] == PositionRole.Goalkeeper;
+        }
+
+        /// <summary>
+        /// What he is worth with the ball, and how fast he can run — his attributes scaled by
+        /// what the afternoon has done to them (engine phase 6). <paramref name="fatiguePermille"/>
+        /// is the only part that moves during the match, which is why this is cheap enough to
+        /// redo for twenty-two men at every minute boundary.
+        ///
+        /// A footballer's top speed is 5.5 to 8.5 m/s and Pace spans that band; what he does off
+        /// the ball is a jog, not a sprint, which is why cruising is a separate figure rather
+        /// than "top speed unless sprinting".
+        /// </summary>
+        private void BindSkills(int side, int i, Lineup lineup, int fatiguePermille)
+        {
+            int k = side * _n + i;
+            PlayerAttributes attributes = lineup.Slots[i].Player.Attributes;
+            _stamina[k] = attributes.Stamina;
+
+            // Condition and home advantage are the match's, and settled once. Recomputing the
+            // condition multiplier every minute would be twenty-two doubles a minute for a number
+            // that cannot have changed.
+            if (fatiguePermille == 1000 || _scalePermille[k] == 0)
+            {
+                int fixedScale = 1000;
+                if (_applyCondition)
+                    fixedScale = (int)(ConditionModel.PerformanceMultiplier(
+                        lineup.Slots[i].Player.Condition, _condition) * 1000);
+                if (side == 0)
+                    fixedScale = fixedScale * (1000 + _cfg.PitchHomeAdvantagePermille) / 1000;
+                _scalePermille[k] = fixedScale < 1 ? 1 : fixedScale;
+            }
+
+            int scale = _scalePermille[k] * fatiguePermille / 1000;
+
+            _skPassing[k] = Rate(attributes.Passing, scale);
+            _skTechnique[k] = Rate(attributes.Technique, scale);
+            _skDribbling[k] = Rate(attributes.Dribbling, scale);
+            _skDefending[k] = Rate(attributes.Defending, scale);
+            _skPositioning[k] = Rate(attributes.Positioning, scale);
+            _skStrength[k] = Rate(attributes.Strength, scale);
+            _skShooting[k] = Rate(attributes.Shooting, scale);
+            _skGoalkeeping[k] = Rate(attributes.Goalkeeping, scale);
+            _skPace[k] = Rate(attributes.Pace, scale);
+            _vision[k] = BallSkill.VisionPercent(_skPositioning[k], _cfg);
+
+            int topDmPerSecond = _cfg.PlayerTopSpeedDmPerSecond
+                                 + _cfg.PlayerTopSpeedPaceDmPerSecond * _skPace[k] / 100;
+            _maxSpeed[k] = U.PerTick(topDmPerSecond, _cfg);
+            if (_maxSpeed[k] < 1) _maxSpeed[k] = 1;
+            _cruise[k] = _maxSpeed[k] * _cfg.PlayerCruisePercent / 100;
+            if (_cruise[k] < 1) _cruise[k] = 1;
+            _accel[k] = U.PerTickPerTick(_cfg.PlayerAccelDmPerSecond2, _cfg);
+            if (_accel[k] < 1) _accel[k] = 1;
+        }
+
+        private static int Rate(int attribute, int scalePermille)
+            => BallSkill.Clamp(attribute * scalePermille / 1000, 1, 100);
+
+        /// <summary>
+        /// The minute has turned. Two things happen, in this order and neither of them random:
+        /// the bench is asked what it wants (a scheduled substitution, or a conditional rule that
+        /// the live score has just opened), and every man's legs are re-rated for how far into
+        /// the match he is and how much Stamina he has to spend on it.
+        /// </summary>
+        private void MinuteBoundary(int tick)
+        {
+            int minute = tick / _cfg.TicksPerMinute;
+
+            if (_feed != null && _feed.Advance(minute, _report.HomeGoals, _report.AwayGoals))
+            {
+                _home = _feed.Current.Home;
+                _away = _feed.Current.Away;
+                _tactics[0] = MovementTactics.From(_feed.Current.Tactics?.Home, _cfg);
+                _tactics[1] = MovementTactics.From(_feed.Current.Tactics?.Away, _cfg);
+
+                for (int side = 0; side < SideCount; side++)
+                {
+                    Lineup lineup = side == 0 ? _home : _away;
+                    var roles = new List<PositionRole>(_n);
+                    for (int i = 0; i < _n; i++) roles.Add(lineup.Slots[i].Role);
+                    int[] shirts = ShirtNumbers.For(lineup);
+                    for (int i = 0; i < _n; i++)
+                    {
+                        int k = side * _n + i;
+                        // A fresh man in that slot: he is a different player, so his fixed scale
+                        // is stale, and the stream has to carry HIS id — the replay names the man
+                        // who came on, not the man he came on for. A sent-off shirt is never
+                        // refilled: the eleven that is down to ten stays down to ten.
+                        int[] ids = side == 0 ? _stream.HomePlayerIds : _stream.AwayPlayerIds;
+                        if (lineup.Slots[i].Player.Id != ids[i] && !_sentOff[k])
+                        {
+                            _scalePermille[k] = 0;
+                            ids[i] = lineup.Slots[i].Player.Id;
+                            (side == 0 ? _stream.HomeShirts : _stream.AwayShirts)[i] = shirts[i];
+                        }
+
+                        BindPlace(side, i, lineup, roles);
+                    }
+                }
+            }
+
+            for (int side = 0; side < SideCount; side++)
+            {
+                Lineup lineup = side == 0 ? _home : _away;
+                for (int i = 0; i < _n; i++)
+                    BindSkills(side, i, lineup, FatiguePermille(minute, _stamina[side * _n + i]));
+            }
+        }
+
+        /// <summary>
+        /// How much of himself he still has, in permille. Tiredness builds toward
+        /// <see cref="ConditionBalance.MatchFatigueAt90Permille"/> by full time, steps back at the
+        /// break, and is scaled by his own Stamina — so a low-stamina man fades and a high-stamina
+        /// one barely does. It is the result model's own curve
+        /// (<c>MatchEngine.FatigueFactor</c>), read one player at a time instead of one team at a
+        /// time, which is the whole gain of the causality being on the pitch.
+        /// </summary>
+        private int FatiguePermille(int minute, int stamina)
+        {
+            if (!_applyMatchFatigue) return 1000;
+
+            int permille = _condition.MatchFatigueAt90Permille * minute / 90;
+            if (minute > 45) permille -= _condition.HalfTimeRecoveryPermille;
+            if (permille < 0) permille = 0;
+
+            int neutral = _condition.StaminaNeutral;
+            int scaled = neutral > 0 ? permille * (2 * neutral - stamina) / neutral : permille;
+            if (scaled < 0) scaled = 0;
+            if (scaled > 900) scaled = 900;
+            return 1000 - scaled;
+        }
+
         private static int[] PlayerIds(Lineup lineup)
         {
             var ids = new int[lineup.Slots.Count];
@@ -607,8 +752,6 @@ namespace Sim.Core.Match.Movement
         private void UpdateTeams(int tick)
         {
             int brain = _cfg.TeamBrainTicks < 1 ? 1 : _cfg.TeamBrainTicks;
-            _looseMan[0] = -1;
-            _looseMan[1] = -1;
             for (int side = 0; side < SideCount; side++)
             {
                 bool wasAttacking = _attacking[side];
@@ -622,22 +765,11 @@ namespace Sim.Core.Match.Movement
                 _chaser[side] = NearestToBall(side, includeKeeper: false);
                 _second[side] = SecondNearestToBall(side, _chaser[side]);
 
-                // During his window the man the chance is for goes for a loose ball himself.
-                int priority = _director.PriorityTarget(tick, side == 0);
-                if (priority >= 0 && _ball.Free && !_ball.Dead
-                    && U.Distance(_px[side * _n + priority], _py[side * _n + priority], _ball.X, _ball.Y)
-                       < U.Units(_cfg.ChanceChaseRangeDm))
-                    _chaser[side] = priority;
-
-                _looseMan[side] = priority;
-                _driving[side] = priority >= 0;
-
-                // The last stretch before his minute. From here the side that the timeline says
-                // is about to have a chance plays like a side about to have one: it hunts the
-                // ball back and it goes forward with it. Without this the strike arrives with
-                // the ball still in midfield and has to be forced from forty metres.
-                int left = _director.TicksToChance(tick, side == 0);
-                _urgent[side] = left >= 0 && left <= _cfg.ChanceUrgencyTicks;
+                // A side WITH the ball pushes its block up (engine phase 6). This used to be the
+                // director's extra shove for the forty-five ticks before a scripted chance; now
+                // it is simply what having the ball means, and it fades in and out with the
+                // expansion rather than switching on for a minute at a time.
+                _driving[side] = _attacking[side];
 
                 // The shape, once for the tick, and FIRST: everything that asks where a man
                 // belongs reads it and nothing recomputes it, and the duties below are read off
@@ -794,7 +926,6 @@ namespace Sim.Core.Match.Movement
                     if (!inOurThird && !inBehind) continue;
 
                     int danger = depth;
-                    if (j == _looseMan[opponent]) danger -= _cfg.MarkOwnThirdDepthDm / 4;
                     if (danger < worstDanger) { worstDanger = danger; worst = j; }
                 }
 
@@ -859,31 +990,33 @@ namespace Sim.Core.Match.Movement
                 return;
             }
 
-            // The chance is his: once he is in the half he is attacking he does not give it
-            // back, he goes. Deep in his own half he is still just a footballer — carrying it
-            // out from there is how a whole match turns into one long dribble.
-            if (_director.PriorityTarget(tick, side == 0) == slot)
-            {
-                bool inAttackingHalf = side == 0 ? _px[k] > U.CenterXU : _px[k] < U.CenterXU;
-                if (inAttackingHalf)
-                {
-                    Carry(tick, side, slot);
-                    return;
-                }
-            }
-
             // Engine phase 4: he WEIGHS what he can do instead of working down a fixed ladder.
             // A pass, a run and a hoof are all quoted in the same currency — the metres of
             // forward progress he expects out of it, less what giving it away where it would be
             // lost is worth to the other side — so they can be compared at all. What he can see
             // of that risk comes off his Positioning; what he can execute comes off his Passing,
             // Technique and Dribbling. That is where the difference between two players lives.
+            //
+            // ENGINE PHASE 6 put the SHOT in that same list, and it is the whole phase. Before it,
+            // nobody on this pitch ever decided to shoot: a director elected a scorer off the 1.4
+            // timeline and worked the ball to him. Now a goal has a price in the one currency —
+            // what it is worth times the odds he gives himself — and a man takes it on when it
+            // beats the ball he could play instead. Which is why a striker in the box shoots and
+            // a full-back on the halfway line does not, without either being told to.
             int pressure = PressurePermille(side, slot);
             int vision = _vision[k];
 
             int passValue = FindPass(tick, side, slot, pressure, vision, out PassChoice pass);
             int carryValue = CarryValue(side, slot, pressure, vision);
             int clearValue = ClearValue(side, slot, vision);
+            int shootValue = ShootValue(side, slot);
+
+            if (shootValue > NoOption && shootValue >= passValue && shootValue >= carryValue && shootValue >= clearValue)
+            {
+                if (_shotLive) ForceResolveShot(tick);
+                TakeShot(tick, side, slot);
+                return;
+            }
 
             if (pass.Slot >= 0 && passValue >= carryValue && passValue >= clearValue)
             {
@@ -977,7 +1110,7 @@ namespace Sim.Core.Match.Movement
         private int CarryValue(int side, int slot, int pressure, int vision)
         {
             int k = side * _n + slot;
-            if (_keeper[k]) return int.MinValue / 4;
+            if (_keeper[k]) return NoOption;
 
             int touch = CarryTouchDm(k, pressure);
 
@@ -1021,8 +1154,8 @@ namespace Sim.Core.Match.Movement
         private int ClearValue(int side, int slot, int vision)
         {
             int k = side * _n + slot;
-            if (_keeper[k]) return int.MinValue / 4;
-            if (!ClearRoom(side, k, out int landing)) return int.MinValue / 4;
+            if (_keeper[k]) return NoOption;
+            if (!ClearRoom(side, k, out int landing)) return NoOption;
 
             int dir = MovementGeometry.Direction(side == 0);
             int gain = dir * (landing - _px[k]) / U.Scale;
@@ -1239,69 +1372,75 @@ namespace Sim.Core.Match.Movement
         /// shooting range of the goal being attacked, and at the feet of the man about to hit
         /// it. Until all three hold the move is still being built and the chance waits.
         /// </summary>
-        private bool Shootable(int side, int slot)
+        /// <summary>
+        /// What HAVING A GO is worth to him, in the same decimetres of forward progress a pass, a
+        /// run and a clearance are quoted in (engine phase 6). A goal is worth
+        /// <see cref="MatchBalance.GoalValueDm"/>; the odds he gives himself are his reading of
+        /// the chance — distance, angle, bodies in the way, and his own finishing. Losing it is
+        /// priced where the ball is, exactly as every other option is, which is why a shot from
+        /// thirty-five metres is a bad idea and a shot from eight is not.
+        ///
+        /// He does not have to be RIGHT about the odds. The outcome is settled by the ball, the
+        /// keeper's dive and the posts, and the gap between the two is what a poor finisher is.
+        /// </summary>
+        private int ShootValue(int side, int slot)
         {
-            if (_ball.Dead) return false;
-            if (_ball.OwnerSide >= 0 && _ball.OwnerSide != side) return false;
+            int k = side * _n + slot;
+            if (_keeper[k]) return NoOption;
 
             int goalX = U.Units(MovementGeometry.AttackedGoalX(side == 0));
-            if (U.Distance(_ball.X, _ball.Y, goalX, U.CenterYU) > U.Units(_cfg.ShootableRangeDm))
-                return false;
+            if (U.Distance(_ball.X, _ball.Y, goalX, U.CenterYU) > _shootRangeU) return NoOption;
 
-            int k = side * _n + slot;
-            return U.Distance(_px[k], _py[k], _ball.X, _ball.Y) <= _controlU;
+            int odds = BallSkill.GoalOddsPermille(ShotQuality(side, slot), _cfg);
+            return BallSkill.OptionValue(odds, _cfg.GoalValueDm, TurnoverCostDm(side, _ball.X), _vision[k]);
         }
 
-        private void TakeShot(int tick, int side, int slot, MatchEventType outcome, int creditSlot)
+        /// <summary>
+        /// He strikes it. Where he MEANS to put it is inside a post, the better the chance the
+        /// tighter; where it ACTUALLY goes is that, plus an error his Shooting and Technique earn
+        /// him and the difficulty of the chance takes away — the same two-uniform draw a misplaced
+        /// pass gets, so most strikes are near their line and the wild one is rare.
+        ///
+        /// And then nothing else is decided here. The ball is in the air: a defender in front of
+        /// it may block it, the keeper may reach it, and if it crosses the line between the posts
+        /// it is a goal. That sentence is the whole of engine phase 6.
+        /// </summary>
+        private void TakeShot(int tick, int side, int slot)
         {
-            int k = side * _n + slot;
             bool home = side == 0;
             int goalX = U.Units(MovementGeometry.AttackedGoalX(home));
             int half = U.Units(MovementGeometry.GoalHalfWidthDm);
 
-            // How good a chance this is (engine phase 4). The timeline still owns the OUTCOME
-            // until the causality is inverted in phase 6; what the quality decides here is where
-            // the ball goes and whether the keeper can hold it. A good finisher's goal is placed
-            // inside the post and his miss is a yard wide; a poor one's goal squeezes past the
-            // keeper and his miss is in the stand.
             _shotQuality = ShotQuality(side, slot);
 
-            int aimX = goalX;
-            int aimY;
-            switch (outcome)
-            {
-                case MatchEventType.Goal:
-                    int reach = half - U.Units(6);
-                    int centre = reach * _cfg.ShotPlacementCentrePermille / 1000;
-                    int placed = centre + (reach - centre) * _shotQuality / 1000;
-                    aimY = U.CenterYU + (_rng.NextInt(0, 2) == 0 ? -placed : placed);
-                    break;
-                case MatchEventType.ChanceSaved:
-                    // Straight at the keeper: the save is him getting a hand to it, not the
-                    // ball rolling over his line while he watches.
-                    int gk = (1 - side) * _n + KeeperOf(1 - side);
-                    aimX = _px[gk];
-                    aimY = _py[gk];
-                    break;
-                default:
-                    int wide = _rng.NextInt(0, 2) == 0 ? -1 : 1;
-                    int spread = U.Units(_cfg.ShotMissSpreadDm) * (1000 - _shotQuality) / 1000;
-                    aimY = U.CenterYU + wide * (half + U.Units(10) + _rng.NextInt(0, spread + 1));
-                    break;
-            }
+            int reach = half - U.Units(6);
+            int centre = reach * _cfg.ShotPlacementCentrePermille / 1000;
+            int placed = centre + (reach - centre) * _shotQuality / 1000;
+            int aimY = U.CenterYU + (_rng.NextInt(0, 2) == 0 ? -placed : placed);
 
-            aimY = U.ClampY(aimY);
+            int spread = U.Units(_cfg.ShotSpreadDm) * (1000 - _shotQuality) / 1000;
+            aimY = U.ClampY(aimY + BallSkill.Spread(_rng, spread));
+
+            int offCentre = aimY > U.CenterYU ? aimY - U.CenterYU : U.CenterYU - aimY;
+            _shotOnTarget = offCentre < half;
 
             // Struck as hard as a shot is struck: it gets there, and it gets there quickly.
             // It leaves from the BALL, so nothing jumps; the striker is on it by construction.
-            _ball.Kick(side, slot, aimX - _ball.X, aimY - _ball.Y, _maxShootForce);
+            _ball.Kick(side, slot, goalX - _ball.X, aimY - _ball.Y, _maxShootForce);
 
             _shotLive = true;
             _shotHome = home;
-            _shotSlot = creditSlot;          // the timeline's man: his name goes on it
-            _shotOutcome = outcome;
+            _shotSlot = slot;
+            _lastTouch[side] = slot;
             _shotExpires = tick + _cfg.ShotResolveTicks;
-            Record(tick, BallActionKind.Shot, home, creditSlot, -1);
+
+            // Filed under the frame the strike was struck IN, not the next one written. Every
+            // other action is rounded UP so it is never shown before it happened; a strike is the
+            // one thing for which that is wrong, because in half a second the ball has travelled
+            // sixteen metres and the frame would show it halfway to the goal. Anything that asks
+            // "where was this hit from" — the replay dump, the harness's shot map, a future
+            // player's shot chart — reads the ball at this frame.
+            RecordStruckAt(tick, home, slot);
         }
 
         /// <summary>
@@ -1338,7 +1477,7 @@ namespace Sim.Core.Match.Movement
             int min = t.HoldTicksMin < 1 ? 1 : t.HoldTicksMin;
             int max = t.HoldTicksMax < min ? min : t.HoldTicksMax;
             int held = _rng.NextInt(min, max + 1);
-            return _urgent[side] ? 1 : held;
+            return held;
         }
 
         // ------------------------------------------------------------------ passing
@@ -1372,10 +1511,7 @@ namespace Sim.Core.Match.Movement
             int k = side * _n + slot;
             bool home = side == 0;
             int dir = MovementGeometry.Direction(home);
-            int priority = _director.PriorityTarget(tick, home);
-
             int bias = _tactics[side].ForwardBias;
-            if (_urgent[side]) bias = bias * _cfg.ChanceForwardPercent / 100;
 
             int bestValue = int.MinValue;
             int tolerance = _controlU + U.Units(20);
@@ -1431,13 +1567,12 @@ namespace Sim.Core.Match.Movement
                     if (miss > tolerance)
                         completion = completion * BallSkill.Lerp(miss - tolerance, tolerance * 3, 1000, 250) / 1000;
 
-                    if (completion < _cfg.MinPassCompletionPermille && j != priority) continue;
+                    if (completion < _cfg.MinPassCompletionPermille) continue;
 
                     int gainDm = dir * (tx - _px[k]) / U.Scale * bias / 10;
                     int value = BallSkill.OptionValue(
                         completion, gainDm + _cfg.PossessionValueDm, TurnoverCostDm(side, tx), vision);
 
-                    if (j == priority) value += _cfg.ChanceOptionBonusDm;
                     if (_keeper[rk]) value -= _cfg.BackToKeeperCostDm;
                     if (AlreadySupporting(side, j)) value += _cfg.SupportingRunBonusDm;
 
@@ -1697,28 +1832,6 @@ namespace Sim.Core.Match.Movement
                 PressSpot(k, out tx, out ty);
                 sprint = true;
             }
-            else if (_director.PriorityTarget(tick, home) == slot)
-            {
-                // His chance is coming. While the ball is still being won back he comes short to
-                // get involved; the moment it is up the pitch he stops showing for it and
-                // attacks the space in front of goal, on the side the ball is coming from —
-                // which is what puts the strike inside the box instead of on the halfway line.
-                bool ballIsUp = home ? _ball.X > U.CenterXU : _ball.X < U.CenterXU;
-                if (ballIsUp)
-                {
-                    int goalX = U.Units(MovementGeometry.AttackedGoalX(home));
-                    int back = U.Units(_cfg.ChanceShotSpotDm);
-                    tx = home ? goalX - back : goalX + back;
-                    ty = U.CenterYU + (_ball.Y - U.CenterYU) / 2;
-                }
-                else
-                {
-                    HomeSpot(side, slot, out int hx, out int hy);
-                    tx = hx + (_ball.X - hx) * _cfg.ChanceDropPercent / 100;
-                    ty = hy + (_ball.Y - hy) * _cfg.ChanceDropPercent / 100;
-                }
-                sprint = true;
-            }
             else if (_attacking[side] && AlreadySupporting(side, slot))
             {
                 tx = _supportX[side];
@@ -1728,8 +1841,7 @@ namespace Sim.Core.Match.Movement
                 // while the ground is still to be covered, and a jog once he is in the space he
                 // ran into — which is the difference between a side that runs 12.1 km a man with
                 // a busiest of 19.5 and one that runs 11 with a busiest of 15.
-                sprint = _urgent[side]
-                         || U.DistanceSq(_px[k], _py[k], tx, ty) > (long)_approachU * _approachU;
+                sprint = U.DistanceSq(_px[k], _py[k], tx, ty) > (long)_approachU * _approachU;
             }
             else if (!_attacking[side] && _duty[k] == DutyCover)
             {
@@ -2005,7 +2117,7 @@ namespace Sim.Core.Match.Movement
                      + (ballDepth - _cfg.BackLineBallLagDm) * _cfg.BackLineBallFollowPercent / 100
                      + t.LinePushDm
                      + _cfg.PossessionLinePushDm * e / 1000;
-            if (_driving[side]) line += _cfg.ChanceDriveShiftPermille * Pitch.LengthDm * e / 1000_000;
+            if (_driving[side]) line += _cfg.PitchDriveShiftPermille * Pitch.LengthDm * e / 1000_000;
             line = MovementGeometry.Clamp(line, _cfg.BackLineMinDepthDm, _cfg.BackLineMaxDepthDm);
 
             int spacing = kickoff
@@ -2176,39 +2288,37 @@ namespace Sim.Core.Match.Movement
 
             if (_ball.OwnerSide == side || _ball.Dead) return false;
 
+            // A SECOND man closes in when the ball is in the third the side is defending: one
+            // presser is easy to play around, and until engine phase 6 the only thing that ever
+            // sent a second man was the director's urgency window before a scripted chance. Where
+            // it matters is exactly where it matters in football — near your own goal.
             if (_chaser[side] != slot)
             {
-                // A second man closes in while a chance is being built: one presser is easy to
-                // play around, and the ball has to be won before his minute comes.
-                if (!_urgent[side] || _keeper[k]) return false;
-                if (_second[side] != slot) return false;
+                if (_keeper[k] || _second[side] != slot) return false;
+                int dir = MovementGeometry.Direction(side == 0);
+                int ownGoalX = U.Units(MovementGeometry.OwnGoalX(side == 0));
+                if (dir * (_ball.X - ownGoalX) > U.Units(_cfg.SecondPressDepthDm)) return false;
             }
 
             long reach = _tactics[side].PressReachU;
-            if (_urgent[side])
-            {
-                reach = reach * _cfg.ChancePressPercent / 100;
-            }
-            else
-            {
-                // The TRIGGER (engine phase 3). A side does not chase the man on the ball
-                // wherever he stands: it has a zone it presses in, which is what the coach's
-                // Pressing instruction has always meant, plus the two situations that switch the
-                // press on outside it — a ball played backwards, and a man receiving with a
-                // touchline behind him. Outside both, the block holds its shape and lets him
-                // have it. (A loose ball is not in here on purpose: it is chased by the branch
-                // above this one, whoever owns the trigger.)
-                int ballDepth = side == 0 ? U.Dm(_ball.X) : Pitch.LengthDm - U.Dm(_ball.X);
-                if (ballDepth > _tactics[side].PressTriggerDepthDm) return false;
 
-                int boost = 100;
-                if (_pressUntil[side] > tick) boost = boost * _cfg.PressBackPassPercent / 100;
-                int offCentre = _ball.Y - U.CenterYU;
-                if (offCentre < 0) offCentre = -offCentre;
-                if (offCentre > U.Units(_cfg.PressWideThresholdDm))
-                    boost = boost * _cfg.PressWideReceptionPercent / 100;
-                reach = reach * boost / 100;
-            }
+            // The TRIGGER (engine phase 3). A side does not chase the man on the ball
+            // wherever he stands: it has a zone it presses in, which is what the coach's
+            // Pressing instruction has always meant, plus the two situations that switch the
+            // press on outside it — a ball played backwards, and a man receiving with a
+            // touchline behind him. Outside both, the block holds its shape and lets him
+            // have it. (A loose ball is not in here on purpose: it is chased by the branch
+            // above this one, whoever owns the trigger.)
+            int ballDepth = side == 0 ? U.Dm(_ball.X) : Pitch.LengthDm - U.Dm(_ball.X);
+            if (ballDepth > _tactics[side].PressTriggerDepthDm) return false;
+
+            int pressBoost = 100;
+            if (_pressUntil[side] > tick) pressBoost = pressBoost * _cfg.PressBackPassPercent / 100;
+            int pressOffCentre = _ball.Y - U.CenterYU;
+            if (pressOffCentre < 0) pressOffCentre = -pressOffCentre;
+            if (pressOffCentre > U.Units(_cfg.PressWideThresholdDm))
+                pressBoost = pressBoost * _cfg.PressWideReceptionPercent / 100;
+            reach = reach * pressBoost / 100;
 
             return U.DistanceSq(homeX, homeY, _ball.X, _ball.Y) <= reach * reach;
         }
@@ -2299,6 +2409,7 @@ namespace Sim.Core.Match.Movement
             bool sameMan = _ball.LastTouchSide == side && _ball.LastTouchSlot == slot;
 
             _ball.Take(side, slot);
+            _lastTouch[side] = slot;
             BallToFeet(k);
             if (!sameMan)
             {
@@ -2324,6 +2435,17 @@ namespace Sim.Core.Match.Movement
 
         private void ResolveControl(int tick)
         {
+
+            // OUT IS OUT (engine phase 6). ResolveOutOfPlay runs after this method, so a ball
+            // that left the field of play during this tick was still being offered to everyone
+            // standing near its path — and a defender who "blocked" it there put a ball that had
+            // already crossed the line back into a state where the referee then read a bogus
+            // crossing point off his deflection. While the score belonged to the timeline that
+            // could only produce a strange restart; with the causality inverted it produced a
+            // GOAL, about one in every three matches. The laws are simpler than the code was: the
+            // moment it is out, nobody may play it.
+            if (_ball.Free && (_ball.X < 0 || _ball.X > U.LengthU || _ball.Y < 0 || _ball.Y > U.WidthU))
+                return;
             if (_ball.Dead) return;
 
             if (!_ball.Free)
@@ -2357,7 +2479,6 @@ namespace Sim.Core.Match.Movement
                 {
                     int challenger = takerSide * _n + taker;
                     int odds = DuelWinPermille(owner, challenger);
-                    if (_urgent[takerSide]) odds = odds * _cfg.ChanceTacklePercent / 100;
 
                     if (_rng.NextInt(0, 1000) < odds)
                     {
@@ -2404,24 +2525,18 @@ namespace Sim.Core.Match.Movement
             // that happens (engine phase 5).
             int inVx = _ball.Vx, inVy = _ball.Vy;
 
-            // A strike the timeline has already settled is nobody's to cut out: a goal is
-            // going in, a miss is going wide, and a save belongs to the keeper it was aimed at.
-            //
-            // EXCEPT that it can be BLOCKED (engine phase 5). A quarter of the shots in a real
-            // match hit a defender, and that is where a large share of football's corners come
-            // from — the engine had no way for a body to get in the way at all, which is one of
-            // the two reasons it produced under two corners a match. A goal on the timeline is
-            // still a goal: nothing may block that. Anything else may be charged down, the
-            // timeline's own outcome is recorded either way, and where the ball goes off him is
-            // then the referee's business like any other loose ball.
-            if (_shotLive && _shotOutcome != MatchEventType.Goal && BlockStrike(tick, inVx, inVy)) return;
+            // A strike can be BLOCKED (engine phase 5). A quarter of the shots in a real match
+            // hit a defender, and that is where a large share of football's corners come from.
+            // Since phase 6 NOTHING is exempt: there is no timeline saying this one was always
+            // going in, so the man who throws himself in front of it can stop any of them.
+            if (_shotLive && BlockStrike(tick, inVx, inVy)) return;
 
-            int keeperOnly = -1;
-            if (_shotLive)
-            {
-                if (_shotOutcome != MatchEventType.ChanceSaved) return;
-                keeperOnly = _shotHome ? 1 : 0;
-            }
+            // And past the bodies, a strike ON TARGET is the keeper's ball and nobody else's. An
+            // outfielder does not "control" a shot travelling at thirty metres a second; he
+            // blocks it, which is the branch above. One flying wide is nobody's at all: it runs
+            // out, and the goal kick is the referee's business.
+            if (_shotLive && !_shotOnTarget) return;
+            int keeperOnly = _shotLive ? (_shotHome ? 1 : 0) : -1;
 
             // Loose ball: the nearest man inside control range takes it. The side whose chance
             // is coming reaches a stride further — the one thumb on the scale this engine
@@ -2440,17 +2555,23 @@ namespace Sim.Core.Match.Movement
                     // The extra stride is for a ball nobody owns — a loose ball, a clearance, a
                     // ball cut out. It is NOT a licence to pluck a team-mate's pass out of the
                     // air a metre after it leaves his foot, which turns the move into a huddle.
-                    bool ownPassInFlight = _receiver[side] >= 0 && _receiver[side] != i;
                     int reach = _controlU;
-                    if (_urgent[side] && !_keeper[k] && !ownPassInFlight)
-                        reach += U.Units(_cfg.ChanceReachBonusDm);
+
+                    // THE DIVE (engine phase 6). A strike at his goal is the one ball a keeper
+                    // reaches further for than anybody reaches for anything, and it is the whole
+                    // of the save: phase 5 had saves only because the timeline had already
+                    // decided there would be one.
+                    if (_shotLive && _keeper[k] && side == keeperOnly)
+                        reach += U.Units(BallSkill.KeeperDiveDm(_skGoalkeeping[k], _shotQuality, _cfg));
 
                     // The man it was played to reaches further for it than anyone else, because
                     // he is facing it and running onto it while the man behind him is turning
                     // (engine phase 4).
                     if (_receiver[side] == i) reach += U.Units(_cfg.ReceiveReachDm);
 
-                    int distance = U.Distance(_px[k], _py[k], _ball.X, _ball.Y);
+                    int distance = _shotLive
+                        ? SweptDistance(k, inVx, inVy)
+                        : U.Distance(_px[k], _py[k], _ball.X, _ball.Y);
                     if (distance >= reach) continue;
 
                     // Scored on how far INSIDE his own reach he is, so the extra stride is a
@@ -2474,8 +2595,15 @@ namespace Sim.Core.Match.Movement
             // HOLDS it, and a fierce strike is parried more often than a tame one — which puts
             // a live ball back in his six-yard box instead of ending the attack.
             int gkSlot = bestSide * _n + bestSlot;
-            if (wasShot && _shotOutcome == MatchEventType.ChanceSaved
-                && bestSide != (_shotHome ? 0 : 1) && _keeper[gkSlot]
+
+            // BEATEN (engine phase 6). He got across to it; that is not the same as keeping it
+            // out. If his Goalkeeping is not equal to the strike he never touches it, the ball
+            // carries on, and — since it was on target to be his ball at all — it is a goal.
+            if (wasShot && bestSide != (_shotHome ? 0 : 1) && _keeper[gkSlot]
+                && _rng.NextInt(0, 100) >= BallSkill.KeeperStopPercent(_skGoalkeeping[gkSlot], _shotQuality, _cfg))
+                return;
+
+            if (wasShot && bestSide != (_shotHome ? 0 : 1) && _keeper[gkSlot]
                 && _rng.NextInt(0, 100) >= BallSkill.KeeperHoldPercent(_skGoalkeeping[gkSlot], _shotQuality, _cfg))
             {
                 _shotLive = false;
@@ -2489,8 +2617,21 @@ namespace Sim.Core.Match.Movement
                 int outX, outY;
                 if (_rng.NextInt(0, 100) < _cfg.KeeperParryBehindPercent)
                 {
-                    outX = -MovementGeometry.Direction(bestSide == 0) * U.Units(60);
-                    outY = _ball.Y < U.CenterYU ? -U.Units(60) : U.Units(60);
+                    // BEHIND THE POST, not merely backwards (engine phase 6). This used to push
+                    // the ball six metres back and six metres sideways, which from a central
+                    // position is a point INSIDE his own goal — and while the score belonged to
+                    // the timeline that could not become a goal, so nobody could see it. With the
+                    // causality inverted it became a keeper punching one into his own net once a
+                    // match. He puts it round the post: past the line, wide of the frame.
+                    int ownGoalX = U.Units(MovementGeometry.OwnGoalX(bestSide == 0));
+                    int postY = U.CenterYU + (_ball.Y < U.CenterYU ? -1 : 1)
+                                * U.Units(MovementGeometry.GoalHalfWidthDm + _cfg.ParryRoundThePostDm);
+                    // Aimed AT THE LINE and wide of the frame, not at a point behind it: a ball
+                    // aimed four metres behind the goal from four and a half in front of it
+                    // crosses the line half way through the turn, and half of "wide of the post"
+                    // is inside it. The crossing point has to BE the target.
+                    outX = ownGoalX - _ball.X;
+                    outY = postY - _ball.Y;
                 }
                 else
                 {
@@ -2500,11 +2641,13 @@ namespace Sim.Core.Match.Movement
 
                 _ball.Kick(bestSide, bestSlot, outX, outY,
                     _ball.ForceForTicks(U.Units(_cfg.KeeperParryDm), _cfg.TicksOfMs(700), _maxPassForce));
-                Record(tick, BallActionKind.Save, bestSide == 0, bestSlot, -1);
+                _lastTouch[bestSide] = bestSlot;
+                RecordSave(tick, bestSide, bestSlot);
                 return;
             }
 
             Collect(bestSide, bestSlot);
+            _lastTouch[bestSide] = bestSlot;
             _hold[bestSide * _n + bestSlot] = HoldTicks(bestSide);
             _receiver[0] = -1;
             _receiver[1] = -1;
@@ -2524,10 +2667,10 @@ namespace Sim.Core.Match.Movement
                 ClearFlags();
             }
 
-            if (wasShot && _shotOutcome == MatchEventType.ChanceSaved && bestSide != (_shotHome ? 0 : 1))
+            if (wasShot && bestSide != (_shotHome ? 0 : 1))
             {
                 _shotLive = false;
-                Record(tick, BallActionKind.Save, bestSide == 0, bestSlot, -1);
+                RecordSave(tick, bestSide, bestSlot);
                 return;
             }
 
@@ -2579,15 +2722,6 @@ namespace Sim.Core.Match.Movement
             bool over = _ball.X < 0 || _ball.X > U.LengthU || _ball.Y < 0 || _ball.Y > U.WidthU;
             if (!over) return;
 
-            // A strike the timeline calls a goal IS a goal the moment it leaves the pitch.
-            // Judging it on the posts as well loses one in five of them to a goal kick, and a
-            // goal the viewer never sees is the worst thing this engine can do.
-            if (_shotLive && _shotOutcome == MatchEventType.Goal)
-            {
-                ForceResolveShot(tick);
-                return;
-            }
-
             // Over a touchline: a throw-in from the spot it actually crossed.
             if (_ball.Y < 0 || _ball.Y > U.WidthU)
             {
@@ -2623,25 +2757,21 @@ namespace Sim.Core.Match.Movement
             // 8-16: the save IS the defender's touch.
             bool defenderPutItBehind = _ball.LastTouchSide == defending;
 
-            if (_shotLive && _shotOutcome == MatchEventType.ChanceMissed)
+            // THE GOAL (engine phase 6). Not "the timeline said so" and not "the keeper kept it
+            // out because the scoresheet has no goal here": the ball crossed the line between the
+            // posts, and that is the entire test. It counts off a strike, off a deflection and
+            // off a defender putting it into his own net, because the laws do not care either.
+            if (betweenPosts)
             {
-                _shotLive = false;
-                Record(tick, BallActionKind.Miss, attacking == 0, _shotSlot, -1);
+                ScoreGoal(tick, attacking, defending);
+                return;
             }
-            else if (_shotLive && _shotOutcome == MatchEventType.ChanceSaved)
+
+            // Wide, and it was a strike: his miss.
+            if (_shotLive)
             {
-                // Turned round the post or over the bar rather than gathered — still a save, and
-                // the keeper's hand on it is the last touch: corner.
                 _shotLive = false;
-                Record(tick, BallActionKind.Save, defending == 0, KeeperOf(defending), -1);
-                defenderPutItBehind = true;
-            }
-            else if (betweenPosts)
-            {
-                // On target but not a goal on the timeline: the keeper kept it out.
-                _shotLive = false;
-                Record(tick, BallActionKind.Save, defending == 0, KeeperOf(defending), -1);
-                defenderPutItBehind = true;
+                RecordMiss(tick, attacking, _shotSlot);
             }
 
             if (defenderPutItBehind)
@@ -2738,6 +2868,19 @@ namespace Sim.Core.Match.Movement
         /// man who blocked it named, rather than his keeper — and the ball comes off him along the
         /// line it arrived on, which is what sends so many of them behind for a corner.
         /// </summary>
+        /// <summary>
+        /// How near a man came to the ball over the whole of this tick, not just at the end of it
+        /// (engine phase 6). See <see cref="U.DistanceSqToSegment"/>: at strike speed the ball
+        /// covers three and a quarter metres a tick, and sampling only the endpoint lets it
+        /// tunnel through the man standing in front of it.
+        /// </summary>
+        private int SweptDistance(int k, int inVx, int inVy)
+        {
+            long sq = U.DistanceSqToSegment(
+                _px[k], _py[k], _ball.X - inVx, _ball.Y - inVy, _ball.X, _ball.Y);
+            return MovementGeometry.Sqrt(sq > int.MaxValue ? int.MaxValue : (int)sq);
+        }
+
         private bool BlockStrike(int tick, int inVx, int inVy)
         {
             int attacking = _shotHome ? 0 : 1;
@@ -2748,16 +2891,18 @@ namespace Sim.Core.Match.Movement
             {
                 int k = defending * _n + j;
                 if (_keeper[k] || _sentOff[k]) continue;
-                if (U.Distance(_px[k], _py[k], _ball.X, _ball.Y) > reach) continue;
+                if (SweptDistance(k, inVx, inVy) > reach) continue;
                 if (_rng.NextInt(0, 1000) >= _cfg.BlockPermillePerTick) continue;
 
+                // A BLOCK is not a save and it is not a miss — football counts it as its own
+                // thing, and so does the timeline: the strike is over, nobody kept it out, and
+                // where the ball goes off him is anybody's, up to and including into the net.
                 _shotLive = false;
-                if (_shotOutcome == MatchEventType.ChanceSaved)
-                    Record(tick, BallActionKind.Save, defending == 0, j, -1);
-                else
-                    Record(tick, BallActionKind.Miss, _shotHome, _shotSlot, -1);
+                _lastTouch[defending] = j;
+                Record(tick, BallActionKind.Block, defending == 0, j, -1);
+                AddEvent(tick, attacking, _shotSlot, MatchEventType.ChanceMissed);
 
-                Deflect(tick, defending, j, inVx, inVy);
+                Deflect(tick, defending, j, inVx, inVy, charged: true);
                 return true;
             }
 
@@ -2771,7 +2916,7 @@ namespace Sim.Core.Match.Movement
         /// tidily up the pitch at a fixed force whatever the ball had been doing, which is why a
         /// cross flicked off a shin came out as a forty-metre clearance and never as a corner.
         /// </summary>
-        private void Deflect(int tick, int side, int slot, int inVx, int inVy)
+        private void Deflect(int tick, int side, int slot, int inVx, int inVy, bool charged = false)
         {
             int speed = U.Length(inVx, inVy);
             int force = speed * _cfg.DeflectForcePercent / 100;
@@ -2788,6 +2933,14 @@ namespace Sim.Core.Match.Movement
 
             int toTouch = _ball.Y < U.CenterYU ? _ball.Y : U.WidthU - _ball.Y;
             bool deep = depth <= U.Units(_cfg.ClearBehindDepthDm);
+
+            // A CHARGED-DOWN STRIKE is always that (engine phase 6): a man throwing himself in
+            // front of a shot absorbs it, he does not give it pace toward his own goal. Anywhere
+            // inside shooting range of the goal he is defending, a block goes away or behind —
+            // which is what a block is. Left as an ordinary deflection it read as a defender
+            // volleying charged-down shots into his own net once every three matches, and that
+            // only became visible when the causality was inverted and such a ball could score.
+            if (charged && depth <= U.Units(_cfg.MaxShootRangeDm)) deep = true;
             bool nearTouch = toTouch <= U.Units(_cfg.ClearIntoTouchDm);
 
             if (deep || nearTouch)
@@ -2813,9 +2966,20 @@ namespace Sim.Core.Match.Movement
                 }
                 else
                 {
+                    // AWAY, and struck to ARRIVE where it is aimed (engine phase 6). Phase 5 made
+                    // exactly this fix to `Clear` — "a hoof aimed forty metres upfield flew the
+                    // length of the pitch and out" — and left the sibling here hitting a twenty
+                    // metre target at a flat share of maximum force. Sixteen of the engine's
+                    // twenty-eight goal kicks a match were that ball running over the far byline,
+                    // and it took the causality being inverted for the total to break its band:
+                    // the eleven off-target shots football actually has were the ones that
+                    // exposed a number that had been too big since before this phase.
                     int upX = dir * U.Units(200);
                     int upY = _rng.NextInt(-U.Units(200), U.Units(200) + 1);
-                    _ball.Kick(side, slot, upX, upY, firm);
+                    _ball.Kick(side, slot, upX, upY,
+                        _ball.ForceToArrive(
+                            U.Length(upX, upY),
+                            _arrivalStepU * _cfg.ClearanceArrivalPercent / 100, firm, out int _));
                 }
 
                 _hold[side * _n + slot] = 0;
@@ -2838,24 +3002,19 @@ namespace Sim.Core.Match.Movement
         /// A strike that has left the pitch anywhere but through a goal: it is called as the
         /// save or the miss the timeline made it, and the restart follows.
         /// </summary>
+        /// <summary>A strike that ran out over a TOUCHLINE: off target, and the throw-in follows.</summary>
         private void SettleStrayStrike(int tick)
         {
             if (!_shotLive) return;
 
-            int attacking = _shotHome ? 0 : 1;
-            int defending = 1 - attacking;
             _shotLive = false;
-
-            if (_shotOutcome == MatchEventType.ChanceSaved)
-                Record(tick, BallActionKind.Save, defending == 0, KeeperOf(defending), -1);
-            else
-                Record(tick, BallActionKind.Miss, _shotHome, _shotSlot, -1);
+            RecordMiss(tick, _shotHome ? 0 : 1, _shotSlot);
         }
 
         /// <summary>
-        /// A strike that neither crossed a line nor was gathered — it hit somebody, or pulled
-        /// up short. It still has to become the thing the timeline says it was, or the ball
-        /// stays "live" and nobody is allowed to touch it for the rest of the match.
+        /// A strike that neither crossed a line nor was gathered — it hit somebody, or pulled up
+        /// short. The flag has to come down, or the ball stays "live" and nobody is allowed to
+        /// touch it for the rest of the match.
         /// </summary>
         private void ResolveStuckShot(int tick)
         {
@@ -2863,32 +3022,18 @@ namespace Sim.Core.Match.Movement
             ForceResolveShot(tick);
         }
 
+        /// <summary>
+        /// The strike is over without anything having settled it: it pulled up, or the whistle
+        /// went while it was travelling. Since engine phase 6 there is no outcome owed to a
+        /// timeline, so this is bookkeeping and nothing more — the shot is recorded as the miss
+        /// it turned out to be and the ball, wherever it is, is live again.
+        /// </summary>
         private void ForceResolveShot(int tick)
         {
             if (!_shotLive) return;
 
-            int attacking = _shotHome ? 0 : 1;
-            int defending = 1 - attacking;
             _shotLive = false;
-
-            switch (_shotOutcome)
-            {
-                case MatchEventType.Goal:
-                    ScoreGoal(tick, attacking, defending);
-                    break;
-
-                case MatchEventType.ChanceSaved:
-                    // Blocked or beaten away without ever reaching a line: a defender's touch was
-                    // the last one on it, so the attacking side keeps the ball — a corner.
-                    Record(tick, BallActionKind.Save, defending == 0, KeeperOf(defending), -1);
-                    Corner(tick, attacking);
-                    break;
-
-                default:
-                    Record(tick, BallActionKind.Miss, _shotHome, _shotSlot, -1);
-                    GoalKick(tick, defending);
-                    break;
-            }
+            RecordMiss(tick, _shotHome ? 0 : 1, _shotSlot);
         }
 
         /// <summary>
@@ -2899,7 +3044,17 @@ namespace Sim.Core.Match.Movement
         private void ScoreGoal(int tick, int attacking, int defending)
         {
             int goalX = U.Units(MovementGeometry.AttackedGoalX(attacking == 0));
-            Record(tick, BallActionKind.Goal, attacking == 0, _shotSlot, -1);
+
+            // WHO IT IS CREDITED TO. The man who struck it when a strike was live; otherwise the
+            // last man of the scoring side to touch it, which is how a deflected goal and a
+            // scramble find a name. A goal that only a defender touched — an own goal — falls
+            // back to the side's furthest man forward rather than being credited to the opponent.
+            int scorer = _shotLive && (_shotHome ? 0 : 1) == attacking ? _shotSlot : _lastTouch[attacking];
+            if (scorer < 0 || _sentOff[attacking * _n + scorer]) scorer = BestStriker(attacking);
+
+            _shotLive = false;
+            _shotSlot = scorer;
+            RecordGoal(tick, attacking, scorer);
 
             _ball.Place(goalX, U.CenterYU);
             _ball.Dead = true;
@@ -3131,33 +3286,17 @@ namespace Sim.Core.Match.Movement
         }
 
         /// <summary>
-        /// A penalty (Law 14). The score still belongs to the 1.4 result model until phase 6, so
-        /// the strike CANNOT invent a goal: if the side's next chance on the timeline is close
-        /// enough to be honest about, the penalty IS that chance, taken now and with its outcome —
-        /// which is the very mechanism the director already uses to keep the picture and the
-        /// scoresheet the same match. When there is no chance to claim, the keeper saves it or it
-        /// goes wide. That residue is phase 6's, and it is written down as such.
+        /// A penalty (Law 14) — and since engine phase 6 it is simply a strike from twelve yards
+        /// with nobody in the way. It goes in when it beats the keeper and it does not when it
+        /// does not; the phase-5 version had to borrow an outcome from the timeline, because the
+        /// score was not the pitch's to write. The odds it converts at are therefore not a knob
+        /// any more: they are the taker's Shooting against the keeper's Goalkeeping, from six
+        /// metres out and straight in front, which is what makes a penalty a penalty.
         /// </summary>
         private void TakePenalty(int tick, int side, int slot)
         {
-            MatchEventType outcome;
-            int credit = slot;
-
-            if (_director.TryCurrent(tick, out MatchDirector.Chance chance) && chance.Home == (side == 0))
-            {
-                outcome = chance.Outcome;
-                credit = chance.Slot;
-                _director.MarkTaken();
-            }
-            else
-            {
-                outcome = _rng.NextInt(0, 100) < _cfg.PenaltySavedPercent
-                    ? MatchEventType.ChanceSaved
-                    : MatchEventType.ChanceMissed;
-            }
-
             if (_shotLive) ForceResolveShot(tick);
-            TakeShot(tick, side, slot, outcome, credit);
+            TakeShot(tick, side, slot);
         }
 
         /// <summary>
@@ -3366,6 +3505,59 @@ namespace Sim.Core.Match.Movement
         /// announcing things the picture had not done yet. Rounding up is monotone, so the order
         /// the actions happened in is kept either way.
         /// </summary>
+        // ------------------------------------------------------------------ the scoresheet
+        //
+        // ENGINE PHASE 6. These three are the whole inversion, seen from the outside: the picture
+        // no longer illustrates a report that was written before it, it WRITES the report as it
+        // goes. Which is also why "the picture and the result agree on the score" stopped being a
+        // check that could fail and became a tautology — there is only one score now.
+
+        /// <summary>The minute a tick falls in, as the timeline counts them: 1 to 90.</summary>
+        private int MinuteOf(int tick)
+        {
+            int minute = tick / _cfg.TicksPerMinute + 1;
+            return minute < 1 ? 1 : (minute > 90 ? 90 : minute);
+        }
+
+        private void AddEvent(int tick, int side, int slot, MatchEventType type)
+        {
+            int[] ids = side == 0 ? _stream.HomePlayerIds : _stream.AwayPlayerIds;
+            _report.Events.Add(new MatchEvent
+            {
+                Minute = MinuteOf(tick),
+                Type = type,
+                ClubId = side == 0 ? _report.HomeClubId : _report.AwayClubId,
+                PlayerId = slot >= 0 && slot < ids.Length ? ids[slot] : 0
+            });
+        }
+
+        private void RecordGoal(int tick, int side, int scorer)
+        {
+            Record(tick, BallActionKind.Goal, side == 0, scorer, -1);
+            if (side == 0) _report.HomeGoals++; else _report.AwayGoals++;
+            AddEvent(tick, side, scorer, MatchEventType.Goal);
+        }
+
+        private void RecordSave(int tick, int keeperSide, int keeperSlot)
+        {
+            Record(tick, BallActionKind.Save, keeperSide == 0, keeperSlot, -1);
+            AddEvent(tick, 1 - keeperSide, _shotSlot, MatchEventType.ChanceSaved);
+        }
+
+        private void RecordMiss(int tick, int side, int slot)
+        {
+            Record(tick, BallActionKind.Miss, side == 0, slot, -1);
+            AddEvent(tick, side, slot, MatchEventType.ChanceMissed);
+        }
+
+        /// <summary>The strike, filed under the frame it left his foot in. See the note in TakeShot.</summary>
+        private void RecordStruckAt(int tick, bool home, int slot)
+        {
+            int frame = tick / _streamStride;
+            if (frame > _lastFrame) frame = _lastFrame;
+            _stream.Actions.Add(new BallAction(frame, BallActionKind.Shot, home, slot, -1));
+        }
+
         private void Record(int tick, BallActionKind kind, bool home, int slot, int target)
         {
             int frame = (tick + _streamStride - 1) / _streamStride;

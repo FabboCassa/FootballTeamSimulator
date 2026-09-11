@@ -8,12 +8,23 @@ using Sim.Core.Tactics;
 namespace Sim.Core.Match
 {
     /// <summary>
-    /// Match engine: minute-by-minute action resolution producing score and
-    /// event timeline (task 1.4), plus the replayable top-down position stream
-    /// played out around that timeline by the agent simulation (tasks 1.5 · 13.1 · 13.2,
-    /// see Movement.MatchSimulator and Movement.MatchDirector).
+    /// Match engine — TWO PATHS since the engine rework's phase 6, and which one a fixture takes
+    /// is decided by one question: is anybody going to look at it?
     ///
-    /// Model per minute:
+    ///   - <b>watched</b> (the stream is on): the match is PLAYED, by
+    ///     <see cref="Movement.MatchSimulator"/> — twenty-two agents, a ball, a referee — and the
+    ///     score, the events and the picture all come out of that one simulation. It is the
+    ///     truth, and it costs about half a second.
+    ///   - <b>the world</b> (the stream is off): the minute model below, which is what this class
+    ///     has always been. Hundreds of AI fixtures a matchday at a millisecond each, and the
+    ///     league tables stay plausible because it is calibrated against the full engine's output
+    ///     rather than against nothing.
+    ///
+    /// Before phase 6 there was only the minute model, and the movement was a re-enactment of a
+    /// result it had already decided (see the deleted MatchDirector). That is the defect the
+    /// whole rework exists to remove: what you watch is now what happened.
+    ///
+    /// Model per minute (the fast path):
     ///   1. an action happens with P = ActionChancePerMinute;
     ///   2. the attacking side is drawn from possession (midfield-driven);
     ///   3. the action becomes a goal with P = GoalCoefficient * r^ChanceSharpness,
@@ -42,9 +53,15 @@ namespace Sim.Core.Match
         // v8: phase 5 — there is a REFEREE. A ball at a carrier's feet is out when it crosses a
         // line (sub-tick crossing point), there is an offside line and a flag, a challenge can be
         // mistimed into a foul with a card and a penalty, a shot can be blocked, a defender can
-        // put it behind, and the second half is kicked off by the other side. The SCORE model is
-        // still untouched: the strike does not decide the goal until phase 6.
-        public const int Version = 8;
+        // put it behind, and the second half is kicked off by the other side.
+        // v9: phase 6 — THE CAUSALITY IS INVERTED. A match somebody watches is decided ON THE
+        // PITCH: a man weighs the shot against his other options, strikes it as well as his
+        // Shooting and Technique let him, and the ball, the bodies in front of it and the
+        // keeper's dive settle it. The director and its Chance* super-powers are gone. The minute
+        // model below survives as the FAST PATH for the world nobody watches, unchanged to the
+        // bit — which is why every league table, every calibration and every balance check reads
+        // exactly what it read on v8.
+        public const int Version = 9;
 
         private const int MatchMinutes = 90;
 
@@ -140,9 +157,39 @@ namespace Sim.Core.Match
             IReadOnlyList<MatchRule>? awayRules,
             IRandomSource rng)
         {
-            MatchInput active = plan.Initial;
-            active.Home.Validate();
-            active.Away.Validate();
+            plan.Initial.Home.Validate();
+            plan.Initial.Away.Validate();
+
+            var report = new MatchReport
+            {
+                HomeClubId = plan.Initial.Home.ClubId,
+                AwayClubId = plan.Initial.Away.ClubId
+            };
+
+            var feed = new MatchInputFeed(plan, homeRules, awayRules, _tactics.FamiliarityMax);
+
+            // ENGINE PHASE 6. A match with a stream is a match somebody will watch, so it is
+            // PLAYED and the pitch writes the report. Everything below this line is the fast
+            // path, and it is exactly the engine that existed before the inversion.
+            if (_generatePositions)
+            {
+                report.Positions = new MatchSimulator(_cfg, _condition, _applyCondition, _applyMatchFatigue)
+                    .Generate(feed, report, rng);
+                return report;
+            }
+
+            return SimulateFast(feed, report, rng);
+        }
+
+        /// <summary>
+        /// The minute model: an action with P = ActionChancePerMinute, the attacking side drawn
+        /// from possession, the goal drawn against attack/(attack+defence). Unchanged, to the
+        /// bit, from the engine of every phase before this one — it is the world's path now, not
+        /// the player's, and its calibrations are the ones the balance harness holds.
+        /// </summary>
+        private MatchReport SimulateFast(MatchInputFeed feed, MatchReport report, IRandomSource rng)
+        {
+            MatchInput active = feed.Current;
 
             // Ratings are recomputed each minute below so within-match fatigue can track
             // the clock. With fatigue off they are minute-independent, so recomputing
@@ -150,41 +197,13 @@ namespace Sim.Core.Match
             TeamRatings homeRatings = default, awayRatings = default;
             double homePossession = 0;
 
-            var report = new MatchReport
-            {
-                HomeClubId = active.Home.ClubId,
-                AwayClubId = active.Away.ClubId
-            };
-
-            bool[]? homeFired = homeRules != null && homeRules.Count > 0 ? new bool[homeRules.Count] : null;
-            bool[]? awayFired = awayRules != null && awayRules.Count > 0 ? new bool[awayRules.Count] : null;
-
-            int changeIndex = 0;
             for (int minute = 1; minute <= MatchMinutes; minute++)
             {
-                // Apply every change effective by this minute, before any draw, so
-                // the prefix is identical and the change first bites at FromMinute.
-                bool changed = false;
-                while (changeIndex < plan.Changes.Count && plan.Changes[changeIndex].FromMinute <= minute)
-                {
-                    active = plan.Changes[changeIndex].Input;
-                    changeIndex++;
-                    changed = true;
-                }
-
-                // Conditional rules: evaluate against the score so far (goals from
-                // minutes < this one). Home rules read (home, away) goals; away rules
-                // the mirror. No RNG is touched here, so a quiet ruleset is identity.
-                if (homeFired != null)
-                    changed |= FireRules(homeRules!, homeFired, minute, report.HomeGoals, report.AwayGoals, true, ref active);
-                if (awayFired != null)
-                    changed |= FireRules(awayRules!, awayFired, minute, report.AwayGoals, report.HomeGoals, false, ref active);
-
-                if (changed)
-                {
-                    active.Home.Validate();
-                    active.Away.Validate();
-                }
+                // Apply every change effective by this minute, before any draw, so the prefix is
+                // identical and the change first bites at FromMinute; then the conditional rules,
+                // against the score from minutes < this one. Neither touches the RNG, so a plan
+                // with no changes and no rules consumes draws in exactly the order engine v1 did.
+                if (feed.Advance(minute, report.HomeGoals, report.AwayGoals)) active = feed.Current;
 
                 ComputeRatings(active, minute, out homeRatings, out awayRatings, out homePossession);
 
@@ -223,62 +242,7 @@ namespace Sim.Core.Match
                 });
             }
 
-            // Movement stream (1.5 · 13.1): generated after the result so it draws from
-            // the RNG *after* every outcome roll - scores/events per seed are identical to
-            // engine v1. It is handed the finished report and the possession share the
-            // ratings produced, so the side that dominates the result model visibly keeps
-            // the ball. Uses the final active lineups; for a match with substitutions the
-            // rendered geometry reflects the latest XI (presentation-only, never a result).
-            if (_generatePositions)
-            {
-                int possessionPermille = (int)(homePossession * 1000);
-                report.Positions = new MatchSimulator(_cfg)
-                    .Generate(active.Home, active.Away, report, rng, active.Tactics, possessionPermille);
-            }
-
             return report;
-        }
-
-        /// <summary>
-        /// Fires every not-yet-fired rule whose minute and scoreline gates are met
-        /// this minute, mutating <paramref name="active"/>. Rules are evaluated in
-        /// list order, so a later rule sees the input as a same-minute earlier rule
-        /// left it (author rules in priority order). A rule that resolves to an
-        /// invalid input (e.g. a substitution that would duplicate a player) is
-        /// skipped but still marked spent — the silent fallback used elsewhere.
-        /// Consumes no randomness. Returns whether the active input changed.
-        /// </summary>
-        private bool FireRules(
-            IReadOnlyList<MatchRule> rules, bool[] fired, int minute,
-            int ownGoals, int opponentGoals, bool isHome, ref MatchInput active)
-        {
-            bool changed = false;
-            for (int i = 0; i < rules.Count; i++)
-            {
-                if (fired[i]) continue;
-
-                MatchRule rule = rules[i];
-                if (minute < rule.FromMinute) continue;
-                if (rule.Action.IsEmpty || !rule.ConditionMet(ownGoals, opponentGoals)) continue;
-
-                fired[i] = true; // spent once its gates open, applies cleanly or not
-
-                MatchInput candidate = MatchRuleApplier.Apply(active, rule, isHome, _tactics.FamiliarityMax);
-                try
-                {
-                    candidate.Home.Validate();
-                    candidate.Away.Validate();
-                }
-                catch (System.InvalidOperationException)
-                {
-                    continue; // illegal change -> ignore silently, keep the prior input
-                }
-
-                active = candidate;
-                changed = true;
-            }
-
-            return changed;
         }
 
         /// <summary>Home/away ratings (home advantage + optional tactics + within-match fatigue) and possession share at a given minute.</summary>

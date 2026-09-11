@@ -56,6 +56,22 @@
         public int Shots { get; set; }
         public int ShotsOnTarget { get; set; }
 
+        /// <summary>
+        /// Where the shots were struck from (engine phase 6): inside the box, from the edge of it
+        /// (16-25 m), and from range. With the causality inverted the shot is a DECISION, and the
+        /// only way to tell a side that works an opening from one that blazes away from thirty
+        /// metres is to count where the strikes came from.
+        /// </summary>
+        public int ShotsInBox { get; set; }
+        public int ShotsEdge { get; set; }
+        public int ShotsLong { get; set; }
+
+        /// <summary>Shots the keeper had to deal with and did: on target and not a goal.</summary>
+        public int Saves { get; set; }
+
+        /// <summary>Goals that came off a strike. Anything else is a deflection or an own goal.</summary>
+        public int ShotGoals { get; set; }
+
         /// <summary>Every ball deliberately played to a team-mate: short, long and crosses together.</summary>
         public int PassesAttempted { get; set; }
 

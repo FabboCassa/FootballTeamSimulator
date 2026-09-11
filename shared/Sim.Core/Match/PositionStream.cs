@@ -40,7 +40,16 @@ namespace Sim.Core.Match
         Penalty = 20,
 
         /// <summary>The whistle at the end of the first half. The second half's Kickoff follows it.</summary>
-        HalfTime = 21
+        HalfTime = 21,
+
+        /// <summary>
+        /// A strike charged down by a defender who threw himself in front of it (engine phase 6).
+        /// It is neither on target nor off it — football counts a blocked shot as its own thing —
+        /// and where the ball goes off him is then anybody's. Appended at the end for the same
+        /// reason the referee's actions were: a replay stored before this phase carries no value
+        /// above 21, so its actions still mean what they meant.
+        /// </summary>
+        Block = 22
     }
 
     /// <summary>

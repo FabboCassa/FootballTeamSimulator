@@ -68,6 +68,31 @@ namespace Sim.Core.Match.Movement
             return dx * dx + dy * dy;
         }
 
+        /// <summary>
+        /// The square of the distance from a point to the SEGMENT a moving thing swept this tick
+        /// (engine phase 6). A struck ball travels thirty-two metres a second — three and a
+        /// quarter metres in one tick — so testing "is the ball within reach of him NOW", once a
+        /// tick, lets a shot tunnel straight through a keeper standing in its path. That is not a
+        /// save he missed; it is a save he was never offered. Everything that has to catch a ball
+        /// travelling at strike speed asks this instead.
+        /// </summary>
+        public static long DistanceSqToSegment(int px, int py, int ax, int ay, int bx, int by)
+        {
+            long dx = bx - ax, dy = by - ay;
+            long lengthSq = dx * dx + dy * dy;
+            if (lengthSq == 0) return DistanceSq(px, py, ax, ay);
+
+            // Where along the segment the foot of the perpendicular falls, clamped to its ends.
+            long t = ((px - ax) * dx + (py - ay) * dy);
+            if (t <= 0) return DistanceSq(px, py, ax, ay);
+            if (t >= lengthSq) return DistanceSq(px, py, bx, by);
+
+            long cx = ax + dx * t / lengthSq;
+            long cy = ay + dy * t / lengthSq;
+            long ox = px - cx, oy = py - cy;
+            return ox * ox + oy * oy;
+        }
+
         /// <summary>Rescales a vector to the given length (zero-safe).</summary>
         public static void Scaled(int dx, int dy, int length, out int x, out int y)
         {

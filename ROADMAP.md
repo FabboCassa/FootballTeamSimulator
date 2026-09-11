@@ -790,8 +790,55 @@ acting one out — with the game playable at the end of every one of them.
   🏁 **Phase 5 is CLOSED**; only `MatchRenderer`'s Play-mode look at the change of ends is left, and
   that is a client-side look, not engine work.
 
-- [ ] Phase 6 — inverting the causality · [ ] Phase 7 — performance data ·
-  [ ] Phase 8 — the instructions matter
+- [x] **Phase 6 — inverting the causality: the STRIKE decides the goal** (written 2026-09-08,
+  corrected after his first run, **VERIFIED BY THE USER 2026-09-11**: `dotnet test` **615/615 green
+  in 486.2 s** (Sim.Core.Tests 375 + Api.Tests 240), `[DeterminismCheck]` and `[server-determinism]`
+  both **`0xB0052E0B3942206A`** identical digit for digit to the container's, the `pitch` scenario
+  reproducing every number of the container's run at **20/20 in band, 23/23 PASS, exit code 0**, and
+  `balance.ps1` **28/28 with every figure unchanged**. The eye: he asked me to look, and the dump
+  measures clean — every goal is the ball on the line, every save is the keeper 8.7-11.9 m off it,
+  the striker is on the ball when he hits it, a blocked shot reads as blocked. 🏁 **Phase 6 is
+  CLOSED.**) The §1.1 defect is gone: `MatchDirector` and
+  every `Chance*` super-power are DELETED, and a man on the ball weighs the SHOT against the pass,
+  the run and the clearance in the one currency they are all quoted in. He strikes it as well as his
+  Shooting and Technique allow, a defender can charge it down, the keeper's dive may reach it and
+  his Goalkeeping may not be equal to it, and a goal is the ball crossing the line between the posts.
+  The report is WRITTEN by the match. **A fixture with the stream on is PLAYED; the hundreds of AI
+  fixtures a matchday stay on the minute model and have not moved by a bit** — which is why
+  `balance.ps1` still reads 28/28 with every figure identical (`tactics`, `difficulty` and `world`
+  reproduce the phase-5 numbers digit for digit in the container). **20/20 readings inside football's
+  bands for the first time, 23/23 checks PASS, exit code 0**: goals 2.66, shots 22.0, **shots on
+  target 7.1** (the band phase 5 left open, at 15.0), passes 896 at 76.7%, throw-ins 35.4, corners
+  11.4, goal kicks 21.0, offsides 2.9, fouls 22.7, km 11.80. Engine **v9**, golden master **`0xB0052E0B3942206A`**,
+  **375** Sim.Core tests (+11 `CausalityTests`) / **615** total. Five real defects found on the way,
+  all invisible while the score belonged to a timeline: a ball already out of play could still be
+  touched (a goal every third match), a strike tunnelled through the keeper between ticks, the
+  keeper punched parries into his own net, a keeper with no option open "shot" from his own box, and
+  a charged-down ball flew out over the far byline.
+  **His first run found the fifth defect and one mistake of mine.** The mistake: the final commit of
+  `BalanceConfig.cs` never landed, so his engine still carried `PitchHomeAdvantagePermille = 45` —
+  his `[DeterminismCheck]` printed the container's 45-value digit for digit, which is the best proof
+  available that cross-runtime determinism survives v9, and it accounted for three of the eight
+  reds. Three more were tests asserting the contract this phase deliberately breaks (redrawn, not
+  patched); one was `Rotation_OutperformsFixedXI` running with the picture on for a question about
+  the result. The defect: `RefereeTests` wanted 8-24 goal kicks and read 28.4, and **16.1 of them
+  came off a DEFLECTION rather than a shot** — phase 5 had fixed exactly that on `Clear` and left
+  the sibling `Deflect` hitting a twenty-metre target at a flat share of maximum force. Too big
+  since before this phase, and only football's eleven off-target shots exposed it. Goal kicks
+  **28.4 → 21.0**, off a deflection **16.1 → 0.1**.
+  ✅ `.\tools\build-simcore.ps1` → `dotnet test` → `-Scenario pitch -PitchMatches 200 -PitchStrict`
+  → `.\tools\balance.ps1`, then OPEN `replay.html` and watch where the shots come from.
+  **Open, on purpose:** shot distance — sixteen shots in the verified dump at 3 to 11 m, **none
+  beyond eleven** where real football's median is sixteen (in band by count, not by distribution;
+  a "shoot on sight" instruction is phase 8's); the goal ball rests at the middle of the net rather
+  than where it crossed (cosmetic, costs a golden master); how hard fitness bites on the pitch (rotation loses to a fatigued best XI
+  there where it wins on the minute model — a phase-7 question, and the test went back to the fast
+  path where a season of rotation is actually decided); every shot comes from inside the box (the decision threshold falls on the
+  16 m line — "shoot on sight" is a phase-8 instruction, not one more knob); 0.88 goals a match are
+  not off a strike (deflections, own goals — legal, but a fatter tail than real football); and the
+  pitch produces fewer draws than the minute model.
+
+- [ ] Phase 7 — performance data · [ ] Phase 8 — the instructions matter
 
 - [~] **13.2 The agent match engine** — 13.1's choreographer is retired. It wrote a script in TICK SPACE and had the players act it out, so nobody in it decided anything: the ball's owner was assigned rather than won, a pass happened because the script said so rather than because one was on, nothing knew the ball had gone out, and team shape was a formula on ball position — which is why the user's second Play-mode recording showed twenty men in one penalty area, half the pitch empty, and players standing on top of each other. That is not a defect list, it is what that architecture produces.
   **The model, from the literature the user asked me to go and find:** Mat Buckland's *Programming Game AI by Example* ch. 4 (Simple Soccer) is the canonical design for a believable 2D match, and it is agent-based. Each player has a home region from the formation, a small set of states and steering with SEPARATION (the missing separation is why the tokens overlapped). Each team has a brain: who chases, who supports, who marks. A **support-spot grid** in the attacking half is scored on whether the man on the ball could find it, whether a goal could be struck from it, and whether it is a comfortable distance — the best spot is where the attackers run, and that is what a viewer reads as a pattern of play. **Passing** follows the book's rule verbatim — *"the best pass is the pass that cannot be intercepted by an opponent and that is as far forward of the receiver as possible"* — with three candidate targets per team-mate. **Marking** takes the RoboCup 2D idea of grouped assignment (defenders take the most advanced opponents first, each opponent once) instead of "everyone marks his nearest", which is what puts three men on one opponent. And the **ball is an object** with velocity and friction: a pass can be read and cut out, and crossing a line IS the throw-in — restarts are DETECTED, not written.

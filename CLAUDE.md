@@ -11,14 +11,163 @@ Read ARCHITECTURE.md (design) and ROADMAP.md (plan + current status via checkbox
 - Language: chat in Italian, all code/comments/docs in English.
 
 ## Environment facts
+- **Current test count: 615 green** (engine phase 6, VERIFIED on his machine 2026-09-11 in 486.2 s) (`Sim.Core.Tests` **375** — the 364 of phase 5 plus the 11 `CausalityTests` — + `Api.Tests` 240), golden master **`0xB0052E0B3942206A`** (engine v9). His 8 September run read 607/615 on an engine that still carried a stale `BalanceConfig`; see the current position. The line below is phase 5's, kept for its history.
 - User machine: Windows, .NET 10 SDK, Unity 6.3 LTS (6000.3.17f1), project folder `C:\Users\Fabbo\FootballTeamSimulator`.
 - Unity project = `client/` subfolder (opened via Unity Hub); git repo = monorepo root, single GitHub repo for everything.
 - After ANY change in `shared/`, the user must run `.\tools\build-simcore.ps1` so Unity gets fresh DLLs (Sim.Core.dll + Fts.Contracts.dll → `client/Assets/Plugins/SimCore/`, gitignored, .meta committed).
 - Test command: `dotnet test` (all) or with harness output:
   `dotnet test shared/Sim.Core.Tests/Sim.Core.Tests.csproj --logger "console;verbosity=detailed"`
-- Current test count: **604 green** (Sim.Core.Tests **364** — the 355 of phase 4 plus the 9 `RefereeTests` of phase 5 — + Api.Tests 240) in 518.5 s, golden master **0x222F723B4993ED25** (engine v8, engine rework phase 5 + the wall fix 5c, verified on the user's machine 2026-09-06 in 577.6 s and identical digit for digit to the container's .NET 8 value; the value BEFORE the wall fix was 0x436E4440B6350A7B, also verified on his machine, and the wall fix invalidated it; phase 4's was 0xF8BE4A32C28421A1 on v7, verified on his machine 2026-09-05 and identical digit for digit to the container's .NET 10 value; phase 3's was 0xABC7B41DC6F258C2 on engine v6), and `dotnet test` takes ~6.3 minutes (378.8 s: Sim.Core.Tests 310.7 s + Api.Tests 378.1 s in parallel). The paragraph below is the historical note it replaced: 212 green (through 8.4a, +4 OnlineSeasonTick tests over 6.10a's 208). Golden master 0xCDEA5A2F7B9E5CF6. **STALE as of 13.1: the golden master changes with engine v3 — see the current position below.** Server Api.Tests: 70 green (through 8.5a, +11 LeagueAuctionTests over 8.4a's 59) + DevSeedTests (5) from the dev-seed tooling; **8.6 (live match control) DONE [x] — 8.6a (server) 85/85 green + 8.6b (Unity client) + dev "simulate the opponent" tooling Play-mode VERIFIED & ACCEPTED by the user (docker `up --build` healthy, the live match kicks off and the bot opponent joins/subs from the live screen). `[server-determinism] 0xCDEA5A2F7B9E5CF6` unchanged, NO Sim.Core change → 212 Sim.Core + golden master stand, no save bump. Still standing: commit `Migrations/AddLiveMatch*` for a clean Postgres/docker deploy (the running dev DB already has `live_matches`). Client: Season "▶ Live" launch, ~1s poll, MatchRenderer synced to KickoffUtc, InMatchPanel subs+instructions → POST /change, finish/leave (new .cs: LiveMatchView, OnlineLiveMatchScreenPresenter). DEV TOOLING (test the live match solo): server `POST /internal/dev/leagues/{id}/live/{fixtureId}/bot` (`DevSeedService.BotLiveAsync` — the fixture's @dev.local bot opens/joins + optionally a legal `LineupPlan.From(BestEleven)` sub), client dev row "Bot: entra"/"Bot: sostituzione" (gated by `DevFlags.OnlineTestTools`); `DevSeedService` ctor now takes `ILiveMatchService` (DI-resolved → the 5 DevSeedTests stay green). NEXT: Phase 9 (public ranked mode) — 8.7 (private season end) is DONE [x] and 🏁 Phase 8 is COMPLETE. **8.7 summary:** SERVER-ONLY logic, NO Sim.Core change, NO migration (reuses `LeagueStatus.Completed`=2 + existing columns); `dotnet test Api.Tests` **92/92 green**, `[server-determinism] 0xCDEA5A2F7B9E5CF6` unchanged. `ResolveNextRoundAsync` flips the league to Completed on the last matchday; `GET /leagues/{id}/season/summary` → final table + champion / top scorer (aggregated from the stored MatchReport goal events) / best defence / wooden spoon; `POST /leagues/{id}/season/new` (creator, Completed only) = FULL reset → deletes fixtures/lineups/trainings/bids/auctions/live, un-assigns clubs, re-equalises the developed squads + re-seeds 25M budgets, resets condition to neutral, reopens the draft (players KEEP their developed ability). Client 8.7b: `SeasonSummaryDto`/`SeasonAwardDto`/`TopScorerDto` + `GetSeasonSummaryAsync`/`StartNewSeasonAsync`, new `Views/OnlineSeasonEndView` + `Presenters/OnlineSeasonEndScreenPresenter` (named `Online*` because `SeasonEndView`/`season_end.*` is the SP 2.7 screen; the online one owns `seasonend.*`), opened by a "Bilancio stagione" button that appears on the Season screen once complete; loc en+it 612/612 at parity. The user's monthly-public-league vision (per-player rating → matchmaking by level → auto-enrol with opt-out → 1-week break between seasons) is recorded as the Phase 9 direction.**
+- Current test count (phase 5, verified): **604 green** (Sim.Core.Tests **364** — the 355 of phase 4 plus the 9 `RefereeTests` of phase 5 — + Api.Tests 240) in 518.5 s, golden master **0x222F723B4993ED25** (engine v8, engine rework phase 5 + the wall fix 5c, verified on the user's machine 2026-09-06 in 577.6 s and identical digit for digit to the container's .NET 8 value; the value BEFORE the wall fix was 0x436E4440B6350A7B, also verified on his machine, and the wall fix invalidated it; phase 4's was 0xF8BE4A32C28421A1 on v7, verified on his machine 2026-09-05 and identical digit for digit to the container's .NET 10 value; phase 3's was 0xABC7B41DC6F258C2 on engine v6), and `dotnet test` takes ~6.3 minutes (378.8 s: Sim.Core.Tests 310.7 s + Api.Tests 378.1 s in parallel). The paragraph below is the historical note it replaced: 212 green (through 8.4a, +4 OnlineSeasonTick tests over 6.10a's 208). Golden master 0xCDEA5A2F7B9E5CF6. **STALE as of 13.1: the golden master changes with engine v3 — see the current position below.** Server Api.Tests: 70 green (through 8.5a, +11 LeagueAuctionTests over 8.4a's 59) + DevSeedTests (5) from the dev-seed tooling; **8.6 (live match control) DONE [x] — 8.6a (server) 85/85 green + 8.6b (Unity client) + dev "simulate the opponent" tooling Play-mode VERIFIED & ACCEPTED by the user (docker `up --build` healthy, the live match kicks off and the bot opponent joins/subs from the live screen). `[server-determinism] 0xCDEA5A2F7B9E5CF6` unchanged, NO Sim.Core change → 212 Sim.Core + golden master stand, no save bump. Still standing: commit `Migrations/AddLiveMatch*` for a clean Postgres/docker deploy (the running dev DB already has `live_matches`). Client: Season "▶ Live" launch, ~1s poll, MatchRenderer synced to KickoffUtc, InMatchPanel subs+instructions → POST /change, finish/leave (new .cs: LiveMatchView, OnlineLiveMatchScreenPresenter). DEV TOOLING (test the live match solo): server `POST /internal/dev/leagues/{id}/live/{fixtureId}/bot` (`DevSeedService.BotLiveAsync` — the fixture's @dev.local bot opens/joins + optionally a legal `LineupPlan.From(BestEleven)` sub), client dev row "Bot: entra"/"Bot: sostituzione" (gated by `DevFlags.OnlineTestTools`); `DevSeedService` ctor now takes `ILiveMatchService` (DI-resolved → the 5 DevSeedTests stay green). NEXT: Phase 9 (public ranked mode) — 8.7 (private season end) is DONE [x] and 🏁 Phase 8 is COMPLETE. **8.7 summary:** SERVER-ONLY logic, NO Sim.Core change, NO migration (reuses `LeagueStatus.Completed`=2 + existing columns); `dotnet test Api.Tests` **92/92 green**, `[server-determinism] 0xCDEA5A2F7B9E5CF6` unchanged. `ResolveNextRoundAsync` flips the league to Completed on the last matchday; `GET /leagues/{id}/season/summary` → final table + champion / top scorer (aggregated from the stored MatchReport goal events) / best defence / wooden spoon; `POST /leagues/{id}/season/new` (creator, Completed only) = FULL reset → deletes fixtures/lineups/trainings/bids/auctions/live, un-assigns clubs, re-equalises the developed squads + re-seeds 25M budgets, resets condition to neutral, reopens the draft (players KEEP their developed ability). Client 8.7b: `SeasonSummaryDto`/`SeasonAwardDto`/`TopScorerDto` + `GetSeasonSummaryAsync`/`StartNewSeasonAsync`, new `Views/OnlineSeasonEndView` + `Presenters/OnlineSeasonEndScreenPresenter` (named `Online*` because `SeasonEndView`/`season_end.*` is the SP 2.7 screen; the online one owns `seasonend.*`), opened by a "Bilancio stagione" button that appears on the Season screen once complete; loc en+it 612/612 at parity. The user's monthly-public-league vision (per-player rating → matchmaking by level → auto-enrol with opt-out → 1-week break between seasons) is recorded as the Phase 9 direction.**
 
-## Current position — 🏁 ENGINE REWORK PHASE 5 CLOSED, WALL FIX INCLUDED (2026-09-06): there is a REFEREE
+## Current position — 🏁 ENGINE REWORK PHASE 6 CLOSED AND VERIFIED (2026-09-11): the STRIKE decides the goal
+
+**VERIFIED BY THE USER, 2026-09-11.** `dotnet test` → **615/615 green, zero red, in 486.2 s**
+(`Sim.Core.Tests` **375** — the 364 of phase 5 plus the 11 `CausalityTests` — + `Api.Tests` **240**).
+`[DeterminismCheck]` and `[server-determinism]` both print **`0xB0052E0B3942206A`**, identical digit
+for digit to the container's .NET 8 value: cross-runtime determinism survives engine v9. The `pitch`
+scenario reproduced **every single number** of the container's run — goals 2.66, shots 22.0 (7.1 on
+target), passes 896 at 76.7%, throw-ins 35.4, corners 11.4, goal kicks 21.0, offsides 2.9, fouls
+22.7, km 11.80 — **20/20 in band, 23/23 PASS, exit code 0**, at 306.2 ms a match against the
+container's 603.1. And **`balance.ps1` 28/28 with every figure unchanged**, which is the proof that
+the result model was not touched.
+
+**THE EYE: looked at, and measured.** His dump, frame by frame: every goal is the ball on the line;
+**every save is the keeper** and nobody else, standing 8.7-11.9 m off his own line; the striker is
+ON the ball when he hits it, not three metres from it; a charged-down strike reads as what it is,
+the effort blocked and the ball running behind for a corner. What the eye found is the SHOT
+DISTANCE — sixteen shots at 3·3·4·4·4·4·4·5·5·7·8·10·10·11·11·11 metres, **not one beyond eleven**,
+where real football's median is around sixteen. In band by count, not by distribution, and it is
+the thing a player notices: nobody ever tries one from the edge. Written down as phase 8's (a
+"shoot on sight" instruction is exactly that), not patched with one more knob. Also cosmetic and
+recorded: `ScoreGoal` rests the ball at the middle of the goal, so every goal in the dump goes in
+dead centre; it should rest where it crossed.
+
+One harness-only fix went in after the verification and moves no number: `PitchDump`'s `KINDS` array
+had no entry for `BallActionKind.Block`, so a blocked shot captioned itself "22". Now "blocked".
+
+### How it got here — corrected after his first run (2026-09-08 → 09-11)
+
+**HIS FIRST RUN (8 September) READ 607/615, AND FOUR OF THE EIGHT REDS WERE MINE OR THE OLD
+CONTRACT'S.** The final commit of `BalanceConfig.cs` had not landed on his machine: it was still on
+`PitchHomeAdvantagePermille = 45`, the second-to-last attempt. His `[DeterminismCheck]` printed
+`0xC8DE69BEC912B667`, which is EXACTLY the value measured in the container at 45 — and every single
+figure of his `pitch` run reproduced the container digit for digit, which is the best proof going
+that cross-runtime determinism survives engine v9. That accounts for three reds (the two
+`SimulationDeterminismTests` and the `goals per match 3.1` band). Three more were tests asserting
+the contract this phase deliberately breaks, and have been REDRAWN rather than patched. One was
+`Rotation_OutperformsFixedXI` running with the picture on for a question about the result.
+
+**AND ONE WAS A REAL DEFECT — the fifth of the phase, and his run found it, not the container.**
+`RefereeTests` wanted 8-24 goal kicks and read 28.4. Measured where they came from: **16.1 of the
+28.4 came off a DEFLECTION, not off a shot.** Phase 5 fixed exactly this on `Clear` ("a hoof aimed
+forty metres upfield flew the length of the pitch and out") and left the sibling `Deflect` striking
+a twenty-metre target at a flat share of maximum force. It was too big already at phase 5 and only
+stayed in band because shots produced none at all: it took football's eleven off-target shots to
+push it over. Fixed the same way (struck to ARRIVE) plus a clearance aimed further from the
+opponent's goal (`ClearanceGoalGapDm` 200 → 220): **goal kicks 28.4 → 21.0, the ones off a
+deflection 16.1 → 0.1.** Now nearly all of them come off a shot going wide, which is how they come
+about in football.
+
+**The final measurement (200 matches, container): 20/20 in band, 23/23 PASS.** Goals **2.66**,
+shots **22.0** (7.1 on target), passes **896 at 76.7%**, throw-ins **35.4**, corners **11.4**, goal
+kicks **21.0**, offsides **2.9**, fouls **22.7**, cards **3.25**, km **11.80**, 603.1 ms/match.
+Golden master **`0xB0052E0B3942206A`**. The two thinnest margins, said out loud: pass accuracy 76.7%
+against a 76.0 floor, and goal kicks read on `RefereeTests`' own thirty seeds at 23.1 against a
+ceiling of 24 (the harness, over two hundred, reads 21.0). Both are deterministic — those numbers
+come out identical every run — but they are where a later phase will break first.
+
+### The phase as written — 🔄 ENGINE REWORK PHASE 6 (2026-09-08): the STRIKE decides the goal
+
+**THE CAUSALITY IS INVERTED — §1.1 of the plan, removed.** Until this phase `MatchEngine` decided
+the score with a minute-by-minute statistical model and `MatchDirector` then worked the ball toward
+the elected scorer, switching on super-powers for forty-five ticks at a time (press radius ×2.6,
+tackle odds ×2.6, forward hunger ×2.2, +5.5 m of reach on every loose ball) so it would arrive — and
+handing him the ball when it did not. **The director is DELETED, and every `Chance*` knob with it.**
+
+A man on the ball now weighs the SHOT against the pass, the run and the clearance in the one
+currency they are all quoted in; he strikes it as well as his Shooting and Technique let him; a
+defender may charge it down; the keeper's dive may reach it and his Goalkeeping may not be equal to
+it; and **a goal is the ball crossing the line between the posts.** The report is WRITTEN by that
+match rather than illustrated by it — which is why "the picture and the result agree on the score"
+stopped being a contract that could break and became a tautology.
+
+**TWO ENGINES, one question: is anybody going to look at it?** A fixture with the stream on is
+PLAYED and the pitch writes the result (~0.6 s). The hundreds of AI fixtures in a matchday stay on
+the minute model at ~1 ms, and **have not moved by a bit** — which is what keeps every league table,
+every calibration and all 28 balance checks reading exactly what they read on v8. This is the §3
+architecture and it is Football Manager's.
+
+**MEASURED IN THE CONTAINER: 20/20 readings inside football's bands for the first time since the
+scenario exists, and 23/23 checks PASS (exit code 0).** The one band phase 5 left outside was shots
+on target, 15.0 against 6-11: it is now **7.1**, and it is inside because it became a real thing
+instead of a consequence of the timeline. Shots: 32% on target, the keeper saves 70% of those, 9.7%
+of shots are scored. (The per-reading figures are in the corrected block above.)
+
+**And the result model is intact, DEMONSTRATED rather than asserted**: every knob this phase retuned
+lives only in the movement layer and the fast path reads none of them, and in the container
+`tactics`, `difficulty` and `world` reproduce the phase-5 figures **digit for digit** (45.0% / 42.5%,
+F433 37.4% / 49.9%, F352 51.4%, +6.5 pts/season, difficulty gaps 6.9 / 6.6 / 9.5 / 7.6, resolver 2.54
+goals against the engine's 2.42, 4/4 + 9/9 PASS).
+
+**FOUR REAL DEFECTS the inversion made visible, all found by measuring:**
+1. **A ball already out of play could still be touched.** `ResolveOutOfPlay` runs AFTER
+   `ResolveControl`, so a ball that had crossed the line during the tick was still offered to
+   everyone near its path — and a defender who "blocked" it there put a ball that was already out
+   back into play, off which the referee then read an invented crossing point. While the score
+   belonged to the timeline that could only produce a strange restart; with the causality inverted
+   it produced **a goal every third match**. Fixed: the moment it is out, nobody may play it.
+2. **The strike tunnelled through the keeper.** The ball travels 3.25 m per tick and the control
+   radius is 2.4 m, so testing "is it within reach NOW" once a tick let a shot pass straight through
+   a keeper standing in its path. `U.DistanceSqToSegment` measures against the SWEPT SEGMENT; the
+   block does the same. This one fix took goals from 21.4 to 11.7.
+3. **The keeper punched it into his own net.** A parry "behind" pushed the ball 6 m back and 6 m
+   sideways: from a central position 4.5 m off his line, that point is INSIDE the goal and the
+   crossing falls halfway through the turn. The target has to BE the crossing point: on the line,
+   wide of the frame.
+4. **The keeper took shots.** Every option answers with what it is worth and a closed one answers
+   with something no real option can beat — but the comparison then has to EXCLUDE it, or a man with
+   nothing open does the first thing on the list. A keeper who had just won the ball in his own box
+   went through `TakeShot` and the scoresheet counted his hoof as a shot: 5.5% of the first
+   measurement's "shots" were that. Hence the `NoOption` sentinel.
+
+**FILES.** New: `Match/MatchInputFeed.cs` (the bench, asked one minute at a time — the schedule of
+substitutions and conditional rules that both paths can now walk, and it consumes no RNG, which is
+what keeps the fast path byte-identical), `Sim.Core.Tests/Match/CausalityTests.cs` (11 tests).
+Deleted: `Match/Movement/MatchDirector.cs` → moved to `_to_delete/MatchDirector.cs.phase6` (the
+sandbox cannot unlink; delete it from Windows). Changed: `MatchEngine` (split into the played path
+and `SimulateFast`, Version → 9), `MatchSimulator` (the shot as a decision and as a trajectory, the
+report written by the match, condition/home/fatigue folded into the cached skills, every `_urgent` /
+`_looseMan` / director branch gone), `BallSkill` (`GoalOddsPermille`, `KeeperDiveDm`,
+`KeeperStopPercent`), `MatchUnits` (`DistanceSqToSegment`), `PositionStream` (`BallActionKind.Block`
+= 22, appended), `MatchAnalyzer`/`MatchMetrics` (shot origin, saves, shot goals), `BalanceConfig`,
+`PitchScenario` (the shot-map diagnostic line), `PositionStreamTests`, client `MatchCommentary` +
+`en/it.json` (`match.action.block`), server `SimulationService` + `SimulationDeterminismTests`
+(golden master).
+
+**WHAT HE HAD TO RUN, and did.** `.\tools\build-simcore.ps1`, then `dotnet test`, then
+`.\tools\balance.ps1 -Scenario pitch -PitchMatches 200 -PitchStrict -PitchDump .\replay.html`,
+then `.\tools\balance.ps1`. Expected: **375 green** in `Sim.Core.Tests` (364 + 11 `CausalityTests`),
+**615 total**; `[DeterminismCheck]` and `[server-determinism]` both printing
+**`0xB0052E0B3942206A`** (engine v9; v8 was `0x222F723B4993ED25`); `pitch` exiting **0** with
+**20/20 in band**; `balance.ps1` 28/28 with every digit unchanged. No `.meta` to generate this time —
+the new files and the deleted one all live in `shared/`, which Unity sees as a DLL and not as
+sources; only `_to_delete/MatchDirector.cs.phase6` is left to remove by hand, because the sandbox
+shell cannot unlink. **v8 replays are no longer drawable** — expected, and the client rejects
+them itself against `MatchEngine.Version`. Then THE EYE: open `replay.html` and watch **where the
+shots are taken from, who saves, and who throws himself in front of one**.
+
+**LEFT OPEN, on purpose and written down:** how hard fitness bites ON THE PITCH (rotation loses to a
+fatigued best XI there, where it wins on the minute model — the test went back to the fast path,
+which is where a season of rotation is actually decided, and the question belongs to phase 7, the
+one that gives the pitch its performance data); every shot comes from inside the box (in band by count,
+not by distribution — real football takes about half its shots from outside, and the decision
+threshold falls right on the 16 m line; "shoot on sight" is precisely a phase-8 instruction, not one
+more knob now); **0.88 goals a match are not off a strike** (deflections off blocks, a cross that
+goes in, an own goal — all legal, but a fatter tail than the real thing); and the pitch produces
+**fewer draws** than the minute model (same club against itself: pitch 46/20/32, fast model
+43/28.5/28.5 — the home edge is there and the right size, the draws are rarer).
+
+### Previous position — 🏁 ENGINE REWORK PHASE 5 CLOSED, WALL FIX INCLUDED (2026-09-06): there is a REFEREE
 
 **5c — THE WALL, FIXED AFTER HIS FIRST RUN AND RE-VERIFIED ON HIS MACHINE 2026-09-06.**
 Phase 5 was verified on his machine, then the eye found the one thing the numbers

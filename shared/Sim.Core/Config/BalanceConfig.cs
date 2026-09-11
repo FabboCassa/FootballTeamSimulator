@@ -1515,9 +1515,6 @@
         /// </summary>
         public int PossessionValueDm { get; set; } = 55;
 
-        /// <summary>The man whose chance it is: what a ball to him is worth on top of its own value.</summary>
-        public int ChanceOptionBonusDm { get; set; } = 520;
-
         /// <summary>What a ball played back to the keeper costs, and what a runner showing for it is worth.</summary>
         public int BackToKeeperCostDm { get; set; } = 130;
         public int SupportingRunBonusDm { get; set; } = 70;
@@ -1533,7 +1530,7 @@
         /// line he was attacking, which is a goal kick by construction (engine phase 5).
         /// </summary>
         public int MinClearanceDm { get; set; } = 200;
-        public int ClearanceGoalGapDm { get; set; } = 200;
+        public int ClearanceGoalGapDm { get; set; } = 220;
 
         /// <summary>
         /// Putting it out (engine phase 5). Deep in his own third with a man on him, a defender
@@ -1627,7 +1624,6 @@
         /// is a balloon into the stand.
         /// </summary>
         public int ShotPlacementCentrePermille { get; set; } = 380;
-        public int ShotMissSpreadDm { get; set; } = 165;
 
         /// <summary>
         /// Does the keeper HOLD it? Goalkeeping says how often; a fierce strike is parried more
@@ -1640,6 +1636,9 @@
 
         /// <summary>How far the keeper pushes a parry away from his goal, in decimetres.</summary>
         public int KeeperParryDm { get; set; } = 150;
+
+        /// <summary>How far OUTSIDE the post a parry behind is put, in decimetres.</summary>
+        public int ParryRoundThePostDm { get; set; } = 25;
 
         /// <summary>
         /// And how often he pushes it BEHIND rather than back into play — which is a corner, and
@@ -1654,7 +1653,7 @@
         public int KeeperLateralPercent { get; set; } = 38;
         public int KeeperRushDm { get; set; } = 130;
 
-        // --- Restarts and the director ---
+        // --- Restarts ---
 
         /// <summary>Pause on a dead ball before it is put back in play, and after a goal.</summary>
         public int DeadBallMs { get; set; } = 4000;
@@ -1662,47 +1661,75 @@
         public int GoalCelebrationMs { get; set; } = 9000;
         public int GoalCelebrationTicks => TicksOfMs(GoalCelebrationMs);
 
+        // --- The strike decides (engine phase 6) ---
+        //
+        // Until this phase every knob under here was a super-power the director switched on for
+        // forty-five ticks so the ball would reach the man the timeline had already elected to
+        // score: press radius times 2.6, tackle odds times 2.6, an extra stride to every loose
+        // ball. They are gone with the director. What replaces them is one number the shot is
+        // WORTH, and one that says how much of a chance's quality actually goes in.
+
         /// <summary>
-        /// How long before a chance on the 1.4 timeline the attacking side starts working the
-        /// ball toward the man who is going to take it. Long enough for two or three passes.
+        /// What a goal is worth to the man deciding, in the decimetres of forward progress every
+        /// other option is quoted in. It is the price of the shot ATTEMPT: raise it and men shoot
+        /// from further out, lower it and they keep working the ball. This is the knob the
+        /// harness tunes against "20-30 shots a match".
         /// </summary>
-        public int ChanceWindowSeconds { get; set; } = 25;
-        public int ChanceWindowTicks => ChanceWindowSeconds * TicksPerSecond;
+        public int GoalValueDm { get; set; } = 626;
 
-        /// <summary>How far the man whose chance it is drops toward the ball to get involved.</summary>
-        public int ChanceDropPercent { get; set; } = 55;
+        /// <summary>
+        /// How much of a chance's quality he expects to convert, as a percentage — his own
+        /// judgement of the shot, not its outcome. The outcome is the ball, the keeper and the
+        /// posts.
+        /// </summary>
+        public int ShotConversionPercent { get; set; } = 30;
 
-        /// <summary>How far he will go for a loose ball during his window.</summary>
-        public int ChanceChaseRangeDm { get; set; } = 620;
+        /// <summary>
+        /// How far a strike sprays off where he MEANT to put it, in decimetres, for a chance of
+        /// no quality at all. Quality closes it: a tap-in goes where he puts it, a hurried shot
+        /// from thirty metres does not. This is the knob behind "6-11 shots on target".
+        /// </summary>
+        public int ShotSpreadDm { get; set; } = 700;
 
-        /// <summary>Grace after his minute for the move to arrive before the strike is forced.</summary>
-        public int ChanceGraceSeconds { get; set; } = 8;
-        public int ChanceGraceTicks => ChanceGraceSeconds * TicksPerSecond;
+        /// <summary>
+        /// The keeper's dive: the extra reach, in decimetres, he has at a ball struck at his
+        /// goal, on top of the control radius everyone has. Goalkeeping earns most of it and the
+        /// quality of the strike takes some of it away.
+        /// </summary>
+        /// <summary>
+        /// And whether being near it was enough (engine phase 6): the odds he actually keeps the
+        /// strike out. This is the knob behind "the keeper saves about seven of every ten shots
+        /// on target", and it is separate from the dive on purpose — the dive is where he is, this
+        /// is who he is.
+        /// </summary>
+        public int KeeperStopBasePercent { get; set; } = 80;
+        public int KeeperStopSkillPercent { get; set; } = 46;
+        public int KeeperStopQualityPercent { get; set; } = 30;
 
-        /// <summary>How far from the goal a strike can be taken and still look like a strike.</summary>
-        public int ShootableRangeDm { get; set; } = 400;
+        public int KeeperDiveBaseDm { get; set; } = 10;
+        public int KeeperDiveSkillDm { get; set; } = 40;
+        public int KeeperDiveQualityDm { get; set; } = 12;
 
-        /// <summary>Where the man whose chance it is attacks once the ball is up the pitch.</summary>
-        public int ChanceShotSpotDm { get; set; } = 150;
+        /// <summary>
+        /// Home advantage ON THE PITCH, in permille on every attribute of the home eleven. The
+        /// result model has always had <see cref="HomeAdvantagePercent"/> on the team ratings;
+        /// with the causality inverted the watched match needs its own, and it is a much smaller
+        /// number because it multiplies eleven men rather than three aggregates.
+        /// </summary>
+        public int PitchHomeAdvantagePermille { get; set; } = 34;
 
-        /// <summary>Extra push on the attacking block while a chance is being built.</summary>
-        public int ChanceDriveShiftPermille { get; set; } = 110;
+        /// <summary>
+        /// Extra push on the block of the side that HAS the ball. It used to be the director's
+        /// shove before a scripted chance; since phase 6 it is simply what being in possession
+        /// means, and it fades in and out with the shape's own expansion.
+        /// </summary>
+        public int PitchDriveShiftPermille { get; set; } = 110;
 
-        /// <summary>How long before his minute the side starts playing for the chance.</summary>
-        public int ChanceUrgencySeconds { get; set; } = 20;
-        public int ChanceUrgencyTicks => ChanceUrgencySeconds * TicksPerSecond;
-
-        /// <summary>Press reach, as a percentage, over that stretch.</summary>
-        public int ChancePressPercent { get; set; } = 260;
-
-        /// <summary>Tackle success, as a percentage of the usual, over that stretch.</summary>
-        public int ChanceTacklePercent { get; set; } = 260;
-
-        /// <summary>Appetite for the forward pass, as a percentage, over that stretch.</summary>
-        public int ChanceForwardPercent { get; set; } = 220;
-
-        /// <summary>The extra stride his side gets to a loose ball over that stretch.</summary>
-        public int ChanceReachBonusDm { get; set; } = 55;
+        /// <summary>
+        /// How deep in his own end a side sends a SECOND man at the ball. One presser is easy to
+        /// play around, and near your own goal that is not a risk anybody takes.
+        /// </summary>
+        public int SecondPressDepthDm { get; set; } = 350;
 
         /// <summary>How long before the man who played the ball may take it back.</summary>
         public int ReleaseLockMs { get; set; } = 400;
@@ -1744,7 +1771,7 @@
         /// in decimetres. Not zero: "level is onside" is in the law itself, and a threshold of a
         /// few centimetres would turn every ball played into the channel into an offside.
         /// </summary>
-        public int OffsideMarginDm { get; set; } = 8;
+        public int OffsideMarginDm { get; set; } = 16;
 
         /// <summary>
         /// How badly a passer reads the line, in decimetres, at Positioning 1 and at Positioning
@@ -1753,7 +1780,7 @@
         /// the flag. A passer who read the line perfectly would never play anybody offside and
         /// the reading would stay at zero, which is what it was before this phase.
         /// </summary>
-        public int OffsideJudgementDm { get; set; } = 22;
+        public int OffsideJudgementDm { get; set; } = 13;
         public int OffsideJudgementFloorDm { get; set; } = 6;
 
         // --- Fouls, cards and free kicks (Laws 12, 13, 14) ---
@@ -1765,8 +1792,8 @@
         /// against him. (The domain has no separate Aggression attribute; Defending IS the
         /// tackling skill here, and the mistimed challenge is what it buys.)
         /// </summary>
-        public int FoulPermilleOfChallengesWorst { get; set; } = 235;
-        public int FoulPermilleOfChallengesBest { get; set; } = 56;
+        public int FoulPermilleOfChallengesWorst { get; set; } = 268;
+        public int FoulPermilleOfChallengesBest { get; set; } = 64;
 
         /// <summary>
         /// And what a defender does differently in his own penalty area: he stays on his feet.
@@ -1865,8 +1892,8 @@
         public int[] PressReachDm { get; set; } = { 160, 260, 380 };
 
         /// <summary>How long a player keeps the ball before he looks to release it, in milliseconds.</summary>
-        public int[] TempoHoldMsMin { get; set; } = { 2400, 1800, 1000 };
-        public int[] TempoHoldMsMax { get; set; } = { 4200, 3200, 2000 };
+        public int[] TempoHoldMsMin { get; set; } = { 2080, 1480, 870 };
+        public int[] TempoHoldMsMax { get; set; } = { 3620, 2620, 1680 };
 
         /// <summary>How strongly the forward option is preferred when passing.</summary>
         public int[] TempoForwardBias { get; set; } = { 6, 10, 16 };

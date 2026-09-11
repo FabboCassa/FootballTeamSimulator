@@ -184,6 +184,7 @@ internal sealed class TargetList
 internal sealed class PitchTotals
 {
     private double _goals, _shots, _onTarget, _passes, _completed, _longBalls, _crosses;
+    private double _inBox, _edge, _long, _saves, _shotGoals;
     private double _dribbles, _clearances, _tackles, _interceptions;
     private double _throwIns, _corners, _goalKicks, _offsides, _fouls;
     private double _yellows, _reds, _penalties;
@@ -203,6 +204,11 @@ internal sealed class PitchTotals
         _goals += m.TotalGoals;
         _shots += m.TotalShots;
         _onTarget += h.ShotsOnTarget + a.ShotsOnTarget;
+        _inBox += h.ShotsInBox + a.ShotsInBox;
+        _edge += h.ShotsEdge + a.ShotsEdge;
+        _long += h.ShotsLong + a.ShotsLong;
+        _saves += h.Saves + a.Saves;
+        _shotGoals += h.ShotGoals + a.ShotGoals;
         _passes += m.TotalPasses;
         _completed += h.PassesCompleted + a.PassesCompleted;
         _longBalls += h.LongBalls + a.LongBalls;
@@ -261,6 +267,15 @@ internal sealed class PitchTotals
         Console.WriteLine($"    goals {Fmt.N(_goals / n, 2)}   shots {Fmt.N(_shots / n, 1)} " +
                           $"({Fmt.N(_onTarget / n, 1)} on target)   " +
                           $"passes {Fmt.N(_passes / n, 0)} at {Fmt.N(100.0 * _completed / Math.Max(1, _passes), 1)}% accuracy");
+        // Where the strikes came from, and what became of them (engine phase 6). With the
+        // causality inverted the shot is a decision, and these are the numbers that say whether
+        // it is a footballer's decision: a side that works an opening, or one that blazes away.
+        Console.WriteLine($"    shots from  in the box {Fmt.N(_inBox / n, 1)}   edge {Fmt.N(_edge / n, 1)}   " +
+                          $"long range {Fmt.N(_long / n, 1)}   " +
+                          $"on target {Fmt.N(100.0 * _onTarget / Math.Max(1, _shots), 0)}%   " +
+                          $"keeper saved {Fmt.N(100.0 * _saves / Math.Max(1, _onTarget), 0)}%   " +
+                          $"scored {Fmt.N(100.0 * _shotGoals / Math.Max(1, _shots), 1)}%   " +
+                          $"not off a strike {Fmt.N((_goals - _shotGoals) / n, 2)}");
         Console.WriteLine($"    long balls {Fmt.N(_longBalls / n, 1)}   crosses {Fmt.N(_crosses / n, 1)}   " +
                           $"dribbles {Fmt.N(_dribbles / n, 1)}   clearances {Fmt.N(_clearances / n, 1)}");
         Console.WriteLine($"    tackles won {Fmt.N(_tackles / n, 1)}   interceptions {Fmt.N(_interceptions / n, 1)}");

@@ -61,6 +61,10 @@ namespace Fts.MatchView
                 case BallActionKind.Penalty: return "match.action.penalty";
                 case BallActionKind.HalfTime: return "match.action.halftime";
 
+                // The strike decides (engine phase 6). A charged-down shot is neither a save nor
+                // a miss and it needs saying: the defence did that, not the finishing.
+                case BallActionKind.Block: return "match.action.block";
+
                 default: return "match.action.freekick";
             }
         }

@@ -13,9 +13,9 @@ namespace Fts.Application.Simulation;
 public sealed class SimulationService : ISimulationService
 {
     /// <summary>Combined hash of the default <see cref="DeterminismCheck.Run()"/> — the value the
-    /// client logs (golden master 0x222F723B4993ED25, engine v8 / engine rework phase 5).
+    /// client logs (golden master 0xB0052E0B3942206A, engine v9 / engine rework phase 6 - the causality inverted).
     /// Pinned by <c>SimulationDeterminismTests</c>.</summary>
-    public ulong GoldenCombinedHash => 0x222F723B4993ED25UL;
+    public ulong GoldenCombinedHash => 0xB0052E0B3942206AUL;
 
     public SimulateMatchResponse SimulateMatch(SimulateMatchRequest request)
     {

@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Text.Json;
 using NUnit.Framework;
 using Sim.Core.Condition;
@@ -295,7 +295,17 @@ namespace Sim.Core.Tests.Condition
         private void RunFatigueBlock(bool rotate, ulong baseSeed, int matchdays, int gapDays, out int points, out double regularsEndFitness)
         {
             SetCondition(_club, C.FormNeutral, C.MoraleNeutral, 100);
-            var engine = new MatchEngine(_cfg, applyCondition: true);
+
+            // NINETY-SIX MATCHES, and the question is the RESULT: does a fresher squad take more
+            // points than a fatigued one over a congested run. Since engine phase 6 a match with
+            // the picture on is PLAYED and costs half a second against the result model's one
+            // millisecond, so leaving the stream on here spent two and a half minutes drawing a
+            // picture nothing in this test looks at — and, more to the point, asked the question
+            // of the wrong engine: a season's worth of rotation is decided by the hundreds of
+            // fixtures the coach does not watch. How hard fitness bites ON THE PITCH is a real
+            // question and a separate one; it belongs to the phase that gives the pitch its
+            // per-player performance data, not here.
+            var engine = new MatchEngine(_cfg, applyCondition: true, generatePositions: false);
             points = 0;
 
             for (int md = 0; md < matchdays; md++)

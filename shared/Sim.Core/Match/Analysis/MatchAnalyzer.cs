@@ -162,16 +162,17 @@ namespace Sim.Core.Match.Analysis
                     case BallActionKind.Shot:
                         {
                             bool onTarget = ShotWasOnTarget(actions, i);
-                            if (isHome)
-                            {
-                                home.Shots++;
-                                if (onTarget) home.ShotsOnTarget++;
-                            }
-                            else
-                            {
-                                away.Shots++;
-                                if (onTarget) away.ShotsOnTarget++;
-                            }
+                            bool goal = ShotWasGoal(actions, i);
+                            int range = ShotRangeM(stream, a);
+                            ref SideMetrics shooter = ref isHome ? ref home : ref away;
+
+                            shooter.Shots++;
+                            if (onTarget) shooter.ShotsOnTarget++;
+                            if (onTarget && !goal) shooter.Saves++;
+                            if (goal) shooter.ShotGoals++;
+                            if (range <= 16) shooter.ShotsInBox++;
+                            else if (range <= 25) shooter.ShotsEdge++;
+                            else shooter.ShotsLong++;
 
                             break;
                         }
@@ -280,13 +281,46 @@ namespace Sim.Core.Match.Analysis
         /// A strike is on target when the thing that settles it is a goal or a save. A miss is a
         /// miss; a strike that settles as nothing at all is not counted on target either.
         /// </summary>
+        /// <summary>
+        /// How far out the strike was taken, in whole metres — read off the ball's own position in
+        /// the frame the strike was recorded in, which is the only place the stream keeps it.
+        /// </summary>
+        private static int ShotRangeM(PositionStream stream, BallAction shot)
+        {
+            PitchPoint ball = stream.BallAt(shot.Tick);
+            int goalX = shot.Home ? Pitch.LengthDm : 0;
+            long dx = ball.X - goalX, dy = ball.Y - Pitch.CenterY;
+            long sq = dx * dx + dy * dy;
+
+            // A whole-metre answer wants no more than a whole-metre root, and this is a
+            // diagnostic rather than a simulation step — but it is still integer, because the
+            // number ends up in a printed measurement that has to reproduce on every machine.
+            int metres = 0;
+            while ((long)(metres + 1) * (metres + 1) * 100 <= sq) metres++;
+            return metres;
+        }
+
+        /// <summary>Did this strike end in the net? The next settling action says so.</summary>
+        private static bool ShotWasGoal(List<BallAction> actions, int index)
+        {
+            for (int i = index + 1; i < actions.Count; i++)
+            {
+                BallActionKind kind = actions[i].Kind;
+                if (kind == BallActionKind.Goal) return true;
+                if (kind == BallActionKind.Save || kind == BallActionKind.Miss) return false;
+                if (kind == BallActionKind.Block || kind == BallActionKind.Shot) return false;
+            }
+
+            return false;
+        }
+
         private static bool ShotWasOnTarget(List<BallAction> actions, int index)
         {
             for (int j = index + 1; j < actions.Count; j++)
             {
                 BallActionKind kind = actions[j].Kind;
                 if (kind == BallActionKind.Goal || kind == BallActionKind.Save) return true;
-                if (kind == BallActionKind.Miss) return false;
+                if (kind == BallActionKind.Miss || kind == BallActionKind.Block) return false;
                 if (kind == BallActionKind.Shot) return false;   // the next strike: this one was never settled
             }
 

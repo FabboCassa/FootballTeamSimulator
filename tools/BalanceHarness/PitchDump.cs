@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using Sim.Core.Domain;
 using Sim.Core.Match;
 
@@ -208,7 +208,7 @@ const NAMES = [[__HOME_PLAYERS__], [__AWAY_PLAYERS__]];
 const ACTIONS = [__ACTIONS__];
 const KINDS = ["kick-off","pass","long ball","cross","dribble","tackle","interception","clearance",
                "shot","save","GOAL","miss","corner","throw-in","goal kick","free kick",
-               "OFFSIDE","foul","yellow card","RED CARD","PENALTY","half-time"];
+               "OFFSIDE","foul","yellow card","RED CARD","PENALTY","half-time","blocked"];
 const HALFTIME = __HALFTIME__;
 const SHORT = ["__HOME_SHORT__", "__AWAY_SHORT__"];
 const GOAL_KIND = KINDS.indexOf("GOAL");

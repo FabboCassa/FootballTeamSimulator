@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using NUnit.Framework;
 using Sim.Core.Career;
@@ -67,7 +67,7 @@ namespace Sim.Core.Tests.Career
         }
 
         [Test]
-        public void WatchingAFixture_DoesNotChangeAnyResult()
+        public void WatchingAFixture_PlaysItOnThePitch_AndLeavesEveryOtherFixtureAlone()
         {
             int watchedId;
             {
@@ -75,7 +75,8 @@ namespace Sim.Core.Tests.Career
                 watchedId = probe.Clubs[3].Id;
             }
 
-            string Play(int? watched)
+            // The scoreline and the timeline of every fixture of the day, fixture by fixture.
+            List<string> Play(int? watched)
             {
                 (League league, Season season) = NewWorld();
                 var progressor = new SeasonProgressor();
@@ -85,14 +86,34 @@ namespace Sim.Core.Tests.Career
                 List<MatchOutcome> day = progressor.AdvanceDay(
                     league, season, WorldSeed, null, null, null, null, watched);
 
-                // The scoreline and the timeline only — the stream is the thing that differs.
-                return string.Join("|", day.Select(o =>
+                return day.Select(o =>
                     $"{o.Fixture.Id}:{o.Report.HomeGoals}-{o.Report.AwayGoals}:" +
-                    string.Join(",", o.Report.Events.Select(e => $"{e.Minute}/{(int)e.Type}/{e.PlayerId}"))));
+                    string.Join(",", o.Report.Events.Select(e => $"{e.Minute}/{(int)e.Type}/{e.PlayerId}")))
+                    .ToList();
             }
 
-            Assert.That(Play(watchedId), Is.EqualTo(Play(null)),
-                "which engine plays a fixture must not move its result by one goal");
+            List<string> unwatched = Play(null);
+            List<string> watchedDay = Play(watchedId);
+
+            // ENGINE PHASE 6 REDREW THIS TEST, and it is worth saying why. Until the causality was
+            // inverted, watching a fixture could not move it by one goal: the picture was a
+            // re-enactment of a result the minute model had already decided, and this test said so.
+            // Now the fixture the coach watches is PLAYED — twenty-two agents, a ball and a
+            // referee — and the result is whatever that match produced. So the claim changes shape:
+            // the watched fixture may differ, and EVERY OTHER FIXTURE OF THE DAY MAY NOT. That is
+            // the real contract, because it is what keeps a league table the same table whether or
+            // not the coach happened to be looking.
+            Assert.That(watchedDay, Has.Count.EqualTo(unwatched.Count), "the same fixtures must be played");
+
+            int differences = 0;
+            for (int i = 0; i < unwatched.Count; i++)
+            {
+                bool isWatched = unwatched[i] != watchedDay[i];
+                if (isWatched) differences++;
+            }
+
+            Assert.That(differences, Is.LessThanOrEqualTo(1),
+                "watching one fixture must not move any OTHER fixture of the matchday");
         }
 
         [Test]

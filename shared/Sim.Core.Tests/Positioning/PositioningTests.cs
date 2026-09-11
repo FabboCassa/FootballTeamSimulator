@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Text.Json;
 using NUnit.Framework;
 using Sim.Core.Config;
@@ -175,8 +175,12 @@ namespace Sim.Core.Tests.Positioning
             MatchReport shaped = off.Simulate(pushed, plain, new Pcg32(777));
             MatchReport preset = off.Simulate(LineupSelector.BestEleven(_club), plain, new Pcg32(777));
 
-            Assert.That(shaped.HomeGoals, Is.EqualTo(preset.HomeGoals), "the result must be untouched");
-            Assert.That(shaped.AwayGoals, Is.EqualTo(preset.AwayGoals), "the result must be untouched");
+            // ENGINE PHASE 6. This used to end "same seed, same result — different geometry", and
+            // that half of it is gone with the causality: a side drawn thirty metres further up
+            // the pitch is a side PLAYING thirty metres further up the pitch, and where a man
+            // stands is now one of the things that decides the match. What the test still pins —
+            // and what task 6.10 was actually about — is that dragging a player off his anchor
+            // MOVES HIM, with or without the rating tilt the flag turns on.
             Assert.That(
                 JsonSerializer.Serialize(shaped.Positions), Is.Not.EqualTo(JsonSerializer.Serialize(preset.Positions)),
                 "a side pushed 300 permille up the pitch must be DRAWN further up the pitch");

@@ -10,34 +10,47 @@ con il gioco sempre funzionante, regolamento fino a falli/cartellini/punizioni.
 - [x] **Fase 4 — decisioni con la palla** (2026-09-04, misurata nel container). Vedi §11.
 - [x] **Fase 5 — il regolamento** (2026-09-05, verificata dall'utente; la correzione della
       barriera §12.5 è arrivata dopo ed è stata riverificata il 2026-09-06). Vedi §12.
-- [ ] Fase 6 — inversione della causalità
+- [x] **Fase 6 — inversione della causalità** (2026-09-08, corretta il 09-11 dopo il suo primo run,
+      **verificata dall'utente il 2026-09-11**). Vedi §13. 🏁 CHIUSA.
 - [ ] Fase 7 — dati sulle prestazioni
 - [ ] Fase 8 — le istruzioni contano
 
 ---
 
-## 📍 Stato — 6 settembre 2026
+## 📍 Stato — 11 settembre 2026
 
-**Siamo qui: 🏁 FASE 5 CHIUSA E VERIFICATA dall'utente — il corpo della fase il 5 settembre 2026, la
-correzione della barriera (§12.5) il 6. Tutto verde, e lo scenario `pitch` esce con codice 0 per la
-prima volta da quando esiste.**
+**Siamo qui: 🏁 FASE 6 CHIUSA E VERIFICATA DALL'UTENTE — la causalità è invertita, e il tiro decide
+il gol.**
 
-**C'è un arbitro.** Fino a questa fase la palla usciva solo se era libera — un giocatore che la
-portava oltre la linea veniva riportato dentro, e l'harness contava quel difetto a 48,7 tick a
-partita (§1.7) — non esisteva una linea del fuorigioco, e un contrasto poteva solo essere vinto o
-perso, mai sbagliato. Quattro delle cinque letture ancora fuori banda erano quelle, e adesso sono
-tutte dentro: **rimesse 18,4 → 33,4** (banda 30-50), **corner 0,3 → 10,7** (8-13), **fuorigioco 0 →
-4,1** (1,5-5), **falli 0 → 20,9** (18-28). Le letture in banda passano da **14/19 a 19/20**, e
-**per la prima volta i tre check di contratto passano tutti e tre**: la palla tenuta su una linea
-legge **0,0 tick a partita** e lo scenario `pitch` esce con codice 0. Vedi §12.
+**`dotnet test` → 615 su 615 verdi, zero rossi, in 486,2 s** (`Sim.Core.Tests` **375** — i 364 della
+fase 5 più gli 11 di `CausalityTests` — e `Api.Tests` **240**). `[DeterminismCheck]` e
+`[server-determinism]` stampano entrambi **`0xB0052E0B3942206A`**, identico cifra per cifra al valore
+calcolato nel container su .NET 8: **il determinismo fra runtime sopravvive a engine v9.**
 
-**Il modello risultato è intatto, ed è la cosa che questa fase rischiava di più**: un rigore o un
-tiro deviato che segna sarebbe un gol che il tabellino non ha. Un rigore prende in prestito
-l'occasione della timeline quando ce n'è una, un gol della timeline non è respingibile, e ogni
-calibrazione del modello risultato torna identica cifra per cifra
-(`Avg goals/match 2,44 | draws 24,8% | home wins 48,4%`, `Strong wins 82%`, `[counter] 56,0%`,
-`[familiarity] 49,3% contro 23,9%`, `[sweep] top 53,8%`, `[match-fatigue] 481 → 580`,
-`[fitness->result] 517 contro 318`).
+**E lo scenario `pitch` ha riprodotto OGNI SINGOLO NUMERO del run del container** — gol 2,66, tiri
+22,0 (7,1 nello specchio), passaggi 896 al 76,7%, rimesse 35,4, corner 11,4, rinvii dal fondo 21,0,
+fuorigioco 2,9, falli 22,7, gialli 3,25, km 11,80, difendendo 39,2 × 31,9 e attaccando 44,0 × 37,7 —
+**20/20 in banda e 23/23 check PASS**, a 306,2 ms a partita contro i 603,1 del container (1,97x, in
+linea col 2,20x della fase 5). **`Balance checks PASSED`: exit code 0.**
+
+**`.\tools\balance.ps1` 28/28 PASS con ogni cifra invariata** (tattiche 45,0% / 42,5%, formazioni
+F433 37,4%/49,9% e F352 51,4%, stagione +6,5 pts, difficoltà 6,9/6,6/9,5/7,6/10,1, 67,6 trasferimenti,
+ingaggi 69,8%, `Avg goals/match 2,44 | draws 24,8% | home wins 48,4%`, `Strong wins 82%`,
+`[counter] 56,0%`, `[familiarity] 49,3% contro 23,9%`, `[sweep] top 53,8%`, `[match-fatigue] 481 →
+580`, `[fitness->result] 517 contro 318`) — **ed è la prova che il modello risultato non è stato
+toccato**, che è la cosa che questa fase rischiava di più.
+
+**Il primo run (8 settembre) aveva dato 607/615**, e i suoi otto rossi erano quattro cose diverse: un
+errore mio (il commit finale di `BalanceConfig.cs` non era atterrato, e il suo motore girava ancora
+a `PitchHomeAdvantagePermille = 45`), tre test che asserivano il contratto che questa fase rompe
+apposta, uno che girava con la picture accesa per una domanda sul risultato, **e un difetto vero, il
+quinto della fase** (§13, difetto 5). Tutto raccontato lì.
+
+**E L'OCCHIO: guardato.** Il dump della sua partita, aperto e misurato frame per frame: ogni gol è la
+palla sulla linea, **ogni parata è il portiere** (e nessun altro), in una posizione da portiere —
+fra 8,7 e 11,9 m dalla propria linea; il tiratore è **sulla palla** quando la colpisce, non a tre
+metri; e un tiro murato si vede per quello che è, la conclusione respinta e il pallone che scappa in
+angolo. Quello che l'occhio ha trovato è **la distanza dei tiri**, ed è in §13 fra le cose aperte.
 
 | | Fase | Stato |
 |---|---|---|
@@ -47,21 +60,32 @@ calibrazione del modello risultato torna identica cifra per cifra
 | 3 | difendere: zona e trigger | ✅ fatta **e verificata dall'utente** |
 | 4 | decisioni con la palla | ✅ fatta **e verificata dall'utente** |
 | 5 | il regolamento | ✅ fatta **e verificata dall'utente**, barriera (§12.5) compresa |
-| 6 | inversione della causalità | ⬅️ **prossima** — il tiro decide il gol |
-| 7-8 | — | da fare |
+| 6 | inversione della causalità | 🏁 **fatta e verificata dall'utente** — il tiro decide il gol |
+| 7 | dati sulle prestazioni | ⬅️ **prossima** |
+| 8 | le istruzioni contano | da fare |
 
 ### Come si verifica che tutto gira
 
     .\tools\build-simcore.ps1
     dotnet test
-    .\tools\balance.ps1 -Scenario pitch -PitchMatches 200 -PitchDump .\replay.html
+    .\tools\balance.ps1 -Scenario pitch -PitchMatches 200 -PitchStrict -PitchDump .\replay.html
     .\tools\balance.ps1        # gli altri scenari NON devono muoversi di un numero
 
-**Golden master della fase 5: `0x222F723B4993ED25`** (engine v8; era `0xF8BE4A32C28421A1` in v7 e
-`0xABC7B41DC6F258C2` in v6), già ripuntato nei quattro posti soliti. I replay salvati in v7 non sono
-più disegnabili: è previsto, e il client li rifiuta da solo perché confronta con
-`MatchEngine.Version`. Attesi **364 test verdi** in `Sim.Core.Tests` (i 355 della fase 4 più i 9 di
-`RefereeTests`) e lo scenario `pitch` che esce con **codice 0**.
+**Golden master della fase 6: `0xB0052E0B3942206A`** (engine v9; era `0x222F723B4993ED25` in v8,
+`0xF8BE4A32C28421A1` in v7 e `0xABC7B41DC6F258C2` in v6), già ripuntato nei quattro posti soliti. I
+replay salvati in v8 non sono più disegnabili: è previsto, e il client li rifiuta da solo perché
+confronta con `MatchEngine.Version`. Attesi **375 test verdi** in `Sim.Core.Tests` (i 364 della fase
+5 più gli 11 di `CausalityTests`), **615 in totale**, e lo scenario `pitch` che esce con **codice 0**
+e **20/20 in banda** sotto `-PitchStrict`.
+
+**Quattro test sono stati RIDISEGNATI, non aggiustati**, perché asserivano il contratto che questa
+fase rompe apposta: `WatchingAFixture_DoesNotChangeAnyResult` → `..._PlaysItOnThePitch_AndLeavesEveryOtherFixtureAlone`
+(guardare una partita può cambiarla; quello che non può fare è muovere un'ALTRA partita della
+giornata, ed è quello a tenere la classifica la stessa classifica); `CustomPositions_...EvenWithTheFlagOff`
+(dove metti un uomo adesso conta, quindi resta solo la metà che diceva che lo MUOVE);
+`EveryEvent_IsStruck_AndCreditedToItsPlayer` (un gol deviato è credito suo senza un suo tiro prima);
+`Rotation_OutperformsFixedXI_OverACongestedBlock` (96 partite sul percorso veloce: la domanda è sul
+risultato, e una stagione di rotazione la decidono le partite che nessuno guarda).
 
 
 ### Verificato dall'utente il 5 settembre 2026 (fase 5) — 🏁 CHIUSA
@@ -616,7 +640,9 @@ difende È la sagoma di chi attacca, e le tre bande difensive ancora rosse sono 
   `Aggression` e `Tackling`.
 - **cambio campo all'intervallo**.
 
-### Fase 6 — Inversione della causalità
+### Fase 6 — Inversione della causalità ✅ FATTA
+
+*Scritta e misurata l'8 settembre 2026 — il resoconto, con i numeri, è in §13.*
 
 - `MatchSimulator` produce punteggio ed eventi. `MatchDirector` e i knob `Chance*` eliminati.
 - `MatchEngine` retrocesso a percorso veloce per il mondo di sfondo, ricalibrato dall'harness
@@ -1852,7 +1878,7 @@ gialli · 0,15 rossi · 0,10 rigori, 8,5 falli da una squadra di 90 di contrasto
 
     .\tools\build-simcore.ps1
     dotnet test
-    .\tools\balance.ps1 -Scenario pitch -PitchMatches 200 -PitchDump .\replay.html
+    .\tools\balance.ps1 -Scenario pitch -PitchMatches 200 -PitchStrict -PitchDump .\replay.html
     .\tools\balance.ps1        # gli altri scenari NON devono muoversi di un numero
 
 Attesi — **confermati dall'utente il 5 settembre 2026 sul corpo della fase e di nuovo il 6 settembre
@@ -1865,7 +1891,213 @@ corner, le punizioni con la barriera e l'intervallo.
 
 ---
 
-## 13. Riferimenti
+## 13. Fase 6 — fatta: l'inversione della causalità
+
+*Scritta e misurata il 7-8 settembre 2026. Decisioni con l'utente prese prima di scrivere una riga:
+(1) **lo stream è la verità** — le partite con `generatePositions: true` prendono gol ed eventi dal
+campo, il resto del mondo resta sul modello a minuti; (2) **vantaggio casa, condizione e stanchezza
+vanno portati sul campo**, o la partita che l'utente gioca è l'unica della sua lega senza; (3) **si
+tara il campo sul modello**, non il modello sul campo, così `balance.ps1` resta 28/28 con ogni cifra
+invariata ed è la prova che il resto del gioco non si è mosso.*
+
+### Cosa era, e cosa è
+
+Il difetto che l'intero rifacimento esiste per togliere è il §1.1: **la partita che guardavi non era
+la partita che contava**. `MatchEngine` decideva punteggio ed eventi con un modello statistico a
+minuti; poi `MatchDirector` apriva una finestra di venticinque secondi prima di ogni occasione e
+accendeva dei super-poteri temporanei sulla squadra che "doveva" segnare — raggio di pressing ×2,6,
+probabilità di tackle ×2,6, fame di verticalizzazione ×2,2, cinque metri e mezzo di raggio in più
+su ogni palla vagante — perché la palla arrivasse al marcatore già eletto. E se non arrivava,
+gliela metteva in mano.
+
+**Adesso il campo produce tutto.** Un uomo con la palla pesa il TIRO accanto al passaggio, alla
+conduzione e alla spazzata, nella stessa moneta in cui sono quotati tutti: i decimetri di progresso
+in avanti. Lo colpisce con la precisione che il suo Tiro e la sua Tecnica gli concedono. Un
+difensore può murarlo, il tuffo del portiere può arrivarci e il suo Portiere può non bastare, e un
+gol è la palla che passa la linea fra i pali. **Il referto lo scrive quella partita**, non lo
+illustra.
+
+`MatchDirector` è **cancellato**, e con lui ogni manopola `Chance*`.
+
+### Come è fatto
+
+**Il tiro come decisione.** `ShootValue` quota il gol a `GoalValueDm` per le probabilità che il
+giocatore si dà — la sua lettura dell'occasione: distanza, angolo, corpi in mezzo, e il suo
+finalizzare — meno quello che perdere la palla lì costa. È esattamente la forma che la fase 4 aveva
+dato al passaggio e alla conduzione, e per questo le quattro opzioni sono confrontabili. **Non deve
+avere ragione**: l'esito lo decidono la palla, il portiere e i pali, e la differenza fra i due è che
+cos'è un cattivo finalizzatore.
+
+**Il tiro come traiettoria.** Dove MIRA è dentro il palo, tanto più stretto quanto migliore è
+l'occasione; dove VA è quello più un errore che il suo Tiro e la sua Tecnica gli tolgono e la
+difficoltà dell'occasione gli aggiunge, tirato come l'errore di un passaggio — due uniformi mediate,
+così quasi tutti i tiri sono vicini alla loro linea e quello selvaggio è raro. Se la traiettoria
+passa fra i pali il tiro è **nello specchio** e da quel momento è palla del portiere e di nessun
+altro; se va fuori non è di nessuno, esce, ed è rinvio dal fondo. Un portiere non raccoglie una
+palla che passa un metro fuori dal suo palo: la guarda uscire.
+
+**La parata come due domande.** Il TUFFO dice se ci è arrivato — raggio in più sul raggio di
+controllo che hanno tutti, quasi tutto guadagnato col Portiere e un po' tolto dalla qualità del
+tiro. La PARATA dice se arrivarci è bastato: `KeeperStopPercent`, il suo Portiere contro quel tiro.
+Farla solo geometria satura — un tuffo lungo abbastanza da coprire gli angoli para tutto, uno corto
+abbastanza da essere battuto non arriva a niente — e quindi sono due cose separate.
+
+**Il muro come cosa a sé.** Un tiro murato non è né parato né sbagliato: il calcio lo conta come una
+terza cosa, e adesso lo fa anche il referto (`BallActionKind.Block`, appesa in fondo all'enum come le
+azioni dell'arbitro della fase 5, così i replay salvati prima continuano a significare quello che
+significavano).
+
+**Il referto scritto dal campo.** `RecordGoal` / `RecordSave` / `RecordMiss` sono l'inversione vista
+da fuori: il quadro non illustra più un referto scritto prima di lui, **lo scrive man mano**. Ed è
+per questo che il check "il quadro e il risultato sono d'accordo sul punteggio" ha smesso di essere
+un contratto che poteva rompersi ed è diventato una tautologia — di punteggio ce n'è uno solo.
+
+**La panchina, un minuto alla volta.** Il ciclo a minuti di `MatchEngine` era l'unico che sapesse il
+punteggio, quindi era l'unico che potesse far scattare una sostituzione o una regola condizionale.
+Adesso il punteggio lo sa il campo, quindi il calendario degli input è diventato una cosa che
+entrambi i percorsi sanno percorrere: `MatchInputFeed`. Non consuma casualità — ed è quello che
+permette al percorso veloce di restare identico al bit al motore di prima.
+
+**Casa, forma e stanchezza sul campo.** Gli attributi cachati sono quelli SCALATI: condizione e
+vantaggio casa sono fissi per la partita, la stanchezza si ripiega dentro a ogni cambio di minuto,
+e nessun punto di chiamata ha dovuto imparare che esistono. La stanchezza è la curva del modello
+risultato letta **un giocatore alla volta invece che una squadra alla volta**, che è tutto il
+guadagno dell'avere la causalità sul campo.
+
+### La misura (200 partite, tattiche neutre, seed 20260803)
+
+**20/20 letture in banda per la prima volta da quando esiste lo scenario, e 23/23 check PASS.** La
+lettura che la fase 5 lasciava fuori — **i tiri nello specchio, 15,0 contro una banda 6-11** — è
+dentro, ed è dentro perché adesso è una cosa vera: prima ogni occasione della timeline che non fosse
+un errore diventava una parata per costruzione.
+
+| Lettura | Fase 5 | **Fase 6** | Calcio vero | |
+|---|---|---|---|---|
+| gol a partita | 2,52 | **2,66** | 2,4-3,0 | ✅ |
+| tiri a partita | 25,2 | **22,0** | 20-30 | ✅ |
+| **tiri nello specchio** | 15,0 | **7,1** | 6-11 | ✅ **chiusa** |
+| passaggi a partita | 877 | **896** | 850-1150 | ✅ |
+| precisione | 78,2% | **76,7%** | 76-88% | ✅ |
+| rimesse | 33,4 | **35,4** | 30-50 | ✅ |
+| corner | 10,7 | **11,4** | 8-13 | ✅ |
+| rinvii dal fondo | 17,5 | **21,0** | 8-24 (§12) | ✅ |
+| fuorigioco | 4,1 | **2,9** | 1,5-5 | ✅ |
+| falli | 20,9 | **22,7** | 18-28 | ✅ |
+| gialli | 2,85 | **3,25** | 2,0-5,5 | ✅ |
+| km a giocatore | 11,07 | **11,80** | 9-12 | ✅ |
+| **totale in banda** | 19/20 | **20/20** | | |
+
+E il tiro, guardato da vicino: **22,0 tiri a partita, il 32% nello specchio, il portiere ne para il
+70%, il 9,7% dei tiri finisce in gol.** Il resto della partita: 0,15 rigori, 0,27 rossi, possesso
+casa 51,7%, palla per terzo 33,3 / 29,0 / 37,7, blocco difensivo 39,2 × 31,9 m con linea 5,9 e buco
+10,6, blocco offensivo 44,0 × 37,7. **603,1 ms a partita** nel container (erano 542,8 alla fase 5:
+il tiro costa l'11%).
+
+**I due margini più stretti, detti perché lo sono**: la precisione dei passaggi è 76,7% contro un
+pavimento di 76,0, e i rinvii dal fondo letti sui trenta semi di `RefereeTests` sono 23,1 contro un
+tetto di 24 (l'harness, su duecento partite, ne legge 21,0). Sono misure deterministiche — quei
+numeri escono identici a ogni run — ma è il posto in cui una fase successiva romperà per prima.
+
+### Il modello risultato NON si è mosso, ed è dimostrato
+
+Ogni manopola ritarata da questa fase vive **solo** nello strato di movimento — `GoalValueDm`,
+`ShotSpreadDm`, `ShotConversionPercent`, `KeeperStop*`, `KeeperDive*`, `PitchHomeAdvantagePermille`,
+`PitchDriveShiftPermille`, `SecondPressDepthDm`, `ParryRoundThePostDm`, `TempoHoldMs*`,
+`OffsideJudgementDm`, `FoulPermilleOfChallenges*` — e il percorso veloce non ne legge nessuna.
+Verificato nel container, cifra per cifra contro i numeri della fase 5:
+
+    [balance-tactics]     45,0% miglior set / 42,5% peggiore · F433 37,4% / 49,9% · F352 51,4%
+    [balance-tactics-season] +6,5 pts/stagione                                    4/4 PASS
+    [balance-difficulty]  gap 6,9 / 6,6 / 9,5 / 7,6, tutti monotoni
+    [balance-world]       risolutore 2,54 gol contro i 2,42 del motore, casa 44,9% vs 44,9%   9/9 PASS
+
+### Quattro difetti veri che la fase ha trovato, e che solo l'inversione poteva rendere visibili
+
+1. **Una palla già uscita poteva ancora essere toccata.** `ResolveOutOfPlay` gira DOPO
+   `ResolveControl`, quindi una palla che aveva superato la linea durante il tick veniva ancora
+   offerta a chiunque fosse vicino alla sua traiettoria — e un difensore che la "murava" lì
+   rimetteva in gioco una palla già fuori, di cui l'arbitro poi leggeva un punto di attraversamento
+   inventato. Finché il punteggio era della timeline questo poteva solo produrre una rimessa
+   strana; con la causalità invertita produceva **un gol ogni tre partite**. La legge è più semplice
+   del codice: nel momento in cui è fuori, non la tocca più nessuno.
+2. **Il tiro passava attraverso il portiere.** La palla viaggia a 32 m/s, cioè 3,25 m per tick, e il
+   raggio di presa è di 2,4: testare "la palla è a portata ADESSO" una volta per tick lasciava che
+   un tiro attraversasse il portiere piazzato sulla sua traiettoria. Non è una parata sbagliata, è
+   una parata mai offerta. `U.DistanceSqToSegment` misura contro il **segmento spazzato** dal tick,
+   e lo stesso vale per il muro. Da sola questa correzione ha portato i gol da 21,4 a 11,7.
+3. **Il portiere si murava da solo.** La respinta "dietro" spingeva la palla sei metri indietro e
+   sei di lato: da una posizione centrale, e partendo da quattro metri e mezzo davanti alla linea,
+   quel punto è **dentro la sua porta**, e il punto di attraversamento cade a metà della curva. Il
+   bersaglio deve ESSERE il punto di attraversamento: sulla linea, fuori dal palo.
+4. **Il portiere tirava.** Ogni opzione risponde con quanto vale, e una che non è aperta risponde
+   con qualcosa che nessuna opzione vera può battere — ma il confronto deve allora ESCLUDERLA, o un
+   uomo senza niente di aperto fa la prima cosa della lista. Un portiere che aveva appena
+   recuperato palla nella propria area finiva in `TakeShot`, e il tabellino contava il suo rinvio
+   come un tiro: il 5,5% dei "tiri" della prima misura erano quello.
+5. **La deviazione volava fuori dal fondo avversario** — e questo l'ha trovato il run dell'utente,
+   non il container. `RefereeTests` chiedeva 8-24 rinvii dal fondo e ne leggeva **28,4**. Misurato
+   da dove venivano: **16,1 su 28,4 nascevano da una deviazione, non da un tiro.** La fase 5 aveva
+   corretto esattamente questo difetto su `Clear` — *"un rinvio da quaranta metri volava per tutta
+   la lunghezza del campo e usciva"* — e aveva lasciato il metodo gemello `Deflect` a colpire un
+   bersaglio di venti metri a una frazione fissa della forza massima. Era un numero troppo grande
+   già alla fase 5, dove stava in banda solo perché i tiri non ne producevano nemmeno uno: sono gli
+   **undici tiri fuori che il calcio vero ha** ad averlo spinto oltre il tetto. Corretto come il
+   gemello (colpita per ARRIVARE) più un bersaglio della spazzata più lontano dalla porta
+   avversaria (`ClearanceGoalGapDm` 200 → 220): rinvii **28,4 → 21,0**, e quelli da deviazione
+   **16,1 → 0,1**. Adesso quasi tutti nascono da un tiro fuori, che è il modo in cui nascono nel
+   calcio.
+
+### Cosa questa fase lascia aperto, detto onestamente
+
+- **Tutti i tiri partono dall'area, e più vicino di così.** L'occhio, sul dump della partita
+  verificata, dà il numero esatto: **sedici tiri, distanze 3 · 3 · 4 · 4 · 4 · 4 · 4 · 5 · 5 · 7 ·
+  8 · 10 · 10 · 11 · 11 · 11 metri. Nessuno oltre gli undici metri in tutta la partita**, dove il
+  calcio vero ha una distanza mediana intorno ai sedici. In banda per NUMERO, non per
+  distribuzione. La causa è misurata: al limite dell'area la qualità dell'occasione è già tagliata
+  dal traffico (`ShotQualityPressurePercent`) e il passaggio di sicurezza vale sempre un po' di
+  più, quindi la soglia della decisione cade dentro il dischetto. È la cosa che un giocatore nota
+  guardando: **nessuno le prova mai da fuori.** È la fase 8 il posto giusto per muoverlo — "tira
+  appena puoi" è precisamente un'istruzione — e non una manopola in più adesso.
+- **La palla del gol si ferma in mezzo alla porta.** `ScoreGoal` la posa a `(goalX, CenterY)` per la
+  celebrazione, quindi i tre gol del dump entrano tutti esattamente al centro. È cosmetico e non
+  tocca un numero, ma l'occhio lo vede: dovrebbe fermarsi nel punto in cui ha passato la linea.
+  Costa una riga e un golden master, quindi non si fa su una build già verde.
+- **0,88 gol a partita non nascono da un tiro**: deviazioni sul muro che entrano, un cross che
+  finisce dentro, un'autorete. Il calcio vero ne ha molti meno. Sono tutti gol legittimi per il
+  regolamento e nessuno di loro è un errore del motore, ma la coda è più grassa del vero.
+- **Meno pareggi del modello a minuti.** La stessa squadra contro sé stessa: il campo dà casa 46% /
+  pari 20% / trasferta 32%, il modello veloce 43% / 28,5% / 28,5%. Il vantaggio casa c'è ed è della
+  misura giusta; i pareggi sul campo sono più rari.
+- **Quanto morde la stanchezza SUL CAMPO.** `Rotation_OutperformsFixedXI` con la picture accesa dava
+  73 punti alla formazione fissa e 65 a quella ruotata: sul campo il divario di qualità fra i
+  titolari e i freschi batte il malus di condizione, dove nel modello a minuti non lo batteva. Il
+  test è tornato sul percorso veloce — è lì che una stagione di rotazione si decide — ma la domanda
+  resta aperta e appartiene alla fase 7, che è quella che dà al campo i dati sulle prestazioni.
+- **Il costo.** 603,1 ms a partita restano il prezzo di una partita vista. Il mondo non lo paga.
+
+### Cosa deve girare sulla macchina dell'utente
+
+    .\tools\build-simcore.ps1
+    dotnet test
+    .\tools\balance.ps1 -Scenario pitch -PitchMatches 200 -PitchStrict -PitchDump .\replay.html
+    .\tools\balance.ps1        # gli altri scenari NON devono muoversi di un numero
+
+Attesi: **375 test verdi** in `Sim.Core.Tests` (i 364 della fase 5 più gli 11 di `CausalityTests`),
+**615 in totale** con `Api.Tests`; `[DeterminismCheck]` e `[server-determinism]` che stampano
+**`0x690376649823E3A4`** (engine v9; era `0x222F723B4993ED25` in v8); lo scenario `pitch` che esce
+con **codice 0** e **20/20 in banda**; `balance.ps1` 28/28 con ogni cifra invariata. Niente `.meta` da
+generare, questa volta: i file nuovi e quello cancellato stanno tutti in `shared/`, che Unity vede
+come DLL e non come sorgenti — resta solo da cancellare a mano `_to_delete/MatchDirector.cs.phase6`,
+perché la shell della sandbox non ha il permesso di farlo. **I replay salvati in v8 non sono più
+disegnabili**: è previsto, e il client li rifiuta da solo perché confronta con
+`MatchEngine.Version`.
+
+E poi l'occhio, che è la metà dell'accettazione che nessun test può dare: aprire `replay.html` e
+guardare **da dove partono i tiri, chi para, e chi si butta davanti alla palla**.
+
+---
+
+## 14. Riferimenti
 
 - RoboCup Soccer Simulator — https://rcsoccersim.readthedocs.io/en/latest/overview.html
 - RoboCup 2D Soccer Simulation League — https://en.wikipedia.org/wiki/RoboCup_2D_Soccer_Simulation_League
