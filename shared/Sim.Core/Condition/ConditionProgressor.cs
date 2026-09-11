@@ -44,10 +44,29 @@ namespace Sim.Core.Condition
             public readonly HashSet<int> StarterIds;
             public readonly TeamResult Result;
 
+            /// <summary>
+            /// Real minutes per player id, when the host has them (engine phase 7: a PLAYED match
+            /// writes them on its report). Null - the default, and what every caller before that
+            /// phase passes - keeps the flat credit this model has always used: ninety minutes for
+            /// a starter, none for anybody else. When it is given it is the whole truth: a player
+            /// missing from it did not play, so a substitute finally drains the fitness of the
+            /// half-hour he actually played instead of nothing at all.
+            /// </summary>
+            public readonly IReadOnlyDictionary<int, int>? MinutesById;
+
             public Participation(HashSet<int> starterIds, TeamResult result)
             {
                 StarterIds = starterIds;
                 Result = result;
+                MinutesById = null;
+            }
+
+            public Participation(
+                HashSet<int> starterIds, TeamResult result, IReadOnlyDictionary<int, int>? minutesById)
+            {
+                StarterIds = starterIds;
+                Result = result;
+                MinutesById = minutesById;
             }
         }
 
@@ -77,10 +96,22 @@ namespace Sim.Core.Condition
         {
             foreach (Player player in club.Squad.Players)
             {
-                int minutes = participation.StarterIds.Contains(player.Id) ? FullMatchMinutes : 0;
+                int minutes = Minutes(participation, player.Id);
                 ConditionModel.ApplyMatchResult(
                     player.Condition, minutes, participation.Result, rng, _cfg, player.Attributes.Stamina);
             }
+        }
+
+        /// <summary>
+        /// How long he was on the pitch: the real figure when the host handed one over, and
+        /// otherwise the flat credit (a start is a full match; partial minutes aren't modelled).
+        /// </summary>
+        private static int Minutes(Participation participation, int playerId)
+        {
+            if (participation.MinutesById == null)
+                return participation.StarterIds.Contains(playerId) ? FullMatchMinutes : 0;
+
+            return participation.MinutesById.TryGetValue(playerId, out int minutes) ? minutes : 0;
         }
 
         private void Rest(Club club)

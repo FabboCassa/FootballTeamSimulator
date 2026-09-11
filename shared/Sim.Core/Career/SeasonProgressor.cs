@@ -5,6 +5,7 @@ using Sim.Core.Config;
 using Sim.Core.Difficulty;
 using Sim.Core.Domain;
 using Sim.Core.Match;
+using Sim.Core.Match.Analysis;
 using Sim.Core.Random;
 using Sim.Core.Tactics;
 
@@ -116,8 +117,14 @@ namespace Sim.Core.Career
         /// Call AFTER AdvanceDay: clubs that played (from <paramref name="dayOutcomes"/>)
         /// drain their kickoff XI and step the whole squad; every other club rests a day.
         /// Kickoff lineups are resolved exactly as the match used them (same
-        /// <paramref name="lineupPlans"/> fallback); subs' partial minutes are not modelled
-        /// in v1. Opt-in by being called — never calling it leaves condition untouched.
+        /// <paramref name="lineupPlans"/> fallback). Opt-in by being called — never calling it
+        /// leaves condition untouched.
+        ///
+        /// <paramref name="useMatchMinutes"/> (engine phase 7) credits every man the minutes he
+        /// ACTUALLY played, read off the performance data of the matches that were played, instead
+        /// of ninety for a starter and nothing for a substitute. Off by default, and deliberately:
+        /// it changes how squads tire, which is a balance change and belongs in front of the
+        /// 1,000-match harness before it becomes the default.
         /// </summary>
         public void EvolveCondition(
             IReadOnlyList<League> leagues,
@@ -125,8 +132,11 @@ namespace Sim.Core.Career
             IReadOnlyList<MatchOutcome> dayOutcomes,
             ulong worldSeed,
             IReadOnlyDictionary<int, LineupPlan>? lineupPlans = null,
-            DifficultyContext? difficulty = null)
+            DifficultyContext? difficulty = null,
+            bool useMatchMinutes = false)
         {
+            Dictionary<int, Dictionary<int, int>>? minutes = useMatchMinutes ? MinutesByClub(dayOutcomes) : null;
+
             var played = new Dictionary<int, ConditionProgressor.Participation>();
             foreach (MatchOutcome outcome in dayOutcomes)
             {
@@ -137,14 +147,52 @@ namespace Sim.Core.Career
                 if (home != null)
                     played[fixture.HomeClubId] = new ConditionProgressor.Participation(
                         StarterIds(ResolveLineup(home, lineupPlans, difficulty, worldSeed, fixture.Id)),
-                        ResultFor(fixture, asHome: true));
+                        ResultFor(fixture, asHome: true),
+                        MinutesFor(minutes, fixture.HomeClubId));
                 if (away != null)
                     played[fixture.AwayClubId] = new ConditionProgressor.Participation(
                         StarterIds(ResolveLineup(away, lineupPlans, difficulty, worldSeed, fixture.Id)),
-                        ResultFor(fixture, asHome: false));
+                        ResultFor(fixture, asHome: false),
+                        MinutesFor(minutes, fixture.AwayClubId));
             }
 
             _conditionProgressor.Evolve(leagues, played, worldSeed, season.CurrentDay);
+        }
+
+        /// <summary>
+        /// Real minutes per club, off the matches that were PLAYED (engine phase 7). A fixture
+        /// resolved on the fast path carries no statistics and is simply absent from the map, so
+        /// its clubs keep the flat credit they have always had — which is what makes this safe to
+        /// switch on for a career whose hundreds of background fixtures nobody watches.
+        /// </summary>
+        private static Dictionary<int, Dictionary<int, int>> MinutesByClub(IReadOnlyList<MatchOutcome> outcomes)
+        {
+            var byClub = new Dictionary<int, Dictionary<int, int>>();
+            foreach (MatchOutcome outcome in outcomes)
+            {
+                MatchStats? stats = outcome.Report.Stats;
+                if (stats == null) continue;
+
+                var home = new Dictionary<int, int>();
+                var away = new Dictionary<int, int>();
+                foreach (PlayerMatchStats player in stats.Players)
+                {
+                    if (player.PlayerId <= 0 || player.MinutesPlayed <= 0) continue;
+                    (player.Home ? home : away)[player.PlayerId] = player.MinutesPlayed;
+                }
+
+                byClub[outcome.Fixture.HomeClubId] = home;
+                byClub[outcome.Fixture.AwayClubId] = away;
+            }
+
+            return byClub;
+        }
+
+        private static IReadOnlyDictionary<int, int>? MinutesFor(
+            Dictionary<int, Dictionary<int, int>>? minutes, int clubId)
+        {
+            if (minutes == null) return null;
+            return minutes.TryGetValue(clubId, out Dictionary<int, int>? forClub) ? forClub : null;
         }
 
         private static HashSet<int> StarterIds(Lineup lineup)

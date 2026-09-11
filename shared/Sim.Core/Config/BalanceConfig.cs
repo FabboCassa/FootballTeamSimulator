@@ -27,6 +27,7 @@
         public IdentityBalance Identity { get; set; } = new IdentityBalance();
         public PositioningBalance Positioning { get; set; } = new PositioningBalance();
         public WorldBalance World { get; set; } = new WorldBalance();
+        public PerformanceBalance Performance { get; set; } = new PerformanceBalance();
     }
 
     /// <summary>
@@ -2063,5 +2064,119 @@
         public int[] ShapeWeights { get; set; } = { 40, 30, 12, 18 };
         /// <summary>Relative weights for the crest fill pattern, indexed by <see cref="Identity.CrestPattern"/>: {Solid, VerticalHalves, HorizontalHalves, DiagonalSash, VerticalStripes, Hoops, Quarters}.</summary>
         public int[] PatternWeights { get; set; } = { 22, 16, 12, 16, 14, 12, 8 };
+    }
+
+    /// <summary>
+    /// Tunables for the PERFORMANCE DATA of a played match (engine phase 7,
+    /// docs/engine/MATCH_ENGINE_PLAN.md §4): the expected-goals estimate a strike is worth from
+    /// where it was taken, and the weights that turn a man's match into a mark out of ten.
+    ///
+    /// None of these can move a result. The statistics are read off a finished match, after every
+    /// roll, so a change here changes what the report SAYS about a match and never what happened
+    /// in it — with one exception a host must opt into deliberately: a rating fed back into the
+    /// development model (see Sim.Core.Match.Analysis.MatchPerformanceFeed), which is off unless
+    /// the host passes the data.
+    /// </summary>
+    public sealed class PerformanceBalance
+    {
+        // --- Expected goals, estimated from the position the strike was taken from ---
+        /// <summary>
+        /// Value (1/1000) of a strike taken from nothing at all - on the goal line, dead centre.
+        /// Real football's best chances sit around 0.38, and that is where this started; it is set
+        /// to 250 because it is CALIBRATED AGAINST THIS ENGINE rather than against football's
+        /// shot mix. Measured over 200 matches: every strike this engine takes comes from inside
+        /// the box (median about five metres - the shot-distance question phase 6 left open), and
+        /// it converts those at 9.7% where real football converts a chance of that geometry nearer
+        /// 15%. At 380 the pitch produced 2.00 expected goals a side against 1.33 scored, and an
+        /// xG on a match report that is half again the goals is a number that misleads. At 250 the
+        /// two track each other. When phase 8 gives the shot a distance, re-measure this.
+        /// </summary>
+        public int XgPeakPermille { get; set; } = 250;
+
+        /// <summary>
+        /// Distance (dm) at which the estimate has halved. The fall-off is d^2 / (h^2 + d^2), which
+        /// is what makes it read like football: ~0.28 from five metres, ~0.15 from eleven, ~0.09
+        /// from the edge of the box and ~0.03 from thirty metres.
+        /// </summary>
+        public int XgHalfDistanceDm { get; set; } = 90;
+
+        /// <summary>How hard a tight angle bites: the estimate is scaled by d^2 / (d^2 + k * dy^2 / 10), dy being the distance off the middle of the goal.</summary>
+        public int XgAngleWeight { get; set; } = 30;
+
+        /// <summary>A penalty is a penalty: the estimate for one, whatever the geometry says.</summary>
+        public int XgPenaltyPermille { get; set; } = 760;
+
+        // --- How long a move is followed when a pass or a key pass is being judged ---
+        /// <summary>Minutes a struck pass is followed before it is written off as never having arrived (mirrors the analyzer).</summary>
+        public int PassFollowMinutes { get; set; } = 3;
+
+        /// <summary>Seconds a receiver has to strike the ball for the pass that found him to count as a key pass.</summary>
+        public int KeyPassWindowSeconds { get; set; } = 15;
+
+        // --- The mark out of ten, in TENTHS. 60 = 6.0 = he was there and nothing happened. ---
+        /// <summary>The mark everybody starts from.</summary>
+        public int RatingBase { get; set; } = 60;
+
+        /// <summary>Floor and ceiling, so no arithmetic produces a 0.0 or an 11.4.</summary>
+        public int RatingFloor { get; set; } = 30;
+        public int RatingCeiling { get; set; } = 100;
+
+        public int RatingPerGoal { get; set; } = 12;
+        public int RatingPerAssist { get; set; } = 7;
+        public int RatingPerKeyPass { get; set; } = 2;
+        public int RatingPerShotOnTarget { get; set; } = 1;
+        public int RatingPerBlock { get; set; } = 2;
+
+        /// <summary>
+        /// Tenths per defensive action (tackle, interception, clearance) ABOVE what the average
+        /// outfielder of that match managed, pro-rated for the minutes played. Measured, and this
+        /// is why it is a difference and not a count: the engine produces ~33 of these per man per
+        /// match (306 tackles, 233 clearances, 192 interceptions), so a flat bonus per action gave
+        /// every player on the pitch three extra points and the average mark came out at 8.5.
+        /// </summary>
+        public int RatingPerDefensiveActionAboveAverage { get; set; } = 1;
+
+        /// <summary>Cap (in tenths) on the defensive term, so one busy afternoon cannot be worth a goal and a half.</summary>
+        public int RatingDefensiveCap { get; set; } = 15;
+
+        /// <summary>
+        /// Tenths per ball given away FEWER than the average outfielder of that match, pro-rated
+        /// for minutes. Duels WON have no weight of their own on purpose: a duel won is a tackle,
+        /// and a tackle is already paid in the line above - counting it twice is how the first
+        /// version turned every busy defender into a nine.
+        /// </summary>
+        public int RatingPerDuelLost { get; set; } = 1;
+
+        /// <summary>Cap (in tenths) on that term, for the same reason as the defensive one.</summary>
+        public int RatingDuelCap { get; set; } = 15;
+        public int RatingPerFoul { get; set; } = 1;
+        public int RatingPerOffside { get; set; } = 1;
+        public int RatingPerYellowCard { get; set; } = 4;
+        public int RatingPerRedCard { get; set; } = 15;
+
+        /// <summary>Pass accuracy that neither helps nor hurts, and how many tenths a ten-point swing from it is worth.</summary>
+        public int RatingPassAccuracyPivotPercent { get; set; } = 78;
+        public int RatingPerTenPercentOfPassing { get; set; } = 2;
+
+        /// <summary>Passes a man has to have attempted before his accuracy is judged at all.</summary>
+        public int RatingMinPassesForAccuracy { get; set; } = 10;
+
+        // --- The keeper is marked on the two things only he does ---
+        public int RatingPerSave { get; set; } = 3;
+        public int RatingPerGoalConceded { get; set; } = 4;
+
+        /// <summary>
+        /// A man who played a quarter of an hour cannot have had an eight of a match. Everything he
+        /// earned above or below the base is scaled by his minutes over ninety, which leaves a full
+        /// ninety untouched and pulls a cameo back toward the base.
+        /// </summary>
+        public bool ScaleRatingByMinutes { get; set; } = true;
+
+        // --- Feeding the development model (opt-in; see MatchPerformanceFeed) ---
+        /// <summary>The mark (in tenths) that maps onto DevelopmentBalance.PerformanceNeutralRating.</summary>
+        public int DevelopmentNeutralRating { get; set; } = 60;
+
+        /// <summary>Development rating points per tenth of a mark away from neutral: 10 puts a 8.0 at 70 and a 4.0 at 30.</summary>
+        public int DevelopmentPointsPerTenth { get; set; } = 10;
     }
 }

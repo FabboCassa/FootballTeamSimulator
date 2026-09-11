@@ -69,10 +69,12 @@ namespace Sim.Core.Match
         private readonly TacticsBalance _tactics;
         private readonly ConditionBalance _condition;
         private readonly PositioningBalance _positioning;
+        private readonly PerformanceBalance _performance;
         private readonly bool _applyCondition;
         private readonly bool _applyMatchFatigue;
         private readonly bool _applyPositioning;
         private readonly bool _generatePositions;
+        private readonly bool _buildStats;
 
         /// <summary>
         /// <paramref name="applyCondition"/> opts the engine into the condition model
@@ -100,17 +102,25 @@ namespace Sim.Core.Match
         /// turning it off cannot move a single bit of any result — it only skips work nobody
         /// is going to look at. The headless paths (AI matchdays, the balance harness) pass
         /// false; anything a human can watch or replay leaves it on.
-        public MatchEngine(BalanceConfig? config = null, bool applyCondition = false, bool applyMatchFatigue = false, bool applyPositioning = false, bool generatePositions = true)
+        /// <paramref name="buildStats"/> reads the performance data off the finished match
+        /// (engine phase 7): who played how long, what he did, what the two shapes looked like.
+        /// It only ever applies to a match that is PLAYED — there is nothing to read in the fast
+        /// path — and it is done AFTER the last roll, on a report nothing will touch again, so
+        /// like the stream it cannot move a bit of any result. Leave it off for a path that will
+        /// throw the report away.
+        public MatchEngine(BalanceConfig? config = null, bool applyCondition = false, bool applyMatchFatigue = false, bool applyPositioning = false, bool generatePositions = true, bool buildStats = true)
         {
             BalanceConfig cfg = config ?? new BalanceConfig();
             _cfg = cfg.Match;
             _tactics = cfg.Tactics;
             _condition = cfg.Condition;
             _positioning = cfg.Positioning;
+            _performance = cfg.Performance;
             _applyCondition = applyCondition;
             _applyMatchFatigue = applyMatchFatigue;
             _applyPositioning = applyPositioning;
             _generatePositions = generatePositions;
+            _buildStats = buildStats;
         }
 
         /// <summary>
@@ -175,6 +185,11 @@ namespace Sim.Core.Match
             {
                 report.Positions = new MatchSimulator(_cfg, _condition, _applyCondition, _applyMatchFatigue)
                     .Generate(feed, report, rng);
+
+                // ENGINE PHASE 7. The match is over and the report is final; what follows only
+                // READS it. No draw, no reordering, nothing written back — which is why the
+                // golden master of phase 6 is still the right number after this phase.
+                if (_buildStats) report.Stats = Analysis.MatchStatsBuilder.Build(report, _performance);
                 return report;
             }
 

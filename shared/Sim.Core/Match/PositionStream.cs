@@ -77,6 +77,50 @@ namespace Sim.Core.Match
     }
 
     /// <summary>
+    /// A slot changing hands: the substitute who came on at <see cref="Frame"/>, and the man he
+    /// came on for (engine phase 7).
+    ///
+    /// The stream carries ONE player id per slot, and a substitution overwrites it — which is
+    /// right for the renderer (it names the man on the pitch) and useless for a statistic, because
+    /// after ninety minutes the array says the man who came on played the whole match. This is the
+    /// missing half: with it, who occupied a slot between which minutes is exact, and so are the
+    /// minutes on a player's line of the match report.
+    ///
+    /// A change always falls on a minute boundary — the bench is asked once a minute — so the
+    /// minutes it produces are whole and the eleven of a side always add up to 990 unless somebody
+    /// was sent off.
+    /// </summary>
+    public struct SlotChange
+    {
+        /// <summary>The frame the change takes effect on, in the same index space as a <see cref="BallAction"/>.</summary>
+        public int Frame { get; set; }
+
+        /// <summary>True when it is the home side's slot.</summary>
+        public bool Home { get; set; }
+
+        public int Slot { get; set; }
+
+        /// <summary>Who came on, and who came off.</summary>
+        public int OnPlayerId { get; set; }
+        public int OffPlayerId { get; set; }
+
+        /// <summary>Their shirt numbers, so a reading needs nothing but the stream.</summary>
+        public int OnShirt { get; set; }
+        public int OffShirt { get; set; }
+
+        public SlotChange(int frame, bool home, int slot, int onPlayerId, int offPlayerId, int onShirt, int offShirt)
+        {
+            Frame = frame;
+            Home = home;
+            Slot = slot;
+            OnPlayerId = onPlayerId;
+            OffPlayerId = offPlayerId;
+            OnShirt = onShirt;
+            OffShirt = offShirt;
+        }
+    }
+
+    /// <summary>
     /// Replayable top-down movement of players and ball (tasks 1.5 · 13.1 · engine phase 1).
     /// Tick 0 is kickoff; the last tick is minute 90. An event at minute M resolves at about
     /// tick M * TicksPerMinute, where the ball sits on the shooter's feet. Derived
@@ -133,6 +177,13 @@ namespace Sim.Core.Match
 
         /// <summary>The ball's story, in tick order.</summary>
         public List<BallAction> Actions { get; set; } = new List<BallAction>();
+
+        /// <summary>
+        /// Every substitution, in frame order (engine phase 7). Empty in a match nobody changed —
+        /// and in every replay stored before this phase, which is exactly what a reader of an old
+        /// replay should conclude from it.
+        /// </summary>
+        public List<SlotChange> Changes { get; set; } = new List<SlotChange>();
 
         // ------------------------------------------------------------- the wire form
 

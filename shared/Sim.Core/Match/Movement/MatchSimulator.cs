@@ -692,9 +692,19 @@ namespace Sim.Core.Match.Movement
                         int[] ids = side == 0 ? _stream.HomePlayerIds : _stream.AwayPlayerIds;
                         if (lineup.Slots[i].Player.Id != ids[i] && !_sentOff[k])
                         {
+                            // ENGINE PHASE 7. The id array is overwritten here — the replay names
+                            // the man who is ON the pitch — so the change itself is written down
+                            // before it is lost. Without it a substitute's line of the match
+                            // report says he played ninety minutes, and the man he came on for
+                            // does not appear at all.
+                            int[] sideShirts = side == 0 ? _stream.HomeShirts : _stream.AwayShirts;
+                            _stream.Changes.Add(new SlotChange(
+                                MinuteFrame(tick), side == 0, i,
+                                lineup.Slots[i].Player.Id, ids[i], shirts[i], sideShirts[i]));
+
                             _scalePermille[k] = 0;
                             ids[i] = lineup.Slots[i].Player.Id;
-                            (side == 0 ? _stream.HomeShirts : _stream.AwayShirts)[i] = shirts[i];
+                            sideShirts[i] = shirts[i];
                         }
 
                         BindPlace(side, i, lineup, roles);
@@ -3556,6 +3566,20 @@ namespace Sim.Core.Match.Movement
             int frame = tick / _streamStride;
             if (frame > _lastFrame) frame = _lastFrame;
             _stream.Actions.Add(new BallAction(frame, BallActionKind.Shot, home, slot, -1));
+        }
+
+        /// <summary>
+        /// The frame a MINUTE BOUNDARY falls on. A boundary tick is a whole number of minutes, and
+        /// a frame is a whole number of ticks, so this lands exactly on a minute of the stream —
+        /// which is what makes a substitute's minutes whole numbers that add up to eleven men for
+        /// ninety minutes (engine phase 7).
+        /// </summary>
+        private int MinuteFrame(int tick)
+        {
+            int frame = tick / _streamStride;
+            if (frame < 0) frame = 0;
+            if (frame > _lastFrame) frame = _lastFrame;
+            return frame;
         }
 
         private void Record(int tick, BallActionKind kind, bool home, int slot, int target)

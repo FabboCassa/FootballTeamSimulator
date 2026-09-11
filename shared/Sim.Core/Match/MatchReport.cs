@@ -25,5 +25,21 @@ namespace Sim.Core.Match
         /// persisting or sending the report over the network.
         /// </summary>
         public PositionStream? Positions { get; set; }
+
+        /// <summary>
+        /// What every man did, and what the two shapes looked like (engine phase 7). Present only
+        /// for a match that was PLAYED — the fast path of <see cref="MatchEngine"/> has no picture
+        /// to count, and a match with no picture has no statistics either.
+        ///
+        /// Derived: <see cref="Analysis.MatchStatsBuilder"/> reads the finished report and its
+        /// stream and touches neither, so it consumes no randomness and moves no result. It is
+        /// deliberately outside <see cref="MatchReportHasher"/> for the same reason — a golden
+        /// master from before this phase is still the right number after it.
+        ///
+        /// A few kilobytes against the stream's several hundred, so it survives the strip that
+        /// removes the positions before a report is persisted. A host that does not want it can
+        /// null it out just as freely.
+        /// </summary>
+        public Analysis.MatchStats? Stats { get; set; }
     }
 }

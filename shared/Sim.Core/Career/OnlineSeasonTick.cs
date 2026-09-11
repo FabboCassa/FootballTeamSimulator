@@ -32,6 +32,10 @@ namespace Sim.Core.Career
         /// (<c>Club.Id</c> = the world-unique external id) to what it did this round (its starters + its
         /// result); a club absent from it did not play and simply rests the week.
         /// <paramref name="trainingPlans"/> maps a club id to its submitted plan (absent → AI default).
+        /// <paramref name="performanceRatings"/> (engine phase 7) maps a player id to the 0-100
+        /// performance signal his match earned — built from a played match's statistics by
+        /// <see cref="MatchPerformanceFeed"/>. Absent (the default, and everything before that
+        /// phase), every player develops on the neutral rating, exactly as before.
         /// </summary>
         public static void EvolveWeek(
             IReadOnlyList<League> leagues,
@@ -39,7 +43,8 @@ namespace Sim.Core.Career
             IReadOnlyDictionary<int, TrainingPlan>? trainingPlans,
             ulong worldSeed,
             int round,
-            BalanceConfig cfg)
+            BalanceConfig cfg,
+            IReadOnlyDictionary<int, int>? performanceRatings = null)
         {
             int daysBetween = cfg.Season.DaysBetweenRounds;
             int matchDay = round * (daysBetween > 0 ? daysBetween : 1);
@@ -59,7 +64,8 @@ namespace Sim.Core.Career
             }
 
             // 3) One development week for the whole world, minutes derived from who started this round.
-            IReadOnlyDictionary<int, DevelopmentContext> contexts = BuildMinutesContexts(leagues, played, cfg.Development);
+            IReadOnlyDictionary<int, DevelopmentContext> contexts =
+                BuildMinutesContexts(leagues, played, cfg.Development, performanceRatings);
             new DevelopmentProgressor(cfg.Development).EvolveWeek(leagues, trainingPlans, contexts, worldSeed, round);
         }
 
@@ -73,24 +79,51 @@ namespace Sim.Core.Career
         private static IReadOnlyDictionary<int, DevelopmentContext> BuildMinutesContexts(
             IReadOnlyList<League> leagues,
             IReadOnlyDictionary<int, ConditionProgressor.Participation> played,
-            DevelopmentBalance cfg)
+            DevelopmentBalance cfg,
+            IReadOnlyDictionary<int, int>? performanceRatings)
         {
             var starters = new HashSet<int>();
+            var minutes = new Dictionary<int, int>();
             foreach (KeyValuePair<int, ConditionProgressor.Participation> kv in played)
+            {
                 foreach (int id in kv.Value.StarterIds)
                     starters.Add(id);
 
+                // Real minutes, when the host handed them over (engine phase 7). Absent, every
+                // player keeps the share he has always had: full for a starter, none for the rest.
+                if (kv.Value.MinutesById == null) continue;
+                foreach (KeyValuePair<int, int> played90 in kv.Value.MinutesById)
+                    minutes[played90.Key] = played90.Value;
+            }
+
             int facility = cfg.FacilityNeutralLevel;
-            int performance = cfg.PerformanceNeutralRating;
+            int neutral = cfg.PerformanceNeutralRating;
 
             var contexts = new Dictionary<int, DevelopmentContext>();
             foreach (League league in leagues)
                 foreach (Club club in league.Clubs)
                     foreach (Player player in club.Squad.Players)
                         contexts[player.Id] = new DevelopmentContext(
-                            starters.Contains(player.Id) ? 100 : 0, facility, performance);
+                            Share(player.Id, starters, minutes),
+                            facility,
+                            performanceRatings != null && performanceRatings.TryGetValue(player.Id, out int rating)
+                                ? rating
+                                : neutral);
 
             return contexts;
+        }
+
+        /// <summary>
+        /// How much of the round he played, as a percentage. Ninety minutes or more is a full
+        /// share; without real minutes it is the old yes-or-no (a starter, or nobody).
+        /// </summary>
+        private static int Share(int playerId, HashSet<int> starters, Dictionary<int, int> minutes)
+        {
+            if (minutes.Count == 0) return starters.Contains(playerId) ? 100 : 0;
+            if (!minutes.TryGetValue(playerId, out int played)) return 0;
+
+            int share = played * 100 / 90;
+            return share > 100 ? 100 : share;
         }
     }
 }

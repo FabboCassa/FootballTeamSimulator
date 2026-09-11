@@ -1,6 +1,7 @@
 ﻿using System.Text;
 using Sim.Core.Domain;
 using Sim.Core.Match;
+using Sim.Core.Match.Analysis;
 
 namespace Fts.BalanceHarness;
 
@@ -46,7 +47,11 @@ internal static class PitchDump
             .Replace("__AWAY_SHIRTS__", Ints(stream.AwayShirts))
             .Replace("__HOME_PLAYERS__", Names(home))
             .Replace("__AWAY_PLAYERS__", Names(away))
-            .Replace("__ACTIONS__", Actions(stream));
+            .Replace("__ACTIONS__", Actions(stream))
+            .Replace("__HOME_MARKS__", Marks(report.Stats, true, home))
+            .Replace("__AWAY_MARKS__", Marks(report.Stats, false, away))
+            .Replace("__TEAM_HOME__", Team(report.Stats?.Home))
+            .Replace("__TEAM_AWAY__", Team(report.Stats?.Away));
 
         string? folder = Path.GetDirectoryName(Path.GetFullPath(path));
         if (!string.IsNullOrEmpty(folder)) Directory.CreateDirectory(folder);
@@ -126,6 +131,100 @@ internal static class PitchDump
         return sb.ToString();
     }
 
+    /// <summary>
+    /// One side's match report, as the rows of a scoresheet (engine phase 7). Empty when the
+    /// report carries no performance data — a replay stored before that phase, or a match built
+    /// with the reading turned off — and the viewer then simply hides the whole panel.
+    /// </summary>
+    private static string Marks(MatchStats? stats, bool home, Lineup lineup)
+    {
+        if (stats == null) return "";
+
+        var sb = new StringBuilder();
+        foreach (PlayerMatchStats p in stats.Players)
+        {
+            if (p.Home != home) continue;
+            if (sb.Length > 0) sb.Append(',');
+
+            sb.Append("{\"n\":\"").Append(Escape(NameOf(lineup, p))).Append("\"")
+              .Append(",\"sh\":").Append(p.Shirt)
+              .Append(",\"min\":").Append(p.MinutesPlayed)
+              .Append(",\"r\":").Append(p.Rating)
+              .Append(",\"km\":").Append(p.DistanceDm)
+              .Append(",\"pa\":").Append(p.PassesAttempted)
+              .Append(",\"pc\":").Append(p.PassesCompleted)
+              .Append(",\"kp\":").Append(p.KeyPasses)
+              .Append(",\"s\":").Append(p.Shots)
+              .Append(",\"st\":").Append(p.ShotsOnTarget)
+              .Append(",\"xg\":").Append(p.XgPermille)
+              .Append(",\"g\":").Append(p.Goals)
+              .Append(",\"a\":").Append(p.Assists)
+              .Append(",\"t\":").Append(p.Tackles)
+              .Append(",\"i\":").Append(p.Interceptions)
+              .Append(",\"c\":").Append(p.Clearances)
+              .Append(",\"dw\":").Append(p.DuelsWon)
+              .Append(",\"dl\":").Append(p.DuelsLost)
+              .Append(",\"f\":").Append(p.Fouls)
+              .Append(",\"y\":").Append(p.YellowCards)
+              .Append(",\"rd\":").Append(p.RedCards)
+              .Append(",\"sv\":").Append(p.Saves)
+              .Append(",\"gc\":").Append(p.GoalsConceded)
+              .Append(",\"k\":").Append(p.Keeper ? 1 : 0)
+              .Append(",\"ax\":").Append(p.AverageXDm)
+              .Append(",\"ay\":").Append(p.AverageYDm)
+              .Append('}');
+        }
+
+        return sb.ToString();
+    }
+
+    /// <summary>The tactical report of one side, plus the busiest lines of its pass map.</summary>
+    private static string Team(TeamMatchStats? team)
+    {
+        if (team == null) return "null";
+
+        var sb = new StringBuilder();
+        sb.Append("{\"pos\":").Append(team.PossessionPermille)
+          .Append(",\"t1\":").Append(team.OwnThirdPermille)
+          .Append(",\"t2\":").Append(team.MiddleThirdPermille)
+          .Append(",\"t3\":").Append(team.FinalThirdPermille)
+          .Append(",\"s\":").Append(team.Shots)
+          .Append(",\"st\":").Append(team.ShotsOnTarget)
+          .Append(",\"xg\":").Append(team.XgPermille)
+          .Append(",\"pa\":").Append(team.PassesAttempted)
+          .Append(",\"pc\":").Append(team.PassesCompleted)
+          .Append(",\"dw\":").Append(team.DefendingWidthDm)
+          .Append(",\"dd\":").Append(team.DefendingDepthDm)
+          .Append(",\"dh\":").Append(team.DefendingHeightDm)
+          .Append(",\"aw\":").Append(team.AttackingWidthDm)
+          .Append(",\"ad\":").Append(team.AttackingDepthDm)
+          .Append(",\"f\":").Append(team.Fouls)
+          .Append(",\"y\":").Append(team.YellowCards)
+          .Append(",\"co\":").Append(team.Corners)
+          .Append(",\"map\":[");
+
+        int lines = 0;
+        foreach (PassLink link in team.PassMap)
+        {
+            if (lines >= 8) break;
+            if (lines > 0) sb.Append(',');
+            sb.Append('[').Append(link.FromSlot).Append(',').Append(link.ToSlot).Append(',')
+              .Append(link.Attempted).Append(',').Append(link.Completed).Append(']');
+            lines++;
+        }
+
+        return sb.Append("]}").ToString();
+    }
+
+    /// <summary>His name, when the starting eleven still knows it; his shirt otherwise (a substitute).</summary>
+    private static string NameOf(Lineup lineup, PlayerMatchStats player)
+    {
+        foreach (LineupSlot slot in lineup.Slots)
+            if (slot.Player.Id == player.PlayerId) return slot.Player.FullName;
+
+        return "#" + player.Shirt;
+    }
+
     private static string Escape(string value) =>
         value.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("<", "&lt;").Replace(">", "&gt;");
 
@@ -157,6 +256,19 @@ internal static class PitchDump
              border-top:1px solid #262b36; font-variant-numeric:tabular-nums; }
   .readout b { font-weight:600; }
   code { background:#1a1f29; padding:1px 6px; border-radius:4px; }
+  h2 { font-size:15px; margin:26px 0 4px; }
+  h3 { font-size:13px; margin:14px 0 6px; color:#c7cddb; }
+  .cols { display:flex; gap:22px; flex-wrap:wrap; align-items:flex-start; }
+  .cols > div { flex:1; min-width:430px; }
+  table { border-collapse:collapse; width:100%; font-size:12px; font-variant-numeric:tabular-nums; }
+  th, td { padding:3px 6px; text-align:right; border-bottom:1px solid #1c212b; white-space:nowrap; }
+  th { color:#8b93a3; font-weight:500; text-align:right; }
+  td.nm, th.nm { text-align:left; }
+  td.mark { font-weight:700; }
+  .good { color:#5fd38d; } .bad { color:#e8657f; } .mid { color:#e6e9ef; }
+  .teamline { display:flex; gap:26px; flex-wrap:wrap; margin:8px 0 4px;
+              font-variant-numeric:tabular-nums; }
+  #avg { width:640px; max-width:100%; height:auto; background:#1f6b34; border-radius:8px; }
 </style>
 </head>
 <body>
@@ -195,6 +307,26 @@ internal static class PitchDump
   <p class="muted">A professional block defends about 30-40 m wide and 25-35 m deep, holds its back
     four within ~3 m of a line, and leaves at most a handful of men inside three metres of an
     opponent. Read the numbers above against that while you scrub.</p>
+
+  <section id="report" hidden>
+    <h2>The match report &mdash; what every man did (engine phase 7)</h2>
+    <div class="teamline" id="teamline"></div>
+    <div class="cols">
+      <div><h3 id="mh"></h3><table id="th"></table></div>
+      <div><h3 id="ma"></h3><table id="ta"></table></div>
+    </div>
+    <h3>Average positions &mdash; where each man actually spent his match</h3>
+    <canvas id="avg" width="1260" height="883"></canvas>
+    <p class="muted">Every figure here is READ off the picture above once the match is over: the
+      action list, the per-frame owner track and the position arrays. Nothing in this panel took
+      part in the match, which is why the golden master does not move. The mark out of ten starts
+      at 6.0 and moves with what he did &mdash; and his work off the ball is paid on the difference
+      from what THE MEN OF HIS OWN LINE managed, not on the raw count: a forward recovers fewer balls
+      and loses more of them than a centre-back because that is what the job is.
+      <b>recov</b> is tackles won: in this engine that is a ball RECOVERED rather than a tackle as
+      football counts one, which is why a goalkeeper's figure is large &mdash; he picks up
+      everything that runs into his box.</p>
+  </section>
 </main>
 
 <script>
@@ -209,6 +341,8 @@ const ACTIONS = [__ACTIONS__];
 const KINDS = ["kick-off","pass","long ball","cross","dribble","tackle","interception","clearance",
                "shot","save","GOAL","miss","corner","throw-in","goal kick","free kick",
                "OFFSIDE","foul","yellow card","RED CARD","PENALTY","half-time","blocked"];
+const MARKS = [[__HOME_MARKS__], [__AWAY_MARKS__]];
+const TEAMS = [__TEAM_HOME__, __TEAM_AWAY__];
 const HALFTIME = __HALFTIME__;
 const SHORT = ["__HOME_SHORT__", "__AWAY_SHORT__"];
 const GOAL_KIND = KINDS.indexOf("GOAL");
@@ -454,6 +588,100 @@ document.addEventListener("keydown", e => {
   if (e.key === "ArrowLeft") { tick = Math.max(0, tick-1); draw(); }
   if (e.key === " ") { e.preventDefault(); document.getElementById("play").click(); }
 });
+
+// ---------------------------------------------------------------- the match report (phase 7)
+
+function one(v) { return (v / 10).toFixed(1); }
+
+function markClass(r) { return r >= 70 ? "good" : (r < 55 ? "bad" : "mid"); }
+
+function rows(side) {
+  const men = MARKS[side];
+  if (!men.length) return "";
+  let html = "<tr><th class='nm'>player</th><th>min</th><th>mark</th><th>km</th>"
+           + "<th>passes</th><th>%</th><th>key</th><th>shots</th><th>xG</th><th>G</th><th>A</th>"
+           + "<th>recov</th><th>int</th><th>clr</th><th>lost</th><th>fouls</th></tr>";
+  for (const p of men) {
+    const acc = p.pa > 0 ? Math.round(100 * p.pc / p.pa) : 0;
+    const keeper = p.k ? " (GK " + p.sv + " saves, " + p.gc + " conceded)" : "";
+    const cards = (p.y ? " \u{1F7E8}" : "") + (p.rd ? " \u{1F7E5}" : "");
+    html += "<tr>"
+      + "<td class='nm'>" + p.sh + " " + p.n + keeper + cards + "</td>"
+      + "<td>" + p.min + "</td>"
+      + "<td class='mark " + markClass(p.r) + "'>" + one(p.r) + "</td>"
+      + "<td>" + (p.km / 10000).toFixed(2) + "</td>"
+      + "<td>" + p.pa + "</td><td>" + acc + "</td><td>" + p.kp + "</td>"
+      + "<td>" + p.s + "/" + p.st + "</td><td>" + (p.xg / 1000).toFixed(2) + "</td>"
+      + "<td>" + p.g + "</td><td>" + p.a + "</td>"
+      + "<td>" + p.t + "</td><td>" + p.i + "</td><td>" + p.c + "</td>"
+      + "<td>" + p.dl + "</td><td>" + p.f + "</td></tr>";
+  }
+  return html;
+}
+
+function teamLine(side) {
+  const t = TEAMS[side];
+  if (!t) return "";
+  const acc = t.pa > 0 ? Math.round(100 * t.pc / t.pa) : 0;
+  const map = t.map.slice(0, 4)
+    .map(l => SHIRTS[side][l[0]] + "\u2192" + SHIRTS[side][l[1]] + " " + l[3] + "/" + l[2])
+    .join("  ");
+  return "<span><b style='color:" + COLOR[side] + "'>" + SHORT[side] + "</b> "
+    + "possession " + (t.pos / 10).toFixed(1) + "%"
+    + " &middot; shots " + t.s + " (" + t.st + " on target), xG " + (t.xg / 1000).toFixed(2)
+    + " &middot; passes " + t.pa + " at " + acc + "%"
+    + " &middot; block defending " + (t.dw / 10).toFixed(1) + "\u00d7" + (t.dd / 10).toFixed(1)
+    + " m at " + (t.dh / 10).toFixed(1) + " m from his own goal"
+    + " &middot; attacking " + (t.aw / 10).toFixed(1) + "\u00d7" + (t.ad / 10).toFixed(1) + " m"
+    + " &middot; ball in thirds " + (t.t1 / 10).toFixed(0) + "/" + (t.t2 / 10).toFixed(0)
+    + "/" + (t.t3 / 10).toFixed(0) + "%"
+    + " &middot; corners " + t.co + ", fouls " + t.f
+    + "<br><span class='muted'>busiest passing lanes: " + (map || "-") + "</span></span>";
+}
+
+function drawAverages() {
+  const c = document.getElementById("avg"), g = c.getContext("2d");
+  const sx = c.width / LEN, sy = c.height / WID;
+  g.clearRect(0, 0, c.width, c.height);
+
+  g.strokeStyle = "rgba(255,255,255,.35)";
+  g.lineWidth = 2;
+  g.strokeRect(1, 1, c.width - 2, c.height - 2);
+  g.beginPath();
+  g.moveTo(c.width / 2, 0); g.lineTo(c.width / 2, c.height);
+  g.stroke();
+  g.beginPath();
+  g.arc(c.width / 2, c.height / 2, 91.5 * sx, 0, Math.PI * 2);
+  g.stroke();
+
+  for (let side = 0; side < 2; side++) {
+    for (const p of MARKS[side]) {
+      if (p.min <= 0) continue;
+      const x = p.ax * sx, y = p.ay * sy;
+      g.fillStyle = COLOR[side];
+      g.beginPath();
+      g.arc(x, y, 13, 0, Math.PI * 2);
+      g.fill();
+      g.fillStyle = "#fff";
+      g.font = "600 13px system-ui";
+      g.textAlign = "center";
+      g.textBaseline = "middle";
+      g.fillText(String(p.sh), x, y + 1);
+    }
+  }
+}
+
+if (MARKS[0].length || MARKS[1].length) {
+  document.getElementById("report").hidden = false;
+  document.getElementById("mh").textContent = SHORT[0];
+  document.getElementById("ma").textContent = SHORT[1];
+  document.getElementById("mh").style.color = COLOR[0];
+  document.getElementById("ma").style.color = COLOR[1];
+  document.getElementById("th").innerHTML = rows(0);
+  document.getElementById("ta").innerHTML = rows(1);
+  document.getElementById("teamline").innerHTML = teamLine(0) + teamLine(1);
+  drawAverages();
+}
 
 draw();
 requestAnimationFrame(frame);

@@ -49,6 +49,7 @@ internal static class PitchScenario
 
         var analyzer = new MatchAnalyzer();
         var totals = new PitchTotals();
+        var perf = new PerfTotals();
         var clock = Stopwatch.StartNew();
         int played = 0, streamless = 0, disagreements = 0;
 
@@ -77,6 +78,7 @@ internal static class PitchScenario
 
             if (!metrics.GoalsAgree) disagreements++;
             totals.Add(metrics);
+            perf.Add(report);
             played++;
         }
 
@@ -99,7 +101,20 @@ internal static class PitchScenario
         Console.WriteLine($"--- pitch: against real football ({played} matches) ---");
         bands.Print();
 
+        perf.Print(played);
+
         // --- contract, not calibration -------------------------------------------------------
+        checks.Check(
+            "the performance data is there, and it reads eleven men for ninety minutes",
+            perf.Matches == played && perf.MinutesWrong == 0,
+            $"{played - perf.Matches} matches came back without statistics and {perf.MinutesWrong} sides " +
+            "did not add up to eleven men for ninety minutes (allowing for the men sent off)");
+
+        checks.Check(
+            "every goal on the scoresheet belongs to a man",
+            perf.GoalsUncredited == 0,
+            $"{perf.GoalsUncredited} goals are in the report and on nobody's line of it");
+
         checks.Check(
             "every match produced a position stream",
             streamless == 0,
@@ -326,5 +341,100 @@ internal sealed class PitchTotals
         bands.Add("attacking: block width", _attWidth / s, 40, 60, " m");
         bands.Add("attacking: block depth", _attDepth / s, 30, 50, " m");
         bands.Add("attacking: opponent within 3 m", _attMarked / s, 5, 25, "%");
+    }
+}
+
+/// <summary>
+/// THE PERFORMANCE DATA (engine phase 7). Two things are contract rather than calibration and are
+/// checked here: a side is eleven men for ninety minutes (which is the arithmetic that proves the
+/// occupancy table — and therefore every per-player figure derived from it — is right), and every
+/// goal on the scoresheet is on somebody's line of the report. The rest is printed to be read: a
+/// match report nobody can believe is worse than no match report.
+/// </summary>
+internal sealed class PerfTotals
+{
+    private const int FullSide = 11 * 90;
+
+    private double _rating, _best, _worst = 10;
+    private double _distance, _passes, _accuracy, _keyPasses, _assists, _xg, _shots;
+    private double _defensive, _duelsLost;
+    private int _players, _sides, _keepers, _saves;
+
+    public int Matches { get; private set; }
+    public int MinutesWrong { get; private set; }
+    public int GoalsUncredited { get; private set; }
+
+    public void Add(MatchReport report)
+    {
+        MatchStats? stats = report.Stats;
+        if (stats == null) return;
+
+        Matches++;
+
+        for (int side = 0; side < 2; side++)
+        {
+            bool home = side == 0;
+            int minutes = 0, reds = 0, goals = 0;
+
+            foreach (PlayerMatchStats player in stats.Players)
+            {
+                if (player.Home != home) continue;
+
+                minutes += player.MinutesPlayed;
+                reds += player.RedCards;
+                goals += player.Goals;
+
+                if (player.MinutesPlayed <= 0) continue;
+
+                _players++;
+                _rating += player.Rating / 10.0;
+                if (player.Rating / 10.0 > _best) _best = player.Rating / 10.0;
+                if (player.Rating / 10.0 < _worst) _worst = player.Rating / 10.0;
+                _distance += player.DistanceKm;
+                _passes += player.PassesAttempted;
+                _accuracy += player.PassesCompleted;
+                _keyPasses += player.KeyPasses;
+                _assists += player.Assists;
+                _defensive += player.DefensiveActions;
+                _duelsLost += player.DuelsLost;
+
+                if (player.Keeper)
+                {
+                    _keepers++;
+                    _saves += player.Saves;
+                }
+            }
+
+            _sides++;
+            if (minutes > FullSide || minutes < FullSide - 90 * reds) MinutesWrong++;
+            if (goals != (home ? report.HomeGoals : report.AwayGoals)) GoalsUncredited++;
+
+            TeamMatchStats team = home ? stats.Home : stats.Away;
+            _xg += team.XgPermille / 1000.0;
+            _shots += team.Shots;
+        }
+    }
+
+    public void Print(int played)
+    {
+        if (_players == 0 || _sides == 0) return;
+
+        double p = _players;
+        Console.WriteLine();
+        Console.WriteLine("  the men (per player, both sides together)");
+        Console.WriteLine(
+            $"    mark {Fmt.N(_rating / p, 2)} out of ten   best {Fmt.N(_best, 1)}   worst {Fmt.N(_worst, 1)}");
+        Console.WriteLine(
+            $"    ground {Fmt.N(_distance / p, 2)} km   passes {Fmt.N(_passes / p, 1)} " +
+            $"at {Fmt.N(_passes <= 0 ? 0 : 100.0 * _accuracy / _passes, 1)}%   " +
+            $"key passes {Fmt.N(_keyPasses / p, 2)}   assists {Fmt.N(_assists / p, 2)}");
+        Console.WriteLine(
+            $"    off the ball {Fmt.N(_defensive / p, 1)} actions   dispossessed {Fmt.N(_duelsLost / p, 1)} times " +
+            "(the mark pays the DIFFERENCE from these, not the count)");
+        Console.WriteLine(
+            $"    keepers {_keepers} with {Fmt.N(_keepers <= 0 ? 0 : _saves / (double)_keepers, 1)} saves each");
+        Console.WriteLine(
+            $"    expected goals {Fmt.N(_xg / _sides, 2)} a side off {Fmt.N(_shots / _sides, 1)} shots " +
+            $"({played} matches read)");
     }
 }

@@ -12,14 +12,59 @@ con il gioco sempre funzionante, regolamento fino a falli/cartellini/punizioni.
       barriera §12.5 è arrivata dopo ed è stata riverificata il 2026-09-06). Vedi §12.
 - [x] **Fase 6 — inversione della causalità** (2026-09-08, corretta il 09-11 dopo il suo primo run,
       **verificata dall'utente il 2026-09-11**). Vedi §13. 🏁 CHIUSA.
-- [ ] Fase 7 — dati sulle prestazioni
+- [~] **Fase 7 — dati sulle prestazioni** (scritta il 2026-09-11; due run dell'utente lo stesso
+      giorno: **`Sim.Core` 398/398, golden master invariato, pitch 20/20 e 25/25, balance 28/28**,
+      voto medio 8,37 → **6,35** e xG 2,00 → **1,33 contro 1,33 gol**. Tre correzioni, tutte trovate
+      dalla misura o dall'occhio; manca l'ultimo giro). Vedi §14.
 - [ ] Fase 8 — le istruzioni contano
 
 ---
 
 ## 📍 Stato — 11 settembre 2026
 
-**Siamo qui: 🏁 FASE 6 CHIUSA E VERIFICATA DALL'UTENTE — la causalità è invertita, e il tiro decide
+**Siamo qui: FASE 7 — due run dell'utente, `Sim.Core` verde (398/398), i numeri tornano; resta da
+confermare la terza correzione (il voto per reparto) che l'OCCHIO ha imposto.**
+
+Il suo run dell'11 settembre: **compilato al primo colpo, 636 test su 637**, e soprattutto
+**`[DeterminismCheck]` e `[server-determinism]` stampano ancora `0xB0052E0B3942206A`** — leggere la
+partita non la tocca, che è l'intera argomentazione di sicurezza della fase, verificata. Il `pitch`
+esce con **20/20 in banda e 25/25 check** (i due nuovi di contratto passano: gli undici per novanta
+minuti e ogni gol su una riga), `balance.ps1` è **28/28 con ogni cifra invariata**, e leggere la
+partita costa **+11,5 ms su 306**, il 3,8%. L'unico rosso era il **voto medio a 8,5 invece di 6,0**:
+il motore produce trentatré azioni difensive per uomo dove il calcio ne conta due o tre, e un bonus
+fisso per azione regalava tre punti a tutti. Adesso il lavoro senza palla si paga **sullo scarto
+dalla media di quella partita**. Corretto anche l'**xG**, che diceva 2,00 a squadra dove se ne
+segnavano 1,33. Tutto in §14.
+
+**Il secondo run** ha dato `Sim.Core.Tests` **398/398**, voto medio **6,35** (era 8,37) e xG **1,33
+a squadra contro 1,33 gol** — l'xG adesso predice quello che il motore fa. Poi ho aperto il dump: la
+pagella diceva che **chi aveva segnato due gol valeva meno del suo centrale**, e su entrambe le
+squadre tutti i difensori stavano sopra tutti gli attaccanti. Un attaccante recupera meno palloni e
+ne perde di più perché è il suo mestiere, quindi adesso ogni uomo è confrontato **con il suo
+reparto**, ricavato da dove ha davvero passato la partita. Terza correzione, un test la inchioda, e
+serve un ultimo giro.
+
+**Lo stato dopo le correzioni: FASE 7 SCRITTA E QUASI VERIFICATA — la partita adesso si LEGGE.**
+
+Ogni uomo ha la sua riga del referto (minuti veri, palloni giocati e quanti sono arrivati, il
+passaggio che ha creato il tiro, il duello perso, i chilometri, il voto), e ogni squadra ha il suo
+rapporto tattico (possesso, territorio, forma del blocco difendendo e attaccando, mappa dei
+passaggi). **Tutto è LETTO dal filmato a partita finita**, dopo l'ultimo tiro di dado: è la stessa
+regola che l'analizzatore della fase 0 rispetta da sempre, e la conseguenza è che
+**`MatchReportHasher` non cambia di un bit e il golden master `0xB0052E0B3942206A` della fase 6 resta
+il numero giusto**. Il resoconto completo è in §14.
+
+**Due avvertenze oneste, entrambe in §14.** (1) Il container di questa sessione **non ha potuto
+compilare né misurare**: l'archivio Ubuntu non è più raggiungibile dal proxy, quindi niente
+`dotnet-sdk-8.0`, niente stub NUnit, niente harness. Il codice è scritto con cura e non è stato
+compilato da nessuna parte — è il primo `dotnet test` sulla sua macchina a dire la verità. (2) La
+parte della fase che TOCCA IL GIOCO — minuti reali e voti che alimentano condizione e sviluppo — è
+scritta ma **spenta**: si accende passando i dati, e prima di accenderla va misurata con
+`balance.ps1`, perché cambia come le rose si stancano e come i giocatori crescono.
+
+**Lo stato della fase 6, che resta la base:**
+
+**🏁 FASE 6 CHIUSA E VERIFICATA DALL'UTENTE — la causalità è invertita, e il tiro decide
 il gol.**
 
 **`dotnet test` → 615 su 615 verdi, zero rossi, in 486,2 s** (`Sim.Core.Tests` **375** — i 364 della
@@ -61,7 +106,7 @@ angolo. Quello che l'occhio ha trovato è **la distanza dei tiri**, ed è in §1
 | 4 | decisioni con la palla | ✅ fatta **e verificata dall'utente** |
 | 5 | il regolamento | ✅ fatta **e verificata dall'utente**, barriera (§12.5) compresa |
 | 6 | inversione della causalità | 🏁 **fatta e verificata dall'utente** — il tiro decide il gol |
-| 7 | dati sulle prestazioni | ⬅️ **prossima** |
+| 7 | dati sulle prestazioni | ✍️ **scritta, tre correzioni, ultimo giro da fare** (§14) |
 | 8 | le istruzioni contano | da fare |
 
 ### Come si verifica che tutto gira
@@ -649,7 +694,7 @@ difende È la sagoma di chi attacca, e le tre bande difensive ancora rosse sono 
   perché le tabelle di lega restino plausibili.
 - determinismo conservato: stessa RNG seminata, stesso ordine di iterazione, matematica intera.
 
-### Fase 7 — Dati sulle prestazioni
+### Fase 7 — Dati sulle prestazioni ✍️ SCRITTA (da verificare, §14)
 
 - `MatchReport` guadagna `PlayerMatchStats[]`: minuti, km, passaggi tentati/riusciti, passaggi
   chiave, dribbling, duelli vinti/persi, contrasti, intercetti, tiri, xG, parate, gol, assist,
@@ -2097,7 +2142,309 @@ guardare **da dove partono i tiri, chi para, e chi si butta davanti alla palla**
 
 ---
 
-## 14. Riferimenti
+## 14. Fase 7 — i dati sulle prestazioni
+
+*Scritta l'11 settembre 2026, subito dopo la chiusura della fase 6, e **consegnata senza essere stata
+compilata da nessuna parte**: il container di questa sessione ha perso l'accesso all'archivio Ubuntu
+(403 dal proxy su `archive.ubuntu.com`, e anche npm e PyPI sono chiusi), quindi il `dotnet-sdk-8.0`
+che le sei fasi precedenti hanno usato per compilare `Sim.Core` offline non era installabile. È
+l'unica fase del piano consegnata così.*
+
+### Il primo run dell'utente (11 settembre 2026): compila, e un rosso solo — il voto
+
+**Ha compilato al primo colpo** (`build-simcore.ps1` verde, zero errori, zero warning nuovi) e
+**`dotnet test` ha dato 636 su 637**. L'unico rosso è `TheMarks_OfARealMatch_ReadLikeFootballsMarks`:
+**voto medio 8,51 invece di ~6,0**, ed è un difetto di taratura mio, raccontato qui sotto.
+
+**Tutto il resto ha detto sì, e ha detto la cosa che contava:**
+
+- **`[DeterminismCheck]` e `[server-determinism]` stampano entrambi `0xB0052E0B3942206A`**, identico
+  alla fase 6 cifra per cifra. **Leggere la partita non la tocca**: è l'intera argomentazione di
+  sicurezza di questa fase, verificata sulla sua macchina.
+- **Lo scenario `pitch`: 20/20 in banda e 25/25 check PASS, exit code 0** — i 23 di prima più i due
+  nuovi di contratto, e **passano entrambi**: `0 sides did not add up to eleven men for ninety
+  minutes` e `0 goals are in the report and on nobody's line of it`. L'aritmetica dei minuti regge,
+  e con lei tutta l'attribuzione.
+- **`balance.ps1` 28/28 con ogni singola cifra invariata** (tattiche 45,0%/42,5%, F433 37,4%/49,9%,
+  stagione +6,5, difficoltà 6,9/6,6/9,5/7,6/10,1, 67,6 trasferimenti, ingaggi 69,8%, `Avg goals
+  2,44 | draws 24,8% | home wins 48,4%`, `Strong wins 82%`). Il modello risultato non è stato
+  sfiorato.
+- **Il costo: 317,7 ms a partita contro i 306,2 della fase 6** — **+11,5 ms, il 3,8%**, per tre
+  passate sul filmato. Sotto la stima che avevo dato (5-10%).
+- **I chilometri tornano**: 11,76 km a giocatore contro gli 11,80 che l'analizzatore misura in
+  virgola mobile sulla stessa partita. La radice intera in decimi di decimetro perde 40 metri su
+  dodici chilometri, lo 0,3%: era la ragione per cui l'accumulo è in decimi, e ha funzionato.
+- **I passaggi tornano al totale di squadra**: 40,7 a giocatore al **76,7%**, contro il 76,7%
+  esatto che l'analizzatore conta lato squadra. L'attribuzione per uomo somma al totale.
+- **E gli assist sono football**: 0,07 a giocatore = **1,5 assist a partita su 2,66 gol**, cioè il
+  58% dei gol ha un assist. Nel calcio vero sono fra il 60% e il 70%.
+
+### Il secondo run (stesso giorno): i numeri tornano, e l'occhio trova la terza correzione
+
+**`Sim.Core.Tests` 398 su 398, verde.** Il voto medio è sceso da 8,37 a **6,35**, e l'xG da 2,00 a
+**1,33 a squadra contro 1,33 gol segnati** — cioè adesso l'xG *predice* quello che il motore fa.
+Il `pitch` resta 20/20 in banda e 25/25 check, exit 0, a 315,3 ms. E il blocco `the men` ha
+finalmente stampato la riga che serviva per capire tutto: **`off the ball 33,3 actions ·
+dispossessed 13,9 times`** — trentatré azioni difensive a testa, esattamente la diagnosi.
+
+*(L'unico rosso del secondo giro è in `Api.Tests` e **non è di questa fase**: il test della scala
+ranked asserisce che dopo il reset stagionale le rose restino entro 3 punti di forza e ne ha letti 4.
+Quel mondo è generato **a caso a ogni run** — gli account sono GUID nuovi — e infatti il primo run
+partiva da uno spread di 16 e il secondo da 22. È la stessa fragilità che il test gemello del draft
+aveva già imparato e documentato in `LeagueEndpointTests` («≤2 era troppo stretto e flakeava in CI»,
+portato a ≤6): il limite della scala è stato allineato, con la stessa spiegazione scritta accanto.
+Il golden master è identico in tutti e due i run, `Sim.Core` è verde, e l'equalizzatore non è mai
+stato toccato da questa fase.)*
+
+**E POI L'OCCHIO, che è la metà dell'accettazione che nessun test può dare.** Aperto `replay.html`
+sulla partita che l'harness ha dumpato (Inter Rigoria 2-1 SS Capocannona), la pagella dice questo:
+
+    # 4 Jacopo Olivetti   90'  voto 7,8   0 gol   18 recuperi        (difensore)
+    # 7 Jacopo Roversi    90'  voto 6,2   2 GOL   34 palloni persi   (attaccante)
+
+**Chi aveva segnato due gol prendeva meno del suo centrale.** E non era un caso isolato: su
+*entrambe* le squadre, *tutti* i difensori e i centrocampisti stavano sopra *tutti* gli attaccanti —
+7,8 · 7,6 · 7,3 · 7,3 · 7,2 · 7,2 contro 6,2 · 6,1 · 5,9 · 3,3 in casa, e lo stesso fuori.
+
+La causa è strutturale, ed è il rovescio esatto della correzione precedente: **un attaccante recupera
+meno palloni e ne perde di più di un centrale, perché è quello che il suo mestiere È.** Misurarlo
+sulla media di tutta la partita lo puniva due volte per aver giocato davanti. Quindi ogni uomo è
+confrontato **con il suo reparto**: i dieci di movimento vengono ordinati per quanto lontano dalla
+propria porta hanno davvero passato la partita — la posizione media che questa fase già calcola — e
+divisi in quattro difensori, tre di mezzo e tre davanti. Niente formazione dichiarata, niente ruoli:
+solo dove sono stati. Un test lo inchioda su otto partite (`[perf-lines]`): la media dei quattro più
+arretrati e quella dei tre più avanzati devono stare entro un punto l'una dall'altra.
+
+**Una cosa che l'occhio ha visto e che NON è un difetto di questa fase, ma va scritta:** un portiere
+risulta con **35 "contrasti"**. Non è un errore di attribuzione — è il motore che registra
+`BallActionKind.Tackle` ogni volta che qualcuno *recupera* il pallone, e un portiere raccoglie tutto
+quello che entra in area. Nel referto della fase 7 quella colonna è quindi chiamata **recuperi**, che
+è quello che è; rinominare l'azione nel flusso toccherebbe il formato del replay e le didascalie del
+dump, ed è materiale della fase 8.
+
+### I due difetti che la misura ha trovato, e come sono corretti
+
+**1. IL VOTO, ed è il rosso.** Media 8,37 sulle 200 partite del `pitch`, migliore 10,0, peggiore
+3,3. La causa è una sola e si legge nella riga sopra del referto: **questo motore produce 306
+contrasti, 233 spazzate e 192 intercetti a partita**, cioè **circa trentatré azioni difensive per
+uomo**, dove il calcio vero ne conta due o tre. Avevo dato un decimo per azione — nel calcio vero
+vale — e trentatré decimi sono **tre punti e mezzo regalati a chiunque scenda in campo**.
+
+La correzione non è abbassare il peso (domani la fase 8 cambia di nuovo la frequenza e siamo da
+capo): **il lavoro senza palla si paga sullo SCARTO dalla media di quella partita**, proporzionato
+ai minuti giocati. Chi fa la sua parte prende zero, chi ne fa metà in più prende qualcosa, chi fa il
+passeggero perde. È auto-tarante: legge lo stesso che il motore conti tre recuperi a testa o trenta.
+Stesso trattamento per i duelli, che valgono come **bilancio** (vinti meno persi) e non come
+conteggio — vincerne venti e perderne venti è un pomeriggio faticoso, non un bel pomeriggio — ed
+entrambi i termini hanno un tetto (±1,5 punti), perché nessuna quantità di corsa vale più di un gol.
+Media attesa dopo la correzione: **6,0-6,2**, con i portieri a ~6,2 (2,5 parate a +0,3 contro 1,33
+gol subiti a −0,4).
+
+**2. L'xG diceva 2,00 a squadra dove se ne segnavano 1,33.** Un xG che vale una volta e mezza i gol,
+su ogni singola partita, è un numero che mente sul referto. La causa non è il modello: è che
+**ogni tiro di questo motore parte da dentro l'area** (mediana ~5 m — è la cosa che la fase 6 ha
+lasciato aperta), e la geometria di quei tiri nel calcio vero vale ~15% di conversione mentre questo
+motore converte al **9,7%**. Quindi il picco è stato **tarato sul motore invece che sul calcio**:
+`XgPeakPermille` 380 → **250**, che riporta l'xG a ~1,33 a squadra. È scritto nella manopola, con la
+misura accanto: **quando la fase 8 darà una distanza ai tiri, va rimisurato.**
+
+*(E c'è una terza cosa, che non è un difetto ma la prima diagnosi che questa fase produce: il campo
+crea la stessa quantità di occasioni del calcio vero e le converte a due terzi del suo ritmo. È
+materiale per la fase 8.)*
+
+### Cosa fa la fase
+
+La fase 6 ha reso il campo la verità. Questa lo rende **leggibile**: la partita che è stata giocata
+adesso si racconta, uomo per uomo e squadra per squadra.
+
+**La riga di ogni uomo** (`PlayerMatchStats`): minuti veri, chilometri percorsi, posizione media,
+passaggi tentati e riusciti, palle lunghe, cross, **passaggi chiave**, conduzioni, tiri e tiri nello
+specchio, **xG**, gol, **assist**, contrasti, intercetti, spazzate, **tiri murati**, duelli vinti e
+persi, parate e gol subiti per il portiere, falli fatti e subiti, fuorigioco, cartellini, e un
+**voto in decimi** (60 = 6,0).
+
+**Il rapporto di ogni squadra** (`TeamMatchStats`): possesso, territorio nei tre terzi *dal proprio
+punto di vista*, tiri e xG, precisione dei passaggi, **larghezza e profondità del blocco difendendo
+e attaccando**, **quanto alto stava** (la X media dei dieci mentre l'altra squadra aveva la palla —
+il numero che la Mentalità dovrà muovere in fase 8), falli, cartellini, corner, e la **mappa dei
+passaggi**: quante volte una maglia ha giocato a un'altra, e quante volte è arrivata.
+
+### La cosa che rende tutto questo sicuro
+
+**Niente di tutto ciò è prodotto dal simulatore mentre gioca. È LETTO dal filmato quando la partita
+è finita.** `MatchStatsBuilder` prende un `MatchReport` già chiuso e il suo `PositionStream`, non
+tocca nessuno dei due, non estrae un solo numero casuale — esattamente il contratto che
+`MatchAnalyzer` rispetta dalla fase 0, applicato un giocatore alla volta invece che una squadra alla
+volta.
+
+Da cui le tre conseguenze che contano:
+
+1. **`MatchReportHasher` non è stato toccato**, e i dati sulle prestazioni sono deliberatamente
+   FUORI dall'hash: un golden master è l'hash di quello che è *successo*, e questo è una lettura di
+   quello che è successo. **`0xB0052E0B3942206A` resta il numero della fase 6.** Un test lo inchioda
+   giocando due volte lo stesso seme, con le statistiche accese e spente, e confrontando gli hash.
+2. **`balance.ps1` non si muove di una cifra**, perché il percorso veloce del mondo non ha filmato,
+   e senza filmato non ci sono statistiche: le migliaia di partite di sfondo di una stagione non
+   pagano niente e non cambiano niente.
+3. **Niente `MatchEngine.Version`, niente bump del save, niente migrazione.** I replay della fase 6
+   restano disegnabili: il campo nuovo è additivo e un replay vecchio semplicemente non lo porta.
+
+### Il pezzo che mancava al filmato: le sostituzioni
+
+Il flusso porta **un id giocatore per maglia**, e una sostituzione lo sovrascrive — giusto per chi
+disegna (nomina l'uomo in campo), inutile per una statistica: a fine partita l'array dice che il
+subentrato ha giocato novanta minuti e l'uomo che è uscito non è mai esistito.
+
+Quindi `PositionStream` guadagna `Changes`: **chi è entrato, per chi, e a quale frame**. È l'unica
+riga di questa fase dentro `MatchSimulator`, sta nel punto in cui l'id veniva sovrascritto, e non
+consuma niente. Un cambio cade sempre su un confine di minuto (la panchina viene interrogata una
+volta al minuto), quindi i minuti che ne escono sono interi e **gli undici di una squadra fanno
+sempre 990**, a meno che qualcuno non sia stato espulso — ed è esattamente il controllo che l'harness
+e i test fanno, perché è l'aritmetica che dimostra che tutta l'attribuzione regge. Un espulso smette
+di giocare al minuto del rosso e la sua maglia non viene più riempita.
+
+### Le scelte di merito, dette per nome
+
+**L'xG è una STIMA GEOMETRICA, e si chiama così.** Non è il numero contro cui il modello di tiro ha
+tirato il dado: il campo decide un tiro dalle qualità di chi tira e dai corpi davanti, e questo
+legge *da dove* è partito. Distanza con caduta `h²/(h²+d²)` (h = 9 m) e una penalità d'angolo,
+tutto in aritmetica intera: ~0,26 da sei metri, ~0,15 da undici, ~0,09 dal limite, ~0,03 da trenta.
+Un rigore vale 0,76 per decreto, come nel calcio vero.
+
+**Un passaggio chiave è il passaggio il cui destinatario tira** (entro quindici secondi e prima che
+la squadra perda palla), **un assist è quello che finisce in rete.** Un gol deviato o una mischia non
+danno assist a nessuno: qualsiasi cosa spezzi l'azione — un contrasto, un tiro murato, una spazzata,
+una rimessa, il fischio — azzera la memoria.
+
+**Il voto è un'opinione, e l'unico modo onesto di pubblicarne una è dire ad alta voce di cosa è
+fatta.** È una somma di cose contate, ognuna col suo peso in `PerformanceBalance`, dentro
+`BalanceConfig` come ogni altra manopola del progetto: si parte da 6,0 ("c'era, e non è successo
+niente"), un gol vale +1,2, un assist +0,7, un rosso −1,5, la precisione dei passaggi conta solo
+sopra i dieci palloni giocati, **il portiere è giudicato sulle parate e sui gol subiti** e non sul
+suo passaggio, e **chi entra al 75' non può prendere nove**: lo scarto dal 6,0 è scalato sui minuti
+giocati. Tutto intero, perché quel numero può finire dentro il modello di sviluppo e deve
+riprodursi identico su .NET, Mono e IL2CPP.
+
+### Il terzo punto della fase — condizione e sviluppo — è SCRITTO MA SPENTO
+
+Il piano chiede che i dati alimentino anche condizione e sviluppo, «che oggi non hanno dati di
+partita». Il cablaggio c'è ed è completo:
+
+- `ConditionProgressor.Participation` accetta i **minuti veri** per giocatore. Oggi accredita novanta
+  minuti a ogni titolare e zero a chiunque altro, per cui un subentrato non si stanca mai;
+- `OnlineSeasonTick.EvolveWeek` accetta i **voti** per giocatore, che finiscono in
+  `DevelopmentContext.PerformanceRating` — il campo che esiste dal 4.4 e che è sempre stato una
+  costante neutra perché non c'era una prestazione da metterci;
+- `SeasonProgressor.EvolveCondition` ha `useMatchMinutes`, e `MatchPerformanceFeed` costruisce i due
+  dizionari da una giornata di partite.
+
+**E sono tutti spenti di default: si accendono passando i dati.** Non è timidezza, è la regola del
+progetto: minuti veri e voti cambiano *come le rose si stancano e come i giocatori crescono*, cioè
+sono una modifica di bilanciamento, e una modifica di bilanciamento passa davanti all'harness da
+1.000 partite prima di diventare il default — non entra di soppiatto dentro una statistica. Finché
+non si accende, **ogni cifra di `balance.ps1` legge quello che leggeva prima**.
+
+La decisione su quando accenderla è sua, e la misura che serve per prenderla è un `balance.ps1`
+prima e dopo. Sospetto che il primo effetto visibile sia sulla rotazione — la cosa che la fase 6 ha
+lasciato aperta («quanto morde la condizione sul campo»), perché con i minuti veri un subentrato
+finalmente paga quello che gioca.
+
+### Cosa è stato toccato
+
+**Nuovi** (`shared/Sim.Core/`): `Match/Analysis/PlayerMatchStats.cs` (i tre DTO più `PassLink`),
+`Match/Analysis/MatchStatsBuilder.cs` (la lettura), `Match/Analysis/MatchRatingModel.cs` (il voto),
+`Career/MatchPerformanceFeed.cs` (il ponte verso condizione e sviluppo).
+**Nuovo test**: `Sim.Core.Tests/Match/PerformanceDataTests.cs` — **22 test**, metà su flussi
+costruiti a mano con la risposta calcolata a penna (un passaggio che arriva contro uno che no, il gol
+accreditato all'uomo che era in quella maglia e non al subentrato, quanto vale un tiro da sei metri
+contro uno da venticinque) e metà sugli invarianti del motore vero (undici uomini per novanta
+minuti, ogni gol appartiene a qualcuno, leggere la partita non la cambia).
+**Modificati**: `Match/MatchReport.cs` (`Stats`), `Match/PositionStream.cs` (`SlotChange` +
+`Changes`), `Match/MatchEngine.cs` (costruisce le statistiche dopo la partita, con una manopola
+`buildStats`), `Match/Movement/MatchSimulator.cs` (**una** aggiunta: registra il cambio prima di
+sovrascrivere l'id), `Config/BalanceConfig.cs` (`PerformanceBalance`), `Condition/ConditionProgressor.cs`,
+`Career/SeasonProgressor.cs`, `Career/OnlineSeasonTick.cs`.
+**Harness**: `tools/BalanceHarness/PitchScenario.cs` stampa il blocco `the men` (voto medio, migliore
+e peggiore, chilometri, passaggi e precisione, passaggi chiave, assist, parate, xG a squadra) e
+aggiunge **due check di contratto**: gli undici per novanta minuti, e ogni gol su una riga.
+`tools/BalanceHarness/PitchDump.cs` (dopo il primo run) porta la **pagella dentro `replay.html`**:
+le due tabelle giocatore per giocatore, la riga tattica delle due squadre con le corsie di passaggio
+più battute, e la **mappa delle posizioni medie** su un campo disegnato. È il modo in cui l'occhio
+controlla questa fase, ed è codice di harness: non entra in `Sim.Core` e non muove un numero.
+
+### Il costo, detto prima che si veda
+
+Leggere una partita è **tre passate sul filmato** (i portieri, i frame, le azioni) su 10.801
+fotogrammi per ventidue uomini, con una radice quadrata intera per uomo per frame. Mi aspetto
+**qualche decina di millisecondi**, contro i ~306 ms che la partita costa a giocarla sulla sua
+macchina: nell'ordine del 5-10% sullo scenario `pitch` e su quella parte della suite che guarda le
+partite. Se il `ms/match` stampato dal `pitch` sale più di così, la manopola c'è: `buildStats: false`
+sul motore, o `Performance` fuori dal giro.
+
+Il referto cresce di **una quindicina di KB** per partita giocata (ventidue righe di interi), contro
+i 794 KB del filmato compresso: il 2%. Se preferisce non persisterle, `report.Stats = null` prima di
+salvare, esattamente come già si fa con le posizioni.
+
+### ✅ Cosa deve girare sulla sua macchina (terzo giro: solo la conferma del reparto)
+
+    .\tools\build-simcore.ps1
+    dotnet test
+    .\tools\balance.ps1 -Scenario pitch -PitchMatches 200 -PitchStrict -PitchDump .\replay.html
+
+Attesi: **399 verdi** in `Sim.Core.Tests` (i 375 della fase 6 più i 24 di `PerformanceDataTests`),
+**639 in totale** — e `Api.Tests` verde, col limite della scala allineato. Il `pitch` deve restare
+20/20 e 25/25 con il voto medio ancora intorno al 6,3 e l'xG a 1,33.
+
+La riga nuova da leggere è **`[perf-lines]`**: la media dei quattro più arretrati e quella dei tre
+più avanzati, che devono stare vicine. E poi `replay.html`: **il marcatore di una partita deve stare
+in cima alla sua pagella**, non sotto il proprio centrale.
+
+### Cosa era stato chiesto al secondo giro (fatto)
+
+    .\tools\build-simcore.ps1
+    dotnet test
+    .\tools\balance.ps1 -Scenario pitch -PitchMatches 200 -PitchStrict -PitchDump .\replay.html
+    .\tools\balance.ps1        # gli altri scenari NON devono muoversi di un numero
+
+Attesi: **398 test verdi** in `Sim.Core.Tests` (i 375 della fase 6 più i 23 di
+`PerformanceDataTests`), **638 in totale** con `Api.Tests`; `[DeterminismCheck]` e
+`[server-determinism]` che stampano ancora **`0xB0052E0B3942206A`** — se questo numero si muove, la
+fase ha toccato la partita e va fermata; lo scenario `pitch` che esce con **codice 0**, **20/20 in
+banda** e **25/25 check**; `balance.ps1` **28/28 con ogni cifra invariata**.
+
+Il primo giro ha già dimostrato il determinismo, le bande, i due check nuovi e il costo: quello che
+questo secondo giro deve dire è **solo il blocco `the men`**. Le due cifre da leggere:
+
+- **voto medio 6,0-6,3**, migliore sopra 7 e peggiore sotto 5 (era 8,37, ed è il rosso corretto);
+- **xG intorno a 1,3 a squadra** contro i 1,33 gol che il motore segna (era 2,00).
+
+E poi **l'occhio, che adesso ha qualcosa da guardare**: `replay.html` porta in fondo **la pagella** —
+una riga per uomo con minuti, voto, chilometri, passaggi e precisione, passaggi chiave, tiri, xG,
+gol, assist, contrasti, intercetti, spazzate, duelli e falli; la riga tattica delle due squadre
+(possesso, territorio, blocco difendendo e attaccando, quanto alto, corsie di passaggio più battute);
+e **la mappa delle posizioni medie**, ventidue maglie disegnate dove ognuno ha davvero passato la
+partita. Quello è il controllo che nessun test può fare: **le posizioni medie devono somigliare a una
+formazione** (portiere sulla linea, difensori bassi e larghi, punte alte), e il voto più alto deve
+essere di qualcuno che ha fatto qualcosa.
+
+### Aperto, per scelta
+
+- **Condizione e sviluppo sono spenti** (sopra). È la decisione che questa fase lascia a lei.
+- **Il client non mostra ancora niente.** I dati esistono nel referto; la schermata che li fa vedere
+  — la pagella e il rapporto tattico a fine partita — è lavoro di UI e cade dentro la fase 14 del
+  ROADMAP, non dentro il motore.
+- **Il server non li serve ancora a nessuno.** `ReplayStore` li persisterà dentro il replay perché
+  fanno parte del referto; esporli come endpoint proprio (pagella di una partita di lega) è un passo
+  server da fare quando il client li vuole.
+- **L'xG è geometrico** e non viene dal modello di tiro. Se un giorno il tiro pubblicherà la sua
+  probabilità, quella sarà la cifra migliore.
+- **I duelli sono i contrasti**, non ogni contatto: l'uomo che vince un pallone conta un duello
+  vinto, quello a cui è stato tolto uno perso. Un duello aereo non esiste perché nel modello non
+  esiste la palla alta.
+
+---
+
+## 15. Riferimenti
 
 - RoboCup Soccer Simulator — https://rcsoccersim.readthedocs.io/en/latest/overview.html
 - RoboCup 2D Soccer Simulation League — https://en.wikipedia.org/wiki/RoboCup_2D_Soccer_Simulation_League

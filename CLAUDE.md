@@ -11,7 +11,8 @@ Read ARCHITECTURE.md (design) and ROADMAP.md (plan + current status via checkbox
 - Language: chat in Italian, all code/comments/docs in English.
 
 ## Environment facts
-- **Current test count: 615 green** (engine phase 6, VERIFIED on his machine 2026-09-11 in 486.2 s) (`Sim.Core.Tests` **375** — the 364 of phase 5 plus the 11 `CausalityTests` — + `Api.Tests` 240), golden master **`0xB0052E0B3942206A`** (engine v9). His 8 September run read 607/615 on an engine that still carried a stale `BalanceConfig`; see the current position. The line below is phase 5's, kept for its history.
+- **Current test count: 639 green** (engine phase 7, VERIFIED on his machine 2026-09-11 in 579.2 s: `Sim.Core.Tests` **399** = the 375 of phase 6 plus the 24 `PerformanceDataTests`, + Api.Tests 240). Golden master **`0xB0052E0B3942206A`** (engine v9, UNCHANGED by phase 7 — the performance data is read off a finished match and is deliberately outside the hash). His first phase-7 run read 637 tests, 636 green — the red was the rating calibration, now corrected, and the 23rd test pins the correction. **The golden master did NOT move and must not: `0xB0052E0B3942206A`, verified on his machine 2026-09-11 with the performance data in.**
+- **Current VERIFIED test count: 615 green** (engine phase 6, VERIFIED on his machine 2026-09-11 in 486.2 s) (`Sim.Core.Tests` **375** — the 364 of phase 5 plus the 11 `CausalityTests` — + `Api.Tests` 240), golden master **`0xB0052E0B3942206A`** (engine v9). His 8 September run read 607/615 on an engine that still carried a stale `BalanceConfig`; see the current position. The line below is phase 5's, kept for its history.
 - User machine: Windows, .NET 10 SDK, Unity 6.3 LTS (6000.3.17f1), project folder `C:\Users\Fabbo\FootballTeamSimulator`.
 - Unity project = `client/` subfolder (opened via Unity Hub); git repo = monorepo root, single GitHub repo for everything.
 - After ANY change in `shared/`, the user must run `.\tools\build-simcore.ps1` so Unity gets fresh DLLs (Sim.Core.dll + Fts.Contracts.dll → `client/Assets/Plugins/SimCore/`, gitignored, .meta committed).
@@ -19,7 +20,125 @@ Read ARCHITECTURE.md (design) and ROADMAP.md (plan + current status via checkbox
   `dotnet test shared/Sim.Core.Tests/Sim.Core.Tests.csproj --logger "console;verbosity=detailed"`
 - Current test count (phase 5, verified): **604 green** (Sim.Core.Tests **364** — the 355 of phase 4 plus the 9 `RefereeTests` of phase 5 — + Api.Tests 240) in 518.5 s, golden master **0x222F723B4993ED25** (engine v8, engine rework phase 5 + the wall fix 5c, verified on the user's machine 2026-09-06 in 577.6 s and identical digit for digit to the container's .NET 8 value; the value BEFORE the wall fix was 0x436E4440B6350A7B, also verified on his machine, and the wall fix invalidated it; phase 4's was 0xF8BE4A32C28421A1 on v7, verified on his machine 2026-09-05 and identical digit for digit to the container's .NET 10 value; phase 3's was 0xABC7B41DC6F258C2 on engine v6), and `dotnet test` takes ~6.3 minutes (378.8 s: Sim.Core.Tests 310.7 s + Api.Tests 378.1 s in parallel). The paragraph below is the historical note it replaced: 212 green (through 8.4a, +4 OnlineSeasonTick tests over 6.10a's 208). Golden master 0xCDEA5A2F7B9E5CF6. **STALE as of 13.1: the golden master changes with engine v3 — see the current position below.** Server Api.Tests: 70 green (through 8.5a, +11 LeagueAuctionTests over 8.4a's 59) + DevSeedTests (5) from the dev-seed tooling; **8.6 (live match control) DONE [x] — 8.6a (server) 85/85 green + 8.6b (Unity client) + dev "simulate the opponent" tooling Play-mode VERIFIED & ACCEPTED by the user (docker `up --build` healthy, the live match kicks off and the bot opponent joins/subs from the live screen). `[server-determinism] 0xCDEA5A2F7B9E5CF6` unchanged, NO Sim.Core change → 212 Sim.Core + golden master stand, no save bump. Still standing: commit `Migrations/AddLiveMatch*` for a clean Postgres/docker deploy (the running dev DB already has `live_matches`). Client: Season "▶ Live" launch, ~1s poll, MatchRenderer synced to KickoffUtc, InMatchPanel subs+instructions → POST /change, finish/leave (new .cs: LiveMatchView, OnlineLiveMatchScreenPresenter). DEV TOOLING (test the live match solo): server `POST /internal/dev/leagues/{id}/live/{fixtureId}/bot` (`DevSeedService.BotLiveAsync` — the fixture's @dev.local bot opens/joins + optionally a legal `LineupPlan.From(BestEleven)` sub), client dev row "Bot: entra"/"Bot: sostituzione" (gated by `DevFlags.OnlineTestTools`); `DevSeedService` ctor now takes `ILiveMatchService` (DI-resolved → the 5 DevSeedTests stay green). NEXT: Phase 9 (public ranked mode) — 8.7 (private season end) is DONE [x] and 🏁 Phase 8 is COMPLETE. **8.7 summary:** SERVER-ONLY logic, NO Sim.Core change, NO migration (reuses `LeagueStatus.Completed`=2 + existing columns); `dotnet test Api.Tests` **92/92 green**, `[server-determinism] 0xCDEA5A2F7B9E5CF6` unchanged. `ResolveNextRoundAsync` flips the league to Completed on the last matchday; `GET /leagues/{id}/season/summary` → final table + champion / top scorer (aggregated from the stored MatchReport goal events) / best defence / wooden spoon; `POST /leagues/{id}/season/new` (creator, Completed only) = FULL reset → deletes fixtures/lineups/trainings/bids/auctions/live, un-assigns clubs, re-equalises the developed squads + re-seeds 25M budgets, resets condition to neutral, reopens the draft (players KEEP their developed ability). Client 8.7b: `SeasonSummaryDto`/`SeasonAwardDto`/`TopScorerDto` + `GetSeasonSummaryAsync`/`StartNewSeasonAsync`, new `Views/OnlineSeasonEndView` + `Presenters/OnlineSeasonEndScreenPresenter` (named `Online*` because `SeasonEndView`/`season_end.*` is the SP 2.7 screen; the online one owns `seasonend.*`), opened by a "Bilancio stagione" button that appears on the Season screen once complete; loc en+it 612/612 at parity. The user's monthly-public-league vision (per-player rating → matchmaking by level → auto-enrol with opt-out → 1-week break between seasons) is recorded as the Phase 9 direction.**
 
-## Current position — 🏁 ENGINE REWORK PHASE 6 CLOSED AND VERIFIED (2026-09-11): the STRIKE decides the goal
+## Current position — 🏁 ENGINE REWORK PHASE 7 CLOSED AND VERIFIED (2026-09-11): the match can be READ
+
+**VERIFIED BY THE USER.** `dotnet test` → **639/639 green, zero red, in 579.2 s** (`Sim.Core.Tests`
+**399** — the 375 of phase 6 plus the 24 `PerformanceDataTests` — + `Api.Tests` **240**).
+`[DeterminismCheck]` and `[server-determinism]` both still print **`0xB0052E0B3942206A`**: the phase
+did not move the match by a bit, which was the whole wager. The `pitch` scenario exits 0 with
+**20/20 in band and 25/25 checks** at 320.4 ms against phase 6's 306.2 — **+14 ms, 4.6%, to read the
+whole match** — and `balance.ps1` is 28/28 with every figure unchanged.
+
+**The report over 200 matches:** average mark **6.18** (best 10.0, worst 3.3), **11.76 km** a player
+against the analyzer's 11.80, **40.7 passes at 76.7%** (identical to the team total), 0.59 key
+passes, 0.07 assists each (1.5 a match against 2.66 goals — 58% of goals assisted, football is
+60-70%), 2.5 saves a keeper, 33.3 defensive actions and 13.9 balls lost a man, and **xG 1.33 a side
+against 1.33 goals scored**. `[perf-lines]`: the four deepest 6.08, the three highest 6.86.
+
+**THE EYE, on the dumped match (Inter Rigoria 2-1):** the two-goal scorer is **top of his own report
+with 8.0**, the assist third with 7.0, the keeper 6.5 on three saves and one conceded; marks run
+5.0-8.0 with defenders and forwards mixed and nobody stuck on a clamp; the average positions draw a
+formation — keeper fourteen metres off his line, a back four across the width, three men high.
+
+**Three corrections were needed, all found by the measurement or by the eye** (the mark paid on the
+difference rather than the count, 8.5 → 6.3; xG calibrated against this engine rather than against
+football, 2.00 → 1.33; and the mark compared against a man's OWN LINE after the report put a two-goal
+scorer below his centre-half). The full account is §14 of `docs/engine/MATCH_ENGINE_PLAN.md`.
+**NEXT: engine phase 8 — the instructions matter.**
+
+### How it was built and corrected (2026-09-11)
+
+**WRITTEN IN A CONTAINER THAT COULD NOT COMPILE ANYTHING** (the Ubuntu archive answered 403 through
+the agent proxy, so no `dotnet-sdk-8.0`, no NUnit type-check, no harness; the device VM's Plan9 mount
+is broken by the 8 September Windows update, so `device_bash` was unusable too and the files were
+staged/committed through the file tools). **HIS FIRST RUN, the same day: it compiled first time and
+read 636/637.**
+
+**WHAT THAT RUN PROVED.** `[DeterminismCheck]` and `[server-determinism]` both still print
+**`0xB0052E0B3942206A`** — reading the match does not touch it, which is this phase's whole safety
+argument, verified. The `pitch` scenario exits 0 with **20/20 in band and 25/25 checks**, including
+both new contract checks (eleven men for ninety minutes; every goal on somebody's line).
+**`balance.ps1` 28/28 with every figure unchanged.** Reading a match costs **+11.5 ms on 306 (3.8%)**.
+The kilometres agree with the analyzer to 0.3% (11.76 vs 11.80), per-player passes sum to the team
+total at the same 76.7%, and assists land at 1.5 a match against 2.66 goals (58% of goals assisted;
+football is 60-70%).
+
+**THE ONE RED, AND THE FIX.** The average mark came out **8.37** instead of ~6.0. Cause, measured:
+this engine produces **306 tackles, 233 clearances and 192 interceptions a match** — about
+thirty-three defensive actions per man, where real football has two or three — so a flat tenth per
+action handed every player three and a half points. The fix is NOT a smaller weight (phase 8 would
+move the rate again): the work off the ball is now paid on the **difference from what that match
+asked of everybody else**, pro-rated for minutes and capped at ±1.5 points, with duels counted as a
+**balance** (won minus lost). Self-calibrating — it reads the same at three recoveries a man or at
+thirty. **Second defect:** xG said **2.00 a side where 1.33 were scored**, because every strike comes
+from inside the box (median ~5 m, phase 6's open question) and this engine converts those at 9.7%
+where football converts nearer 15%; `XgPeakPermille` is now calibrated against THIS engine
+(380 → 250), with a note to re-measure when phase 8 gives the shot a distance.
+
+**AND THE EYE NOW HAS SOMETHING TO LOOK AT:** `PitchDump` puts the match report inside `replay.html`
+— a row per man, the two tactical lines, and a map of the average positions. Harness-only.
+
+**SECOND RUN, same day: `Sim.Core.Tests` 398/398 green.** Average mark 8.37 → **6.35**, xG 2.00 →
+**1.33 a side against 1.33 goals scored**. `pitch` still 20/20 and 25/25 at 315.3 ms. The one red was
+in `Api.Tests` and NOT this phase: the ranked-ladder reset test asserts club strengths within 3 and
+read 4, on a world that is generated at RANDOM every run (GUID accounts: run 1 started from a spread
+of 16, run 2 from 22) — the same fragility the twin draft test already documented and loosened to 6
+in `LeagueEndpointTests`. The ladder bound is now aligned, with the explanation beside it.
+
+**THE THIRD CORRECTION, AND THE EYE FOUND IT.** In the dumped match the two-goal scorer was marked
+**6.2 while a centre-back with no goals took 7.8**, and on both sides every defender and midfielder
+came out above every forward. A forward recovers fewer balls and loses more of them because that is
+the job, so the match-wide average punished him twice. Every man is now compared **against his own
+line** — the ten outfielders ranked by how deep they actually played (four/three/three), read off the
+average position this phase already computes, with no declared formation involved. `[perf-lines]`
+pins it. Also noted, not a defect of this phase: a keeper shows 35 "tackles" because the engine
+records a Tackle whenever anybody RECOVERS the ball; the report labels that column *recoveries*.
+
+**WHAT THE PHASE DOES.** Phase 6 made the pitch the truth; phase 7 makes it legible. Every man gets
+his line of the report — real minutes, kilometres, average position, passes attempted/completed, long
+balls, crosses, key passes, carries, shots and shots on target, xG, goals, assists, tackles,
+interceptions, clearances, blocks, duels won/lost, saves and goals conceded, fouls made and suffered,
+offsides, cards, and a mark out of ten in tenths (60 = 6.0) — and every side gets a tactical report:
+possession, territory by third from its own point of view, shots and xG, pass accuracy, block width
+and depth defending and attacking, how high it stood, fouls, cards, corners, and the pass map.
+
+**THE SAFETY ARGUMENT, AND IT IS THE POINT.** None of it is produced by the simulator as it plays: it
+is READ off the picture once the match is over. `Match/Analysis/MatchStatsBuilder` takes a finished
+`MatchReport` plus its `PositionStream`, touches neither and draws no randomness — the contract
+`MatchAnalyzer` has held since phase 0, applied one player at a time. Therefore **`MatchReportHasher`
+is untouched, the stats are deliberately OUTSIDE the hash, and the golden master
+`0xB0052E0B3942206A` is still the right number**; **`balance.ps1` cannot move a digit** (the world's
+fast path has no picture, and no picture means no statistics); and there is **no engine version bump,
+no save bump, no migration** — phase 6 replays still draw.
+
+**THE ONE ADDITION INSIDE `MatchSimulator`:** the stream carries one player id per slot and a
+substitution overwrites it, so `PositionStream.Changes` now records who came on, for whom, at which
+frame. Without it a substitute's line says he played ninety minutes and the man he replaced never
+existed. A change always lands on a minute boundary, so minutes are whole and a side adds up to
+eleven men for ninety minutes (990) unless somebody was sent off — the contract check the harness and
+the tests make, because it is the arithmetic that proves the whole attribution sound.
+
+**CONDITION AND DEVELOPMENT ARE WIRED BUT OFF.** `ConditionProgressor.Participation` accepts real
+minutes, `OnlineSeasonTick.EvolveWeek` accepts ratings for `DevelopmentContext.PerformanceRating`,
+`SeasonProgressor.EvolveCondition` has `useMatchMinutes`, and `Career/MatchPerformanceFeed` builds
+both dictionaries from a matchday — all off until a host passes the data, deliberately: real minutes
+and real marks change how squads tire and how players grow, which is a BALANCE change and goes in
+front of the 1,000-match harness before it becomes the default. **This is the decision the phase
+leaves to the user.**
+
+**NEW:** `Sim.Core/Match/Analysis/{PlayerMatchStats, MatchStatsBuilder, MatchRatingModel}.cs`,
+`Sim.Core/Career/MatchPerformanceFeed.cs`, `Sim.Core.Tests/Match/PerformanceDataTests.cs` (24 tests).
+**CHANGED:** `MatchReport`, `PositionStream`, `MatchEngine` (a `buildStats` knob, default on),
+`MatchSimulator`, `BalanceConfig` (`PerformanceBalance`), `ConditionProgressor`, `SeasonProgressor`,
+`OnlineSeasonTick`, `tools/BalanceHarness/{PitchScenario, PitchDump}.cs` (the `the men` block, two contract checks, and the match report inside `replay.html`); plus one line of `server/Api.Tests/RankedRankingTests.cs` — an unrelated random-world assertion that flaked, aligned with the twin test's documented bound.
+Everything is in `shared/` and `tools/`, so **no Unity `.meta` to generate**.
+
+✅ **How it is verified, for the record:** `.\tools\build-simcore.ps1` → `dotnet test` →
+`.\tools\balance.ps1 -Scenario pitch -PitchMatches 200 -PitchStrict -PitchDump .\replay.html` →
+`.\tools\balance.ps1`. Then open `replay.html` and scroll past the pitch: the match report is at the
+bottom, with the average-position map under it.
+
+### Previous position — 🏁 ENGINE REWORK PHASE 6 CLOSED AND VERIFIED (2026-09-11): the STRIKE decides the goal
 
 **VERIFIED BY THE USER, 2026-09-11.** `dotnet test` → **615/615 green, zero red, in 486.2 s**
 (`Sim.Core.Tests` **375** — the 364 of phase 5 plus the 11 `CausalityTests` — + `Api.Tests` **240**).
