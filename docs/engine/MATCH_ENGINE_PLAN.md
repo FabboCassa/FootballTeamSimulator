@@ -25,33 +25,92 @@ con il gioco sempre funzionante, regolamento fino a falli/cartellini/punizioni.
 
 ## 📍 Stato — 12 settembre 2026
 
-**Siamo qui: FASE 8 MISURATA — le quattro istruzioni sono leve vere sul campo, e due di esse sono
-troppo forti.** `4/4` check verdi: il blocco sta a 40,5 / 46,8 / 51,1 m, la palla si riconquista a
-36,2 / 39,9 / 42,2 m dalla propria porta (**la domanda rinviata dalle fasi 4 e 5, chiusa**), i
-passaggi vanno 302 / 455 / 671, i cross 20,2 / 29,3 / 43,8. **L'invariante ha tenuto:** l'istruzione
-neutra è l'identità, `Neutral_Instructions_AreTheIdentity` è verde, e il golden master si è mosso
-**solo** per la palla del gol — ora **`0x5EF1EDDAFA52BAFA`, engine v10**, ripuntato nei quattro
-posti. Il che vuol dire che ritarare un estremo non tocca l'hash: la fase è stata costruita per
-rendere questa ritaratura gratis, e serve.
+**IL PIANO È COMPLETO. Fase 8 chiusa, e con essa il rifacimento del motore: le otto fasi sono tutte
+`[x]`, e le ultime due sono state verificate sulla sua macchina lo stesso giorno.** Le quattro
+istruzioni del tecnico sono leve vere sul campo, e dopo una ritaratura restano calcio a entrambi
+gli estremi.
 
-**Quello che resta, ed è il cuore:** la voglia di tirare è un **dirupo, non una pendenza** — 0,1
-tiri a partita da paziente, 13,1 al neutro, 46,4 da voglioso — perché il confronto tira-o-passa è
-una soglia netta e le occasioni di questo motore stanno tutte addossate appena sotto. Una squadra
-difensiva tira 2,2 volte e segna 0,63. Stessa cosa, più piccola, per l'ampiezza: `wide` costa metà
-dei gol. **Una tattica deve essere una scelta, non un'autolesione.** Le due tabelle sono già
-ritarate (appetito a 96/100/106 su entrambi gli assi, bias largo a -55/+65 dm) e la ritaratura non
-tocca l'hash: **è il suo prossimo run che dice se è bastata.** E il `pitch` va ancora riletto: gira
-neutro, ma la palla del gol lo muove un po', quindi la domanda è se resta dentro le bande, non se è
-identico.
+| | Fase | Stato |
+|---|---|---|
+| 0 | banco di prova | ✅ fatta |
+| 1 | unità e base temporale | ✅ fatta |
+| 2 | forma: formazione e blocco | ✅ fatta |
+| 3 | difendere: zona e trigger | ✅ fatta |
+| 4 | decisioni con la palla | ✅ fatta |
+| 5 | il regolamento | ✅ fatta e verificata dall'utente |
+| 6 | inversione della causalità | ✅ fatta e verificata dall'utente |
+| 7 | dati sulle prestazioni | ✅ fatta e verificata dall'utente (2026-09-12) |
+| 8 | le istruzioni contano | ✅ fatta e verificata dall'utente (2026-09-12) |
 
-L'unico rosso inatteso era il TEST e non il motore: un'occasione è archiviata quando si risolve e il
-tiro quando parte dal piede, quindi una palla in volo a cavallo del minuto li metteva in minuti
-diversi. Corretto con un volo di anticipo nella finestra. Lo strumento della fase è
-`.\tools\balance.ps1 -Scenario instructions -InstructionsStrict`, che gioca le stesse partite dodici
-volte per isolare un asse alla volta. Tutto in §16.
+**Come si verifica che tutto gira** — `.\tools\build-simcore.ps1` → `dotnet test` (**646/646**,
+`[DeterminismCheck]` e `[server-determinism]` entrambi `0x5EF1EDDAFA52BAFA`) →
+`.\tools\balance.ps1 -Scenario instructions -InstructionsStrict` (**4/4**) →
+`.\tools\balance.ps1 -Scenario pitch -PitchMatches 200 -PitchStrict -PitchDump .\replay.html`
+(**20/20 in banda, 25/25 check**) → `.\tools\balance.ps1` (**28/28**). Tutti e quattro escono 0.
 
-**La fase 7 resta come la lascia il suo secondo run:** `Sim.Core` verde (398/398), i numeri tornano,
-e manca solo l'ultimo giro sulla terza correzione (il voto per reparto) che l'OCCHIO ha imposto.
+### Verificato dall'utente il 2026-09-12
+
+- **`dotnet test` → 646/646 verdi in 680,4 s** (`Sim.Core.Tests` 406, `Api.Tests` 240). Golden
+  master **`0x5EF1EDDAFA52BAFA`** stampato identico da `[DeterminismCheck]` e
+  `[server-determinism]`: è la garanzia di identità fra runtime, e adesso vale su engine **v10**.
+- **`-Scenario instructions -InstructionsStrict` → 4/4 in 113,4 s** a 315,1 ms/partita. Blocco
+  **40,4 / 46,8 / 51,1 m** (span 10,7 contro i 3,0 chiesti); palla riconquistata a
+  **36,2 / 39,9 / 42,2 m** dalla propria porta (span 6,0 contro 2,0); passaggi **304 / 455 / 671**
+  (span 368 contro 30); cross **22,8 / 29,3 / 35,1** (span 12,3 contro 1,0).
+- **`-Scenario pitch -PitchMatches 200 -PitchStrict` → 20/20 in banda, 25/25 check** a 330,7
+  ms/partita. Gol 2,50, tiri 22,0 (7,2 nello specchio), passaggi 893,1 al 76,6%, km 11,80, voto
+  medio 6,17, xG **1,32 contro 1,32 gol segnati**. La stampa dice ora **`balls won back 310,0`**:
+  la rinomina `Tackle` → `Recovery` è arrivata fino al dump.
+- **`.\tools\balance.ps1` → 28/28** in 7,7 s, ogni cifra invariata. È atteso per costruzione: il
+  mondo gioca le partite di fondo col modello rapido, che non ha un campo e quindi non ha
+  istruzioni.
+- **`[instructions-shots]` dopo la ritaratura: 6,4 / 13,1 / 23,0** tiri a partita, contro i
+  **0,1 / 13,1 / 46,4** della prima versione. La stima era 9 / 13 / 18: il centro esatto, gli
+  estremi un po' più larghi del previsto, e una leva vera con due capi che restano calcio.
+
+### Note operative
+
+- **Il neutro di ogni tabella di istruzione è l'IDENTITÀ** — le percentuali leggono 100, i termini
+  additivi 0, e ogni punto che li spende lo fa come `x * 100 / 100` o `x + 0`, esatto sugli interi.
+  Conseguenza pratica: **ritarare un estremo non può muovere il golden master né un numero del
+  `pitch`**, che girano a tattiche neutre. In un giorno è servito due volte.
+- **Il golden master non si è mosso per le istruzioni: si è mosso per la palla del gol.** Farla
+  fermare dove ha passato la linea cambia i tick dell'esultanza, quindi ogni partita diverge dopo
+  il suo primo gol. È per questo che fra v9 e v10 `[press]`, `[duties]`, `[keeper]` e i conteggi di
+  causalità a piccolo N si sono spostati di poco, senza che nessuno di essi sia un difetto.
+- **`[press]` non può separare pressing basso da medio, e ora si sa perché:** misura lo spazio
+  lasciato a chi porta palla nel *proprio* terzo, e a 70-105 m dalla porta difesa il trigger è
+  spento per entrambi. La lettura che li separa è **dove la palla viene riconquistata**.
+- **Il confronto tira-o-passa è una soglia netta**, e le occasioni di questo motore stanno tutte
+  addossate appena sotto. Qualsiasi leva che scali `GoalValueDm` ha quindi una risposta fortemente
+  non lineare: pendenze misurate su ln(tiri) ≈ **+0,026 per punto sopra 100** e **~0,15 sotto**.
+  Prima di riallargare l'appetito, dare un bordo morbido alla soglia.
+- **Un'occasione è archiviata quando si risolve, il tiro quando parte dal piede.** Sono due tick
+  diversi e possono cadere in due minuti diversi. Qualunque test cerchi il tiro dentro il minuto
+  dell'evento deve ammettere un volo di anticipo (`StrikeLeadFrames`).
+- **Gli scenari `pitch` e `instructions` si chiedono per nome** e sono esclusi da `-Scenario all`.
+- **La matrice di `instructions` non ha una colonna dei gol subiti**, quindi lo scambio che una
+  tattica difensiva compra è invisibile lì: va letto in `[tactics] attacking GF/GA = 80/37 |
+  defensive GF/GA = 48/17`. Aggiungere la colonna è mezz'ora di harness e chiude il dubbio.
+
+### Decisioni aperte
+
+- **`wide` costa ancora metà dei gol** (0,97 contro 1,97 del neutro, 9,3 tiri contro 11,3) e non ha
+  un tornaconto visibile: crossare converte peggio che entrare in area. Dimezzare ancora
+  `WidthWidePassBiasDm` è una riga; la domanda è se l'ampiezza *debba* costare.
+- **`attacking` segna come `balanced`** (1,93 contro 1,97) pur tirando di più: trenta partite sono
+  poche per distinguerli, ma se regge su duecento vuol dire che alzare la linea restituisce in gol
+  subiti quello che dà in tiri.
+- **Le istruzioni non contano nel modello rapido**, che è quello con cui il mondo gioca le migliaia
+  di partite di fondo di una stagione. È per scelta di questa fase — ed è il motivo per cui
+  `balance.ps1` non si muove di una cifra — ma è il prossimo dubbio vero.
+- **Gol a 2,50 a tattiche neutre contro un pavimento di banda a 2,40** è il margine più sottile
+  della stampa; era 2,66 su v9, e lo ha mosso la palla del gol.
+
+**La fase 7 è chiusa con questo stesso run:** la correzione del voto per reparto è verde e
+inchiodata (`[perf-lines]` i quattro più bassi 5,99, i tre più alti 6,41, entro il punto che il test
+chiede), voto medio 6,17 e xG 1,32 contro 1,32 gol. Resta scoperto solo l'occhio sul `replay.html`,
+che nessun test può dare e che non è mai stato riportato in chat.
 
 Il suo run dell'11 settembre: **compilato al primo colpo, 636 test su 637**, e soprattutto
 **`[DeterminismCheck]` e `[server-determinism]` stampano ancora `0xB0052E0B3942206A`** — leggere la
@@ -2177,7 +2236,7 @@ guardare **da dove partono i tiri, chi para, e chi si butta davanti alla palla**
 
 ---
 
-## 14. Fase 7 — i dati sulle prestazioni
+## 14. Fase 7 — i dati sulle prestazioni ✅ FATTA E VERIFICATA
 
 *Scritta l'11 settembre 2026, subito dopo la chiusura della fase 6, e **consegnata senza essere stata
 compilata da nessuna parte**: il container di questa sessione ha perso l'accesso all'archivio Ubuntu
@@ -2479,7 +2538,7 @@ essere di qualcuno che ha fatto qualcosa.
 
 ---
 
-## 16. Fase 8 — le istruzioni contano davvero
+## 16. Fase 8 — le istruzioni contano davvero ✅ FATTA E VERIFICATA — 🏁 CHIUSA
 
 *Scritta l'11 settembre 2026, in un container che — come per la fase 7 — **non ha potuto compilare
 né misurare niente** (l'archivio Ubuntu risponde 403 attraverso il proxy: niente `dotnet-sdk-8.0`,
@@ -2693,19 +2752,38 @@ pendenze misurate suggeriscono), e `WidthWidePassBiasDm` da -110/+130 a **-55/+6
 mossa nessun'altra cosa: nessuna voce di mezzo, nessuna riga del simulatore — quindi
 `0x5EF1EDDAFA52BAFA` regge e ogni numero del `pitch` con lui. **Sono stime, non misure**: le
 pendenze vengono da tre punti e il lato che crolla è stimato da uno di essi che era già saturo
-(0,1 tiri vuol dire "non tira mai", e il logaritmo lì non dice più niente). **È il suo run che
-decide:** `[instructions-shots]` deve leggere qualcosa come 9 / 13 / 18 invece di 0,1 / 13,1 / 46,4,
-la matrice deve restare **4/4** (il check sui cross chiede uno span di 1,0 e dovrebbe averne ancora
-una dozzina), e nessuna impostazione dovrebbe essere strettamente peggiore del neutro su tutto. Se
-i tiri restano un dirupo anche a ±6 punti, allora la leva sbagliata non è la tabella ma la soglia:
-il passo successivo è dare un bordo morbido al confronto tira-o-passa, non stringere ancora.
+(0,1 tiri vuol dire "non tira mai", e il logaritmo lì non dice più niente).
 
-**ANCORA DA FARE:** `-Scenario pitch -PitchMatches 200 -PitchStrict` riletto contro la stampa della
-fase 7 (gol 2,66, tiri 22,0, passaggi 895,8, 20/20, 25/25, 320,4 ms) — gira a tattiche neutre ma la
-palla del gol lo muove un po', quindi la domanda è se resta **dentro le bande**, non se è identico;
-`.\tools\balance.ps1` 28/28; la ritaratura di appetito e ampiezza qui sopra; e **l'occhio** —
-`replay.html` per vedere dove si ferma la palla del gol, e Unity con offensiva-veloce contro
-difensiva-lenta.
+**IL RUN CHE LA CHIUDE — 12 settembre 2026, sulla sua macchina. 🏁 FASE CHIUSA.**
+`[instructions-shots]` legge **6,4 / 13,1 / 23,0** tiri a partita: la stima era 9 / 13 / 18, il
+centro è esatto e gli estremi un po' più larghi del previsto — una squadra paziente tira metà di
+quanto tira una neutra, una voglioso il 75% in più, ed entrambi i capi restano calcio. La matrice
+resta **4/4** con il check sui cross a uno span di **12,3** contro l'1,0 chiesto. **646/646 test
+verdi**, `pitch` **20/20 in banda e 25/25 check** a 330,7 ms, `balance.ps1` **28/28** con ogni cifra
+invariata, e il golden master **`0x5EF1EDDAFA52BAFA`** stampato identico da client e server. La
+matrice completa dopo la ritaratura:
+
+| asse | impostazione | blocco | riconquista | passaggi | avanti | cross | larghezza | tiri | gol |
+|---|---|---|---|---|---|---|---|---|---|
+| Mentalità | difensiva | 40,4 | 34,9 | 354 | 42% | 11,8 | 47,3 | 6,6 | 0,90 |
+| | bilanciata | 46,8 | 39,9 | 455 | 36% | 29,3 | 44,3 | 11,3 | 1,97 |
+| | offensiva | 51,1 | 38,6 | 461 | 39% | 31,1 | 41,4 | 13,3 | 1,93 |
+| Pressing | basso | 43,4 | 36,2 | 427 | 39% | 24,7 | 44,6 | 10,9 | 1,50 |
+| | medio | 46,8 | 39,9 | 455 | 36% | 29,3 | 44,3 | 11,3 | 1,97 |
+| | alto | 47,8 | 42,2 | 454 | 36% | 30,8 | 44,3 | 11,7 | 1,50 |
+| Ritmo | lento | 48,9 | 43,4 | 304 | 22% | 19,9 | 45,4 | 7,5 | 0,87 |
+| | normale | 46,8 | 39,9 | 455 | 36% | 29,3 | 44,3 | 11,3 | 1,97 |
+| | veloce | 44,9 | 35,7 | 671 | 48% | 39,1 | 43,1 | 19,7 | 2,47 |
+| Ampiezza | stretta | 47,1 | 39,0 | 410 | 37% | 22,8 | 35,9 | 13,7 | 1,63 |
+| | normale | 46,8 | 39,9 | 455 | 36% | 29,3 | 44,3 | 11,3 | 1,97 |
+| | larga | 46,2 | 38,5 | 509 | 36% | 35,1 | 52,2 | 9,3 | 0,97 |
+
+**Cosa resta aperto, e non è un difetto di questa fase** (tutto nel blocco di stato in cima): `wide`
+costa ancora metà dei gol senza un tornaconto visibile nella matrice, che non ha una colonna dei gol
+subiti; `attacking` segna come `balanced` pur tirando di più, su trenta partite; e **le istruzioni
+non contano nel modello rapido**, che è quello con cui il mondo gioca le partite di fondo. Non
+verificato: **l'occhio** — `replay.html` per dove si ferma la palla del gol, e Unity con
+offensiva-veloce contro difensiva-lenta.
 
 **I replay salvati in v9 non sono più disegnabili**: è previsto, e il client li rifiuta da solo
 perché confronta `MatchEngine.Version`.
