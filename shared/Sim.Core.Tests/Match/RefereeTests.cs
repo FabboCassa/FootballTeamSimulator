@@ -466,7 +466,7 @@ namespace Sim.Core.Tests.Match
         private static bool IsTouch(BallActionKind kind) =>
             kind == BallActionKind.Pass || kind == BallActionKind.LongBall || kind == BallActionKind.Cross
             || kind == BallActionKind.Dribble || kind == BallActionKind.Clearance
-            || kind == BallActionKind.Interception || kind == BallActionKind.Tackle
+            || kind == BallActionKind.Interception || kind == BallActionKind.Recovery
             || kind == BallActionKind.Shot;
 
         /// <summary>The same club with every outfielder's Defending set to one level.</summary>

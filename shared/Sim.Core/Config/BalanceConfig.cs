@@ -1871,33 +1871,128 @@
         public int HalfTimeMs { get; set; } = 12000;
         public int HalfTimeTicks => TicksOfMs(HalfTimeMs);
 
-        // --- What the coach's instructions mean on the pitch (task 13.2) ---
+        // --- What the coach's instructions mean on the pitch (task 13.2, engine phase 8) ---
+        //
         // Each table is indexed by the enum: Mentality Defensive/Balanced/Attacking,
         // Pressing Low/Medium/High, Tempo Slow/Normal/Fast, Width Narrow/Normal/Wide.
+        //
+        // ENGINE PHASE 8 HOLDS ONE RULE ABOVE EVERY VALUE HERE: the MIDDLE entry of every table
+        // is the NEUTRAL instruction, and the neutral instruction is the IDENTITY. Additive
+        // tables read 0 in the middle and percentage tables read 100, so a side with neutral
+        // instructions plays the match phase 7 played, tick for tick and draw for draw. That is
+        // what lets this phase move the levers as hard as it does: the twenty readings of the
+        // `pitch` scenario, which runs at neutral tactics, cannot move, and any calibration
+        // argument stays where phase 6 settled it. What phase 8 changes is what happens when the
+        // coach asks for something ELSE.
+        //
+        // The outer entries were widened here from the values 13.2 first guessed at, because
+        // 13.2 wrote them blind and phase 8 is where they are measured: the `instructions`
+        // scenario plays the same fixture with opposed tactics and prints what actually moved.
 
         /// <summary>
         /// Where mentality moves the back line, in decimetres. It is the height of the line —
         /// the one instruction a coach gives in exactly these words — and everything else in the
         /// block follows from it, so a defensive side genuinely sits deeper rather than merely
-        /// scoring differently.
+        /// scoring differently. Phase 8 widens it from -70/+80: seven metres is inside the
+        /// deadband the line holds itself to (BackLineHoldDm), so half of it was being eaten
+        /// before it reached the picture.
         /// </summary>
-        public int[] MentalityLinePushDm { get; set; } = { -70, 0, 80 };
+        public int[] MentalityLinePushDm { get; set; } = { -130, 0, 140 };
 
         /// <summary>How many players make supporting runs.</summary>
         public int[] MentalitySupporters { get; set; } = { 1, 2, 3 };
 
-        /// <summary>Percent applied to each player's distance from the centre line.</summary>
-        public int[] WidthSpreadPercent { get; set; } = { 82, 100, 122 };
+        /// <summary>
+        /// How near the goal the most advanced line will stand, as a percentage of
+        /// <see cref="FrontLineGoalGapDm"/>. The line's HEIGHT is the push above; this is its
+        /// CEILING, and without it an attacking side's push is thrown away the moment the block
+        /// hits the cap — which is exactly when it is attacking. A defensive side keeps its
+        /// forward further off the goal it is attacking, which is what "get back and defend"
+        /// costs you.
+        /// </summary>
+        public int[] MentalityFrontLineGapPercent { get; set; } = { 135, 100, 72 };
 
-        /// <summary>How far from his position a player will go to press the ball.</summary>
-        public int[] PressReachDm { get; set; } = { 160, 260, 380 };
+        /// <summary>
+        /// How much more (or less) a goal is worth to the man deciding, as a percentage of
+        /// <see cref="GoalValueDm"/>. An attacking side has a go; a defensive one keeps working
+        /// the ball. Multiplied by <see cref="TempoShotAppetitePercent"/>.
+        ///
+        /// NARROW ON PURPOSE, AND MEASURED. Phase 8 first shipped 82/100/122 here and 83/100/122
+        /// on Tempo, and the harness said what that really was: 0.1 shots a match at the patient
+        /// end, 13.1 at neutral, 46.4 at the eager one. A hundredfold swing off ±32/+48 points,
+        /// because the shoot-or-pass comparison in ShootValue/OptionValue is a THRESHOLD and this
+        /// engine's chances sit tightly clustered just under it — so a few per cent either way
+        /// flips nearly every decision at once. Measured slopes on ln(shots): about +0.026 per
+        /// point above 100, and nearer 0.15 below, the low side being the cliff. 96/100/106 on
+        /// both axes therefore aims at roughly 9 / 13 / 18 shots: a real instruction, and both
+        /// ends still football. If the threshold is ever given a soft edge, this can widen again.
+        /// </summary>
+        public int[] MentalityShotAppetitePercent { get; set; } = { 96, 100, 106 };
+
+        /// <summary>Percent applied to each player's distance from the centre line.</summary>
+        public int[] WidthSpreadPercent { get; set; } = { 74, 100, 130 };
+
+        /// <summary>
+        /// What a team-mate standing in a WIDE channel is worth, in the decimetres of forward
+        /// progress every option a man on the ball has is quoted in. A wide side looks for the
+        /// man on the touchline and a narrow one would rather play through the middle — and a
+        /// cross, in this engine, IS a pass from a wide position near the goal, so this is the
+        /// lever behind "wide → more crosses". Zero at neutral: the pass is priced exactly as
+        /// phase 4 priced it.
+        ///
+        /// HALVED AFTER MEASURING. At -110/+130 the harness read 20.2 / 29.3 / 43.8 crosses —
+        /// and 1.80 / 1.97 / 0.80 goals with 16.0 / 11.3 / 7.0 shots, i.e. asking for width cost
+        /// a side half its goals, because every decimetre of bias that pulls the ball into the
+        /// channel pulls it out of the box. The check this lever has to satisfy wants a span of
+        /// 1.0 cross and had 23.6, so there was room to give most of it back: -55/+65 should keep
+        /// a span of a dozen crosses while the box stops emptying.
+        /// </summary>
+        public int[] WidthWidePassBiasDm { get; set; } = { -55, 0, 65 };
+
+        /// <summary>
+        /// How far from his position a player will go to press the ball. Phase 8 widens the
+        /// outer two: a low block that still went sixteen metres for the ball was not a low
+        /// block, and a high press that stopped at thirty-eight was not the same instruction a
+        /// coach thinks he is giving.
+        /// </summary>
+        public int[] PressReachDm { get; set; } = { 120, 260, 440 };
+
+        /// <summary>
+        /// How deep in his own end a side sends a SECOND man at the ball, as a percentage of
+        /// <see cref="SecondPressDepthDm"/>. A high press doubles up on the man on the ball in
+        /// the other side's half; a low block does it only on the edge of its own box. This is
+        /// the lever that actually moves WHERE the ball is won, which is the reading phase 8's
+        /// plan asks for by name ("pressing alto → più recuperi nell'ultimo terzo").
+        /// </summary>
+        public int[] PressingSecondPressPercent { get; set; } = { 55, 100, 230 };
+
+        /// <summary>
+        /// How close the presser gets, as a percentage of <see cref="PressDistanceDm"/>. A high
+        /// press is touch-tight; a low block CONTAINS — it stands off, shows him sideways and
+        /// keeps its shape. It is the reading `[press]` prints, and the one the phase-3 test
+        /// asserts the extremes of.
+        /// </summary>
+        public int[] PressingStandOffPercent { get; set; } = { 165, 100, 70 };
 
         /// <summary>How long a player keeps the ball before he looks to release it, in milliseconds.</summary>
-        public int[] TempoHoldMsMin { get; set; } = { 2080, 1480, 870 };
-        public int[] TempoHoldMsMax { get; set; } = { 3620, 2620, 1680 };
+        public int[] TempoHoldMsMin { get; set; } = { 2600, 1480, 700 };
+        public int[] TempoHoldMsMax { get; set; } = { 4400, 2620, 1350 };
 
         /// <summary>How strongly the forward option is preferred when passing.</summary>
-        public int[] TempoForwardBias { get; set; } = { 6, 10, 16 };
+        public int[] TempoForwardBias { get; set; } = { 3, 10, 22 };
+
+        /// <summary>
+        /// The other half of the shot appetite, from the Tempo axis (see
+        /// <see cref="MentalityShotAppetitePercent"/>). A side playing quickly takes the first
+        /// thing that is on, and one of the things that is on is the shot; a side keeping the
+        /// ball works the extra pass instead. Attacking + fast values a goal at 1.12 times what
+        /// a neutral side values it, defensive + slow at 0.92 — and the man on the ball is doing
+        /// nothing different with that number than he has done since phase 6, which is weighing
+        /// it against the pass, the run and the clearance in one currency. The range is narrow
+        /// because it was measured wide first; the note on MentalityShotAppetitePercent has the
+        /// numbers and the reason.
+        /// </summary>
+        public int[] TempoShotAppetitePercent { get; set; } = { 96, 100, 106 };
     }
 
     /// <summary>

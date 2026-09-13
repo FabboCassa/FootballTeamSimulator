@@ -153,7 +153,7 @@
   "match.action.longball": "{0} lancia lungo per {1}",
   "match.action.cross": "{0} crossa per {1}",
   "match.action.dribble": "{0} salta l'uomo",
-  "match.action.tackle": "{0} vince il contrasto",
+  "match.action.recovery": "{0} recupera palla",
   "match.action.interception": "{0} legge l'azione e intercetta",
   "match.action.clearance": "{0} spazza via",
   "match.action.shot": "{0} tira!",

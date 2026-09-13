@@ -61,7 +61,17 @@ namespace Sim.Core.Match
         // model below survives as the FAST PATH for the world nobody watches, unchanged to the
         // bit — which is why every league table, every calibration and every balance check reads
         // exactly what it read on v8.
-        public const int Version = 9;
+        // v10: phase 8 — THE INSTRUCTIONS COUNT. The four axes the tactics screen has always
+        // exposed are levers on the pitch: Mentality sets how high the line holds AND how near
+        // the goal the front line may stand AND how readily a man has a go; Pressing sets how far
+        // he leaves his position, how deep in the other half a second man joins him and how tight
+        // he gets; Tempo sets how long the ball is held, how far forward it is looked and the
+        // other half of the shot appetite; Width sets how far the shape spreads and what the man
+        // on the touchline is worth. The NEUTRAL instruction is the identity — a neutral match is
+        // the phase 7 match, draw for draw — so what moves the master here is the one cosmetic
+        // thing phase 6 left written down: the goal ball now rests where it crossed the line
+        // instead of in the middle of the net, and those frames are in the stream the hash covers.
+        public const int Version = 10;
 
         private const int MatchMinutes = 90;
 

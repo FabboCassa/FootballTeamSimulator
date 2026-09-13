@@ -180,7 +180,7 @@ namespace Sim.Core.Match.Analysis
                     case BallActionKind.Goal: streamGoals++; break;
                     case BallActionKind.Dribble: Bump(ref home, ref away, isHome, SideCounter.Dribble); break;
                     case BallActionKind.Clearance: Bump(ref home, ref away, isHome, SideCounter.Clearance); break;
-                    case BallActionKind.Tackle: Bump(ref home, ref away, isHome, SideCounter.Tackle); break;
+                    case BallActionKind.Recovery: Bump(ref home, ref away, isHome, SideCounter.Recovery); break;
                     case BallActionKind.Interception: Bump(ref home, ref away, isHome, SideCounter.Interception); break;
                     case BallActionKind.ThrowIn: Bump(ref home, ref away, isHome, SideCounter.ThrowIn); break;
                     case BallActionKind.Corner: Bump(ref home, ref away, isHome, SideCounter.Corner); break;
@@ -202,7 +202,7 @@ namespace Sim.Core.Match.Analysis
 
         private enum SideCounter
         {
-            Dribble, Clearance, Tackle, Interception, ThrowIn, Corner, GoalKick,
+            Dribble, Clearance, Recovery, Interception, ThrowIn, Corner, GoalKick,
             Offside, Foul, Yellow, Red, Penalty
         }
 
@@ -218,7 +218,7 @@ namespace Sim.Core.Match.Analysis
             {
                 case SideCounter.Dribble: side.Dribbles++; break;
                 case SideCounter.Clearance: side.Clearances++; break;
-                case SideCounter.Tackle: side.TacklesWon++; break;
+                case SideCounter.Recovery: side.Recoveries++; break;
                 case SideCounter.Interception: side.Interceptions++; break;
                 case SideCounter.ThrowIn: side.ThrowIns++; break;
                 case SideCounter.Corner: side.Corners++; break;

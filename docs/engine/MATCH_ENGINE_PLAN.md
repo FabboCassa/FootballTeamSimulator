@@ -16,14 +16,42 @@ con il gioco sempre funzionante, regolamento fino a falli/cartellini/punizioni.
       giorno: **`Sim.Core` 398/398, golden master invariato, pitch 20/20 e 25/25, balance 28/28**,
       voto medio 8,37 → **6,35** e xG 2,00 → **1,33 contro 1,33 gol**. Tre correzioni, tutte trovate
       dalla misura o dall'occhio; manca l'ultimo giro). Vedi §14.
-- [ ] Fase 8 — le istruzioni contano
+- [~] **Fase 8 — le istruzioni contano** (scritta il 2026-09-11: i quattro assi sono leve sul
+      campo, il neutro è l'IDENTITÀ, `-Scenario instructions` è lo strumento che lo misura, e la
+      palla del gol si ferma dove ha passato la linea — engine **v10**, golden master DA
+      RIPUNTARE. Scritta in un container che non ha potuto compilare). Vedi §16.
 
 ---
 
-## 📍 Stato — 11 settembre 2026
+## 📍 Stato — 12 settembre 2026
 
-**Siamo qui: FASE 7 — due run dell'utente, `Sim.Core` verde (398/398), i numeri tornano; resta da
-confermare la terza correzione (il voto per reparto) che l'OCCHIO ha imposto.**
+**Siamo qui: FASE 8 MISURATA — le quattro istruzioni sono leve vere sul campo, e due di esse sono
+troppo forti.** `4/4` check verdi: il blocco sta a 40,5 / 46,8 / 51,1 m, la palla si riconquista a
+36,2 / 39,9 / 42,2 m dalla propria porta (**la domanda rinviata dalle fasi 4 e 5, chiusa**), i
+passaggi vanno 302 / 455 / 671, i cross 20,2 / 29,3 / 43,8. **L'invariante ha tenuto:** l'istruzione
+neutra è l'identità, `Neutral_Instructions_AreTheIdentity` è verde, e il golden master si è mosso
+**solo** per la palla del gol — ora **`0x5EF1EDDAFA52BAFA`, engine v10**, ripuntato nei quattro
+posti. Il che vuol dire che ritarare un estremo non tocca l'hash: la fase è stata costruita per
+rendere questa ritaratura gratis, e serve.
+
+**Quello che resta, ed è il cuore:** la voglia di tirare è un **dirupo, non una pendenza** — 0,1
+tiri a partita da paziente, 13,1 al neutro, 46,4 da voglioso — perché il confronto tira-o-passa è
+una soglia netta e le occasioni di questo motore stanno tutte addossate appena sotto. Una squadra
+difensiva tira 2,2 volte e segna 0,63. Stessa cosa, più piccola, per l'ampiezza: `wide` costa metà
+dei gol. **Una tattica deve essere una scelta, non un'autolesione.** Le due tabelle sono già
+ritarate (appetito a 96/100/106 su entrambi gli assi, bias largo a -55/+65 dm) e la ritaratura non
+tocca l'hash: **è il suo prossimo run che dice se è bastata.** E il `pitch` va ancora riletto: gira
+neutro, ma la palla del gol lo muove un po', quindi la domanda è se resta dentro le bande, non se è
+identico.
+
+L'unico rosso inatteso era il TEST e non il motore: un'occasione è archiviata quando si risolve e il
+tiro quando parte dal piede, quindi una palla in volo a cavallo del minuto li metteva in minuti
+diversi. Corretto con un volo di anticipo nella finestra. Lo strumento della fase è
+`.\tools\balance.ps1 -Scenario instructions -InstructionsStrict`, che gioca le stesse partite dodici
+volte per isolare un asse alla volta. Tutto in §16.
+
+**La fase 7 resta come la lascia il suo secondo run:** `Sim.Core` verde (398/398), i numeri tornano,
+e manca solo l'ultimo giro sulla terza correzione (il voto per reparto) che l'OCCHIO ha imposto.
 
 Il suo run dell'11 settembre: **compilato al primo colpo, 636 test su 637**, e soprattutto
 **`[DeterminismCheck]` e `[server-determinism]` stampano ancora `0xB0052E0B3942206A`** — leggere la
@@ -107,14 +135,21 @@ angolo. Quello che l'occhio ha trovato è **la distanza dei tiri**, ed è in §1
 | 5 | il regolamento | ✅ fatta **e verificata dall'utente**, barriera (§12.5) compresa |
 | 6 | inversione della causalità | 🏁 **fatta e verificata dall'utente** — il tiro decide il gol |
 | 7 | dati sulle prestazioni | ✍️ **scritta, tre correzioni, ultimo giro da fare** (§14) |
-| 8 | le istruzioni contano | da fare |
+| 8 | le istruzioni contano | ✍️ **scritta, mai compilata, golden master da ripuntare** (§16) |
 
 ### Come si verifica che tutto gira
 
     .\tools\build-simcore.ps1
     dotnet test
+    .\tools\balance.ps1 -Scenario instructions -InstructionsStrict
     .\tools\balance.ps1 -Scenario pitch -PitchMatches 200 -PitchStrict -PitchDump .\replay.html
     .\tools\balance.ps1        # gli altri scenari NON devono muoversi di un numero
+
+**DALLA FASE 8 IL GOLDEN MASTER È DA RIPUNTARE** (engine v10): la palla del gol si ferma dove ha
+passato la linea, quei fotogrammi stanno nel filmato che l'hash copre, e il container di quella
+sessione non ha potuto calcolare il valore nuovo. I due `SimulationDeterminismTests` escono rossi
+stampandolo: è quello da appuntare nei quattro posti soliti. Il valore qui sotto è quello della
+fase 6/7, su engine v9.
 
 **Golden master della fase 6: `0xB0052E0B3942206A`** (engine v9; era `0x222F723B4993ED25` in v8,
 `0xF8BE4A32C28421A1` in v7 e `0xABC7B41DC6F258C2` in v6), già ripuntato nei quattro posti soliti. I
@@ -2441,6 +2476,254 @@ essere di qualcuno che ha fatto qualcosa.
 - **I duelli sono i contrasti**, non ogni contatto: l'uomo che vince un pallone conta un duello
   vinto, quello a cui è stato tolto uno perso. Un duello aereo non esiste perché nel modello non
   esiste la palla alta.
+
+---
+
+## 16. Fase 8 — le istruzioni contano davvero
+
+*Scritta l'11 settembre 2026, in un container che — come per la fase 7 — **non ha potuto compilare
+né misurare niente** (l'archivio Ubuntu risponde 403 attraverso il proxy: niente `dotnet-sdk-8.0`,
+niente stub NUnit, niente harness; anche npm e pypi sono fuori dall'allowlist di questa sessione, e
+il mount Plan9 della VM del dispositivo è ancora rotto dall'aggiornamento Windows dell'8 settembre,
+quindi i file sono stati letti e riscritti con gli strumenti di staging). Il primo `dotnet test`
+sulla sua macchina è quello che dice la verità. Quello che questa fase ha fatto, per compensare, è
+scegliere un'architettura che **non può rompere niente di misurato**: vedi subito qui sotto.*
+
+### L'invariante che regge tutta la fase: il neutro è l'identità
+
+**La voce di mezzo di ogni tabella è l'istruzione NEUTRA, e l'istruzione neutra è l'IDENTITÀ.** Le
+tabelle additive leggono 0 al centro, quelle percentuali leggono 100, e ogni punto del codice che le
+spende lo fa come `x * 100 / 100` oppure `x + 0` — esatto sugli interi. Ne segue, senza doverlo
+misurare:
+
+- **le venti letture dello scenario `pitch` non si muovono di una cifra**, perché il `pitch` gira a
+  tattiche neutre. I 20/20 in banda e i 25/25 check della fase 7 restano quelli;
+- **`balance.ps1` non può muoversi**, perché il mondo di sfondo usa il percorso veloce che non ha
+  un campo da leggere;
+- **l'intera argomentazione di calibrazione della fase 6 resta in piedi**: questa fase non ha
+  ritoccato un solo numero del modello risultato.
+
+`InstructionsTests.Neutral_Instructions_AreTheIdentity` inchioda la promessa dove si vede: una
+partita giocata **senza tattiche** e la stessa partita giocata con la **tattica tutta neutra**
+hanno lo stesso hash, bit per bit. Se un giorno qualcuno rompe l'invariante ritoccando una voce di
+mezzo, quel test diventa rosso prima che il golden master faccia in tempo a mentire.
+
+**Quello che invece SI muove, ed è l'unica cosa:** la palla del gol adesso si ferma **dove ha
+passato la linea** invece che in mezzo alla porta. Era la cosa cosmetica che la fase 6 aveva
+lasciato scritta («i tre gol del dump entrano tutti esattamente al centro»), costa un golden master
+perché quei fotogrammi stanno nel filmato che l'hash copre, e questa fase lo paga volentieri perché
+è l'unico motivo per cui si muove. **Engine v10.**
+
+### I quattro assi, e cosa muovono davvero
+
+| Asse | Cosa comanda sul campo |
+|---|---|
+| **Mentalità** | l'altezza a cui tiene la linea (`MentalityLinePushDm` −130 / 0 / +140, era −70/+80: sette metri finivano dentro la banda morta con cui la linea si tiene ferma, quindi metà dell'istruzione non arrivava mai alla figura) · **il TETTO della linea più avanzata** (`MentalityFrontLineGapPercent` 135 / 100 / 72 — senza questo la spinta di una squadra offensiva viene buttata via proprio nel momento in cui attacca, perché è lì che il blocco sbatte contro il tetto) · quanti uomini accompagnano · **quanto vale un gol a chi decide** |
+| **Pressing** | quanto lontano dalla sua posizione va un uomo a chiudere (`PressReachDm` 120 / 260 / 440) · **fin dove in campo avversario raddoppia il secondo uomo** (`PressingSecondPressPercent` 55 / 100 / 230) · **quanto stretto ci sta una volta arrivato** (`PressingStandOffPercent` 165 / 100 / 70) · la zona d'innesco di sempre |
+| **Ritmo** | quanto tiene la palla (`TempoHoldMs*` 2600-4400 / 1480-2620 / 700-1350) · quanto pesa l'opzione in avanti (`TempoForwardBias` 3 / 10 / 22) · **l'altra metà della voglia di tirare** |
+| **Ampiezza** | quanto si allarga la forma (`WidthSpreadPercent` 74 / 100 / 130) · **quanto vale l'uomo sulla fascia a chi ha la palla** (`WidthWidePassBiasDm` −110 / 0 / +130) |
+
+### «Tira appena puoi» è un'istruzione, ed è Mentalità × Ritmo
+
+La fase 6 ha lasciato aperta la cosa che un giocatore nota per prima: **sedici tiri in una partita,
+distanze 3·3·4·4·4·4·4·5·5·7·8·10·10·11·11·11 metri, nessuno oltre gli undici**, dove il calcio
+vero ha una mediana intorno ai sedici. E aveva scritto dove andava risolta: «è la fase 8 il posto
+giusto per muoverlo — *tira appena puoi* è precisamente un'istruzione — e non una manopola in più».
+
+Lo è. `ShootValue` pesa il tiro contro il passaggio, la conduzione e la spazzata **nella stessa
+valuta** da quando la causalità è invertita, e la valuta è `GoalValueDm`: quanto vale un gol
+all'uomo che decide. Adesso quel numero è del tecnico —
+`MentalityShotAppetitePercent` (82/100/122) **per** `TempoShotAppetitePercent` (83/100/122) — quindi
+una squadra offensiva e veloce prezza il gol a **1,49 volte** quello che ci mette una neutra, e una
+difensiva e lenta a **0,68**. Della DECISIONE non cambia niente: pesa le stesse opzioni nella stessa
+valuta, e a stabilire come va a finire restano la palla, i corpi davanti e il tuffo del portiere.
+Quello che si muove è **dove cade la soglia**, che è esattamente la cosa che la fase 6 ha misurato
+ferma sul dischetto.
+
+**La scelta dell'utente, presa in apertura:** niente quinto asse. «Tira appena puoi» esce dai
+quattro assi che ci sono, senza toccare formato di salvataggio, schermata tattiche, matrice dei
+contro e familiarità. Il prezzo, detto per nome: **a istruzioni neutre la distanza dei tiri non si
+muove** (è l'identità, per costruzione) — sale quando il tecnico chiede di attaccare e di giocare
+veloce. Se dopo il primo run la mediana neutra si vuole alzare comunque, la manopola è una sola
+(`GoalValueDm`), e allora **va rimisurato l'xG** (`XgPeakPermille`, che la fase 7 ha tarato su
+questo motore proprio perché tutti i tiri partono da dentro l'area — la nota è scritta lì).
+
+### Il pressing, e la domanda che le fasi 4 e 5 hanno rimandato qui
+
+`[press]` ha perso la monotonia fra basso e medio dalla fase 4, e sia la 4 che la 5 hanno scritto la
+stessa frase: **è la domanda della fase 8, va misurata lì.** Misurata, la risposta è che la domanda
+era mal posta. Quella lettura misura lo spazio lasciato a un uomo sulla palla **nel proprio terzo**,
+cioè a 70-105 m dalla porta di chi difende: con il trigger a 350 (basso) e 620 (medio) decimetri
+**la pressione è spenta in entrambi i casi**, quindi quei due numeri non possono separarsi lì, e non
+si separeranno mai finché la lettura è quella.
+
+Due conseguenze, e sono la fase:
+
+1. **La lettura giusta è DOVE si recupera il pallone**, che è poi quello che il piano chiedeva per
+   nome («pressing alto → più recuperi nell'ultimo terzo»). Lì i tre trigger si separano per
+   costruzione, e la leva che li separa davvero è il **secondo uomo** — raddoppiare in metà campo
+   avversaria è ciò che trasforma un pressing in recuperi alti, e un blocco basso che raddoppia solo
+   sul limite della propria area riprende palla in basso perché è quello che gli è stato chiesto.
+2. **Lo stand-off resta e vale**, perché `[press]` misura la distanza dell'avversario più vicino
+   ovunque sia la palla: un pressing alto si attacca addosso, un blocco basso **contiene**. La
+   monotonia fra basso e medio nella vecchia lettura non è stata «riparata» ritoccando il valore
+   neutro — sarebbe stata una taratura a occhio del percorso che il `pitch` misura, esattamente ciò
+   che questa fase non fa.
+
+### Lo strumento: `-Scenario instructions`
+
+Un modo solo di rispondere alla domanda del piano, e adesso c'è. `tools/BalanceHarness/InstructionsScenario.cs`
+gioca **le stesse partite** dodici volte — quattro assi × tre impostazioni — con l'istruzione addosso
+alla squadra di casa e quella in trasferta sempre neutra, e stampa la matrice: altezza del blocco
+senza palla, dove è stato recuperato il pallone, passaggi, quota di passaggi in avanti, cross,
+larghezza attaccando, tiri e la loro ripartizione area / limite / lontano, gol. Con
+`-InstructionsStrict` le quattro affermazioni diventano PASS/FAIL:
+
+    .\tools\balance.ps1 -Scenario instructions -InstructionsStrict
+
+Non fa parte di `-Scenario all`, per la stessa ragione del `pitch`: misura una riscrittura, non il
+bilanciamento spedito.
+
+Accanto, **sei test NUnit** (`Sim.Core.Tests/Match/InstructionsTests.cs`): l'identità a neutro,
+il determinismo, e un test per asse che asserisce **solo gli estremi con un margine** su otto seed e
+stampa il valore di mezzo — la stessa disciplina che `[press]` tiene dalla fase 3, perché sono
+misure su partite simulate e non identità aritmetiche. Le righe da leggere sono
+`[instructions-line]`, `[instructions-press]`, `[instructions-tempo]`, `[instructions-width]` e
+`[instructions-shots]`.
+
+### Le due cose che le fasi 6 e 7 avevano lasciato aperte perché costavano un golden master
+
+Le ha chiuse questa, che il golden master lo muove comunque (decisione dell'utente, presa in
+apertura):
+
+1. **La palla del gol si ferma dove ha passato la linea.** `ResolveOutOfPlay` conosce già il punto
+   di attraversamento sub-tick — lo usa per decidere se è gol — e adesso lo passa a `ScoreGoal`
+   invece di buttarlo via. La palla è morta da quel tick al calcio d'inizio e nessuno può giocarla,
+   quindi l'unica cosa che si muove è la figura.
+2. **`BallActionKind.Tackle` si chiama `Recovery`.** Il motore registra quell'azione **ogni volta
+   che qualcuno recupera il pallone**, ed è per questo che nel referto della fase 7 un portiere
+   usciva con «35 contrasti»: il conteggio era giusto, la parola no. **Il VALORE numerico non è
+   cambiato** (resta 5), quindi ogni replay salvato continua a voler dire quello che voleva dire;
+   sono cambiati il nome nel codice, la didascalia del dump, la colonna dell'analizzatore
+   (`SideMetrics.TacklesWon` → `Recoveries`) e la chiave di localizzazione
+   (`match.action.tackle` → `match.action.recovery`, en+it). `PlayerMatchStats.Tackles` è rimasto
+   com'è **di proposito**: quella riga viaggia sul filo e finisce in una colonna jsonb del server,
+   e rinominarla romperebbe i referti già salvati.
+
+### Cosa è stato toccato
+
+**Sim.Core:** `Config/BalanceConfig.cs` (il blocco delle istruzioni riscritto: quattro tabelle
+allargate, cinque nuove), `Match/Movement/MovementTactics.cs` (cinque campi nuovi + `Percent()`, la
+tabella il cui valore mancante è l'identità e non zero), `Match/Movement/MatchSimulator.cs`
+(`UpdateBlock` prende il tetto dalla mentalità, `Pressing` il secondo uomo, `PressSpot` lo stand-off,
+`ShootValue` l'appetito, `FindPass` il bias sull'uomo largo, `ScoreGoal` il punto di attraversamento,
+più il rinominato), `Match/PositionStream.cs` (`Recovery = 5`), `Match/Analysis/{MatchAnalyzer,
+MatchMetrics, MatchStatsBuilder}.cs`, `Match/MatchEngine.cs` (`Version = 10`).
+**Test:** nuovo `Sim.Core.Tests/Match/InstructionsTests.cs` (6), `DefensiveDutyTests` allineato al
+rinominato. **Harness:** nuovo `tools/BalanceHarness/InstructionsScenario.cs`, più
+`HarnessOptions`/`Program`/`PitchScenario`/`PitchDump` e `tools/balance.ps1`.
+**Client:** `MatchView/MatchCommentary.cs` + `Resources/Localization/{en,it}.json` (una chiave
+rinominata, 1118/1118 a parità).
+
+### ✅ Cosa deve girare sulla sua macchina
+
+    .\tools\build-simcore.ps1
+    dotnet test
+    .\tools\balance.ps1 -Scenario instructions -InstructionsStrict
+    .\tools\balance.ps1 -Scenario pitch -PitchMatches 200 -PitchStrict -PitchDump .\replay.html
+    .\tools\balance.ps1        # gli altri scenari NON devono muoversi di un numero
+
+**LA MISURA — 12 settembre 2026, sulla sua macchina.** Ha compilato al primo colpo:
+`Sim.Core.Tests` **406**, `Api.Tests` 240, **646 in totale in 726,6 s**; lo scenario `instructions`
+esce **0** con **4/4 check verdi** in 112,1 s a 311,4 ms per partita.
+
+**I quattro assi, misurati.** Il blocco senza palla sta a **40,5 / 46,8 / 51,1 m** (span 10,6 m
+contro i 3,0 richiesti). La palla si riconquista a **36,2 / 39,9 / 42,2 m** dalla propria porta — ed
+è **la risposta alla domanda che le fasi 4 e 5 avevano rinviato qui**, venuta fuori in ordine: la
+lettura di `[press]` (spazio lasciato a chi porta palla nel proprio terzo) non può separare low da
+medium perché a 70-105 m dalla porta il trigger è spento per entrambi, mentre **dove la palla viene
+riconquistata li separa, e lo fa**. La squadra che porta l'istruzione gioca **302 / 455 / 671**
+passaggi. E gioca **20,2 / 29,3 / 43,8** cross con un blocco larga **36,0 / 44,3 / 52,5 m**.
+
+**IL GOLDEN MASTER È `0x5EF1EDDAFA52BAFA` (engine v10)**, ripuntato in
+`SimulationDeterminismTests.cs`, `SimulationService.cs`, `docs/ops/runbook.md` e
+`docs/store/release-checklist.md` — gli ultimi due citavano ancora `0x222F723B4993ED25` della v8,
+tre fasi indietro, e ora sono aggiornati. **Quello che l'ha mosso è la palla del gol, non le
+istruzioni**: farla fermare dove ha passato la linea cambia i tick dell'esultanza, quindi ogni
+partita divergo dopo il suo primo gol — ed è per questo che `[press]` (5,68 / 5,79 / 5,16),
+`[duties]` (302 contrasti, 184 intercetti), `[keeper]` e i conteggi di causalità a piccolo N si sono
+spostati un po'. **Gli assi delle istruzioni NON l'hanno mosso e non possono**: la corsa è a tattiche
+neutre, la voce di mezzo di ogni tabella è l'identità, e `Neutral_Instructions_AreTheIdentity` è
+verde. Il che significa che **ogni ritaratura degli estremi è gratis rispetto all'hash** — che è
+esattamente la ragione per cui la fase è stata costruita così.
+
+**IL DIFETTO CHE LA MISURA HA TROVATO: la voglia di tirare è un dirupo, non una pendenza.**
+`[instructions-shots] patient 0,1 · neutral 13,1 · eager 46,4` tiri a partita. Un movimento
+combinato di −32 / +48 punti su `GoalValueDm` fa oscillare il numero di tiri di **cento volte**. Il
+centro è giusto (11,3 per una squadra, cioè i 22 della banda del `pitch` per due) e **entrambi gli
+estremi smettono di essere calcio: una squadra difensiva tira 2,2 volte e segna 0,63, una lenta 2,4
+e 0,50.** La causa non è la grandezza della leva ma la forma di quello che spinge: il confronto
+tira-o-passa in `ShootValue`/`OptionValue` è una **soglia netta** e le occasioni di questo motore
+stanno tutte addossate appena sotto, quindi pochi punti percentuali ribaltano quasi tutte le
+decisioni insieme. Le pendenze misurate, per chi la ritara: **+0,026 per punto di appetito sopra
+100, e qualcosa vicino a 0,15 sotto** — il lato che crolla è quello difensivo.
+
+**La seconda leva troppo forte:** `WidthWidePassBiasDm` a −110 / +130 dm fa costare a `wide` metà dei
+gol (**0,80 contro 1,97 del neutro**, 7,0 tiri contro 11,3) e li regala a `narrow` (1,80 gol, 16,0
+tiri) — e il check sui cross chiede uno span di 1,0 e ne ha 23,6, quindi c'è margine enorme da
+restituire. Stessa storia, più piccola, per il ritmo: `slow` a 302 passaggi segna 0,50. **Una
+tattica deve essere una scelta, non un'autolesione**, e adesso tre delle dodici impostazioni sono
+strettamente peggiori del neutro su tutto.
+
+**L'UNICO ROSSO INATTESO ERA IL TEST, NON IL MOTORE.**
+`PositionStreamTests.EveryEvent_IsStruck_AndCreditedToItsPlayer` è caduto al seed 101, minuto 52,
+perché cercava il tiro **dentro il minuto dell'evento**: un'occasione viene archiviata quando si
+**risolve** (`RecordSave` / `RecordMiss`, al tick della risoluzione) e il tiro quando **parte dal
+piede** (`RecordStruckAt`, al tick del tiro), quindi una palla ancora in volo a cavallo del confine
+di minuto mette i due in minuti diversi. Il motore ha ragione su entrambi — l'occasione appartiene
+al minuto in cui è diventata qualcosa, il tiro al minuto in cui è stato battuto — quindi la finestra
+ammette ora esattamente un volo di anticipo (`StrikeLeadFrames` = `ShotResolveTicks` in frame + 2,
+circa 3,5 s) e nient'altro cambia. È un buco latente della fase 6 su cui solo le traiettorie nuove
+della fase 8 potevano atterrare.
+
+**LA RITARATURA, fatta lo stesso giorno — e gratis rispetto al golden master, per costruzione.**
+`MentalityShotAppetitePercent` e `TempoShotAppetitePercent` passano da 82/83-100-122 a **96/100/106**
+(estremi combinati 0,92x e 1,12x invece di 0,68x e 1,49x, mirati sui **9 / 13 / 18** tiri che le
+pendenze misurate suggeriscono), e `WidthWidePassBiasDm` da -110/+130 a **-55/+65 dm**. Non si è
+mossa nessun'altra cosa: nessuna voce di mezzo, nessuna riga del simulatore — quindi
+`0x5EF1EDDAFA52BAFA` regge e ogni numero del `pitch` con lui. **Sono stime, non misure**: le
+pendenze vengono da tre punti e il lato che crolla è stimato da uno di essi che era già saturo
+(0,1 tiri vuol dire "non tira mai", e il logaritmo lì non dice più niente). **È il suo run che
+decide:** `[instructions-shots]` deve leggere qualcosa come 9 / 13 / 18 invece di 0,1 / 13,1 / 46,4,
+la matrice deve restare **4/4** (il check sui cross chiede uno span di 1,0 e dovrebbe averne ancora
+una dozzina), e nessuna impostazione dovrebbe essere strettamente peggiore del neutro su tutto. Se
+i tiri restano un dirupo anche a ±6 punti, allora la leva sbagliata non è la tabella ma la soglia:
+il passo successivo è dare un bordo morbido al confronto tira-o-passa, non stringere ancora.
+
+**ANCORA DA FARE:** `-Scenario pitch -PitchMatches 200 -PitchStrict` riletto contro la stampa della
+fase 7 (gol 2,66, tiri 22,0, passaggi 895,8, 20/20, 25/25, 320,4 ms) — gira a tattiche neutre ma la
+palla del gol lo muove un po', quindi la domanda è se resta **dentro le bande**, non se è identico;
+`.\tools\balance.ps1` 28/28; la ritaratura di appetito e ampiezza qui sopra; e **l'occhio** —
+`replay.html` per vedere dove si ferma la palla del gol, e Unity con offensiva-veloce contro
+difensiva-lenta.
+
+**I replay salvati in v9 non sono più disegnabili**: è previsto, e il client li rifiuta da solo
+perché confronta `MatchEngine.Version`.
+
+### Aperto, per scelta
+
+- **A istruzioni neutre la distanza dei tiri è quella della fase 6**, per costruzione. Sale con
+  Mentalità e Ritmo. Se la si vuole alzare anche al centro è una riga (`GoalValueDm`) e un giro di
+  `pitch`, con l'xG da rimisurare dietro.
+- **Il bias sull'uomo largo paga anche nella propria metà campo.** È l'ampiezza, ed è quello che
+  l'ampiezza vuol dire; ma un'ala pagata 13 metri di progressione mentre la palla è sulla linea dei
+  difensori è la cosa che la misura potrebbe dire di restringere al terzo offensivo.
+- **La monotonia bassa/media di `[press]` resta persa in quella lettura**, e adesso si sa perché
+  (il trigger è spento per entrambe lì). La lettura che li separa è quella dei recuperi, ed è
+  quella che il nuovo scenario tiene.
+- **Il secondo uomo a pressing alto arriva a 2,3 volte la profondità neutra.** È la leva più forte
+  della fase e la prima da guardare se il `pitch` di una squadra a pressing alto dovesse uscire di
+  banda.
 
 ---
 

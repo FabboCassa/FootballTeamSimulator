@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using Fts.BalanceHarness;
 using Sim.Core.Config;
 
@@ -30,6 +30,12 @@ if (all || options.Scenario == "world") WorldScenario.Run(options, config, check
 // is a long way from football. Folding that into the default run would turn every balance run
 // red and hide a real regression in the other five. Ask for it by name.
 if (options.Scenario == "pitch") PitchScenario.Run(options, config, checks);
+
+// Nor is this one, and for the same reason plus one of its own: the `instructions` scenario plays
+// the same fixtures twelve times over to isolate one axis at a time (engine phase 8), which is a
+// measurement of the MOVEMENT layer and has nothing to say about the shipped balance. It answers
+// the only question phase 8 asks - when the coach asks for something, does the picture do it?
+if (options.Scenario == "instructions") InstructionsScenario.Run(options, config, checks);
 
 if (checks.Count == 0)
 {

@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using Sim.Core.Config;
 
 namespace Sim.Core.Match.Analysis
@@ -429,7 +429,7 @@ namespace Sim.Core.Match.Analysis
                             ClearMove();
                             break;
 
-                        case BallActionKind.Tackle:
+                        case BallActionKind.Recovery:
                             {
                                 if (man != null)
                                 {

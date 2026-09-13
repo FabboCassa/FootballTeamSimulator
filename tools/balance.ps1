@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Balance harness (Phase 10.1) - measures the game's balance by simulating it.
 
@@ -30,13 +30,20 @@
                   printed against the band real football produces. Phase 0 of the match
                   engine rework; see docs/engine/MATCH_ENGINE_PLAN.md.
 
+      instructions does the coach's tactic actually DO anything on the pitch? One axis at
+                  a time, three settings of it, the SAME fixtures each time, the home side
+                  carrying the instruction and the away side neutral. Reads how high the
+                  block stood, where the ball was won back, how quickly it was moved and
+                  how much of it went down the touchline. Phase 8 of the match engine
+                  rework - the phase that is not finished until these numbers move.
+
     Nothing here talks to a server or a database: it runs Sim.Core and the server's
     rating maths in-process, so it is safe to run any time and it replays exactly for
     a given seed.
 
 .PARAMETER Scenario
-    all | tactics | economy | difficulty | ladder | world | pitch. Default all.
-    "pitch" is NOT included in "all" - ask for it by name.
+    all | tactics | economy | difficulty | ladder | world | pitch | instructions. Default all.
+    "pitch" and "instructions" are NOT included in "all" - ask for them by name.
 
 .PARAMETER PitchMatches
     Matches measured by the pitch scenario. Default 100 (the harness default).
@@ -46,6 +53,12 @@
 
 .PARAMETER PitchDump
     Write one measured match out as a self-contained HTML replay at this path.
+
+.PARAMETER InstructionMatches
+    Matches per setting of each axis in the instructions scenario. Default 30 (the harness default).
+
+.PARAMETER InstructionsStrict
+    Turn the four instruction claims into PASS/FAIL checks.
 
 .PARAMETER Seed
     Root seed. Default 20260803. Same seed = same numbers.
@@ -59,17 +72,20 @@
     .\tools\balance.ps1 -Long
     .\tools\balance.ps1 -Scenario pitch
     .\tools\balance.ps1 -Scenario pitch -PitchMatches 200 -PitchDump .\replay.html
+    .\tools\balance.ps1 -Scenario instructions -InstructionsStrict
 #>
 
 [CmdletBinding()]
 param(
-    [ValidateSet("all", "tactics", "economy", "difficulty", "ladder", "world", "pitch")]
+    [ValidateSet("all", "tactics", "economy", "difficulty", "ladder", "world", "pitch", "instructions")]
     [string]$Scenario = "all",
     [long]$Seed = 20260803,
     [switch]$Long,
     [int]$PitchMatches = 0,
     [switch]$PitchStrict,
-    [string]$PitchDump
+    [string]$PitchDump,
+    [int]$InstructionMatches = 0,
+    [switch]$InstructionsStrict
 )
 
 $ErrorActionPreference = "Stop"
@@ -98,6 +114,8 @@ if ($Long) { $arguments += "--long" }
 if ($PitchMatches -gt 0) { $arguments += @("--pitch-matches", $PitchMatches) }
 if ($PitchStrict) { $arguments += "--pitch-strict" }
 if ($PitchDump) { $arguments += @("--pitch-dump", $PitchDump) }
+if ($InstructionMatches -gt 0) { $arguments += @("--instruction-matches", $InstructionMatches) }
+if ($InstructionsStrict) { $arguments += "--instructions-strict" }
 
 Write-Host ""
 Write-Host "Running: dotnet $($arguments -join ' ')" -ForegroundColor Cyan

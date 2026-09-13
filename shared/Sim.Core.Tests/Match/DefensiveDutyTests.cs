@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using NUnit.Framework;
 using Sim.Core.Config;
 using Sim.Core.Domain;
@@ -234,7 +234,7 @@ namespace Sim.Core.Tests.Match
             for (ulong seed = 20; seed < 26; seed++)
             {
                 MatchMetrics m = analyzer.Measure(Play(seed))!;
-                tackles += m.Home.TacklesWon + m.Away.TacklesWon;
+                tackles += m.Home.Recoveries + m.Away.Recoveries;
                 interceptions += m.Home.Interceptions + m.Away.Interceptions;
                 n++;
             }

@@ -41,7 +41,7 @@ namespace Fts.MatchView
                 case BallActionKind.LongBall: return "match.action.longball";
                 case BallActionKind.Cross: return "match.action.cross";
                 case BallActionKind.Dribble: return "match.action.dribble";
-                case BallActionKind.Tackle: return "match.action.tackle";
+                case BallActionKind.Recovery: return "match.action.recovery";
                 case BallActionKind.Interception: return "match.action.interception";
                 case BallActionKind.Clearance: return "match.action.clearance";
                 case BallActionKind.Shot: return "match.action.shot";

@@ -16,7 +16,15 @@ namespace Sim.Core.Match
         LongBall = 2,
         Cross = 3,
         Dribble = 4,
-        Tackle = 5,
+
+        /// <summary>
+        /// The ball WON BACK. Called <c>Tackle</c> until engine phase 8: the simulator records
+        /// this whenever anybody recovers the ball — a tackle, an interception he then keeps, a
+        /// keeper gathering a cross — so the old name made a goalkeeper's report read "35
+        /// tackles". The VALUE is unchanged, so every stored replay still means what it meant;
+        /// only the word, the caption and the commentary key moved.
+        /// </summary>
+        Recovery = 5,
         Interception = 6,
         Clearance = 7,
         Shot = 8,

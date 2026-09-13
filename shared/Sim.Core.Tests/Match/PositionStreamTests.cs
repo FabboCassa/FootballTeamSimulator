@@ -56,6 +56,19 @@ namespace Sim.Core.Tests.Match
         private static int StrikeSlackFrames =>
             Cfg.FramesPerMinute + Cfg.ShotResolveTicks / Cfg.StreamTicksPerFrame + 2;
 
+        /// <summary>
+        /// How far BEFORE the start of its minute an event's STRIKE can be. A chance is filed when
+        /// it is settled - the keeper holds it, it runs dead, it goes in - and the strike is filed
+        /// when it left his foot. A ball still in flight across a minute boundary therefore puts
+        /// the two in different minutes, and the scoresheet is right about both: the chance
+        /// belongs to the minute it came to something, the strike to the minute it was hit. So the
+        /// allowance is exactly how long a strike may be in the air, and no longer. Engine rework
+        /// phase 8 exposed it: the ball now rests where it crossed the line, every match after
+        /// its first goal runs differently, and a strike finally landed on a boundary.
+        /// </summary>
+        private static int StrikeLeadFrames =>
+            Cfg.ShotResolveTicks / Cfg.StreamTicksPerFrame + 2;
+
         /// <summary>Frames a strike may take to become a goal, a save or a ball out of play.</summary>
         private static int ShotResolveFrames =>
             StrikeSlackFrames + Cfg.ShotResolveTicks / Cfg.StreamTicksPerFrame + 2;
@@ -161,7 +174,8 @@ namespace Sim.Core.Tests.Match
                     // and carry a Goal in his name with no Shot of his own before it — which the
                     // engine could not produce at all while the score belonged to a timeline.
                     Assert.That(
-                        stream.Actions.Any(a => a.Tick >= tick && a.Tick <= tick + StrikeSlackFrames
+                        stream.Actions.Any(a => a.Tick >= tick - StrikeLeadFrames
+                                                && a.Tick <= tick + StrikeSlackFrames
                                                 && a.Home == homeShoots && a.Slot == slot
                                                 && (a.Kind == BallActionKind.Shot
                                                     || (e.Type == MatchEventType.Goal

@@ -11,6 +11,7 @@ Read ARCHITECTURE.md (design) and ROADMAP.md (plan + current status via checkbox
 - Language: chat in Italian, all code/comments/docs in English.
 
 ## Environment facts
+- **Engine phase 8 is WRITTEN and MEASURED ON HIS MACHINE (2026-09-12): the instructions count, and two of them count too much.** `Sim.Core.Tests` **406**, `Api.Tests` 240, **646 total**, in 726.6 s. **Golden master is now `0x5EF1EDDAFA52BAFA` (engine v10)**, re-pinned in `SimulationDeterminismTests.cs`, `SimulationService.cs`, `docs/ops/runbook.md` and `docs/store/release-checklist.md` (the last two were still on v8's `0x222F723B4993ED25` and are now current). **What moved it is the goal ball resting where it crossed the line** — that changes the celebration ticks, so every match diverges after its first goal, which is also why `[press]`, `[duties]`, `[keeper]` and the small-N causality counts all drifted a little. **The four instruction axes did NOT move it and CANNOT**: the determinism run is on neutral tactics and every instruction table reads its middle entry as the identity, so **retuning an extreme is free of the hash** — the invariant is doing exactly the job it was built for, and `Neutral_Instructions_AreTheIdentity` is green. **`-Scenario instructions -InstructionsStrict` → 4/4 PASS**: block height 40.5/46.8/51.1 m, ball won back 36.2/39.9/42.2 m from its own goal, passes 302/455/671, crosses 20.2/29.3/43.8. **THE OPEN DEFECT — the shot appetite is a cliff, not a slope:** `[instructions-shots] patient 0.1 · neutral 13.1 · eager 46.4` a match. A ±32/+48 pp move on `GoalValueDm` swings shots by 100x, because the shoot-vs-pass comparison is a hard threshold with the opportunities tightly clustered just under it — so a defensive side takes 2.2 shots and scores 0.63, and a slow one 2.4 and 0.50. **Second over-strong lever:** `WidthWidePassBiasDm` at -110/+130 dm makes `wide` cost half your goals (0.80 against 1.97 neutral, 7.0 shots against 11.3) while the crosses check needs a span of 1.0 and has 23.6 — enormous headroom to give back. **The one unexpected red was the TEST, not the engine:** `PositionStreamTests.EveryEvent_IsStruck_AndCreditedToItsPlayer` looked for the strike inside the event's own minute, but a chance is filed when it is SETTLED and the strike when it left his foot, so a ball in flight over a minute boundary puts them in different minutes; the window now allows exactly one flight (`StrikeLeadFrames`) of lead, and the engine is right about both. **Still owed: the `pitch` scenario** — it runs at neutral tactics but the goal-ball change does move it a little, so its 20/20 and 25/25 need re-reading against the phase-7 print (goals 2.66, shots 22.0, passes 895.8, 320.4 ms/match). **RETUNED THE SAME DAY, and it is free of the golden master by construction:** `MentalityShotAppetitePercent` and `TempoShotAppetitePercent` both go 82/83-100-122 → **96/100/106** (combined extremes 0.92x and 1.12x instead of 0.68x and 1.49x — aimed at roughly **9 / 13 / 18** shots off the measured slopes), and `WidthWidePassBiasDm` -110/+130 → **-55/+65 dm**. Nothing else moved: not a middle entry, not a line of the simulator, so `0x5EF1EDDAFA52BAFA` and every `pitch` number stand. **HIS NEXT RUN decides it**: `[instructions-shots]` must read something like 9 / 13 / 18 rather than 0.1 / 13.1 / 46.4, the `instructions` matrix must keep **4/4** (the crosses check wants a span of 1.0 and should still have ~12), and no setting should be strictly worse than neutral at everything.
 - **Current test count: 639 green** (engine phase 7, VERIFIED on his machine 2026-09-11 in 579.2 s: `Sim.Core.Tests` **399** = the 375 of phase 6 plus the 24 `PerformanceDataTests`, + Api.Tests 240). Golden master **`0xB0052E0B3942206A`** (engine v9, UNCHANGED by phase 7 — the performance data is read off a finished match and is deliberately outside the hash). His first phase-7 run read 637 tests, 636 green — the red was the rating calibration, now corrected, and the 23rd test pins the correction. **The golden master did NOT move and must not: `0xB0052E0B3942206A`, verified on his machine 2026-09-11 with the performance data in.**
 - **Current VERIFIED test count: 615 green** (engine phase 6, VERIFIED on his machine 2026-09-11 in 486.2 s) (`Sim.Core.Tests` **375** — the 364 of phase 5 plus the 11 `CausalityTests` — + `Api.Tests` 240), golden master **`0xB0052E0B3942206A`** (engine v9). His 8 September run read 607/615 on an engine that still carried a stale `BalanceConfig`; see the current position. The line below is phase 5's, kept for its history.
 - User machine: Windows, .NET 10 SDK, Unity 6.3 LTS (6000.3.17f1), project folder `C:\Users\Fabbo\FootballTeamSimulator`.
@@ -20,7 +21,94 @@ Read ARCHITECTURE.md (design) and ROADMAP.md (plan + current status via checkbox
   `dotnet test shared/Sim.Core.Tests/Sim.Core.Tests.csproj --logger "console;verbosity=detailed"`
 - Current test count (phase 5, verified): **604 green** (Sim.Core.Tests **364** — the 355 of phase 4 plus the 9 `RefereeTests` of phase 5 — + Api.Tests 240) in 518.5 s, golden master **0x222F723B4993ED25** (engine v8, engine rework phase 5 + the wall fix 5c, verified on the user's machine 2026-09-06 in 577.6 s and identical digit for digit to the container's .NET 8 value; the value BEFORE the wall fix was 0x436E4440B6350A7B, also verified on his machine, and the wall fix invalidated it; phase 4's was 0xF8BE4A32C28421A1 on v7, verified on his machine 2026-09-05 and identical digit for digit to the container's .NET 10 value; phase 3's was 0xABC7B41DC6F258C2 on engine v6), and `dotnet test` takes ~6.3 minutes (378.8 s: Sim.Core.Tests 310.7 s + Api.Tests 378.1 s in parallel). The paragraph below is the historical note it replaced: 212 green (through 8.4a, +4 OnlineSeasonTick tests over 6.10a's 208). Golden master 0xCDEA5A2F7B9E5CF6. **STALE as of 13.1: the golden master changes with engine v3 — see the current position below.** Server Api.Tests: 70 green (through 8.5a, +11 LeagueAuctionTests over 8.4a's 59) + DevSeedTests (5) from the dev-seed tooling; **8.6 (live match control) DONE [x] — 8.6a (server) 85/85 green + 8.6b (Unity client) + dev "simulate the opponent" tooling Play-mode VERIFIED & ACCEPTED by the user (docker `up --build` healthy, the live match kicks off and the bot opponent joins/subs from the live screen). `[server-determinism] 0xCDEA5A2F7B9E5CF6` unchanged, NO Sim.Core change → 212 Sim.Core + golden master stand, no save bump. Still standing: commit `Migrations/AddLiveMatch*` for a clean Postgres/docker deploy (the running dev DB already has `live_matches`). Client: Season "▶ Live" launch, ~1s poll, MatchRenderer synced to KickoffUtc, InMatchPanel subs+instructions → POST /change, finish/leave (new .cs: LiveMatchView, OnlineLiveMatchScreenPresenter). DEV TOOLING (test the live match solo): server `POST /internal/dev/leagues/{id}/live/{fixtureId}/bot` (`DevSeedService.BotLiveAsync` — the fixture's @dev.local bot opens/joins + optionally a legal `LineupPlan.From(BestEleven)` sub), client dev row "Bot: entra"/"Bot: sostituzione" (gated by `DevFlags.OnlineTestTools`); `DevSeedService` ctor now takes `ILiveMatchService` (DI-resolved → the 5 DevSeedTests stay green). NEXT: Phase 9 (public ranked mode) — 8.7 (private season end) is DONE [x] and 🏁 Phase 8 is COMPLETE. **8.7 summary:** SERVER-ONLY logic, NO Sim.Core change, NO migration (reuses `LeagueStatus.Completed`=2 + existing columns); `dotnet test Api.Tests` **92/92 green**, `[server-determinism] 0xCDEA5A2F7B9E5CF6` unchanged. `ResolveNextRoundAsync` flips the league to Completed on the last matchday; `GET /leagues/{id}/season/summary` → final table + champion / top scorer (aggregated from the stored MatchReport goal events) / best defence / wooden spoon; `POST /leagues/{id}/season/new` (creator, Completed only) = FULL reset → deletes fixtures/lineups/trainings/bids/auctions/live, un-assigns clubs, re-equalises the developed squads + re-seeds 25M budgets, resets condition to neutral, reopens the draft (players KEEP their developed ability). Client 8.7b: `SeasonSummaryDto`/`SeasonAwardDto`/`TopScorerDto` + `GetSeasonSummaryAsync`/`StartNewSeasonAsync`, new `Views/OnlineSeasonEndView` + `Presenters/OnlineSeasonEndScreenPresenter` (named `Online*` because `SeasonEndView`/`season_end.*` is the SP 2.7 screen; the online one owns `seasonend.*`), opened by a "Bilancio stagione" button that appears on the Season screen once complete; loc en+it 612/612 at parity. The user's monthly-public-league vision (per-player rating → matchmaking by level → auto-enrol with opt-out → 1-week break between seasons) is recorded as the Phase 9 direction.**
 
-## Current position — 🏁 ENGINE REWORK PHASE 7 CLOSED AND VERIFIED (2026-09-11): the match can be READ
+## Current position — ✍️ ENGINE REWORK PHASE 8 WRITTEN (2026-09-11): the instructions COUNT
+
+**WRITTEN IN A CONTAINER THAT COULD NOT COMPILE OR MEASURE ANYTHING** — the Ubuntu archive answers
+403 through the agent proxy (no `dotnet-sdk-8.0`, no NUnit stub, no harness) and npm and pypi are
+outside this session's allowlist too; the device VM's Plan9 mount is still broken by the 8 September
+Windows update, so `device_bash` was unusable and every file was read and written through the
+staging tools. **His first `dotnet test` is what tells the truth.**
+
+**WHAT THE PHASE DID INSTEAD OF MEASURING: it picked an architecture that cannot break anything
+already measured.** The middle entry of every instruction table is the NEUTRAL setting, and the
+neutral setting is the IDENTITY — additive tables read 0 there, percentage tables read 100, and
+every site spends one as `x * 100 / 100` or `x + 0`, exact in integers. So **the twenty `pitch`
+readings cannot move** (that scenario runs at neutral tactics), **`balance.ps1` cannot move a
+digit**, and **phase 6's whole calibration argument is untouched**.
+`InstructionsTests.Neutral_Instructions_AreTheIdentity` nails it: a match with NO tactics and the
+same match with the ALL-NEUTRAL tactic hash the same, bit for bit.
+
+**THE FOUR AXES ARE NOW LEVERS.** Mentality = the height the line holds (−130/0/+140 dm, widened
+from −70/+80 because seven metres fell inside the deadband the line holds itself to) + the CEILING
+on the most advanced line (135/100/72% of `FrontLineGoalGapDm` — without it an attacking side's
+push is thrown away exactly when it attacks) + bodies forward + **what a goal is worth**. Pressing =
+reach (120/260/440 dm) + **how deep in the other half a SECOND man doubles up** (55/100/230%) +
+**how tight he stands** (165/100/70%). Tempo = how long he holds it + the forward bias (3/10/22) +
+**the other half of the shot appetite**. Width = the spread (74/100/130%) + **what the man on the
+touchline is worth to the player on the ball** (−110/0/+130 dm — and a cross in this engine IS a
+pass from out there near the goal).
+
+**"SHOOT ON SIGHT" IS AN INSTRUCTION, AND IT IS MENTALITY × TEMPO** (the user's decision up front:
+NO fifth axis, so no save bump, no tactics screen, no counter-matrix). Attacking+fast prices a goal
+at **1.49×** a neutral side, defensive+slow at **0.68×**. The decision is unchanged — he still
+weighs the shot against the pass, the run and the clearance in one currency — but where the
+threshold falls moves, which is the thing phase 6 measured stuck on the penalty spot (sixteen shots,
+none beyond eleven metres). **At neutral the shot distance does NOT move: that is the identity.**
+
+**THE PRESSING QUESTION PHASES 4 AND 5 DEFERRED TO HERE, answered rather than tuned.** `[press]`
+measures the space left to a carrier IN HIS OWN THIRD — 70-105 m from the defending side's goal —
+and with the trigger at 350 (low) and 620 (medium) dm **the press is OFF for both there**, so those
+two columns cannot separate in that reading. The reading that separates them is **where the ball is
+won back** (the plan's own words: "pressing alto → più recuperi nell'ultimo terzo") and the lever is
+the second man. The neutral value was NOT retuned to force the old reading: that would be tuning the
+path the `pitch` measures, by eye.
+
+**THE INSTRUMENT: `.\tools\balance.ps1 -Scenario instructions -InstructionsStrict`** — plays the
+SAME fixtures twelve times (four axes × three settings), instruction on the home side, away side
+neutral, and prints the matrix (block height, where the ball was won, passes, forward share,
+crosses, attacking width, shots box/edge/long, goals). Not part of `-Scenario all`, same reason as
+`pitch`. Plus **six NUnit tests** that assert only the EXTREMES with a margin over eight seeds and
+print the middle — these are measurements over simulated matches, not identities, and they are
+flagged as such in the file. Lines to read: `[instructions-line]`, `[instructions-press]`,
+`[instructions-tempo]`, `[instructions-width]`, `[instructions-shots]`.
+
+**AND THE TWO THINGS PHASES 6 AND 7 LEFT OPEN BECAUSE THEY COST A GOLDEN MASTER** (the user chose
+both): the **goal ball now rests where it crossed the line** instead of dead centre — the sub-tick
+crossing point already exists (it is how the goal is judged) and is now handed to `ScoreGoal`
+— and **`BallActionKind.Tackle` is now `Recovery`**, because the engine records it on every ball
+WON BACK, which is why a keeper's report read "35 tackles". **The numeric value stays 5**, so stored
+replays still mean what they meant; the name, the dump caption, `SideMetrics.TacklesWon` →
+`Recoveries` and the loc key `match.action.tackle` → `match.action.recovery` (en+it 1118/1118)
+moved. `PlayerMatchStats.Tackles` is deliberately NOT renamed: it travels on the wire into a jsonb
+column and renaming it would break stored reports. **Engine v10.**
+
+**⚠️ THE GOLDEN MASTER MOVED AND COULD NOT BE COMPUTED HERE.** The goal ball's resting frames are in
+the stream the hash covers. `SimulationDeterminismTests` is still pinned to `0xB0052E0B3942206A`
+(engine v9), so **TWO REDS IN `Api.Tests` ARE EXPECTED** and they PRINT the new value — paste it and
+it gets re-pinned in `SimulationDeterminismTests.cs`, `SimulationService.cs`, `docs/ops/runbook.md`,
+`docs/store/release-checklist.md`, plus here and ROADMAP.md. **v9 replays are no longer drawable**;
+the client rejects them itself against `MatchEngine.Version`.
+
+**NEW:** `Sim.Core.Tests/Match/InstructionsTests.cs` (6), `tools/BalanceHarness/InstructionsScenario.cs`.
+**CHANGED:** `Config/BalanceConfig.cs` (the instruction block rewritten: four tables widened, five
+new), `Match/Movement/MovementTactics.cs`, `Match/Movement/MatchSimulator.cs`,
+`Match/PositionStream.cs`, `Match/Analysis/{MatchAnalyzer,MatchMetrics,MatchStatsBuilder}.cs`,
+`Match/MatchEngine.cs` (Version = 10), `Sim.Core.Tests/Match/DefensiveDutyTests.cs`,
+`tools/BalanceHarness/{HarnessOptions,Program,PitchScenario,PitchDump}.cs`, `tools/balance.ps1`,
+`client/.../MatchCommentary.cs` + `Resources/Localization/{en,it}.json`. Everything but the two
+client files lives in `shared/` and `tools/`, so **only the two new files need a Unity `.meta`** —
+and they are not in `client/`, so none do.
+
+✅ **What to run:** `.\tools\build-simcore.ps1` → `dotnet test` (expect **405** in
+`Sim.Core.Tests`, **645** total, + the two expected golden-master reds) →
+`.\tools\balance.ps1 -Scenario instructions -InstructionsStrict` →
+`.\tools\balance.ps1 -Scenario pitch -PitchMatches 200 -PitchStrict -PitchDump .\replay.html`
+(**must reproduce every phase-7 number — a moved `pitch` number means the identity invariant is
+broken**) → `.\tools\balance.ps1` (28/28 unchanged). Then open `replay.html` and look at **where
+the shots come from** and **where the goal ball rests**, and in Unity play an attacking-fast tactic
+against a defensive-slow one.
+
+### Previous position — 🏁 ENGINE REWORK PHASE 7 CLOSED AND VERIFIED (2026-09-11): the match can be READ
 
 **VERIFIED BY THE USER.** `dotnet test` → **639/639 green, zero red, in 579.2 s** (`Sim.Core.Tests`
 **399** — the 375 of phase 6 plus the 24 `PerformanceDataTests` — + `Api.Tests` **240**).

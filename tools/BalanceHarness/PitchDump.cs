@@ -323,7 +323,8 @@ internal static class PitchDump
       at 6.0 and moves with what he did &mdash; and his work off the ball is paid on the difference
       from what THE MEN OF HIS OWN LINE managed, not on the raw count: a forward recovers fewer balls
       and loses more of them than a centre-back because that is what the job is.
-      <b>recov</b> is tackles won: in this engine that is a ball RECOVERED rather than a tackle as
+      <b>recov</b> is balls WON BACK &mdash; which is what the engine has always counted, and since
+      engine phase 8 what the action in the feed is called too: a recovery rather than a tackle as
       football counts one, which is why a goalkeeper's figure is large &mdash; he picks up
       everything that runs into his box.</p>
   </section>
@@ -338,7 +339,7 @@ const OWNER = [__OWNER__];
 const SHIRTS = [[__HOME_SHIRTS__], [__AWAY_SHIRTS__]];
 const NAMES = [[__HOME_PLAYERS__], [__AWAY_PLAYERS__]];
 const ACTIONS = [__ACTIONS__];
-const KINDS = ["kick-off","pass","long ball","cross","dribble","tackle","interception","clearance",
+const KINDS = ["kick-off","pass","long ball","cross","dribble","recovery","interception","clearance",
                "shot","save","GOAL","miss","corner","throw-in","goal kick","free kick",
                "OFFSIDE","foul","yellow card","RED CARD","PENALTY","half-time","blocked"];
 const MARKS = [[__HOME_MARKS__], [__AWAY_MARKS__]];

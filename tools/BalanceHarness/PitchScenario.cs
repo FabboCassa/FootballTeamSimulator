@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using Sim.Core.Config;
 using Sim.Core.Domain;
 using Sim.Core.Generation;
@@ -200,7 +200,7 @@ internal sealed class PitchTotals
 {
     private double _goals, _shots, _onTarget, _passes, _completed, _longBalls, _crosses;
     private double _inBox, _edge, _long, _saves, _shotGoals;
-    private double _dribbles, _clearances, _tackles, _interceptions;
+    private double _dribbles, _clearances, _recoveries, _interceptions;
     private double _throwIns, _corners, _goalKicks, _offsides, _fouls;
     private double _yellows, _reds, _penalties;
     private double _homePossession, _loose, _homeThird, _middleThird, _awayThird, _ticks;
@@ -230,7 +230,7 @@ internal sealed class PitchTotals
         _crosses += h.Crosses + a.Crosses;
         _dribbles += h.Dribbles + a.Dribbles;
         _clearances += h.Clearances + a.Clearances;
-        _tackles += h.TacklesWon + a.TacklesWon;
+        _recoveries += h.Recoveries + a.Recoveries;
         _interceptions += h.Interceptions + a.Interceptions;
         _throwIns += m.TotalThrowIns;
         _corners += m.TotalCorners;
@@ -293,7 +293,7 @@ internal sealed class PitchTotals
                           $"not off a strike {Fmt.N((_goals - _shotGoals) / n, 2)}");
         Console.WriteLine($"    long balls {Fmt.N(_longBalls / n, 1)}   crosses {Fmt.N(_crosses / n, 1)}   " +
                           $"dribbles {Fmt.N(_dribbles / n, 1)}   clearances {Fmt.N(_clearances / n, 1)}");
-        Console.WriteLine($"    tackles won {Fmt.N(_tackles / n, 1)}   interceptions {Fmt.N(_interceptions / n, 1)}");
+        Console.WriteLine($"    balls won back {Fmt.N(_recoveries / n, 1)}   interceptions {Fmt.N(_interceptions / n, 1)}");
         Console.WriteLine($"    throw-ins {Fmt.N(_throwIns / n, 1)}   corners {Fmt.N(_corners / n, 1)}   " +
                           $"goal kicks {Fmt.N(_goalKicks / n, 1)}   offsides {Fmt.N(_offsides / n, 1)}   " +
                           $"fouls {Fmt.N(_fouls / n, 1)}");

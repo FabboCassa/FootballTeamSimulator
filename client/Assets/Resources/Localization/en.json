@@ -153,7 +153,7 @@
   "match.action.longball": "{0} goes long for {1}",
   "match.action.cross": "{0} whips it in for {1}",
   "match.action.dribble": "{0} takes his man on",
-  "match.action.tackle": "{0} wins the tackle",
+  "match.action.recovery": "{0} wins the ball back",
   "match.action.interception": "{0} reads it and intercepts",
   "match.action.clearance": "{0} clears the danger",
   "match.action.shot": "{0} shoots!",

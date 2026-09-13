@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using NUnit.Framework;
 using Sim.Core.Config;
@@ -406,7 +406,7 @@ namespace Sim.Core.Tests.Match
             PositionStream s = NewStream();
 
             Hold(s, 50, true, 9);
-            Act(s, 52, BallActionKind.Tackle, false, 4);
+            Act(s, 52, BallActionKind.Recovery, false, 4);
 
             MatchStats stats = Build(s);
 

@@ -1392,6 +1392,14 @@ namespace Sim.Core.Match.Movement
         ///
         /// He does not have to be RIGHT about the odds. The outcome is settled by the ball, the
         /// keeper's dive and the posts, and the gap between the two is what a poor finisher is.
+        ///
+        /// AND WHAT A GOAL IS WORTH IS THE COACH'S (engine phase 8). Mentality and Tempo
+        /// multiplied together price it: attacking and fast at about half again what a neutral
+        /// side prices it, defensive and slow at two thirds. Nothing about the DECISION changes —
+        /// he still weighs it against the pass, the run and the clearance in one currency, and
+        /// the ball still settles it — but where the threshold falls moves, and the threshold is
+        /// the thing phase 6 measured as stuck on the penalty spot. "Have a go" is an
+        /// instruction; this is what the instruction does.
         /// </summary>
         private int ShootValue(int side, int slot)
         {
@@ -1401,8 +1409,9 @@ namespace Sim.Core.Match.Movement
             int goalX = U.Units(MovementGeometry.AttackedGoalX(side == 0));
             if (U.Distance(_ball.X, _ball.Y, goalX, U.CenterYU) > _shootRangeU) return NoOption;
 
+            int goalValue = _cfg.GoalValueDm * _tactics[side].ShotAppetitePercent / 100;
             int odds = BallSkill.GoalOddsPermille(ShotQuality(side, slot), _cfg);
-            return BallSkill.OptionValue(odds, _cfg.GoalValueDm, TurnoverCostDm(side, _ball.X), _vision[k]);
+            return BallSkill.OptionValue(odds, goalValue, TurnoverCostDm(side, _ball.X), _vision[k]);
         }
 
         /// <summary>
@@ -1522,6 +1531,7 @@ namespace Sim.Core.Match.Movement
             bool home = side == 0;
             int dir = MovementGeometry.Direction(home);
             int bias = _tactics[side].ForwardBias;
+            int widePassBiasDm = _tactics[side].WidePassBiasDm;
 
             int bestValue = int.MinValue;
             int tolerance = _controlU + U.Units(20);
@@ -1579,9 +1589,18 @@ namespace Sim.Core.Match.Movement
 
                     if (completion < _cfg.MinPassCompletionPermille) continue;
 
+                    // WIDTH, PRICED (engine phase 8). A team-mate standing in a wide channel is
+                    // worth something extra to a side told to play wide and something less to one
+                    // told to play through the middle — in the same decimetres of forward progress
+                    // everything else here is quoted in. It is the lever behind "wide → more
+                    // crosses", because a cross in this engine IS a pass from a wide position near
+                    // the goal (see IsCross): make the wide man the better option often enough and
+                    // the crosses follow from the football rather than from a counter. Zero at
+                    // neutral, so the price is exactly the one phase 4 settled on.
                     int gainDm = dir * (tx - _px[k]) / U.Scale * bias / 10;
+                    int wide = widePassBiasDm != 0 && IsWideChannel(ty) ? widePassBiasDm : 0;
                     int value = BallSkill.OptionValue(
-                        completion, gainDm + _cfg.PossessionValueDm, TurnoverCostDm(side, tx), vision);
+                        completion, gainDm + wide + _cfg.PossessionValueDm, TurnoverCostDm(side, tx), vision);
 
                     if (_keeper[rk]) value -= _cfg.BackToKeeperCostDm;
                     if (AlreadySupporting(side, j)) value += _cfg.SupportingRunBonusDm;
@@ -1682,9 +1701,16 @@ namespace Sim.Core.Match.Movement
         {
             bool home = side == 0;
             int goalX = U.Units(MovementGeometry.AttackedGoalX(home));
-            bool wide = _py[k] < U.WidthU / 4 || _py[k] > U.WidthU * 3 / 4;
+            bool wide = IsWideChannel(_py[k]);
             return wide && U.Distance(_px[k], _py[k], goalX, U.CenterYU) < U.Units(Pitch.LengthDm / 3);
         }
+
+        /// <summary>
+        /// The outer quarter of the pitch on either side — the touchline channels. It is the same
+        /// test <see cref="IsCross"/> makes, named once so that the Width instruction prices
+        /// exactly the position the feed will later call a cross (engine phase 8).
+        /// </summary>
+        private static bool IsWideChannel(int y) => y < U.WidthU / 4 || y > U.WidthU * 3 / 4;
 
         /// <summary>
         /// Can this ball be cut out — and by how much? For each opponent, where he would meet
@@ -1839,7 +1865,7 @@ namespace Sim.Core.Match.Movement
             }
             else if (!_attacking[side] && Pressing(tick, side, slot, out pressHomeX, out pressHomeY))
             {
-                PressSpot(k, out tx, out ty);
+                PressSpot(side, k, out tx, out ty);
                 sprint = true;
             }
             else if (_attacking[side] && AlreadySupporting(side, slot))
@@ -2139,9 +2165,16 @@ namespace Sim.Core.Match.Movement
 
             // How much room the front line has. Without a ceiling the most advanced line ends up
             // standing on the goal line instead of on the edge of the box.
+            //
+            // MENTALITY OWNS THAT CEILING (engine phase 8), and it has to, because the push it
+            // gives the back line is spent the moment the block hits this cap — which is exactly
+            // when the side is attacking and exactly when the instruction is supposed to show.
+            // A defensive side keeps its furthest man further off the goal it is attacking; an
+            // attacking one lets him stand on the edge of the box. Neutral reads the config
+            // value unchanged.
             int reach = kickoff
                 ? Pitch.CenterX - _cfg.KickoffHalfwayGapDm
-                : Pitch.LengthDm - _cfg.FrontLineGoalGapDm;
+                : Pitch.LengthDm - t.FrontLineGapDm;
 
             if (lines > 1 && line + (lines - 1) * spacing > reach)
             {
@@ -2302,12 +2335,18 @@ namespace Sim.Core.Match.Movement
             // presser is easy to play around, and until engine phase 6 the only thing that ever
             // sent a second man was the director's urgency window before a scripted chance. Where
             // it matters is exactly where it matters in football — near your own goal.
+            //
+            // AND HOW FAR UP THE PITCH THAT IS, IS THE PRESSING INSTRUCTION (engine phase 8). It
+            // is the lever that moves WHERE the ball is won rather than merely how often: doubling
+            // up in the other side's half is what turns a press into recoveries in the final
+            // third, and a low block that only ever doubles up on the edge of its own box wins
+            // the ball back deep by construction. Neutral is the config value unchanged.
             if (_chaser[side] != slot)
             {
                 if (_keeper[k] || _second[side] != slot) return false;
                 int dir = MovementGeometry.Direction(side == 0);
                 int ownGoalX = U.Units(MovementGeometry.OwnGoalX(side == 0));
-                if (dir * (_ball.X - ownGoalX) > U.Units(_cfg.SecondPressDepthDm)) return false;
+                if (dir * (_ball.X - ownGoalX) > U.Units(_tactics[side].SecondPressDepthDm)) return false;
             }
 
             long reach = _tactics[side].PressReachU;
@@ -2347,7 +2386,13 @@ namespace Sim.Core.Match.Movement
             y = U.ClampY(_ball.Y + gy);
         }
 
-        private void PressSpot(int k, out int x, out int y)
+        /// <summary>
+        /// Where the presser puts himself: a stride off the ball, on the line between him and it.
+        /// HOW BIG a stride is the Pressing instruction (engine phase 8) — a high press is
+        /// touch-tight and a low block CONTAINS, standing off him and keeping its shape. This is
+        /// the number `[press]` reads: the space left to the man on the ball.
+        /// </summary>
+        private void PressSpot(int side, int k, out int x, out int y)
         {
             int dx = _px[k] - _ball.X, dy = _py[k] - _ball.Y;
             int distance = U.Length(dx, dy);
@@ -2358,7 +2403,7 @@ namespace Sim.Core.Match.Movement
                 return;
             }
 
-            int standOff = U.Units(_cfg.PressDistanceDm);
+            int standOff = _tactics[side].PressStandOffU;
             int reach = distance < standOff ? distance : standOff;
             x = _ball.X + (int)((long)dx * reach / distance);
             y = _ball.Y + (int)((long)dy * reach / distance);
@@ -2523,7 +2568,7 @@ namespace Sim.Core.Match.Movement
                         }
 
                         ClearFlags();
-                        Record(tick, BallActionKind.Tackle, takerSide == 0, taker, -1);
+                        Record(tick, BallActionKind.Recovery, takerSide == 0, taker, -1);
                     }
                 }
 
@@ -2773,7 +2818,7 @@ namespace Sim.Core.Match.Movement
             // off a defender putting it into his own net, because the laws do not care either.
             if (betweenPosts)
             {
-                ScoreGoal(tick, attacking, defending);
+                ScoreGoal(tick, attacking, defending, crossY);
                 return;
             }
 
@@ -3051,7 +3096,15 @@ namespace Sim.Core.Match.Movement
         /// showing the ball already back on the centre spot is a goal the viewer never sees.
         /// The kickoff is set up when the celebration is over.
         /// </summary>
-        private void ScoreGoal(int tick, int attacking, int defending)
+        /// <summary>
+        /// <paramref name="crossY"/> is where the ball crossed the line, and the ball is laid to
+        /// rest THERE for the celebration rather than in the middle of the goal (engine phase 8).
+        /// Phase 6 wrote this down as cosmetic and true: every goal in its dump went in dead
+        /// centre, which the eye sees at once. The ball is dead from this tick to the kickoff and
+        /// nobody may play it, so the only thing this moves is the picture — and the golden
+        /// master, since the resting frames are in the stream the hash covers.
+        /// </summary>
+        private void ScoreGoal(int tick, int attacking, int defending, int crossY)
         {
             int goalX = U.Units(MovementGeometry.AttackedGoalX(attacking == 0));
 
@@ -3066,7 +3119,7 @@ namespace Sim.Core.Match.Movement
             _shotSlot = scorer;
             RecordGoal(tick, attacking, scorer);
 
-            _ball.Place(goalX, U.CenterYU);
+            _ball.Place(goalX, U.ClampY(crossY));
             _ball.Dead = true;
             _ball.OwnerSide = -1;
             _ball.OwnerSlot = -1;

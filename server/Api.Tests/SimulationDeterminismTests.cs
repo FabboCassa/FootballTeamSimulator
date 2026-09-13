@@ -7,17 +7,22 @@ namespace Fts.Api.Tests;
 /// <summary>
 /// Server half of the cross-runtime determinism check (Phase 7.3, extends Sim.Core test 1.6).
 /// The server runs the SAME Sim.Core as the client, so the fixed determinism run must produce the
-/// exact combined hash the client logs (golden master 0xCDEA5A2F7B9E5CF6). Pure unit tests — no
+/// exact combined hash the client logs (golden master 0x5EF1EDDAFA52BAFA). Pure unit tests — no
 /// WebApplicationFactory, no DB, no Redis.
 /// </summary>
 [TestFixture]
 public class SimulationDeterminismTests
 {
-    // Engine v3 (task 13.1 — the possession movement model). The stream is part of the
-    // report hash, so replacing the movement layer necessarily moved this value; the
-    // score/event model is untouched. Every change to the movement model moves it, because the stream is part of the
-    // report hash. Earlier values: v2 0xCDEA5A2F7B9E5CF6, first v3 0x3421951276465473, v8 0x222F723B4993ED25.
-    private const ulong GoldenCombinedHash = 0xB0052E0B3942206AUL;
+    // Engine v10 (engine rework phase 8 — the instructions count). The stream is part of the
+    // report hash, so anything that moves the picture moves this value; here it was the goal ball
+    // coming to rest where it crossed the line instead of on the centre spot, which changes the
+    // celebration ticks and therefore every match after its first goal. The four instruction axes
+    // did NOT move it, and that is the invariant worth stating out loud: the middle entry of every
+    // instruction table is the identity (percentages read 100, additive terms read 0), so a
+    // determinism run on neutral tactics is untouched by any retune of the extremes.
+    // Earlier values: v2 0xCDEA5A2F7B9E5CF6, first v3 0x3421951276465473,
+    // v8 0x222F723B4993ED25, v9 0xB0052E0B3942206A.
+    private const ulong GoldenCombinedHash = 0x5EF1EDDAFA52BAFAUL;
 
     [Test]
     public void ServerRuntime_DeterminismCheck_MatchesTheClientGoldenHash()
@@ -45,7 +50,7 @@ public class SimulationDeterminismTests
 
         Assert.That(response.MatchCount, Is.EqualTo(DeterminismCheck.DefaultMatches));
         Assert.That(response.CombinedHash, Is.EqualTo(GoldenCombinedHash));
-        Assert.That(response.CombinedHashHex, Is.EqualTo("0xB0052E0B3942206A"));
+        Assert.That(response.CombinedHashHex, Is.EqualTo("0x5EF1EDDAFA52BAFA"));
         Assert.That(response.MatchesGolden, Is.True);
         Assert.That(response.GoldenHashHex, Is.EqualTo(response.CombinedHashHex));
         Assert.That(sim.GoldenCombinedHash, Is.EqualTo(GoldenCombinedHash));

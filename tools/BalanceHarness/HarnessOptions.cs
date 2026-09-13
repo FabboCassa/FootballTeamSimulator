@@ -1,4 +1,4 @@
-namespace Fts.BalanceHarness;
+﻿namespace Fts.BalanceHarness;
 
 /// <summary>
 /// Command line of the balance harness. Everything is parameterised with a cheap default so a quick
@@ -6,8 +6,8 @@ namespace Fts.BalanceHarness;
 /// </summary>
 internal sealed class HarnessOptions
 {
-    /// <summary>tactics | economy | difficulty | ladder | world | pitch | all.
-    /// "pitch" is never part of "all": see Program.cs.</summary>
+    /// <summary>tactics | economy | difficulty | ladder | world | pitch | instructions | all.
+    /// "pitch" and "instructions" are never part of "all": see Program.cs.</summary>
     public string Scenario { get; private set; } = "all";
 
     /// <summary>Root seed. Every world/match seed in the run is derived from it, so a run replays exactly.</summary>
@@ -29,6 +29,22 @@ internal sealed class HarnessOptions
 
     /// <summary>Which of the measured matches to write out. Index into the run, from 0.</summary>
     public int PitchDumpMatch { get; private set; }
+
+    // --- instructions (phase 8 of the match engine rework) --------------------------------------
+
+    /// <summary>
+    /// Matches played PER SETTING of each axis - twelve columns in all (four axes, three
+    /// settings). Thirty settles the block height and the recovery position to well inside the
+    /// metre the checks demand and keeps the run under a minute; --long buys four times that.
+    /// </summary>
+    public int InstructionMatches { get; private set; } = 30;
+
+    /// <summary>
+    /// Turn the four instruction claims into real PASS/FAIL checks. Off by default for the same
+    /// reason --pitch-strict is: the readings are worth printing while a phase is being tuned,
+    /// and worth holding once it claims to be finished.
+    /// </summary>
+    public bool InstructionsStrict { get; private set; }
 
     // --- tactics ------------------------------------------------------------------------------
 
@@ -92,6 +108,8 @@ internal sealed class HarnessOptions
                 case "--pitch-dump" when value is not null: o.PitchDump = value; i++; break;
                 case "--pitch-dump-match" when value is not null: o.PitchDumpMatch = int.Parse(value); i++; break;
                 case "--pitch-strict": o.PitchStrict = true; break;
+                case "--instruction-matches" when value is not null: o.InstructionMatches = int.Parse(value); i++; break;
+                case "--instructions-strict": o.InstructionsStrict = true; break;
                 case "--tactic-repeats" when value is not null: o.TacticRepeats = int.Parse(value); i++; break;
                 case "--formation-repeats" when value is not null: o.FormationRepeats = int.Parse(value); i++; break;
                 case "--tactic-seasons" when value is not null: o.TacticSeasons = int.Parse(value); i++; break;
@@ -114,6 +132,7 @@ internal sealed class HarnessOptions
                     o.DifficultySeasons = 16;
                     o.LadderSeasons = 40;
                     o.PitchMatches = 400;
+                    o.InstructionMatches = 120;
                     break;
                 case "--help":
                 case "-h":
@@ -145,9 +164,10 @@ internal sealed class HarnessOptions
     public const string Usage = """
         fts-balance - Phase 10.1 balance harness
 
-          --scenario <tactics|economy|difficulty|ladder|world|pitch|all>   what to measure (default: all)
-                                        "pitch" is asked for BY NAME - it is the match engine
-                                        rework instrument and is not part of "all"
+          --scenario <tactics|economy|difficulty|ladder|world|pitch|instructions|all>
+                                        what to measure (default: all)
+                                        "pitch" and "instructions" are asked for BY NAME - they are
+                                        the match engine rework instruments and are not part of "all"
           --seed <n>                    root seed (default 20260803); a run replays exactly
           --long                        the roadmap-sized run (slower, tighter numbers)
 
@@ -155,6 +175,9 @@ internal sealed class HarnessOptions
           --pitch-strict                turn the "against real football" bands into PASS/FAIL checks
           --pitch-dump <path>           write one match as a self-contained HTML replay
           --pitch-dump-match <n>        which match to write out (default 0)
+
+          --instruction-matches <n>     matches per setting of each axis (default 30, 12 columns)
+          --instructions-strict         turn the four instruction claims into PASS/FAIL checks
 
           --tactic-repeats <n>          repeats per instruction pairing (default 2 => 12,960 matches)
           --formation-repeats <n>       repeats per formation pairing (default 600 = 3,000 games/shape)

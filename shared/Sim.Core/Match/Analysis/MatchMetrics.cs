@@ -82,7 +82,13 @@
         public int Crosses { get; set; }
         public int Dribbles { get; set; }
         public int Clearances { get; set; }
-        public int TacklesWon { get; set; }
+        /// <summary>
+        /// Balls WON BACK. It was called TacklesWon until engine phase 8, and the name was the
+        /// lie phase 7's eye caught: the engine records this action every time anybody recovers
+        /// the ball, so a goalkeeper gathering crosses came out of the report with thirty-five
+        /// "tackles". The count was always right; the word was wrong.
+        /// </summary>
+        public int Recoveries { get; set; }
         public int Interceptions { get; set; }
 
         /// <summary>Restarts AWARDED to this side.</summary>

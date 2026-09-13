@@ -1,4 +1,4 @@
-using NUnit.Framework;
+﻿using NUnit.Framework;
 using Sim.Core.Config;
 using Sim.Core.Domain;
 using Sim.Core.Generation;
@@ -412,7 +412,7 @@ namespace Sim.Core.Tests.Match
             s.Actions.Add(new BallAction(1, BallActionKind.ThrowIn, true, 3, -1));
             s.Actions.Add(new BallAction(4, BallActionKind.Corner, true, 7, -1));
             s.Actions.Add(new BallAction(8, BallActionKind.GoalKick, false, Keeper, -1));
-            s.Actions.Add(new BallAction(11, BallActionKind.Tackle, false, 4, -1));
+            s.Actions.Add(new BallAction(11, BallActionKind.Recovery, false, 4, -1));
             s.Actions.Add(new BallAction(14, BallActionKind.Interception, true, 6, -1));
             s.Actions.Add(new BallAction(17, BallActionKind.Clearance, false, 2, -1));
             s.Actions.Add(new BallAction(20, BallActionKind.Dribble, true, 10, -1));
@@ -421,7 +421,7 @@ namespace Sim.Core.Tests.Match
             Assert.That(m.Home.ThrowIns, Is.EqualTo(1));
             Assert.That(m.Home.Corners, Is.EqualTo(1));
             Assert.That(m.Away.GoalKicks, Is.EqualTo(1));
-            Assert.That(m.Away.TacklesWon, Is.EqualTo(1));
+            Assert.That(m.Away.Recoveries, Is.EqualTo(1));
             Assert.That(m.Home.Interceptions, Is.EqualTo(1));
             Assert.That(m.Away.Clearances, Is.EqualTo(1));
             Assert.That(m.Home.Dribbles, Is.EqualTo(1));
