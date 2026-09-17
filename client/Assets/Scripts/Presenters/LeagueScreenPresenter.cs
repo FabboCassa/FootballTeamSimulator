@@ -114,7 +114,7 @@ namespace Fts.Presenters
                     GoalDifference = row.GoalDifference,
                     Points = row.Points,
                     IsUser = row.ClubId == _career.UserClubId,
-                    Crest = Crest(row.ClubId, 18f)
+                    Crest = Crest(row.ClubId, CrestPx)
                 });
             }
 
@@ -143,8 +143,8 @@ namespace Fts.Presenters
                         ? _loc.Tr("league.fixture.result", home, f.HomeGoals, f.AwayGoals, away)
                         : _loc.Tr("league.fixture.vs", home, away),
                     IsUser = f.Involves(_career.UserClubId),
-                    HomeCrest = Crest(f.HomeClubId, 18f),
-                    AwayCrest = Crest(f.AwayClubId, 18f)
+                    HomeCrest = Crest(f.HomeClubId, CrestPx),
+                    AwayCrest = Crest(f.AwayClubId, CrestPx)
                 });
             }
 
@@ -177,7 +177,7 @@ namespace Fts.Presenters
                 {
                     Label = _loc.Tr("league.scorer_row", i + 1, player, ClubName(tally.ClubId), tally.Goals),
                     IsUser = tally.ClubId == _career.UserClubId,
-                    Crest = Crest(tally.ClubId, 18f)
+                    Crest = Crest(tally.ClubId, CrestPx)
                 });
             }
 
@@ -192,6 +192,9 @@ namespace Fts.Presenters
         }
 
         /// <summary>A small club crest for a table/fixture/scorer row (task 6.8).</summary>
+        /// <summary>Crest size for table rows: bigger on a phone, where a point is ~2.5 mockup pixels (task 14.4).</summary>
+        private static float CrestPx => Responsive.IsMobile ? 48f : 28f;
+
         private VisualElement Crest(int clubId, float size)
         {
             Club club = _career.FindClub(clubId);

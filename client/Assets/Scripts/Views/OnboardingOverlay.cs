@@ -54,9 +54,8 @@ namespace Fts.Views
             // Modal: swallow clicks so the Hub behind can't be touched during the tutorial.
             Root.RegisterCallback<ClickEvent>(e => e.StopPropagation());
 
-            var card = UiKit.Card();
-            card.style.maxWidth = 460;
-            card.style.minWidth = 320;
+            var card = UiKit.RaisedCard();
+            card.AddToClassList("fts-dialog");
 
             _progress = UiKit.Caption(string.Empty);
             _progress.style.marginBottom = UiKit.SpaceXs;
@@ -67,25 +66,21 @@ namespace Fts.Views
             card.Add(_title);
 
             _body = new Label(string.Empty);
-            _body.style.fontSize = UiKit.FontBody;
+            _body.AddToClassList("fts-dialog__message");
             _body.style.color = UiKit.TextMuted;
             _body.style.whiteSpace = WhiteSpace.Normal;
             _body.style.marginBottom = UiKit.SpaceMd;
             card.Add(_body);
 
             var buttons = new VisualElement();
-            buttons.style.flexDirection = FlexDirection.Row;
-            buttons.style.alignItems = Align.Center;
+            buttons.AddToClassList("fts-dialog__buttons");
 
-            _backButton = UiKit.MenuButton(tr("onboarding.back"), OnBack);
-            _backButton.style.width = 110;
-            _backButton.style.height = 46;
+            _backButton = UiKit.GhostButton(tr("onboarding.back"), OnBack);
+            _backButton.AddToClassList("fts-dialog__btn");
             buttons.Add(_backButton);
 
-            var skip = UiKit.MenuButton(tr("onboarding.skip"), Complete);
-            skip.style.width = 110;
-            skip.style.height = 46;
-            skip.style.marginLeft = UiKit.SpaceSm;
+            var skip = UiKit.GhostButton(tr("onboarding.skip"), Complete);
+            skip.AddToClassList("fts-dialog__btn");
             buttons.Add(skip);
 
             var spacer = new VisualElement();
@@ -93,8 +88,8 @@ namespace Fts.Views
             buttons.Add(spacer);
 
             _nextButton = UiKit.PrimaryButton(tr("onboarding.next"), OnNext);
-            _nextButton.style.width = 140;
-            _nextButton.style.height = 46;
+            _nextButton.AddToClassList("fts-dialog__btn");
+            _nextButton.AddToClassList("fts-dialog__btn--primary");
             buttons.Add(_nextButton);
 
             card.Add(buttons);

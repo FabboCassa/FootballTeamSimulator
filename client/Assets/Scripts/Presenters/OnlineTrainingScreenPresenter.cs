@@ -50,6 +50,7 @@ namespace Fts.Presenters
         public void Enter()
         {
             _view.TeamFocusCycleClicked += OnTeamFocus;
+            _view.TeamFocusSelected += OnTeamFocusSelected;
             _view.IndividualFocusCycleClicked += OnIndividualFocus;
             _view.SaveClicked += OnSave;
             _view.BackClicked += OnBack;
@@ -62,6 +63,7 @@ namespace Fts.Presenters
         public void Exit()
         {
             _view.TeamFocusCycleClicked -= OnTeamFocus;
+            _view.TeamFocusSelected -= OnTeamFocusSelected;
             _view.IndividualFocusCycleClicked -= OnIndividualFocus;
             _view.SaveClicked -= OnSave;
             _view.BackClicked -= OnBack;
@@ -123,6 +125,14 @@ namespace Fts.Presenters
             Refresh();
         }
 
+        private void OnTeamFocusSelected(int index)
+        {
+            if (!_loaded) return;
+            if (index < 0 || index >= TeamFocusCount) return;
+            _working.TeamFocus = (TeamTrainingFocus)index;
+            Refresh();
+        }
+
         private void OnIndividualFocus(int playerId)
         {
             if (!_loaded) return;
@@ -140,6 +150,7 @@ namespace Fts.Presenters
         private void Refresh()
         {
             _view.SetTeamFocus(_loc.Tr("training.team_focus", TeamFocusName(_working.TeamFocus)));
+            _view.SetTeamFocusIndex((int)_working.TeamFocus);
             _view.SetTeamHint(_loc.Tr("training.team_desc." + _working.TeamFocus.ToString().ToLowerInvariant()));
 
             var rows = new List<TrainingRowVm>(_squad.Count);
@@ -149,7 +160,11 @@ namespace Fts.Presenters
                 {
                     PlayerId = p.externalId,
                     Label = $"{p.name} ({RoleName(p.role)})",
+                    Name = p.name,
+                    RoleAbbr = RoleName(p.role),
+                    RoleGroup = RoleFormat.Group((Sim.Core.Domain.PositionRole)p.role),
                     FocusLabel = IndividualFocusName(_working.FocusFor(p.externalId)),
+                    FocusIndex = (int)_working.FocusFor(p.externalId),
                 });
             }
             _view.SetRoster(rows);

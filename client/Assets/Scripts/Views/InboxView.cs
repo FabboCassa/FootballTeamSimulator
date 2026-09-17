@@ -17,10 +17,10 @@ namespace Fts.Views
     }
 
     /// <summary>
-    /// Inbox notifications hub (task 6.2): a scrollable list of the career's messages, newest first,
-    /// with a category tag and read/unread styling. A filter cycles all/unread, and the user can mark
-    /// everything read or clear the list. Dumb view — the presenter owns the model, translates every
-    /// string, decides the row colours and renders the empty state.
+    /// Inbox (task 6.2), redrawn in task 14.4 on the standard page: kicker "Posta" over the unread
+    /// summary, the filter and the two bulk actions in one toolbar, and each message as a card —
+    /// an accent rail when unread, the category pill, the text at body size, the date on the right.
+    /// Dumb view — the presenter owns the model, the strings, the category colours and the empty state.
     /// </summary>
     public sealed class InboxView
     {
@@ -34,73 +34,50 @@ namespace Fts.Views
 
         private readonly Label _header;
         private readonly Button _filterButton;
-        private readonly ScrollView _list;
-        private readonly Label _empty;
+        private readonly VisualElement _list;
+        private readonly VisualElement _empty;
+        private readonly Label _emptyText;
 
         public InboxView(Func<string, string> tr)
         {
-            // Task 6.9: shell-aligned — navy background, a centred capped-width column, and a section
-            // Header instead of the old giant Title (the shell top bar already gives context).
-            Root = UiKit.ScreenRoot();
+            PageParts page = UiKit.StandardPage(tr("inbox.title"), string.Empty, tr("common.back"),
+                () => BackClicked?.Invoke(), UiKit.WidthMedium);
+            Root = page.Root;
+            _header = page.Title;
+            VisualElement col = page.Column;
 
-            var col = UiKit.PageColumn(UiKit.WidthMedium);
-            col.style.flexGrow = 1f;
-            Root.Add(col);
-
-            var header = UiKit.Header(tr("inbox.title"));
-            header.style.unityTextAlign = TextAnchor.MiddleCenter;
-            col.Add(header);
-
-            _header = UiKit.Subtitle(string.Empty);
-            _header.style.marginBottom = 6;
-            col.Add(_header);
-
-            // Action bar: filter chip on the left, mark-all-read + clear on the right.
-            var bar = new VisualElement();
-            bar.style.flexDirection = FlexDirection.Row;
-            bar.style.alignItems = Align.Center;
-            bar.style.flexWrap = Wrap.Wrap; // task 6.6: chips wrap on narrow phones instead of overflowing
-            bar.style.flexShrink = 0f;
-            bar.style.marginBottom = 6;
-
-            _filterButton = ChipButton(string.Empty, () => FilterClicked?.Invoke());
+            VisualElement bar = UiKit.Toolbar();
+            bar.AddToClassList("fts-inbox__bar");
+            _filterButton = UiKit.ChipButton(string.Empty, () => FilterClicked?.Invoke());
             bar.Add(_filterButton);
-
             var spacer = new VisualElement();
             spacer.style.flexGrow = 1f;
             bar.Add(spacer);
-
-            bar.Add(ChipButton(tr("inbox.mark_all_read"), () => MarkAllReadClicked?.Invoke()));
-            bar.Add(ChipButton(tr("inbox.clear"), () => ClearClicked?.Invoke()));
+            bar.Add(UiKit.GhostButton(tr("inbox.mark_all_read"), () => MarkAllReadClicked?.Invoke()));
+            Button clear = UiKit.GhostButton(tr("inbox.clear"), () => ClearClicked?.Invoke());
+            clear.AddToClassList("fts-inbox__clear");
+            bar.Add(clear);
             col.Add(bar);
 
-            // Task 6.6: vertical-only — the 6.4 device test showed a horizontal scrollbar when
-            // a row's fixed parts (dot + tag + stamp) pushed past a narrow viewport.
-            _list = new ScrollView(ScrollViewMode.Vertical);
-            _list.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
-            _list.style.flexGrow = 1f;
+            _list = new VisualElement();
             col.Add(_list);
 
-            _empty = new Label(string.Empty);
-            _empty.style.color = new Color(1f, 1f, 1f, 0.7f);
-            _empty.style.fontSize = 14;
-            _empty.style.whiteSpace = WhiteSpace.Normal;
-            _empty.style.unityTextAlign = TextAnchor.MiddleCenter;
-            _empty.style.marginTop = 24;
+            _empty = UiKit.OptionCard();
+            _emptyText = UiKit.HelpText(string.Empty);
+            _emptyText.style.unityTextAlign = TextAnchor.MiddleCenter;
+            _emptyText.style.marginBottom = 0;
+            _empty.Add(EmptyState.Build("inbox", string.Empty));
+            _empty.Add(_emptyText);
             _empty.style.display = DisplayStyle.None;
             col.Add(_empty);
-
-            VisualElement footer = UiKit.FooterBar();
-            footer.Add(FooterButton(tr("common.back"), () => BackClicked?.Invoke()));
-            col.Add(footer);
         }
 
-        public void SetHeader(string text) => _header.text = text;
-        public void SetFilter(string text) => _filterButton.text = text;
+        public void SetHeader(string text) => _header.text = text ?? string.Empty;
+        public void SetFilter(string text) => _filterButton.text = text ?? string.Empty;
 
         public void SetEmpty(string text)
         {
-            _empty.text = text;
+            _emptyText.text = text ?? string.Empty;
             _empty.style.display = DisplayStyle.Flex;
             _list.style.display = DisplayStyle.None;
         }
@@ -116,64 +93,42 @@ namespace Fts.Views
                 int id = vm.Id;
 
                 var row = new VisualElement();
+                row.AddToClassList("fts-inbox__row");
+                row.EnableInClassList("fts-inbox__row--unread", vm.Unread);
                 row.style.flexDirection = FlexDirection.Row;
                 row.style.alignItems = Align.Center;
-                row.style.minHeight = 44;
-                row.style.marginBottom = 3;
-                row.style.paddingTop = 6;
-                row.style.paddingBottom = 6;
-                row.style.paddingLeft = 8;
-                row.style.paddingRight = 8;
-                row.style.backgroundColor = vm.Unread
-                    ? new Color(1f, 1f, 1f, 0.10f)
-                    : new Color(1f, 1f, 1f, 0.04f);
-                UiKit.Round(row, UiKit.RadiusSm);
                 row.RegisterCallback<ClickEvent>(_ => MessageClicked?.Invoke(id));
 
-                // Unread dot keeps the eye on what's new.
-                var dot = new VisualElement();
-                dot.style.width = 8;
-                dot.style.height = 8;
-                dot.style.marginRight = 8;
-                dot.style.backgroundColor = vm.Unread ? UiKit.Accent : new Color(0f, 0f, 0f, 0f);
-                UiKit.Round(dot, 4);
-                row.Add(dot);
+                var rail = new VisualElement();
+                rail.AddToClassList("fts-inbox__rail");
+                rail.style.flexShrink = 0f;
+                rail.pickingMode = PickingMode.Ignore;
+                row.Add(rail);
 
-                row.Add(UiKit.Pill(vm.CategoryLabel, vm.CategoryColor, UiKit.Background));
+                Label pill = UiKit.Pill(vm.CategoryLabel, vm.CategoryColor, UiKit.Background);
+                pill.AddToClassList("fts-inbox__pill");
+                pill.style.flexShrink = 0f;
+                pill.pickingMode = PickingMode.Ignore;
+                row.Add(pill);
 
                 var text = new Label(vm.Text);
+                text.AddToClassList("fts-inbox__text");
                 text.style.flexGrow = 1f;
                 text.style.flexShrink = 1f;
-                text.style.minWidth = 0; // lets the label shrink + wrap instead of widening the row
-                text.style.marginLeft = 8;
-                text.style.fontSize = 14;
+                text.style.minWidth = 0;
                 text.style.whiteSpace = WhiteSpace.Normal;
-                text.style.color = vm.Unread ? UiKit.TextPrimary : UiKit.TextMuted;
-                text.style.unityFontStyleAndWeight = vm.Unread ? FontStyle.Bold : FontStyle.Normal;
+                text.pickingMode = PickingMode.Ignore;
                 row.Add(text);
 
                 var stamp = new Label(vm.Stamp);
-                stamp.style.width = 70;
-                stamp.style.fontSize = 11;
+                stamp.AddToClassList("fts-inbox__stamp");
                 stamp.style.unityTextAlign = TextAnchor.MiddleRight;
-                stamp.style.color = new Color(1f, 1f, 1f, 0.55f);
+                stamp.style.flexShrink = 0f;
+                stamp.pickingMode = PickingMode.Ignore;
                 row.Add(stamp);
 
                 _list.Add(row);
             }
         }
-
-        private static Button ChipButton(string text, Action onClick)
-        {
-            var button = new Button(onClick) { text = text };
-            button.style.height = 30;
-            button.style.fontSize = 12;
-            button.style.marginRight = 6;
-            button.style.paddingLeft = 10;
-            button.style.paddingRight = 10;
-            return button;
-        }
-
-        private static Button FooterButton(string text, Action onClick) => UiKit.FooterButton(text, onClick);
     }
 }

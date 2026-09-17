@@ -50,7 +50,7 @@ namespace Fts.Presenters
             _view.BackClicked += OnBack;
 
             _club = _career.GetUserClub();
-            _view.SetHeader(_loc.Tr("club.header", _club.Name));
+            _view.SetHeader(_club.Name);
             _view.SetStatus(string.Empty);
             Refresh();
         }
@@ -95,12 +95,18 @@ namespace Fts.Presenters
         private void Refresh()
         {
             Finances f = _club.Finances;
-            _view.SetFinances(
-                _loc.Tr("club.balance", MoneyFormat.Short(f.Balance)),
-                _loc.Tr("club.income", MoneyFormat.Short(f.SeasonGateIncome),
-                        MoneyFormat.Short(f.SeasonSponsorIncome), MoneyFormat.Short(f.SeasonPrizeIncome)),
-                _loc.Tr("club.expense", MoneyFormat.Short(f.SeasonWageExpense)),
-                _loc.Tr("club.net", Signed(f.SeasonNet)));
+            long income = f.SeasonGateIncome + f.SeasonSponsorIncome + f.SeasonPrizeIncome;
+            _view.SetFinances(new ClubFinancesVm
+            {
+                Balance = MoneyFormat.Short(f.Balance),
+                Income = MoneyFormat.Short(income),
+                Expense = MoneyFormat.Short(f.SeasonWageExpense),
+                Net = Signed(f.SeasonNet),
+                NetPositive = f.SeasonNet >= 0,
+                Gate = MoneyFormat.Short(f.SeasonGateIncome),
+                Sponsor = MoneyFormat.Short(f.SeasonSponsorIncome),
+                Prize = MoneyFormat.Short(f.SeasonPrizeIncome)
+            });
 
             var rows = new List<FacilityRowVm>
             {
@@ -123,6 +129,8 @@ namespace Fts.Presenters
                 Index = (int)type,
                 Name = FacilityName(type),
                 Tier = _loc.Tr("club.tier", tier, _config.Finance.MaxFacilityTier),
+                TierValue = tier,
+                TierMax = _config.Finance.MaxFacilityTier,
                 Effect = EffectText(type, tier),
                 ActionLabel = maxed ? _loc.Tr("club.max") : _loc.Tr("club.upgrade", MoneyFormat.Short(cost)),
                 CanUpgrade = !maxed && _club.Finances.Balance >= cost

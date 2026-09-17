@@ -28,7 +28,7 @@ namespace Fts.Views
 
             var label = new Label(message ?? string.Empty);
             label.style.color = UiKit.TextMuted;
-            label.style.fontSize = UiKit.FontSmall;
+            label.AddToClassList("fts-empty__text");
             label.style.unityTextAlign = TextAnchor.MiddleCenter;
             label.style.whiteSpace = WhiteSpace.Normal;
             label.style.maxWidth = 320;

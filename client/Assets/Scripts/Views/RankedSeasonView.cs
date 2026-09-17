@@ -56,14 +56,16 @@ namespace Fts.Views
 
             _title = UiKit.ScreenTitle(string.Empty);
             _title.style.marginBottom = UiKit.SpaceSm;
-            col.Add(_title);
+            // Back and the page's actions sit beside the title, not in a footer (task 14.6).
+            PageHeadParts titleHead = UiKit.TitleHead(_title);
+            col.Add(titleHead.Root);
 
             // ---- status + actions -------------------------------------------------------------
             VisualElement head = UiKit.Panel();
             col.Add(head);
 
             _banner = UiKit.PanelLine(string.Empty);
-            _banner.style.fontSize = 15;
+            _banner.AddToClassList("fts-t-body");
             _banner.style.unityFontStyleAndWeight = FontStyle.Bold;
             head.Add(_banner);
 
@@ -92,7 +94,7 @@ namespace Fts.Views
             _seasonEndCard.style.display = DisplayStyle.None;
             col.Add(_seasonEndCard);
             _seasonEndTitle = UiKit.PanelLine(string.Empty);
-            _seasonEndTitle.style.fontSize = 16;
+            _seasonEndTitle.AddToClassList("fts-t-strong");
             _seasonEndTitle.style.unityFontStyleAndWeight = FontStyle.Bold;
             _seasonEndCard.Add(_seasonEndTitle);
             _seasonEndDetail = UiKit.Caption(string.Empty);
@@ -133,10 +135,9 @@ namespace Fts.Views
             _status.style.display = DisplayStyle.None;
             col.Add(_status);
 
-            VisualElement footer = UiKit.FooterBar();
+            VisualElement footer = titleHead.Actions;
             _backButton = UiKit.FooterButton(string.Empty, () => BackClicked?.Invoke());
             footer.Add(_backButton);
-            col.Add(footer);
 
             RebuildStandingsHeader();
             ShowTab(0);

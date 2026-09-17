@@ -91,6 +91,15 @@ namespace Fts.Views
             _header.style.whiteSpace = WhiteSpace.Normal;
             _header.style.marginBottom = 0;
             top.Add(_header);
+            // Back sits in the header row, top-right (task 14.6), not in a footer.
+            _header.style.flexGrow = 1f;
+            _header.style.flexShrink = 1f;
+            var headActions = new VisualElement();
+            headActions.AddToClassList("fts-titlehead__actions");
+            headActions.style.flexDirection = FlexDirection.Row;
+            headActions.style.flexShrink = 0f;
+            headActions.Add(UiKit.FooterButton(tr("common.back"), () => BackClicked?.Invoke()));
+            top.Add(headActions);
             page.Add(top);
 
             // Everything below the header lives in _body so the whole thing can be swapped
@@ -156,9 +165,6 @@ namespace Fts.Views
             _rightCol.Add(_roster);
             _bodyRow.Add(_rightCol);
 
-            VisualElement footer = UiKit.FooterBar();
-            footer.Add(UiKit.FooterButton(tr("common.back"), () => BackClicked?.Invoke()));
-            page.Add(footer);
 
             Root.RegisterCallback<GeometryChangedEvent>(_ => ApplyResponsive(Root.resolvedStyle.width));
         }
@@ -256,7 +262,7 @@ namespace Fts.Views
         private static Label InfoLine()
         {
             var label = new Label(string.Empty);
-            label.style.fontSize = UiKit.FontBody;
+            label.AddToClassList("fts-t-body");
             label.style.color = UiKit.TextPrimary;
             label.style.whiteSpace = WhiteSpace.Normal;
             label.style.marginBottom = 2;

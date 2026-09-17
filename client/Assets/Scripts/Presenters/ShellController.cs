@@ -18,6 +18,10 @@ namespace Fts.Presenters
     /// <see cref="HubShortcutMessage"/> — HubPresenter stays the single owner of the
     /// calendar/navigation logic (no duplication, and the pop keeps the stack sane).
     /// Lives in the Game scope; registered by GameSessionService.
+    ///
+    /// Task 14.3 redrew the chrome on the mockup, which changed what this class FEEDS it: the club
+    /// line and the budget are now two kicker-over-value blocks rather than one name and one
+    /// concatenated subline.
     /// </summary>
     public sealed class ShellController : IDisposable
     {
@@ -65,13 +69,8 @@ namespace Fts.Presenters
             _originalRoot.Add(_shell.Root);
             _navigator.SetRoot(_shell.ContentHost);
 
-            var club = _career.GetUserClub();
-            ClubVisual v = _identity.UserVisual();
-            _shell.SetCrest(new CrestRenderer(
-                44f, v.Shape, v.Pattern, v.Primary, v.Secondary, v.Accent, v.Emblem,
-                UiKit.Surface, club.ShortName));
-            _shell.SetClub(club.Name);
-            _shell.SetAccent(v.Primary);
+            BuildCrest();
+            _shell.SetAccent(_identity.UserVisual().Primary);
             _shell.SetSections(BuildSections());
             _shell.SetActiveSection("overview");
             _shell.SetBackVisible(false);
@@ -83,7 +82,31 @@ namespace Fts.Presenters
 
             _daySubscription = _broker.Subscribe<DayAdvancedMessage>(_ => Refresh());
             _screenSubscription = _broker.Subscribe<ScreenChangedMessage>(OnScreenChanged);
+            // The crest is a painter2D element sized in C#, so unlike everything the stylesheet
+            // owns it cannot resize itself at a breakpoint — it is rebuilt instead (task 14.3).
+            Responsive.Changed += OnViewportChanged;
             Refresh();
+        }
+
+        /// <summary>
+        /// Draws the club crest at the size the current shape wants. The mask colour must be the
+        /// ground the crest actually sits on — the top bar is the DEEP surface, and passing the
+        /// ordinary surface left a faint halo around the silhouette.
+        /// </summary>
+        private void BuildCrest()
+        {
+            var club = _career.GetUserClub();
+            ClubVisual v = _identity.UserVisual();
+            float size = Responsive.IsMobile ? 96f : 44f;
+            _shell.SetCrest(new CrestRenderer(
+                size, v.Shape, v.Pattern, v.Primary, v.Secondary, v.Accent, v.Emblem,
+                UiKit.SurfaceDeep, club.ShortName));
+        }
+
+        private void OnViewportChanged(Viewport viewport)
+        {
+            if (_shell != null)
+                BuildCrest();
         }
 
         public void Dispose()
@@ -92,6 +115,7 @@ namespace Fts.Presenters
             _daySubscription = null;
             _screenSubscription?.Dispose();
             _screenSubscription = null;
+            Responsive.Changed -= OnViewportChanged;
 
             if (_shell == null)
                 return;
@@ -100,6 +124,7 @@ namespace Fts.Presenters
             _shell.ContinueClicked -= OnContinue;
             _shell.AdvanceDayClicked -= OnAdvanceDay;
             _shell.BackClicked -= OnBack;
+            _shell.Dispose();
 
             _navigator.SetRoot(_originalRoot);
             _originalRoot.Remove(_shell.Root);
@@ -153,9 +178,15 @@ namespace Fts.Presenters
             if (_shell == null)
                 return;
 
-            string day = _loc.Tr("shell.day", _career.Season.Year, _career.Season.CurrentDay);
-            string budget = _loc.Tr("market.budget", MoneyFormat.Short(_career.GetUserClub().TransferBudget));
-            _shell.SetSubline(day + "  ·  " + budget);
+            // Kicker over value, twice: where we are over who we are, and what the budget is
+            // called over what it is. `market.budget` is a sentence ("Budget: {0}"), so the bare
+            // caption `shell.budget` is used here instead.
+            _shell.SetClubLine(
+                _loc.Tr("shell.day", _career.Season.Year, _career.Season.CurrentDay),
+                _career.GetUserClub().Name);
+            _shell.SetMoney(
+                _loc.Tr("shell.budget"),
+                MoneyFormat.Short(_career.GetUserClub().TransferBudget));
 
             bool complete = _seasonService.IsSeasonComplete;
             _shell.SetContinueLabel(_loc.Tr(complete ? "hub.end_season" : "hub.next_match"));

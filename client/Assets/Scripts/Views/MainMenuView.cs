@@ -5,9 +5,10 @@ using UnityEngine.UIElements;
 namespace Fts.Views
 {
     /// <summary>
-    /// Dumb view: exposes events, renders placeholder UI. No logic.
-    /// Receives a translate delegate (views cannot reference Services);
-    /// UpdateTexts re-reads it so a language switch refreshes this screen live.
+    /// Main menu, redrawn in task 14.4 on the centred page: the game's name in Bebas under a kicker,
+    /// then three blocks — CAREER (Continue as the accent CTA, New career), ONLINE (Ranked, private
+    /// leagues, account) and the small print (language, the dev bench). Dumb view: exposes events;
+    /// <see cref="UpdateTexts"/> re-reads the translate delegate so a language switch refreshes live.
     /// </summary>
     public sealed class MainMenuView
     {
@@ -25,6 +26,8 @@ namespace Fts.Views
         private readonly Func<string, string> _tr;
         private readonly Label _title;
         private readonly Label _subtitle;
+        private readonly Label _careerCaption;
+        private readonly Label _onlineCaption;
         private readonly Button _continueButton;
         private readonly Button _newCareerButton;
         private readonly Button _accountButton;
@@ -38,33 +41,68 @@ namespace Fts.Views
         {
             _tr = tr;
 
-            Root = UiKit.Screen(UiKit.MenuGreen);
-            _title = UiKit.Title(string.Empty);
-            Root.Add(_title);
-            _subtitle = UiKit.Subtitle(string.Empty);
-            Root.Add(_subtitle);
+            PageParts page = UiKit.CenterPage(string.Empty, string.Empty);
+            Root = page.Root;
+            Root.AddToClassList("fts-menu");
+            _title = page.Title;
+            VisualElement col = page.Column;
 
-            _continueButton = UiKit.MenuButton(string.Empty, () => ContinueClicked?.Invoke());
-            Root.Add(_continueButton);
-            _newCareerButton = UiKit.MenuButton(string.Empty, () => NewCareerClicked?.Invoke());
-            Root.Add(_newCareerButton);
-            _accountButton = UiKit.MenuButton(string.Empty, () => AccountClicked?.Invoke());
-            Root.Add(_accountButton);
-            _onlineButton = UiKit.MenuButton(string.Empty, () => OnlineLeaguesClicked?.Invoke());
-            Root.Add(_onlineButton);
-            _rankedButton = UiKit.MenuButton(string.Empty, () => RankedClicked?.Invoke());
-            Root.Add(_rankedButton);
-            _benchButton = UiKit.MenuButton(string.Empty, () => WorldBenchClicked?.Invoke());
+            _subtitle = new Label(string.Empty);
+            _subtitle.AddToClassList("fts-menu__subtitle");
+            _subtitle.style.unityTextAlign = TextAnchor.MiddleCenter;
+            _subtitle.style.whiteSpace = WhiteSpace.Normal;
+            col.Add(_subtitle);
+
+            // ---- career
+            VisualElement career = UiKit.RaisedCard();
+            career.AddToClassList("fts-menu__block");
+            _careerCaption = UiKit.SectionLabel(string.Empty);
+            _careerCaption.style.marginTop = 0;
+            career.Add(_careerCaption);
+            _continueButton = UiKit.PrimaryButton(string.Empty, () => ContinueClicked?.Invoke());
+            _continueButton.AddToClassList("fts-menu__btn");
+            _continueButton.AddToClassList("fts-menu__btn--cta");
+            career.Add(_continueButton);
+            _newCareerButton = UiKit.GhostButton(string.Empty, () => NewCareerClicked?.Invoke());
+            _newCareerButton.AddToClassList("fts-menu__btn");
+            career.Add(_newCareerButton);
+            col.Add(career);
+
+            // ---- online
+            VisualElement online = UiKit.OptionCard();
+            online.AddToClassList("fts-menu__block");
+            _onlineCaption = UiKit.SectionLabel(string.Empty);
+            _onlineCaption.style.marginTop = 0;
+            online.Add(_onlineCaption);
+            _rankedButton = UiKit.GhostButton(string.Empty, () => RankedClicked?.Invoke());
+            _rankedButton.AddToClassList("fts-menu__btn");
+            online.Add(_rankedButton);
+            _onlineButton = UiKit.GhostButton(string.Empty, () => OnlineLeaguesClicked?.Invoke());
+            _onlineButton.AddToClassList("fts-menu__btn");
+            online.Add(_onlineButton);
+            _accountButton = UiKit.GhostButton(string.Empty, () => AccountClicked?.Invoke());
+            _accountButton.AddToClassList("fts-menu__btn");
+            online.Add(_accountButton);
+            col.Add(online);
+
+            // ---- small print
+            var foot = new VisualElement();
+            foot.AddToClassList("fts-menu__foot");
+            _languageButton = UiKit.GhostButton(string.Empty, () => LanguageClicked?.Invoke());
+            _languageButton.AddToClassList("fts-menu__small");
+            foot.Add(_languageButton);
+            _benchButton = UiKit.GhostButton(string.Empty, () => WorldBenchClicked?.Invoke());
+            _benchButton.AddToClassList("fts-menu__small");
             _benchButton.style.display = DisplayStyle.None;
-            Root.Add(_benchButton);
-            _languageButton = UiKit.MenuButton(string.Empty, () => LanguageClicked?.Invoke());
-            Root.Add(_languageButton);
+            foot.Add(_benchButton);
+            col.Add(foot);
 
-            _errorLabel = UiKit.Subtitle(string.Empty);
-            _errorLabel.style.color = new Color(1f, 0.55f, 0.55f);
+            _errorLabel = new Label(string.Empty);
+            _errorLabel.AddToClassList("fts-menu__error");
+            _errorLabel.style.whiteSpace = WhiteSpace.Normal;
+            _errorLabel.style.unityTextAlign = TextAnchor.MiddleCenter;
             _errorLabel.style.display = DisplayStyle.None;
-            _errorLabel.style.marginTop = 16;
-            Root.Add(_errorLabel);
+            col.Add(_errorLabel);
 
             UpdateTexts();
         }
@@ -74,6 +112,8 @@ namespace Fts.Views
         {
             _title.text = _tr("app.title");
             _subtitle.text = _tr("mainmenu.subtitle");
+            _careerCaption.text = _tr("mainmenu.section.career").ToUpperInvariant();
+            _onlineCaption.text = _tr("mainmenu.section.online").ToUpperInvariant();
             _continueButton.text = _tr("mainmenu.continue");
             _newCareerButton.text = _tr("mainmenu.new_career");
             _accountButton.text = _tr("mainmenu.account");
@@ -85,14 +125,14 @@ namespace Fts.Views
         public void SetLanguageLabel(string text) => _languageButton.text = text;
 
         /// <summary>Dev only: the database bench button is hidden in a release build.</summary>
-        public void SetWorldBenchVisible(bool visible)
-        {
+        public void SetWorldBenchVisible(bool visible) =>
             _benchButton.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
-        }
 
+        /// <summary>No save → New career becomes the accent action instead of Continue.</summary>
         public void SetContinueVisible(bool visible)
         {
             _continueButton.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+            _newCareerButton.EnableInClassList("fts-menu__btn--cta-ghost", !visible);
         }
 
         public void ShowError(string message)
@@ -101,9 +141,6 @@ namespace Fts.Views
             _errorLabel.style.display = DisplayStyle.Flex;
         }
 
-        public void HideError()
-        {
-            _errorLabel.style.display = DisplayStyle.None;
-        }
+        public void HideError() => _errorLabel.style.display = DisplayStyle.None;
     }
 }

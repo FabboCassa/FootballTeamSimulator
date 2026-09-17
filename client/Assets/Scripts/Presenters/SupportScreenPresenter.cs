@@ -133,8 +133,8 @@ namespace Fts.Presenters
 
             Player selected = FindSquadPlayer(_selectedPlayerId);
             _view.SetSelectedCaption(selected != null
-                ? _loc.Tr("support.selected", selected.FullName)
-                : string.Empty);
+                ? selected.FullName
+                : _loc.Tr("support.pick_player"));
 
             _view.SetActions(BuildActions());
         }
@@ -155,7 +155,7 @@ namespace Fts.Presenters
                     text = _loc.Tr("support.action_cooldown", name, days);
                 }
 
-                actions.Add(new SupportButtonVm { ActionId = i, Text = text, Enabled = !onCooldown });
+                actions.Add(new SupportButtonVm { ActionId = i, Text = text, Enabled = !onCooldown && FindSquadPlayer(_selectedPlayerId) != null });
             }
 
             return actions;

@@ -275,7 +275,8 @@ namespace Fts.Presenters
                 _view.AddPlayerRow(new MarketRowVm
                 {
                     PlayerId = p.Id,
-                    Name = _loc.Tr("market.buy_row", p.FullName, club.Name),
+                    Name = p.FullName,
+                    Meta = _loc.Tr("market.meta_buy", club.Name, p.Age),
                     RoleAbbr = RoleName(p.Role),
                     RoleGroup = RoleFormat.Group(p.Role),
                     Age = p.Age.ToString(System.Globalization.CultureInfo.InvariantCulture),
@@ -318,6 +319,7 @@ namespace Fts.Presenters
                 {
                     PlayerId = p.Id,
                     Name = p.FullName,
+                    Meta = _loc.Tr("market.meta_sell", p.Age),
                     RoleAbbr = RoleName(p.Role),
                     RoleGroup = RoleFormat.Group(p.Role),
                     Age = p.Age.ToString(System.Globalization.CultureInfo.InvariantCulture),
@@ -544,6 +546,6 @@ namespace Fts.Presenters
 
         /// <summary>A player portrait placeholder in his club's kit colours (task 6.8).</summary>
         private VisualElement Avatar(Player p, int clubId) =>
-            Crests.Avatar(_identity.Visual(clubId), 34f, p.FullName);
+            Crests.Avatar(_identity.Visual(clubId), Responsive.IsMobile ? 84f : 46f, p.FullName);
     }
 }

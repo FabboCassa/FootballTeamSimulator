@@ -111,7 +111,7 @@ namespace Fts.Presenters
             int clubId = ClubIdOf(player.Id);
             RenderReputation(player, clubId, owned);
             if (clubId >= 0)
-                _view.SetAvatar(Crests.Avatar(_identity.Visual(clubId), 72f, player.FullName));
+                _view.SetAvatar(Crests.Avatar(_identity.Visual(clubId), Responsive.IsMobile ? 150f : 96f, player.FullName));
             else
                 _view.SetAvatar(null);
 

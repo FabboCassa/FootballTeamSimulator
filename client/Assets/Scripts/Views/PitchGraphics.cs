@@ -21,10 +21,52 @@ namespace Fts.Views
         public const float LengthDm = 1050f;
         public const float WidthDm = 680f;
 
-        public static readonly Color TurfColor = new Color(0.16f, 0.42f, 0.20f);
-        public static readonly Color TurfStripe = new Color(0.18f, 0.46f, 0.22f);
-        public static readonly Color LineColor = new Color(1f, 1f, 1f, 0.75f);
-        public static readonly Color GoalColor = new Color(1f, 1f, 1f, 0.95f);
+        // Task 14.7: the palette re-picked against the #080D18 ground. The old turf (#296B33) was a
+        // saturated mid green that glowed on the near-black page and sat one step from the UI accent
+        // (#2FD08A); this is a deep, slightly blue grass — clearly a pitch, clearly NOT a control —
+        // with stripes kept subtle and lines softened so the players, not the markings, carry contrast.
+        public static readonly Color TurfColor = UiKit.Hex(0x1B4A32);
+        public static readonly Color TurfStripe = UiKit.Hex(0x1F5338);
+        public static readonly Color LineColor = new Color(0.92f, 0.96f, 1f, 0.62f);
+        public static readonly Color GoalColor = new Color(1f, 1f, 1f, 0.92f);
+
+        /// <summary>
+        /// Neutral kits for matches with no club identity (online / ranked): a cobalt and a coral that
+        /// read apart from each other, from the turf and from the UI accent / danger tokens, so a
+        /// player dot is never mistaken for a button or a warning.
+        /// </summary>
+        public static readonly Color KitHome = UiKit.Hex(0x4C8DFF);
+        public static readonly Color KitAway = UiKit.Hex(0xFF8A4C);
+
+        /// <summary>Minimum RGB distance a kit needs from the turf, the accent and the other side.</summary>
+        public const float MinKitSeparation = 0.42f;
+        private const float MinTurfSeparation = 0.30f;
+
+        /// <summary>True when a kit colour reads on the pitch: not grass-coloured, not accent-coloured.</summary>
+        public static bool ReadsOnPitch(Color kit) =>
+            KitDistance(kit, TurfColor) >= MinTurfSeparation && KitDistance(kit, UiKit.Accent) >= MinTurfSeparation;
+
+        /// <summary>
+        /// The on-pitch colour for a side: the first of <paramref name="candidates"/> that reads on the
+        /// pitch and stays <see cref="MinKitSeparation"/> away from <paramref name="avoid"/> (the other
+        /// side, or null for the first side); else the neutral kit that does, else the fallback.
+        /// </summary>
+        public static Color PickKit(Color? avoid, Color fallback, params Color[] candidates)
+        {
+            foreach (Color c in candidates)
+                if (ReadsOnPitch(c) && (avoid == null || KitDistance(c, avoid.Value) >= MinKitSeparation))
+                    return c;
+            foreach (Color c in new[] { fallback, KitHome, KitAway, Color.white })
+                if (avoid == null || KitDistance(c, avoid.Value) >= MinKitSeparation)
+                    return c;
+            return fallback;
+        }
+
+        public static float KitDistance(Color a, Color b)
+        {
+            float dr = a.r - b.r, dg = a.g - b.g, db = a.b - b.b;
+            return Mathf.Sqrt(dr * dr + dg * dg + db * db);
+        }
 
         // Real markings, in decimetres.
         private const float BoxDepth = 165f;        // penalty area, 16.5 m

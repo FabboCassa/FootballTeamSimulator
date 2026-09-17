@@ -40,7 +40,7 @@ namespace Fts.Views
     /// </summary>
     public sealed class SquadView
     {
-        private const float StackBreakpoint = 640f;
+        
 
         public event Action<int> SlotTapped;        // lineup slot index
         public event Action<int> BenchTapped;       // player id
@@ -78,94 +78,96 @@ namespace Fts.Views
 
         public SquadView(Func<string, string> tr)
         {
-            Root = UiKit.ScreenRoot();
+            // Task 14.4: the standard page. Head = kicker, club line, and the three actions that
+            // used to be a footer (Auto / Save as the accent CTA / Back). Under it one line that is
+            // either the hint or the picked player, then the pitch and the bench side by side.
+            PageParts page = UiKit.StandardPage(tr("squad.kicker"), string.Empty, tr("common.back"),
+                () => BackClicked?.Invoke());
+            Root = page.Root;
+            Root.AddToClassList("fts-squad");
+            _header = page.Title;
 
-            _header = UiKit.Subtitle(string.Empty);
-            _header.style.marginBottom = 4;
-            _header.style.unityTextAlign = TextAnchor.MiddleLeft;
-            Root.Add(_header);
+            Button auto = UiKit.GhostButton(tr("squad.auto_pick"), () => AutoClicked?.Invoke());
+            Button save = UiKit.PrimaryButton(tr("squad.save_lineup"), () => SaveClicked?.Invoke());
+            save.AddToClassList("fts-headcta");
+            page.Head.Actions.Insert(0, save);
+            page.Head.Actions.Insert(0, auto);
+
+            _status = UiKit.HelpText(string.Empty);
+            _status.AddToClassList("fts-status");
+            page.Column.Add(_status);
 
             // Selection bar: shows the picked player + a profile shortcut, or a hint.
             _selectionBar = UiKit.Row();
-            _selectionBar.style.marginBottom = 6;
-            _selectionBar.style.minHeight = 30;
+            _selectionBar.AddToClassList("fts-squad__selection");
             _selectionLabel = new Label(string.Empty);
-            _selectionLabel.style.color = UiKit.TextPrimary;
-            _selectionLabel.style.fontSize = 14;
+            _selectionLabel.AddToClassList("fts-squad__selectiontext");
             _selectionLabel.style.flexGrow = 1f;
-            _selectionLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
+            _selectionLabel.style.flexShrink = 1f;
+            _selectionLabel.style.whiteSpace = WhiteSpace.Normal;
             _selectionBar.Add(_selectionLabel);
-            _profileButton = UiKit.MenuButton(tr("squad.profile"), () =>
+            _profileButton = UiKit.GhostButton(tr("squad.profile"), () =>
             {
                 if (_selectedPlayerId >= 0) ProfileClicked?.Invoke(_selectedPlayerId);
             });
-            _profileButton.style.width = 110;
-            _profileButton.style.height = 34;
-            _profileButton.style.fontSize = 13;
             _selectionBar.Add(_profileButton);
-            Root.Add(_selectionBar);
+            page.Column.Add(_selectionBar);
 
-            _hint = UiKit.Caption(tr("squad.pitch_hint"));
-            _hint.style.marginBottom = 6;
-            Root.Add(_hint);
+            _hint = UiKit.HelpText(tr("squad.pitch_hint"));
+            _hint.AddToClassList("fts-squad__hint");
+            page.Column.Add(_hint);
 
             _content = new VisualElement();
+            _content.AddToClassList("fts-squad__grid");
             _content.style.flexDirection = FlexDirection.Row;
-            _content.style.flexGrow = 1f;
-            Root.Add(_content);
+            page.Column.Add(_content);
 
-            _pitchWrap = new VisualElement();
-            _pitchWrap.style.flexGrow = 1f;
-            _pitchWrap.style.marginRight = 8;
+            _pitchWrap = UiKit.OptionCard();
+            _pitchWrap.AddToClassList("fts-squad__pitchcard");
+            var pitchBox = new VisualElement();
+            pitchBox.AddToClassList("fts-squad__pitch");
+            pitchBox.style.overflow = Overflow.Hidden;
             _pitch = new PitchFormationView(mirror: false);
-            _pitchWrap.Add(_pitch);
+            pitchBox.Add(_pitch);
+            _pitchWrap.Add(pitchBox);
             _content.Add(_pitchWrap);
 
-            _benchColumn = new VisualElement();
-            _benchColumn.style.width = new Length(34, LengthUnit.Percent);
-            _benchColumn.style.minWidth = 150;
-            var benchCaption = new Label(tr("squad.bench_caption"));
-            benchCaption.style.color = UiKit.TextMuted;
-            benchCaption.style.fontSize = 13;
-            benchCaption.style.marginBottom = 4;
-            _benchColumn.Add(benchCaption);
-            _benchList = new ScrollView();
-            _benchList.style.flexGrow = 1f;
+            _benchColumn = UiKit.OptionCard();
+            _benchColumn.AddToClassList("fts-squad__benchcard");
+            _benchColumn.Add(UiKit.BlockHead(tr("squad.bench_caption")));
+            _benchList = new ScrollView(ScrollViewMode.Vertical);
+            _benchList.AddToClassList("fts-squad__bench");
+            _benchList.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
             _benchColumn.Add(_benchList);
             _content.Add(_benchColumn);
 
-            VisualElement footer = UiKit.FooterBar();
-            footer.Add(FooterButton(tr("squad.auto_pick"), () => AutoClicked?.Invoke()));
-            footer.Add(FooterButton(tr("squad.save_lineup"), () => SaveClicked?.Invoke()));
-            footer.Add(FooterButton(tr("common.back"), () => BackClicked?.Invoke()));
-            Root.Add(footer);
-
-            _status = UiKit.Caption(string.Empty);
-            _status.style.marginTop = 4;
-            _status.style.unityTextAlign = TextAnchor.MiddleCenter;
-            Root.Add(_status);
-
             _ghost = new Label(string.Empty);
+            _ghost.AddToClassList("fts-squad__ghost");
             _ghost.style.position = Position.Absolute;
             _ghost.style.display = DisplayStyle.None;
             _ghost.pickingMode = PickingMode.Ignore;
             _ghost.style.backgroundColor = UiKit.Accent;
             _ghost.style.color = UiKit.TextOnAccent;
-            _ghost.style.fontSize = 13;
             _ghost.style.unityFontStyleAndWeight = FontStyle.Bold;
-            _ghost.style.paddingLeft = 8;
-            _ghost.style.paddingRight = 8;
-            _ghost.style.paddingTop = 3;
-            _ghost.style.paddingBottom = 3;
             UiKit.Round(_ghost, 8);
             Root.Add(_ghost);
 
             SetSelection(null);
-            Root.RegisterCallback<GeometryChangedEvent>(_ => ApplyResponsive());
+            Root.RegisterCallback<AttachToPanelEvent>(_ =>
+            {
+                Responsive.Changed += Layout;
+                Layout(Responsive.Current);
+            });
+            Root.RegisterCallback<DetachFromPanelEvent>(_ => Responsive.Changed -= Layout);
+            Layout(Responsive.Current);
         }
 
         public void SetHeader(string text) => _header.text = text;
-        public void SetStatus(string text) => _status.text = text;
+        public void SetStatus(string text)
+        {
+            _status.text = text ?? string.Empty;
+            _status.style.display = string.IsNullOrEmpty(text) ? DisplayStyle.None : DisplayStyle.Flex;
+        }
 
         public void SetTokens(IReadOnlyList<PitchTokenVm> tokens)
         {
@@ -211,54 +213,30 @@ namespace Fts.Views
 
         private VisualElement BenchRow(BenchRowVm vm)
         {
-            var row = new VisualElement();
-            row.style.flexDirection = FlexDirection.Row;
-            row.style.alignItems = Align.Center;
-            row.style.height = 34;
-            row.style.marginBottom = 2;
-            row.style.paddingLeft = 8;
-            row.style.paddingRight = 6;
-            row.style.backgroundColor = vm.Selected ? UiKit.SurfaceAlt : new Color(1f, 1f, 1f, 0.05f);
-            UiKit.Round(row, 6);
+            // [role chip] [name···] [age] [rating] [condition] — the shared row kit, so the bench
+            // reads exactly like every other player list in the game.
+            VisualElement row = PlayerRowKit.Row();
+            row.AddToClassList("fts-squad__benchrow");
+            row.EnableInClassList("fts-squad__benchrow--selected", vm.Selected);
             row.tooltip = vm.Tooltip ?? string.Empty;
 
-            // Distinct columns: [role] [name···] [age] [rating] then the condition strip.
-            var role = new Label(vm.Role);
-            role.style.width = 34;
-            role.style.fontSize = 11;
-            role.style.unityFontStyleAndWeight = FontStyle.Bold;
-            role.style.color = PlayerRowKit.RoleColor(vm.RoleGroup); // reparto colour (task 6.9)
-            role.style.unityTextAlign = TextAnchor.MiddleLeft;
-            row.Add(role);
-
-            var name = new Label(vm.Name);
-            name.style.flexGrow = 1f;
-            name.style.fontSize = 12;
-            name.style.color = UiKit.TextPrimary;
-            name.style.unityTextAlign = TextAnchor.MiddleLeft;
-            name.style.whiteSpace = WhiteSpace.NoWrap;
-            name.style.textOverflow = TextOverflow.Ellipsis;
-            name.style.overflow = Overflow.Hidden;
+            row.Add(PlayerRowKit.RoleChip(vm.Role, vm.RoleGroup));
+            VisualElement name = PlayerRowKit.TextCell(vm.Name, 0, TextAnchor.MiddleLeft, grow: true, bold: true);
+            PlayerRowKit.SetSelected(name, vm.Selected);
             row.Add(name);
 
             var age = new Label(vm.Age.ToString());
-            age.style.width = 26;
-            age.style.fontSize = 11;
-            age.style.color = UiKit.TextMuted;
-            age.style.unityTextAlign = TextAnchor.MiddleRight;
-            age.style.marginRight = 6;
+            age.AddToClassList("fts-squad__age");
+            age.style.unityTextAlign = TextAnchor.MiddleCenter;
             row.Add(age);
 
             var rating = new Label(vm.Rating.ToString());
-            rating.style.width = 26;
-            rating.style.fontSize = 13;
-            rating.style.unityFontStyleAndWeight = FontStyle.Bold;
-            rating.style.color = UiKit.TextPrimary;
-            rating.style.unityTextAlign = TextAnchor.MiddleRight;
-            rating.style.marginRight = 8;
+            rating.AddToClassList("fts-squad__rating");
+            rating.style.unityTextAlign = TextAnchor.MiddleCenter;
             row.Add(rating);
 
             ConditionStrip.Append(row, vm.FormArrow, vm.MoraleFace, vm.Fitness);
+
             foreach (VisualElement child in row.Children())
                 child.pickingMode = PickingMode.Ignore;
             return row;
@@ -344,38 +322,17 @@ namespace Fts.Views
             _ghost.style.top = panelPos.y - rootWb.y + 10f;
         }
 
-        private void ApplyResponsive()
+        private void Layout(Viewport viewport)
         {
-            float w = Root.contentRect.width;
-            if (w <= 1f)
-                return;
-
-            bool stack = w < StackBreakpoint;
-            if (stack == _stacked)
-                return;
+            bool stack = viewport == Viewport.Mobile;
             _stacked = stack;
-
             _content.style.flexDirection = stack ? FlexDirection.Column : FlexDirection.Row;
-            if (stack)
-            {
-                _pitchWrap.style.marginRight = 0;
-                _pitchWrap.style.minHeight = 220;
-                _pitchWrap.style.flexGrow = 0;
-                _benchColumn.style.width = new Length(100, LengthUnit.Percent);
-                _benchColumn.style.minWidth = 0;
-                _benchColumn.style.maxHeight = 200;
-                _benchColumn.style.marginTop = 6;
-            }
-            else
-            {
-                _pitchWrap.style.marginRight = 8;
-                _pitchWrap.style.minHeight = StyleKeyword.Null;
-                _pitchWrap.style.flexGrow = 1;
-                _benchColumn.style.width = new Length(34, LengthUnit.Percent);
-                _benchColumn.style.minWidth = 150;
-                _benchColumn.style.maxHeight = StyleKeyword.Null;
-                _benchColumn.style.marginTop = 0;
-            }
+            _content.style.alignItems = stack ? Align.Stretch : Align.FlexStart;
+            _pitchWrap.style.flexGrow = stack ? 0f : 3f;
+            _pitchWrap.style.flexBasis = stack ? new StyleLength(StyleKeyword.Auto) : new StyleLength(0f);
+            _benchColumn.style.flexGrow = stack ? 0f : 2f;
+            _benchColumn.style.flexBasis = stack ? new StyleLength(StyleKeyword.Auto) : new StyleLength(0f);
+            _benchColumn.style.marginLeft = stack ? 0f : UiKit.SpaceMd;
         }
 
         private static Button FooterButton(string text, Action onClick) => UiKit.FooterButton(text, onClick);

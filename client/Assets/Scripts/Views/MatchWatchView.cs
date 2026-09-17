@@ -5,17 +5,25 @@ using UnityEngine.UIElements;
 namespace Fts.Views
 {
     /// <summary>
-    /// Chrome for the watchable match (task 3.1): a top HUD (score + clock),
-    /// the pitch area (the renderer is inserted by the presenter), an event
-    /// toast overlay, and a bottom control bar (speed 1x/2x/4x, Skip, Continue).
+    /// Chrome for the watchable match (task 3.1): a top HUD (score + clock), a slot the
+    /// presenter fills with the live figures, the pitch area (the renderer is inserted by the
+    /// presenter), an event toast overlay, and a bottom control bar (speed 0.5x/1x/2x/4x, Skip,
+    /// Continue).
+    ///
+    /// The figures arrive as a whole strip rather than as numbers because the strip is painted in
+    /// the two KIT colours, and the kits are the presenter's business — it is the one that resolves
+    /// the club identities and guards against a colour clash.
+    ///
     /// Dumb view: it raises events and renders what the presenter tells it.
     /// </summary>
     public sealed class MatchWatchView
     {
-        private static readonly Color BarColor = new Color(0.07f, 0.11f, 0.20f);
+        private static readonly Color BarColor = UiKit.SurfaceDeep;
         private static readonly Color ToastColor = new Color(0f, 0f, 0f, 0.75f);
-        private static readonly Color ActiveSpeed = new Color(0.20f, 0.55f, 0.30f);
-        private static readonly Color IdleSpeed = new Color(0.20f, 0.24f, 0.34f);
+        private static readonly Color ActiveSpeed = UiKit.Accent;
+        private static readonly Color IdleSpeed = UiKit.SurfaceAlt;
+        private static readonly Color SlowMotionChip = new Color(0.95f, 0.72f, 0.20f, 0.92f);
+        private static readonly Color SlowMotionText = new Color(0.08f, 0.09f, 0.12f);
 
         public event Action<float> SpeedClicked;
         public event Action SkipClicked;
@@ -27,17 +35,25 @@ namespace Fts.Views
         /// <summary>Container the presenter drops the MatchRenderer into.</summary>
         public VisualElement PitchContainer { get; }
 
+        /// <summary>Row under the HUD the presenter drops the live-figures strip into.</summary>
+        public VisualElement StatsSlot { get; }
+
         private Label _score;
         private Label _clock;
         private VisualElement _homeCrestSlot;
         private VisualElement _awayCrestSlot;
         private readonly Label _toast;
+        private readonly Label _slowMotion;
         private readonly ActionFeed _feed = new ActionFeed();
         private Button _skip;
         private Button _pause;
         private Button _continue;
         private readonly Button[] _speedButtons;
-        private readonly float[] _speeds = { 1f, 2f, 4f };
+        // 0.5x is not a gimmick: at 1x the director spends half the budget on the strikes and has
+        // to run the rest of the match at about thirty-five times real time, which is a lot of
+        // football going past. Halving it is the one honest lever on that — a ten-minute match
+        // with the ordinary play at a readable pace and the strikes in slow motion proper.
+        private readonly float[] _speeds = { 0.5f, 1f, 2f, 4f };
         private IVisualElementScheduledItem _toastHide;
 
         public MatchWatchView(Func<string, string> tr)
@@ -47,6 +63,9 @@ namespace Fts.Views
             Root.style.backgroundColor = UiKit.HubBlue;
 
             Root.Add(BuildHud(tr));
+
+            StatsSlot = new VisualElement();
+            Root.Add(StatsSlot);
 
             PitchContainer = new VisualElement();
             PitchContainer.style.flexGrow = 1f; // takes the space between HUD and controls
@@ -64,7 +83,7 @@ namespace Fts.Views
 
             _toast = new Label(string.Empty);
             _toast.style.color = Color.white;
-            _toast.style.fontSize = 16;
+            _toast.AddToClassList("fts-t-strong");
             _toast.style.unityFontStyleAndWeight = FontStyle.Bold;
             _toast.style.backgroundColor = ToastColor;
             _toast.style.paddingLeft = 12;
@@ -73,6 +92,22 @@ namespace Fts.Views
             _toast.style.paddingBottom = 6;
             _toast.style.display = DisplayStyle.None;
             toastRow.Add(_toast);
+
+            // The slow-motion chip sits beside the toast: when the director drops playback to real
+            // time the picture suddenly crawls, and without a word on screen that reads as a stall.
+            _slowMotion = new Label(tr("match.slow_motion"));
+            _slowMotion.style.color = SlowMotionText;
+            _slowMotion.AddToClassList("fts-t-meta");
+            _slowMotion.style.unityFontStyleAndWeight = FontStyle.Bold;
+            _slowMotion.style.backgroundColor = SlowMotionChip;
+            _slowMotion.style.paddingLeft = 9;
+            _slowMotion.style.paddingRight = 9;
+            _slowMotion.style.paddingTop = 3;
+            _slowMotion.style.paddingBottom = 3;
+            _slowMotion.style.marginLeft = 8;
+            _slowMotion.style.display = DisplayStyle.None;
+            toastRow.Add(_slowMotion);
+
             PitchContainer.Add(toastRow);
             PitchContainer.Add(_feed.Root);
             _feed.Clear();
@@ -100,7 +135,8 @@ namespace Fts.Views
             hud.Add(_homeCrestSlot);
 
             _score = new Label(string.Empty);
-            _score.style.fontSize = 24;
+            _score.AddToClassList("fts-hud__score");
+            UiKit.UseDisplayFont(_score);
             _score.style.unityFontStyleAndWeight = FontStyle.Bold;
             _score.style.color = Color.white;
             hud.Add(_score);
@@ -111,7 +147,7 @@ namespace Fts.Views
             hud.Add(_awayCrestSlot);
 
             _clock = new Label("0'");
-            _clock.style.fontSize = 20;
+            _clock.AddToClassList("fts-t-strong");
             _clock.style.color = new Color(1f, 1f, 1f, 0.8f);
             _clock.style.minWidth = 48;
             _clock.style.unityTextAlign = TextAnchor.MiddleLeft;
@@ -130,7 +166,7 @@ namespace Fts.Views
             bar.style.paddingTop = 8;
             bar.style.paddingBottom = 8;
 
-            string[] speedKeys = { "match.speed_1x", "match.speed_2x", "match.speed_4x" };
+            string[] speedKeys = { "match.speed_05x", "match.speed_1x", "match.speed_2x", "match.speed_4x" };
             for (int i = 0; i < _speeds.Length; i++)
             {
                 float speed = _speeds[i];
@@ -153,7 +189,7 @@ namespace Fts.Views
             _continue = new Button(() => ContinueClicked?.Invoke()) { text = tr("match.continue") };
             StyleSmall(_continue);
             _continue.style.marginLeft = 16;
-            _continue.style.width = 150;
+            _continue.style.minWidth = 150;
             bar.Add(_continue);
 
             return bar;
@@ -176,7 +212,7 @@ namespace Fts.Views
         {
             var slot = new VisualElement();
             slot.style.width = 32;
-            slot.style.height = 32;
+            slot.style.minHeight = 32;
             slot.style.alignItems = Align.Center;
             slot.style.justifyContent = Justify.Center;
             return slot;
@@ -186,8 +222,11 @@ namespace Fts.Views
         public void SetActiveSpeed(float speed)
         {
             for (int i = 0; i < _speeds.Length; i++)
+            {
                 _speedButtons[i].style.backgroundColor =
                     Mathf.Approximately(_speeds[i], speed) ? ActiveSpeed : IdleSpeed;
+                _speedButtons[i].style.color = Mathf.Approximately(_speeds[i], speed) ? UiKit.TextOnAccent : UiKit.TextPrimary;
+            }
         }
 
         /// <summary>Adds a line to the running commentary beside the pitch (task 13.1).</summary>
@@ -195,6 +234,10 @@ namespace Fts.Views
 
         /// <summary>Empties the commentary (a re-simulated remainder starts fresh).</summary>
         public void ClearActions() => _feed.Clear();
+
+        /// <summary>Shows or hides the real-time slow-motion chip.</summary>
+        public void SetSlowMotion(bool on) =>
+            _slowMotion.style.display = on ? DisplayStyle.Flex : DisplayStyle.None;
 
         public void ShowToast(string text)
         {
@@ -216,9 +259,9 @@ namespace Fts.Views
 
         private static void StyleSmall(Button b)
         {
-            b.style.height = 44;
+            b.style.minHeight = 44;
             b.style.minWidth = 56;
-            b.style.fontSize = 18;
+            b.AddToClassList("fts-t-strong");
             b.style.marginLeft = 4;
             b.style.marginRight = 4;
             b.style.color = Color.white;

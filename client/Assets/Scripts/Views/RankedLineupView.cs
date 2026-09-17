@@ -65,7 +65,9 @@ namespace Fts.Views
 
             _title = UiKit.ScreenTitle(string.Empty);
             _title.style.marginBottom = UiKit.SpaceSm;
-            col.Add(_title);
+            // Back and the page's actions sit beside the title, not in a footer (task 14.6).
+            PageHeadParts titleHead = UiKit.TitleHead(_title);
+            col.Add(titleHead.Root);
 
             VisualElement formationPanel = UiKit.Panel();
             col.Add(formationPanel);
@@ -97,12 +99,11 @@ namespace Fts.Views
             _status.style.display = DisplayStyle.None;
             col.Add(_status);
 
-            VisualElement footer = UiKit.FooterBar();
+            VisualElement footer = titleHead.Actions;
             _backButton = UiKit.FooterButton(string.Empty, () => BackClicked?.Invoke());
             footer.Add(_backButton);
             _saveButton = UiKit.FooterPrimaryButton(string.Empty, () => SaveClicked?.Invoke());
             footer.Add(_saveButton);
-            col.Add(footer);
 
             UpdateTexts();
         }
@@ -122,7 +123,7 @@ namespace Fts.Views
                 UiKit.SetRowCardSelected(row, s.Selected);
 
                 var role = new Label(s.RoleLabel ?? string.Empty);
-                role.style.fontSize = 12;
+                role.AddToClassList("fts-t-meta");
                 role.style.unityFontStyleAndWeight = FontStyle.Bold;
                 role.style.color = UiKit.TextMuted;
                 role.style.width = 56;
@@ -131,7 +132,7 @@ namespace Fts.Views
                 row.Add(role);
 
                 var player = new Label(s.PlayerLabel ?? string.Empty);
-                player.style.fontSize = 14;
+                player.AddToClassList("fts-t-body");
                 player.style.color = UiKit.TextPrimary;
                 player.style.flexGrow = 1f;
                 player.style.flexShrink = 1f;
@@ -158,7 +159,7 @@ namespace Fts.Views
                 VisualElement row = UiKit.RowCard(44f);
 
                 var label = new Label(b.Label ?? string.Empty);
-                label.style.fontSize = 14;
+                label.AddToClassList("fts-t-body");
                 label.style.color = UiKit.TextPrimary;
                 label.style.flexGrow = 1f;
                 label.style.flexShrink = 1f;
@@ -170,7 +171,7 @@ namespace Fts.Views
                 row.Add(label);
 
                 var arrow = new Label("↑");
-                arrow.style.fontSize = 16;
+                arrow.AddToClassList("fts-t-strong");
                 arrow.style.color = UiKit.TextMuted;
                 arrow.style.marginLeft = UiKit.SpaceSm;
                 arrow.style.flexShrink = 0f;

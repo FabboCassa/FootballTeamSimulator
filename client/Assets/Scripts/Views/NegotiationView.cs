@@ -37,79 +37,66 @@ namespace Fts.Views
 
         public NegotiationView(Func<string, string> tr)
         {
-            // Task 6.9: shell-aligned — navy background, a centred capped-width column, a section
-            // Header instead of the old giant Title, and the shared UiKit.Card for the info box.
-            Root = UiKit.ScreenRoot();
+            // Task 14.4: the standard page. The deal facts sit on a card; the amount is the page's
+            // raised card — a big field with − / + either side, the formatted figure under it and the
+            // offers left — and the two actions are a CTA and a ghost, full width on a phone.
+            PageParts page = UiKit.StandardPage(tr("negotiation.kicker"), tr("negotiation.title"), tr("common.back"),
+                () => BackClicked?.Invoke(), UiKit.WidthNarrow + 200f);
+            Root = page.Root;
+            _title = page.Title;
+            VisualElement col = page.Column;
 
-            var col = UiKit.PageColumn(UiKit.WidthMedium);
-            col.style.flexGrow = 1f;
-            Root.Add(col);
-
-            _title = UiKit.Header(tr("negotiation.title"));
-            _title.style.marginBottom = 8;
-            col.Add(_title);
-
-            _infoBox = UiKit.Card();
+            _infoBox = UiKit.OptionCard();
+            _infoBox.AddToClassList("fts-nego__info");
             col.Add(_infoBox);
 
-            _amountCaption = SectionLabel(tr("negotiation.your_amount"));
-            _amountCaption.style.marginTop = 10;
-            col.Add(_amountCaption);
+            VisualElement amountCard = UiKit.RaisedCard();
+            amountCard.AddToClassList("fts-nego__amount");
+            _amountCaption = UiKit.SectionLabel(tr("negotiation.your_amount"));
+            _amountCaption.style.marginTop = 0;
+            amountCard.Add(_amountCaption);
 
             var amountRow = new VisualElement();
             amountRow.style.flexDirection = FlexDirection.Row;
             amountRow.style.alignItems = Align.Center;
-
-            _decrement = StepButton("−", () => DecrementClicked?.Invoke());
+            _decrement = StepButton("\u2212", () => DecrementClicked?.Invoke());
             amountRow.Add(_decrement);
-
             _amountField = new TextField();
+            _amountField.AddToClassList("fts-search");
+            _amountField.AddToClassList("fts-nego__field");
             _amountField.style.flexGrow = 1f;
-            _amountField.style.fontSize = 20;
-            _amountField.style.minWidth = 140;
             _amountField.RegisterValueChangedCallback(evt => AmountTyped?.Invoke(ParseDigits(evt.newValue)));
             amountRow.Add(_amountField);
-
             _increment = StepButton("+", () => IncrementClicked?.Invoke());
             amountRow.Add(_increment);
-            col.Add(amountRow);
+            amountCard.Add(amountRow);
 
             _amountFormatted = new Label(string.Empty);
-            _amountFormatted.style.fontSize = 15;
-            _amountFormatted.style.color = UiKit.Positive;
-            _amountFormatted.style.marginTop = 2;
-            _amountFormatted.style.marginBottom = 6;
-            col.Add(_amountFormatted);
+            _amountFormatted.AddToClassList("fts-nego__formatted");
+            UiKit.UseDisplayFont(_amountFormatted);
+            _amountFormatted.style.unityTextAlign = TextAnchor.MiddleCenter;
+            amountCard.Add(_amountFormatted);
 
             _patience = new Label(string.Empty);
-            _patience.style.fontSize = 12;
-            _patience.style.color = new Color(1f, 1f, 1f, 0.6f);
-            _patience.style.marginBottom = 6;
-            col.Add(_patience);
+            _patience.AddToClassList("fts-nego__patience");
+            _patience.style.unityTextAlign = TextAnchor.MiddleCenter;
+            amountCard.Add(_patience);
 
             var actionRow = new VisualElement();
-            actionRow.style.flexDirection = FlexDirection.Row;
-            actionRow.style.flexWrap = Wrap.Wrap;
-            actionRow.style.marginBottom = 4;
-            _primary = ActionButton(() => PrimaryClicked?.Invoke());
+            actionRow.AddToClassList("fts-nego__actions");
+            _primary = UiKit.PrimaryButton(string.Empty, () => PrimaryClicked?.Invoke());
+            _primary.AddToClassList("fts-nego__primary");
             actionRow.Add(_primary);
-            _secondary = ActionButton(() => SecondaryClicked?.Invoke());
+            _secondary = UiKit.GhostButton(string.Empty, () => SecondaryClicked?.Invoke());
+            _secondary.AddToClassList("fts-nego__secondary");
             actionRow.Add(_secondary);
-            col.Add(actionRow);
+            amountCard.Add(actionRow);
+            col.Add(amountCard);
 
-            _status = UiKit.Subtitle(string.Empty);
+            _status = new Label(string.Empty);
+            _status.AddToClassList("fts-nego__status");
             _status.style.whiteSpace = WhiteSpace.Normal;
-            _status.style.unityTextAlign = TextAnchor.MiddleLeft;
-            _status.style.marginTop = 2;
             col.Add(_status);
-
-            VisualElement footer = UiKit.FooterBar();
-            var back = UiKit.MenuButton(tr("common.back"), () => BackClicked?.Invoke());
-            back.style.width = 160;
-            back.style.height = 44;
-            back.style.fontSize = 16;
-            footer.Add(back);
-            col.Add(footer);
         }
 
         public void SetTitle(string text) => _title.text = text;
@@ -127,10 +114,8 @@ namespace Fts.Views
             foreach (string line in lines)
             {
                 var label = new Label(line);
-                label.style.fontSize = 14;
-                label.style.color = new Color(1f, 1f, 1f, 0.85f);
+                label.AddToClassList("fts-nego__line");
                 label.style.whiteSpace = WhiteSpace.Normal;
-                label.style.marginBottom = 2;
                 _infoBox.Add(label);
             }
         }
@@ -169,27 +154,10 @@ namespace Fts.Views
             return value;
         }
 
-        private static Label SectionLabel(string caption) => UiKit.SectionLabel(caption);
-
         private static Button StepButton(string text, Action onClick)
         {
             var button = new Button(onClick) { text = text };
-            button.style.width = 52;
-            button.style.height = 44;
-            button.style.fontSize = 22;
-            button.style.marginRight = 8;
-            button.style.marginLeft = 8;
-            return button;
-        }
-
-        private static Button ActionButton(Action onClick)
-        {
-            var button = new Button(onClick) { text = string.Empty };
-            button.style.minWidth = 180;
-            button.style.height = 46;
-            button.style.fontSize = 15;
-            button.style.marginRight = 8;
-            button.style.marginTop = 4;
+            button.AddToClassList("fts-nego__step");
             return button;
         }
     }

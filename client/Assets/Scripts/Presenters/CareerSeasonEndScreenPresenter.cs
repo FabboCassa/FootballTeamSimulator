@@ -78,8 +78,8 @@ namespace Fts.Presenters
                     ClubId = offer.ClubId,
                     Text = _loc.Tr("careerend.offer", offer.ClubName, offer.Division, offer.RequiredReputation),
                     ActionLabel = _loc.Tr("careerend.accept"),
-                    Crest = Crests.Badge(_identity.Visual(offer.ClubId), 32f,
-                        _career.FindClub(offer.ClubId)?.ShortName ?? "?", UiKit.Surface)
+                    Crest = Crests.Badge(_identity.Visual(offer.ClubId), Responsive.IsMobile ? 84f : 48f,
+                        _career.FindClub(offer.ClubId)?.ShortName ?? "?", UiKit.RowSurface)
                 });
             }
             _view.SetOffers(rows);

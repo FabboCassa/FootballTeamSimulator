@@ -19,9 +19,11 @@ namespace Fts.Services
     /// </summary>
     public sealed class SafeAreaController : IStartable, ITickable
     {
-        // Mirrors Fts.Views.UiKit.Background (0x141C30). Hardcoded because the Services
+        // Mirrors Fts.Views.UiKit.Background (0x080D18). Hardcoded because the Services
         // layer does not reference the Views layer; keep in sync with the UiKit token.
-        private static readonly Color AppBackground = new Color(0x14 / 255f, 0x1C / 255f, 0x30 / 255f);
+        // It was left on the pre-14.1 navy (0x141C30) until 14.3, which showed as a lighter
+        // frame around the page in the notch inset on a real handset.
+        private static readonly Color AppBackground = new Color(0x08 / 255f, 0x0D / 255f, 0x18 / 255f);
 
         private readonly UIDocument _uiDocument;
         private VisualElement _root;

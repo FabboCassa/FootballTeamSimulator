@@ -23,18 +23,50 @@ namespace Fts.MatchView
     /// it is going to, or the trajectory of a shot), or dead on a spot. Players wear
     /// their shirt numbers. A short trail follows the ball so a pass reads as a pass.
     ///
-    /// Playback advances in wall-clock time (scheduler delta), scaled by the current
-    /// speed, and interpolates linearly between stream ticks so motion stays smooth at
-    /// any frame rate. The stream carries no per-tick noise any more, so — unlike 3.1 —
-    /// nothing is smoothed on the way in: what Sim.Core produced is what is drawn.
+    /// PACING (the director). Playback advances in wall-clock time (scheduler delta) and
+    /// interpolates linearly between stream ticks so motion stays smooth at any frame rate,
+    /// but it does NOT advance at one rate throughout. Ninety minutes compressed evenly into
+    /// a few real minutes is thirty times real speed, and at thirty times real speed a shot
+    /// — two or three frames of the stream — is on screen for a twentieth of a second and
+    /// nobody has ever seen one. So the frames AROUND a strike, a goal, a penalty or a
+    /// sending-off play at REAL TIME, and the rest of the match is compressed harder to pay
+    /// for them, landing the whole thing on <see cref="TargetSecondsAt1x"/>. See
+    /// <see cref="SetPacing"/>: the online live screens, which follow a clock shared with
+    /// another human being, opt OUT and keep the flat rate.
+    ///
+    /// Shirt numbers are real <see cref="Label"/> children rather than painter text: a label
+    /// centres itself in the token's own box, which is the only way a two-digit number stays
+    /// inside its circle at every pitch size.
+    ///
+    /// The stream carries no per-tick noise, so — unlike 3.1 — nothing is smoothed on the way
+    /// in: what Sim.Core produced is what is drawn.
     /// </summary>
     public sealed class MatchRenderer : VisualElement
     {
-        // 90 minutes play in this many real seconds at 1x (ARCHITECTURE.md §4.3:
-        // "~3-5 real minutes when watched"). 2x/4x divide it down. The online live
-        // screens derive the shared match minute from this number — do not change it
-        // without changing LiveSecondsPerMinute there too.
-        private const float BaseSecondsAt1x = 180f;
+        // 90 minutes play in this many real seconds at 1x when the pacing is FLAT (no director):
+        // the shared-clock live screens derive the match minute from this number — do not change
+        // it without changing LiveSecondsPerMinute there too.
+        public const float BaseSecondsAt1x = 180f;
+
+        /// <summary>
+        /// What a watched match costs at 1x with the director on. The whole ninety minutes lands
+        /// here — slow-motion included — because the rest of the match is compressed to pay for
+        /// the slow-motion. Raise it for a more watchable match and a longer sitting: 420f is a
+        /// seven-minute match with the same real-time highlights.
+        /// </summary>
+        public const float TargetSecondsAt1x = 300f;
+
+        /// <summary>Frames of the stream before and after a highlight that play at real time (2 frames = 1s).</summary>
+        private const int HighlightLeadFrames = 8;   // 4 seconds of football before the strike
+        private const int HighlightTailFrames = 6;   // 3 seconds after it
+
+        /// <summary>
+        /// The director never spends more than this share of the budget on slow-motion. A match
+        /// with thirty strikes would otherwise be nothing but slow-motion and would run twice as
+        /// long as the caller asked for.
+        /// </summary>
+        private const float MaxHighlightShare = 0.55f;
+
         private const int PumpIntervalMs = 16; // ~60 fps
 
         // Geometry in decimetres (Sim.Core pitch space), scaled to pixels on draw.
@@ -62,7 +94,32 @@ namespace Fts.MatchView
         private readonly int _players;
         private readonly int _ticksPerMinute;
         private readonly int _lastTick;
-        private readonly float _ticksPerSecond;
+
+        /// <summary>Frames per real second that IS real time (the stream runs at 120 frames a match minute).</summary>
+        private readonly float _realTimeTicksPerSecond;
+
+        /// <summary>True on the frames the director plays at real time. Empty when the director is off.</summary>
+        private bool[] _highlight = Array.Empty<bool>();
+
+        private float _fastTicksPerSecond;   // everything that is not a highlight
+        private float _slowTicksPerSecond;   // the highlights themselves
+        private bool _director;
+        private bool _inSlowMotion;
+
+        // Shirt numbers, one label a man. Kept as children so the text centres itself.
+        private readonly Label[] _homeNumbers;
+        private readonly Label[] _awayNumbers;
+
+        /// <summary>Token radius the labels were last sized for; -1 forces the first write.</summary>
+        private float _numberRadius = -1f;
+
+        // The live figures and where the count has got to (see MatchLiveStats).
+        private MatchLiveStats _stats;
+        private int _statsTick = -1;
+
+        /// <summary>A strike of this side's that nothing has settled yet — see <see cref="CountAction"/>.</summary>
+        private bool _homeShotPending;
+        private bool _awayShotPending;
 
         /// <summary>
         /// The frame the referee blew for half-time on (int.MaxValue when the stream has no interval —
@@ -85,7 +142,6 @@ namespace Fts.MatchView
         private int _nextAction;
         private int _lastMinute = -1;
         private bool _finished;
-        private bool _canDrawText = true;
 
         /// <summary>Fired when the displayed clock minute changes (0..90).</summary>
         public event Action<int> MinuteChanged;
@@ -96,6 +152,12 @@ namespace Fts.MatchView
         /// <summary>Fired as playback crosses a ball action — the commentary feed (13.1).</summary>
         public event Action<BallAction> ActionReached;
 
+        /// <summary>Fired when the live figures move, so a panel can redraw without polling.</summary>
+        public event Action<MatchLiveStats> StatsChanged;
+
+        /// <summary>Fired when playback enters or leaves real-time slow-motion.</summary>
+        public event Action<bool> SlowMotionChanged;
+
         /// <summary>Fired once when playback reaches full time (or on Skip).</summary>
         public event Action Finished;
 
@@ -104,6 +166,9 @@ namespace Fts.MatchView
         public int[] AwayShirts => _stream.AwayShirts;
         public int[] HomePlayerIds => _stream.HomePlayerIds;
         public int[] AwayPlayerIds => _stream.AwayPlayerIds;
+
+        /// <summary>The figures of the match SO FAR — never of the whole match (see MatchLiveStats).</summary>
+        public MatchLiveStats Stats => _stats;
 
         public MatchRenderer(MatchReport report, Color homeColor, Color awayColor)
         {
@@ -120,7 +185,7 @@ namespace Fts.MatchView
             _players = _stream.PlayerCount;
             _ticksPerMinute = _stream.TicksPerMinute > 0 ? _stream.TicksPerMinute : 1;
             _lastTick = _stream.TickCount > 0 ? _stream.TickCount - 1 : 0;
-            _ticksPerSecond = _lastTick > 0 ? _lastTick / BaseSecondsAt1x : 0f;
+            _realTimeTicksPerSecond = _ticksPerMinute / 60f;
 
             foreach (BallAction action in _actions)
                 if (action.Kind == BallActionKind.HalfTime)
@@ -129,6 +194,11 @@ namespace Fts.MatchView
                     break;
                 }
 
+            _homeNumbers = BuildNumbers(_stream.HomeShirts, _homeNumberColor, _homeColor, _homeKeeperColor);
+            _awayNumbers = BuildNumbers(_stream.AwayShirts, _awayNumberColor, _awayColor, _awayKeeperColor);
+
+            SetPacing(BaseSecondsAt1x, director: false);
+
             // Fill the host container (its alignItems must not shrink us to content).
             style.position = Position.Absolute;
             style.left = 0;
@@ -136,10 +206,102 @@ namespace Fts.MatchView
             style.right = 0;
             style.bottom = 0;
             generateVisualContent += OnGenerateVisualContent;
+            RegisterCallback<GeometryChangedEvent>(_ => LayoutNumbers());
         }
 
         /// <summary>True when there is something to play (a stripped report has nothing).</summary>
         public bool HasStream => _lastTick > 0 && _players > 0;
+
+        /// <summary>True while the director is holding playback at real time.</summary>
+        public bool InSlowMotion => _inSlowMotion;
+
+        // ------------------------------------------------------------- pacing
+
+        /// <summary>
+        /// How long the match should take at 1x, and whether the director may spend part of that
+        /// budget running the strikes at real time.
+        ///
+        /// <paramref name="director"/> MUST stay false on the shared-clock live screens: there the
+        /// displayed minute is agreed with another client from wall-clock time, and a renderer that
+        /// slowed down for a shot would drift away from it. A finished replay — the career watch
+        /// screen, a stored replay — answers to nobody's clock and gets the director.
+        /// </summary>
+        public void SetPacing(float targetSecondsAt1x, bool director)
+        {
+            float target = targetSecondsAt1x > 1f ? targetSecondsAt1x : BaseSecondsAt1x;
+            _director = director && HasStream;
+
+            if (!_director)
+            {
+                _highlight = Array.Empty<bool>();
+                _fastTicksPerSecond = _lastTick > 0 ? _lastTick / target : 0f;
+                _slowTicksPerSecond = _fastTicksPerSecond;
+                SetSlowMotion(false);
+                return;
+            }
+
+            _highlight = BuildHighlights();
+
+            int slowFrames = 0;
+            for (int i = 0; i < _highlight.Length; i++)
+                if (_highlight[i])
+                    slowFrames++;
+
+            int fastFrames = (_lastTick + 1) - slowFrames;
+
+            // What the highlights would cost at true real time, capped so they cannot eat the match.
+            float slowSeconds = slowFrames / _realTimeTicksPerSecond;
+            float slowBudget = target * MaxHighlightShare;
+            if (slowSeconds > slowBudget)
+                slowSeconds = slowBudget;
+
+            float fastSeconds = target - slowSeconds;
+            _slowTicksPerSecond = slowSeconds > 0f ? slowFrames / slowSeconds : _realTimeTicksPerSecond;
+            _fastTicksPerSecond = fastSeconds > 0f ? fastFrames / fastSeconds : _lastTick / target;
+
+            // A pathological stream (all highlight, or none) must never stall playback.
+            if (_slowTicksPerSecond <= 0f) _slowTicksPerSecond = _realTimeTicksPerSecond;
+            if (_fastTicksPerSecond <= 0f) _fastTicksPerSecond = _lastTick / target;
+        }
+
+        /// <summary>
+        /// The frames worth watching: a strike, the goal it becomes, a penalty, a sending-off —
+        /// with the run-up to it, which is where the football actually is.
+        ///
+        /// Saves, misses and blocks are deliberately NOT in the list: each one lands within a frame
+        /// or two of the shot that caused it and is already inside that shot's window. Corners and
+        /// free kicks are left out too — there are twenty-odd a match and taking them at real time
+        /// would spend the whole budget on restarts.
+        /// </summary>
+        private bool[] BuildHighlights()
+        {
+            var flags = new bool[_lastTick + 1];
+
+            foreach (BallAction a in _actions)
+            {
+                if (a.Kind != BallActionKind.Shot && a.Kind != BallActionKind.Goal
+                    && a.Kind != BallActionKind.Penalty && a.Kind != BallActionKind.RedCard)
+                    continue;
+
+                int from = Mathf.Max(0, a.Tick - HighlightLeadFrames);
+                int to = Mathf.Min(_lastTick, a.Tick + HighlightTailFrames);
+
+                // Never run the window across the change of ends: the two halves are drawn in
+                // mirrored coordinates and the slow-motion would be of the mirror, not the ball.
+                if (SecondHalf(a.Tick) && from < _secondHalfFrom) from = _secondHalfFrom;
+                if (!SecondHalf(a.Tick) && to >= _secondHalfFrom) to = _secondHalfFrom - 1;
+
+                for (int t = from; t <= to; t++)
+                    flags[t] = true;
+            }
+
+            return flags;
+        }
+
+        private bool IsHighlight(int tick) =>
+            _highlight.Length > 0 && tick >= 0 && tick < _highlight.Length && _highlight[tick];
+
+        // ------------------------------------------------------------- playback
 
         /// <summary>Starts (or resumes) playback. Safe to call once on screen enter.</summary>
         public void Play()
@@ -177,6 +339,8 @@ namespace Fts.MatchView
 
             _lastMinute = m;
             _finished = false;
+            RecountStats();
+            LayoutNumbers();
             MarkDirtyRepaint();
         }
 
@@ -193,6 +357,8 @@ namespace Fts.MatchView
             _nextEvent = _events.Count;
             _nextAction = _actions.Count;
             SetMinute(90);
+            RecountStats();
+            LayoutNumbers();
             MarkDirtyRepaint();
             Finish();
         }
@@ -203,17 +369,35 @@ namespace Fts.MatchView
                 return;
 
             float dt = Mathf.Min(ts.deltaTime / 1000f, 0.1f); // clamp long stalls
-            _tickPos += dt * _ticksPerSecond * _speed;
+            int at = Mathf.Clamp(Mathf.FloorToInt(_tickPos), 0, _lastTick);
+            bool slow = IsHighlight(at);
+            SetSlowMotion(slow);
+
+            _tickPos += dt * (slow ? _slowTicksPerSecond : _fastTicksPerSecond) * _speed;
             if (_tickPos > _lastTick)
                 _tickPos = _lastTick;
+
+            bool statsMoved = AdvancePossession();
 
             while (_nextEvent < _events.Count && _events[_nextEvent].Minute * _ticksPerMinute <= _tickPos)
                 EventReached?.Invoke(_events[_nextEvent++]);
 
             while (_nextAction < _actions.Count && _actions[_nextAction].Tick <= _tickPos)
-                ActionReached?.Invoke(_actions[_nextAction++]);
+            {
+                BallAction action = _actions[_nextAction++];
+                statsMoved |= CountAction(action);
+                ActionReached?.Invoke(action);
+            }
 
-            SetMinute(Mathf.Min(90, Mathf.FloorToInt(_tickPos / _ticksPerMinute)));
+            int minute = Mathf.Min(90, Mathf.FloorToInt(_tickPos / _ticksPerMinute));
+            if (minute != _lastMinute)
+                statsMoved = true; // the possession share is worth a redraw once a minute
+            SetMinute(minute);
+
+            if (statsMoved)
+                StatsChanged?.Invoke(_stats);
+
+            LayoutNumbers();
             MarkDirtyRepaint();
 
             if (_tickPos >= _lastTick)
@@ -228,13 +412,262 @@ namespace Fts.MatchView
             MinuteChanged?.Invoke(minute);
         }
 
+        private void SetSlowMotion(bool slow)
+        {
+            if (slow == _inSlowMotion)
+                return;
+            _inSlowMotion = slow;
+            SlowMotionChanged?.Invoke(slow);
+        }
+
         private void Finish()
         {
             if (_finished)
                 return;
             _finished = true;
             _pump?.Pause();
+            SetSlowMotion(false);
             Finished?.Invoke();
+        }
+
+        // ------------------------------------------------------------- live figures
+
+        /// <summary>Adds the frames crossed since the last pump to the possession count.</summary>
+        private bool AdvancePossession()
+        {
+            int upTo = Mathf.Clamp(Mathf.FloorToInt(_tickPos), 0, _lastTick);
+            if (upTo <= _statsTick)
+                return false;
+
+            int[] owner = _stream.Owner;
+            if (owner == null || owner.Length <= upTo)
+            {
+                _statsTick = upTo;
+                return false;
+            }
+
+            for (int t = _statsTick + 1; t <= upTo; t++)
+                AddOwnerFrame(owner[t]);
+
+            _statsTick = upTo;
+            return true;
+        }
+
+        private void AddOwnerFrame(int code)
+        {
+            if (code == PositionStream.NoOwner)
+                return;
+
+            _stats.OwnedFrames++;
+            if (_stream.TryOwner(code, out bool home, out _))
+            {
+                if (home) _stats.Home.PossessionFrames++;
+                else _stats.Away.PossessionFrames++;
+            }
+        }
+
+        /// <summary>
+        /// Folds one action into the live figures. Returns true when something moved.
+        ///
+        /// Which side an action belongs to is not uniform, and this is the one place that knows it:
+        /// a shot, a goal and a miss are the ATTACKER's, a save and a block are the DEFENDER's — so
+        /// a save is a shot on target for the other side, and a block is neither on target nor off
+        /// it, which is what football counts.
+        ///
+        /// A strike counts ON TARGET when the thing that settles it is a goal or a save, which is
+        /// <see cref="Sim.Core.Match.Analysis.MatchStatsBuilder"/>'s rule read FORWARDS: the builder
+        /// looks ahead from the shot, and this waits for the same action to arrive — so the strip at
+        /// full time carries the same figures as the match report, without ever looking at a frame
+        /// the watcher has not reached. A goal the stream records without a strike of its own is a
+        /// goal and not a shot, again exactly as the builder counts it.
+        /// </summary>
+        private bool CountAction(BallAction a)
+        {
+            switch (a.Kind)
+            {
+                case BallActionKind.Shot:
+                    Side(a.Home).Shots++;
+                    SetShotPending(a.Home, true);
+                    return true;
+
+                case BallActionKind.Goal:
+                    Side(a.Home).Goals++;
+                    if (ShotPending(a.Home))
+                    {
+                        Side(a.Home).ShotsOnTarget++;
+                        SetShotPending(a.Home, false);
+                    }
+
+                    return true;
+
+                case BallActionKind.Save:
+                    // The keeper's side is the one that did NOT shoot.
+                    if (ShotPending(!a.Home))
+                    {
+                        Side(!a.Home).ShotsOnTarget++;
+                        SetShotPending(!a.Home, false);
+                    }
+
+                    return true;
+
+                case BallActionKind.Miss:
+                    SetShotPending(a.Home, false);   // wide: settled, and not on target
+                    return false;
+
+                case BallActionKind.Block:
+                    SetShotPending(!a.Home, false);  // the blocker's side is recorded, not the striker's
+                    return false;
+
+                case BallActionKind.Corner:
+                    Side(a.Home).Corners++;
+                    return true;
+
+                case BallActionKind.Foul:
+                    Side(a.Home).Fouls++;
+                    return true;
+
+                case BallActionKind.YellowCard:
+                    Side(a.Home).YellowCards++;
+                    return true;
+
+                case BallActionKind.RedCard:
+                    Side(a.Home).RedCards++;
+                    return true;
+
+                case BallActionKind.Offside:
+                    Side(a.Home).Offsides++;
+                    return true;
+
+                default:
+                    return false;
+            }
+        }
+
+        private ref TeamLiveStats Side(bool home)
+        {
+            if (home)
+                return ref _stats.Home;
+            return ref _stats.Away;
+        }
+
+        private bool ShotPending(bool home) => home ? _homeShotPending : _awayShotPending;
+
+        private void SetShotPending(bool home, bool pending)
+        {
+            if (home) _homeShotPending = pending;
+            else _awayShotPending = pending;
+        }
+
+        /// <summary>Rebuilds the figures from frame 0 up to where playback now is (a seek, or Skip).</summary>
+        private void RecountStats()
+        {
+            _stats = default;
+            _statsTick = -1;
+            _homeShotPending = false;
+            _awayShotPending = false;
+
+            foreach (BallAction a in _actions)
+            {
+                if (a.Tick > _tickPos)
+                    break;
+                CountAction(a);
+            }
+
+            AdvancePossession();
+            StatsChanged?.Invoke(_stats);
+        }
+
+        // ------------------------------------------------------------- shirt numbers
+
+        private Label[] BuildNumbers(int[] shirts, Color numberColor, Color kit, Color keeperKit)
+        {
+            int count = _players > 0 ? _players : 0;
+            var labels = new Label[count];
+
+            for (int i = 0; i < count; i++)
+            {
+                string text = shirts != null && i < shirts.Length ? shirts[i].ToString() : string.Empty;
+                var label = new Label(text);
+                label.pickingMode = PickingMode.Ignore;
+                label.style.position = Position.Absolute;
+                label.style.marginLeft = 0;
+                label.style.marginRight = 0;
+                label.style.marginTop = 0;
+                label.style.marginBottom = 0;
+                label.style.paddingLeft = 0;
+                label.style.paddingRight = 0;
+                label.style.paddingTop = 0;
+                label.style.paddingBottom = 0;
+
+                // The label's box IS the token's box, so middle-centre is dead centre of the circle
+                // whatever the number's width — which is what painter text could never promise.
+                label.style.unityTextAlign = TextAnchor.MiddleCenter;
+                label.style.unityFontStyleAndWeight = FontStyle.Bold;
+                label.style.color = IsKeeper(shirts, i) ? ReadableOn(keeperKit) : numberColor;
+                label.style.display = DisplayStyle.None;
+                labels[i] = label;
+                Add(label);
+            }
+
+            return labels;
+        }
+
+        /// <summary>Puts every number back on top of its token. Called on every pump and on resize.</summary>
+        private void LayoutNumbers()
+        {
+            Rect r = contentRect;
+            if (!HasStream || float.IsNaN(r.width) || r.width <= 1f || r.height <= 1f)
+                return;
+
+            Rect fit = PitchGraphics.FitRect(r.width, r.height);
+            float scale = fit.width / PitchGraphics.LengthDm;
+            float radius = Mathf.Max(4f, TokenRadiusDm * scale);
+
+            int ta = Mathf.Clamp(Mathf.FloorToInt(_tickPos), 0, _lastTick);
+            int tb = Mathf.Min(ta + 1, _lastTick);
+            float f = Mathf.Clamp01(_tickPos - ta);
+
+            LayoutSide(_homeNumbers, _stream.HomeXY, _stream.HomeShirts, fit, radius, ta, tb, f);
+            LayoutSide(_awayNumbers, _stream.AwayXY, _stream.AwayShirts, fit, radius, ta, tb, f);
+            _numberRadius = radius;
+        }
+
+        private void LayoutSide(
+            Label[] labels, int[] side, int[] shirts, Rect fit, float radius, int ta, int tb, float f)
+        {
+            // Below this the circle is a dot and a digit inside it would be a smudge; the token alone
+            // has to do, exactly as the painter version did.
+            bool readable = radius >= 7f;
+
+            // The box and the font only change when the pitch is resized, so they are written once
+            // per resize and not sixty times a second for twenty-two labels.
+            bool resized = !Mathf.Approximately(radius, _numberRadius);
+            float box = radius * 2f;
+
+            for (int i = 0; i < labels.Length; i++)
+            {
+                Label label = labels[i];
+                if (!readable)
+                {
+                    label.style.display = DisplayStyle.None;
+                    continue;
+                }
+
+                if (resized)
+                {
+                    int digits = shirts != null && i < shirts.Length && shirts[i] >= 10 ? 2 : 1;
+                    label.style.display = DisplayStyle.Flex;
+                    label.style.width = box;
+                    label.style.height = box;
+
+                    // One digit can fill the circle; two have to share its width, so they step down.
+                    label.style.fontSize = digits >= 2 ? radius * 0.95f : radius * 1.25f;
+                }
+
+                Vector2 pos = Lerp(fit, side, ta, tb, i, f);
+                label.style.left = pos.x - radius;
+                label.style.top = pos.y - radius;
+            }
         }
 
         // ------------------------------------------------------------- drawing
@@ -261,22 +694,21 @@ namespace Fts.MatchView
             _stream.TryOwner(_stream.Owner[ta], out bool ownerHome, out int ownerSlot);
             bool owned = _stream.Owner[ta] != PositionStream.NoOwner;
 
-            DrawTeam(mgc, p, fit, scale, _stream.HomeXY, ta, tb, f, true,
+            DrawTeam(p, fit, scale, _stream.HomeXY, ta, tb, f, true,
                 owned && ownerHome ? ownerSlot : -1);
-            DrawTeam(mgc, p, fit, scale, _stream.AwayXY, ta, tb, f, false,
+            DrawTeam(p, fit, scale, _stream.AwayXY, ta, tb, f, false,
                 owned && !ownerHome ? ownerSlot : -1);
 
             DrawBall(p, fit, scale, ta, tb, f);
         }
 
         private void DrawTeam(
-            MeshGenerationContext mgc, Painter2D p, Rect fit, float scale,
+            Painter2D p, Rect fit, float scale,
             int[] side, int ta, int tb, float f, bool home, int carrier)
         {
             float radius = Mathf.Max(4f, TokenRadiusDm * scale);
             Color fill = home ? _homeColor : _awayColor;
             Color keeper = home ? _homeKeeperColor : _awayKeeperColor;
-            Color numbers = home ? _homeNumberColor : _awayNumberColor;
             int[] shirts = home ? _stream.HomeShirts : _stream.AwayShirts;
 
             for (int i = 0; i < _players; i++)
@@ -302,39 +734,12 @@ namespace Fts.MatchView
                 p.BeginPath();
                 p.Arc(pos, radius, 0f, 360f);
                 p.Stroke();
-
-                DrawNumber(mgc, shirts, i, pos, radius, numbers);
             }
         }
 
         /// <summary>Shirt 1 is the keeper; the stream hands numbers over so this needs no lineup.</summary>
         private static bool IsKeeper(int[] shirts, int slot) =>
             shirts != null && slot < shirts.Length && shirts[slot] == 1;
-
-        private void DrawNumber(
-            MeshGenerationContext mgc, int[] shirts, int slot, Vector2 pos, float radius, Color color)
-        {
-            if (!_canDrawText || shirts == null || slot >= shirts.Length)
-                return;
-
-            float fontSize = radius * 1.15f;
-            if (fontSize < 7f)
-                return; // unreadable at this size; the token alone has to do
-
-            string text = shirts[slot].ToString();
-            var at = new Vector2(pos.x - fontSize * 0.31f * text.Length, pos.y - fontSize * 0.62f);
-
-            try
-            {
-                mgc.DrawText(text, at, fontSize, color);
-            }
-            catch (Exception)
-            {
-                // No font resolved for this panel: drop numbers for the rest of the match
-                // rather than throwing once per token per frame.
-                _canDrawText = false;
-            }
-        }
 
         /// <summary>A short fading tail behind the ball, so a pass reads as a pass.</summary>
         private void DrawTrail(Painter2D p, Rect fit, int ta)

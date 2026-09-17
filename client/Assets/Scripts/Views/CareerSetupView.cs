@@ -117,6 +117,7 @@ namespace Fts.Views
 
         private Mode _mode = Mode.Leagues;
         private Viewport _builtFor = (Viewport)(-1);
+        private bool _builtWide;
         private IReadOnlyList<string> _nations = Array.Empty<string>();
         private string _nationName = string.Empty;
         private string _paneName = string.Empty;
@@ -658,10 +659,11 @@ namespace Fts.Views
         /// </summary>
         private void Layout(Viewport viewport)
         {
-            if (viewport == _builtFor)
+            if (viewport == _builtFor && _builtWide == Responsive.HasWideColumns)
                 return;
 
             _builtFor = viewport;
+            _builtWide = Responsive.HasWideColumns;
             Root.Clear();
             DetachAll();
 
@@ -744,7 +746,8 @@ namespace Fts.Views
                 _colRight.Add(_cta);
 
                 // A tablet drops the third column: the summary rides under the options instead.
-                bool tablet = viewport == Viewport.Tablet;
+                // Task 14.9: an upright tablet or a squeezed window; a landscape tablet keeps three columns.
+                bool tablet = viewport == Viewport.Tablet && !Responsive.HasWideColumns;
                 _colRight.style.display = tablet ? DisplayStyle.None : DisplayStyle.Flex;
                 if (tablet)
                 {

@@ -99,7 +99,9 @@ namespace Fts.Views
             Root.Add(col);
 
             _title = UiKit.ScreenTitle(string.Empty);
-            col.Add(_title);
+            // Back and the page's actions sit beside the title, not in a footer (task 14.6).
+            PageHeadParts titleHead = UiKit.TitleHead(_title);
+            col.Add(titleHead.Root);
             _subtitle = UiKit.HelpText(string.Empty);
             col.Add(_subtitle);
 
@@ -118,7 +120,7 @@ namespace Fts.Views
             body.Add(_todayCard);
             _todayCaption = Caption(_todayCard);
             _position = Line(_todayCard);
-            _position.style.fontSize = 16;
+            _position.AddToClassList("fts-t-strong");
             _position.style.unityFontStyleAndWeight = FontStyle.Bold;
             _lastResult = Line(_todayCard);
             _nextMatch = Line(_todayCard);
@@ -184,7 +186,7 @@ namespace Fts.Views
             _status.style.display = DisplayStyle.None;
             col.Add(_status);
 
-            VisualElement footer = UiKit.FooterBar();
+            VisualElement footer = titleHead.Actions;
             _backButton = UiKit.FooterButton(string.Empty, () => BackClicked?.Invoke());
             footer.Add(_backButton);
             _refreshButton = UiKit.FooterButton(string.Empty, () => RefreshClicked?.Invoke());
@@ -192,7 +194,6 @@ namespace Fts.Views
             footer.Add(_refreshButton);
             _enrolButton = UiKit.FooterPrimaryButton(string.Empty, () => EnrolClicked?.Invoke());
             footer.Add(_enrolButton);
-            col.Add(footer);
 
             UpdateTexts();
         }
@@ -276,7 +277,7 @@ namespace Fts.Views
                 OnlineTableKit.Stripe(line, false, i);
 
                 var label = new Label(row.Label ?? string.Empty);
-                label.style.fontSize = 14;
+                label.AddToClassList("fts-t-body");
                 label.style.color = UiKit.TextPrimary;
                 label.style.flexGrow = 1f;
                 label.style.flexShrink = 1f;

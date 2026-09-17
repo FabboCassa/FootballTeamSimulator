@@ -999,9 +999,13 @@ namespace Fts.Views
         {
             var bar = new VisualElement();
             bar.AddToClassList("fts-pagehead");
-            bar.style.flexDirection = FlexDirection.Row;
-            bar.style.alignItems = Align.FlexEnd;
-            bar.style.justifyContent = Justify.SpaceBetween;
+            // Direction lives in the sheet so a phone can stack title over actions (task 14.4).
+            if (!StylesLoaded)
+            {
+                bar.style.flexDirection = FlexDirection.Row;
+                bar.style.alignItems = Align.FlexEnd;
+                bar.style.justifyContent = Justify.SpaceBetween;
+            }
             bar.style.flexShrink = 0f;
 
             var left = new VisualElement();
@@ -1010,12 +1014,31 @@ namespace Fts.Views
             bar.Add(left);
 
             var actions = new VisualElement();
+            actions.AddToClassList("fts-pagehead__actions");
             actions.style.flexDirection = FlexDirection.Row;
             actions.style.alignItems = Align.Center;
+            actions.style.flexWrap = Wrap.Wrap;
             actions.style.flexShrink = 0f;
             bar.Add(actions);
 
             return new PageHeadParts { Root = bar, Left = left, Actions = actions };
+        }
+
+        /// <summary>
+        /// Task 14.6: the head row of a scaffold screen that still builds its own title — the title
+        /// on the left, Back and the page's actions on the right (instead of a footer). Add the
+        /// buttons (<see cref="FooterButton"/> / <see cref="FooterPrimaryButton"/>) to
+        /// <see cref="PageHeadParts.Actions"/>. On a phone the sheet stacks actions under the title.
+        /// </summary>
+        public static PageHeadParts TitleHead(Label title)
+        {
+            PageHeadParts head = PageHead();
+            head.Root.AddToClassList("fts-titlehead");
+            head.Actions.AddToClassList("fts-titlehead__actions");
+            title.style.marginBottom = 0;
+            head.Left.style.flexGrow = 1f;
+            head.Left.Add(title);
+            return head;
         }
 
         /// <summary>A block of related settings on a card (the mockup's left column).</summary>
@@ -1395,6 +1418,145 @@ namespace Fts.Views
             return v;
         }
 
+        /// <summary>
+        /// The standard page of the redrawn app (task 14.4): the themed screen root, ONE vertical
+        /// scroller, a centred column capped at <paramref name="maxWidth"/>, and the mockup's page
+        /// head — a tracked-out kicker over a Bebas title, with a quiet Back (<paramref name="backText"/>) on the right. Add the
+        /// screen's blocks to <see cref="PageParts.Column"/>.
+        /// The Back ghost is hidden on a phone by the stylesheet: the shell's top bar already
+        /// carries a back button there, and two of them read as clutter.
+        /// </summary>
+        public static PageParts StandardPage(string kicker, string title, string backText, Action onBack, float maxWidth = WidthWide)
+        {
+            var root = new VisualElement();
+            root.AddToClassList("fts-screen");
+            root.style.flexGrow = 1f;
+            root.style.backgroundColor = Background;
+
+            // The head (kicker, title, actions, hairline) stays FIXED above the scroller: only the
+            // blocks under the line scroll (user request, 2026-09-17). It sits in its own column
+            // of the same width so it lines up with the body.
+            VisualElement headColumn = PageColumn(maxWidth, false);
+            headColumn.style.flexGrow = 0f;
+            headColumn.style.flexShrink = 0f;
+            root.Add(headColumn);
+
+            ScrollView scroll = ListScroll();
+            scroll.style.minHeight = 0f;
+            root.Add(scroll);
+
+            VisualElement column = PageColumn(maxWidth, false);
+            column.style.flexGrow = 0f;
+            scroll.Add(column);
+
+            PageHeadParts head = PageHead();
+            Label kickerLabel = Eyebrow(kicker);
+            head.Left.Add(kickerLabel);
+
+            var titleLabel = new Label(title ?? string.Empty);
+            titleLabel.AddToClassList("fts-pagetitle");
+            titleLabel.style.overflow = Overflow.Hidden;
+            titleLabel.style.textOverflow = TextOverflow.Ellipsis;
+            UseDisplayFont(titleLabel);
+            if (!StylesLoaded)
+            {
+                titleLabel.style.fontSize = 56;
+                titleLabel.style.color = TextPrimary;
+            }
+            head.Left.Add(titleLabel);
+
+            Button back = null;
+            if (onBack != null)
+            {
+                back = GhostButton(backText, onBack);
+                back.AddToClassList("fts-pageback");
+                head.Actions.Add(back);
+            }
+
+            headColumn.Add(head.Root);
+            return new PageParts
+            {
+                Root = root, Scroll = scroll, Column = column, Head = head,
+                Kicker = kickerLabel, Title = titleLabel, Back = back
+            };
+        }
+
+        /// <summary>
+        /// A centred page (task 14.4) for the short, one-decision screens — main menu, match result,
+        /// season end: the themed ground, ONE scroller that centres its content vertically when it
+        /// fits, and a capped column with a centred kicker over a big Bebas title.
+        /// Add the blocks to <see cref="PageParts.Column"/>; <see cref="PageParts.Head"/> is unused.
+        /// </summary>
+        public static PageParts CenterPage(string kicker, string title, float maxWidth = WidthNarrow + 180f)
+        {
+            ScrollView scroll = (ScrollView)Screen(Background);
+            scroll.AddToClassList("fts-center");
+
+            var column = new VisualElement();
+            column.AddToClassList("fts-center__col");
+            column.style.width = Length.Percent(100);
+            column.style.maxWidth = maxWidth;
+            column.style.alignSelf = Align.Center;
+            scroll.Add(column);
+
+            Label kickerLabel = Eyebrow(kicker);
+            kickerLabel.AddToClassList("fts-center__kicker");
+            kickerLabel.style.unityTextAlign = TextAnchor.MiddleCenter;
+            kickerLabel.style.display = string.IsNullOrEmpty(kicker) ? DisplayStyle.None : DisplayStyle.Flex;
+            column.Add(kickerLabel);
+
+            var titleLabel = new Label(title ?? string.Empty);
+            titleLabel.AddToClassList("fts-center__title");
+            titleLabel.style.unityTextAlign = TextAnchor.MiddleCenter;
+            titleLabel.style.whiteSpace = WhiteSpace.Normal;
+            UseDisplayFont(titleLabel);
+            if (!StylesLoaded)
+            {
+                titleLabel.style.fontSize = 64;
+                titleLabel.style.color = TextPrimary;
+            }
+            column.Add(titleLabel);
+
+            return new PageParts { Root = scroll, Scroll = scroll, Column = column, Kicker = kickerLabel, Title = titleLabel };
+        }
+
+        /// <summary>
+        /// A block caption row: the tracked-out section label on the left and, optionally, a quiet
+        /// accent link on the right ("See all ▸"). Returns the row; add it to a card.
+        /// </summary>
+        public static VisualElement BlockHead(string caption, string linkText = null, Action onLink = null)
+        {
+            var row = new VisualElement();
+            row.AddToClassList("fts-blockhead");
+            row.style.flexDirection = FlexDirection.Row;
+            row.style.justifyContent = Justify.SpaceBetween;
+            row.style.alignItems = Align.Center;
+            row.style.flexShrink = 0f;
+
+            Label label = SectionLabel(caption);
+            label.style.marginTop = 0;
+            row.Add(label);
+
+            if (!string.IsNullOrEmpty(linkText) && onLink != null)
+            {
+                var link = new Button(onLink) { text = linkText };
+                link.AddToClassList("fts-link");
+                row.Add(link);
+            }
+            return row;
+        }
+
+        /// <summary>
+        /// The text-scale class for a desktop pixel size (task 14.4). Views that used to set a
+        /// font size inline call this instead, so the phone breakpoint can grow the text.
+        /// </summary>
+        public static string TextClassFor(int desktopPx) =>
+            desktopPx <= 11 ? "fts-t-small" :
+            desktopPx <= 13 ? "fts-t-meta" :
+            desktopPx <= 15 ? "fts-t-body" :
+            desktopPx <= 20 ? "fts-t-strong" :
+            desktopPx <= 28 ? "fts-t-big" : "fts-t-score";
+
         /// <summary>A themed one-line search box. The caller wires <c>RegisterValueChangedCallback</c>.</summary>
         public static TextField SearchField(string placeholder)
         {
@@ -1555,6 +1717,22 @@ namespace Fts.Views
     }
 
     /// <summary>The three parts of a <see cref="UiKit.PageHead"/> (task 14.1).</summary>
+    /// <summary>What <see cref="UiKit.StandardPage"/> hands back.</summary>
+    public struct PageParts
+    {
+        /// <summary>The screen root — return this as the presenter's view.</summary>
+        public VisualElement Root;
+        /// <summary>The page's one scroller.</summary>
+        public ScrollView Scroll;
+        /// <summary>The centred column: add the screen's blocks here.</summary>
+        public VisualElement Column;
+        public PageHeadParts Head;
+        public Label Kicker;
+        public Label Title;
+        /// <summary>The Back ghost, or null when the page was built without one.</summary>
+        public Button Back;
+    }
+
     public struct PageHeadParts
     {
         /// <summary>The strip itself — add this to the screen.</summary>

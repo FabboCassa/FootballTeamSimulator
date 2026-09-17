@@ -39,7 +39,9 @@ namespace Fts.Views
 
             _header = UiKit.ScreenTitle(tr("bench.title"));
             _header.style.flexShrink = 0f;
-            col.Add(_header);
+            // Back and the page's actions sit beside the title, not in a footer (task 14.6).
+            PageHeadParts titleHead = UiKit.TitleHead(_header);
+            col.Add(titleHead.Root);
 
             _help = UiKit.HelpText(tr("bench.help"));
             _help.style.flexShrink = 0f;
@@ -67,9 +69,8 @@ namespace Fts.Views
             panel.Add(_log);
             col.Add(panel);
 
-            VisualElement footer = UiKit.FooterBar();
+            VisualElement footer = titleHead.Actions;
             footer.Add(UiKit.FooterButton(tr("common.back"), () => BackClicked?.Invoke()));
-            col.Add(footer);
         }
 
         public void SetHeader(string text) => _header.text = text;
@@ -90,7 +91,7 @@ namespace Fts.Views
             foreach (string line in lines)
             {
                 var label = new Label(line);
-                label.style.fontSize = 12;
+                label.AddToClassList("fts-t-meta");
                 label.style.color = UiKit.TextPrimary;
                 label.style.whiteSpace = WhiteSpace.Normal;
                 label.style.marginBottom = 4;

@@ -63,7 +63,7 @@ namespace Fts.Views
             row.AddToClassList("fts-thead");
             row.style.flexDirection = FlexDirection.Row;
             row.style.alignItems = Align.Center;
-            row.style.height = 28;
+            row.style.minHeight = 28;
             row.style.flexShrink = 0f;
             row.style.paddingLeft = UiKit.SpaceSm;
             row.style.paddingRight = UiKit.SpaceSm;
@@ -95,7 +95,7 @@ namespace Fts.Views
             var row = new VisualElement();
             row.style.flexDirection = FlexDirection.Row;
             row.style.alignItems = Align.Center;
-            row.style.height = RowHeight;
+            row.style.minHeight = RowHeight;
             row.style.flexShrink = 0f;
             row.style.paddingLeft = UiKit.SpaceSm;
             row.style.paddingRight = UiKit.SpaceSm;
@@ -145,7 +145,7 @@ namespace Fts.Views
             var row = new VisualElement();
             row.style.flexDirection = FlexDirection.Row;
             row.style.alignItems = Align.Center;
-            row.style.height = RowHeight + 4f;
+            row.style.minHeight = RowHeight + 4f;
             row.style.flexShrink = 0f;
             row.style.paddingLeft = UiKit.SpaceSm;
             row.style.paddingRight = UiKit.SpaceSm;
@@ -216,7 +216,7 @@ namespace Fts.Views
         public static Label Cell(string text, float width, Color color, TextAnchor align, int fontSize, bool bold)
         {
             var label = new Label(text ?? string.Empty);
-            label.style.fontSize = fontSize;
+            label.AddToClassList(UiKit.TextClassFor(fontSize));
             label.style.color = color;
             label.style.unityTextAlign = align;
             if (bold) label.style.unityFontStyleAndWeight = FontStyle.Bold;

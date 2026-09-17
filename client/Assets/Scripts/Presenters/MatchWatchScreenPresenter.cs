@@ -27,10 +27,6 @@ namespace Fts.Presenters
     {
         private const int MaxSubstitutions = 5;
 
-        // Minimum kit-colour separation (Unity RGB, 0..~1.73) so the two sides read apart on the
-        // pitch; below this the away side falls back to its secondary/accent (task 6.8 clash guard).
-        private const float MinKitColorDistance = 0.42f;
-
         private readonly ScreenNavigator _navigator;
         private readonly CareerState _career;
         private readonly UserMatchLog _matchLog;
@@ -40,6 +36,7 @@ namespace Fts.Presenters
         private readonly ClubIdentityService _identity;
         private readonly MatchWatchView _view;
         private readonly InMatchPanel _panel;
+        private MatchStatsStrip _statsStrip;
         // Condition-aware + within-match fatigue, matching the headless advance (task 4.2);
         // the re-sim restores each player's kickoff condition (see ResimWithKickoffCondition)
         // so it stays consistent with the committed result even though the live players have evolved.
@@ -117,12 +114,19 @@ namespace Fts.Presenters
             int awayId = _context.Fixture.AwayClubId;
             ClubVisual homeVis = _identity.Visual(homeId);
             ClubVisual awayVis = _identity.Visual(awayId);
-            _homeColor = homeVis.Primary;
-            _awayColor = PickAwayColor(homeVis.Primary, awayVis);
+            // Task 14.7: a kit also has to read against the turf and must not look like the UI accent.
+            _homeColor = PitchGraphics.PickKit(null, PitchGraphics.KitHome, homeVis.Primary, homeVis.Secondary, homeVis.Accent);
+            _awayColor = PitchGraphics.PickKit(_homeColor, PitchGraphics.KitAway, awayVis.Primary, awayVis.Secondary, awayVis.Accent);
 
             _view.SetCrests(
                 Crests.Badge(homeVis, 30f, ClubShort(homeId), UiKit.Background),
                 Crests.Badge(awayVis, 30f, ClubShort(awayId), UiKit.Background));
+
+            // The live figures, in the two kit colours the pitch itself uses. Built here rather
+            // than in the view because the colours are resolved here (identity + clash guard).
+            _statsStrip = new MatchStatsStrip(_loc.Tr, _homeColor, _awayColor);
+            _view.StatsSlot.Clear();
+            _view.StatsSlot.Add(_statsStrip.Root);
 
             _view.Root.Add(_panel.Root); // overlay on top of the HUD/pitch/controls
             _panel.SetVisible(false);
@@ -399,12 +403,21 @@ namespace Fts.Presenters
             DetachRenderer();
 
             _renderer = new MatchRenderer(report, _homeColor, _awayColor);
+
+            // The watched match answers to nobody's clock but this player's, so it gets the
+            // director: ~5 real minutes at 1x, with the strikes played at REAL TIME. (The online
+            // live screens deliberately do not — see MatchRenderer.SetPacing.)
+            _renderer.SetPacing(MatchRenderer.TargetSecondsAt1x, director: true);
+
             _renderer.MinuteChanged += OnMinuteChanged;
             _renderer.EventReached += OnEventReached;
             _renderer.Finished += OnFinished;
             _renderer.ActionReached += OnActionReached;
+            _renderer.StatsChanged += OnStatsChanged;
+            _renderer.SlowMotionChanged += OnSlowMotionChanged;
             _view.PitchContainer.Insert(0, _renderer); // behind the toast overlay
             _view.ClearActions();
+            _view.SetSlowMotion(false);
 
             _renderer.SetSpeed(_speed);
             _view.SetFinished(false);
@@ -430,6 +443,9 @@ namespace Fts.Presenters
             _renderer.EventReached -= OnEventReached;
             _renderer.Finished -= OnFinished;
             _renderer.ActionReached -= OnActionReached;
+            _renderer.StatsChanged -= OnStatsChanged;
+            _renderer.SlowMotionChanged -= OnSlowMotionChanged;
+            _view.SetSlowMotion(false);
             if (_renderer.parent != null)
                 _renderer.RemoveFromHierarchy();
             _renderer = null;
@@ -446,6 +462,11 @@ namespace Fts.Presenters
 
             _view.PushAction(MatchCommentary.Describe(action, _loc.Tr, NameOfSlot));
         }
+
+        /// <summary>The figures of the match so far, straight onto the strip under the HUD.</summary>
+        private void OnStatsChanged(MatchLiveStats stats) => _statsStrip?.Set(stats);
+
+        private void OnSlowMotionChanged(bool on) => _view.SetSlowMotion(on);
 
         private string NameOfSlot(bool home, int slot)
         {
@@ -608,23 +629,6 @@ namespace Fts.Presenters
         private string ClubName(int clubId) => _career.FindClub(clubId)?.Name ?? $"Club {clubId}";
 
         private string ClubShort(int clubId) => _career.FindClub(clubId)?.ShortName ?? "?";
-
-        /// <summary>
-        /// The away side's on-pitch colour (task 6.8): its primary, unless that's too close to the
-        /// home primary — then its secondary, then its accent, so the two teams never blur together.
-        /// </summary>
-        private static Color PickAwayColor(Color home, ClubVisual away)
-        {
-            if (ColorDistance(home, away.Primary) >= MinKitColorDistance) return away.Primary;
-            if (ColorDistance(home, away.Secondary) >= MinKitColorDistance) return away.Secondary;
-            return away.Accent;
-        }
-
-        private static float ColorDistance(Color a, Color b)
-        {
-            float dr = a.r - b.r, dg = a.g - b.g, db = a.b - b.b;
-            return Mathf.Sqrt(dr * dr + dg * dg + db * db);
-        }
 
         private string PlayerName(int clubId, int playerId)
         {

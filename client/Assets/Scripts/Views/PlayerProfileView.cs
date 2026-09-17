@@ -33,19 +33,14 @@ namespace Fts.Views
     }
 
     /// <summary>
-    /// Player profile (task 4.6): a pushed detail screen opened from the Squad roster.
-    /// Shows the full 10-attribute breakdown, live condition with the 4.2 "why" lines,
-    /// role/age/overall/potential and season goals. Dumb view — every value and every
-    /// string is computed by the presenter; this only lays things out and paints bars.
-    /// Market value is intentionally NOT shown here (task 6.7 feedback: money lives only on
-    /// the Market screen); scouted ranges, contract and appearances/ratings land with 5.4/5.6.
+    /// Player profile (task 4.6), redrawn in task 14.4 on the standard page.
+    /// Desktop: an identity card on the left (portrait, role · age · overall, potential, where he
+    /// plays, the observation action, season goals, and — for your own players — the condition with
+    /// its three "why" lines), the ten attributes on the right as big bars coloured by level.
+    /// Phone: the same two cards stacked. Dumb view — every value and string comes from the presenter.
     /// </summary>
     public sealed class PlayerProfileView
     {
-        private static readonly Color BarTrackColor = new Color(0f, 0f, 0f, 0.45f);
-        private static readonly Color AttrBarColor = new Color(0.45f, 0.70f, 0.95f);
-        private static readonly Color SectionColor = new Color(1f, 1f, 1f, 0.7f);
-
         public event Action BackClicked;
 
         /// <summary>"Put him under observation" / "call the scout off" (task 11.3).</summary>
@@ -62,96 +57,91 @@ namespace Fts.Views
         private readonly VisualElement _avatarSlot;
         private readonly VisualElement _conditionSection;
         private readonly VisualElement _conditionBlock;
-        private readonly ScrollView _attrList;
+        private readonly VisualElement _attrList;
+        private readonly VisualElement _grid;
+        private readonly VisualElement _colId;
+        private readonly VisualElement _colAttr;
 
         public PlayerProfileView(Func<string, string> tr)
         {
-            Root = UiKit.ScreenRoot();
+            PageParts page = UiKit.StandardPage(tr("profile.kicker"), string.Empty, tr("common.back"),
+                () => BackClicked?.Invoke(), UiKit.WidthMedium);
+            Root = page.Root;
+            _name = page.Title;
 
-            var col = UiKit.PageColumn(UiKit.WidthMedium);
-            col.style.flexGrow = 1f;
-            Root.Add(col);
+            _grid = new VisualElement();
+            _grid.AddToClassList("fts-profile__grid");
+            page.Column.Add(_grid);
 
-            // Portrait placeholder (task 6.8), centred above the name.
+            // ---- identity
+            _colId = UiKit.RaisedCard();
+            _colId.AddToClassList("fts-profile__id");
+            _grid.Add(_colId);
+
+            var top = new VisualElement();
+            top.style.flexDirection = FlexDirection.Row;
+            top.style.alignItems = Align.Center;
             _avatarSlot = new VisualElement();
-            _avatarSlot.style.alignItems = Align.Center;
-            _avatarSlot.style.justifyContent = Justify.Center;
-            _avatarSlot.style.marginBottom = 6;
-            col.Add(_avatarSlot);
-
-            _name = UiKit.ScreenTitle(string.Empty);
-            _name.style.unityTextAlign = TextAnchor.MiddleCenter;
-            _name.style.marginBottom = 2;
-            col.Add(_name);
-
-            _subline = UiKit.Subtitle(string.Empty);
-            _subline.style.marginBottom = 4;
-            col.Add(_subline);
-
+            _avatarSlot.AddToClassList("fts-profile__avatar");
+            _avatarSlot.style.flexShrink = 0f;
+            top.Add(_avatarSlot);
+            var idText = new VisualElement();
+            idText.style.flexShrink = 1f;
+            idText.style.minWidth = 0f;
+            _subline = new Label(string.Empty);
+            _subline.AddToClassList("fts-profile__subline");
+            _subline.style.whiteSpace = WhiteSpace.Normal;
+            idText.Add(_subline);
             _potential = new Label(string.Empty);
-            _potential.style.color = SectionColor;
-            _potential.style.fontSize = 13;
-            _potential.style.unityTextAlign = TextAnchor.MiddleCenter;
-            _potential.style.marginBottom = 10;
-            col.Add(_potential);
+            _potential.AddToClassList("fts-profile__potential");
+            _potential.style.whiteSpace = WhiteSpace.Normal;
+            idText.Add(_potential);
+            top.Add(idText);
+            _colId.Add(top);
 
-            // Task 11.3: where he plays and how publicly known he is — the line that explains why a
-            // player nobody has scouted can still be readable (or hopelessly vague).
-            _reputation = new Label(string.Empty);
-            _reputation.style.color = SectionColor;
-            _reputation.style.fontSize = 12;
-            _reputation.style.unityTextAlign = TextAnchor.MiddleCenter;
-            _reputation.style.whiteSpace = WhiteSpace.Normal;
-            _reputation.style.marginBottom = 8;
+            _reputation = UiKit.HelpText(string.Empty);
+            _reputation.AddToClassList("fts-profile__reputation");
             _reputation.style.display = DisplayStyle.None;
-            col.Add(_reputation);
+            _colId.Add(_reputation);
 
-            // Task 11.3: the roadmap's "browsing a squad gains a put-under-observation action".
-            // It lives on the profile because every list in the game — a club's squad, the market,
-            // the search tab — opens it, so one button covers all of them.
-            _watchButton = UiKit.SmallButton(string.Empty, () => WatchClicked?.Invoke(), 240f);
-            _watchButton.style.alignSelf = Align.Center;
-            _watchButton.style.marginBottom = 10;
+            _watchButton = UiKit.GhostButton(string.Empty, () => WatchClicked?.Invoke());
+            _watchButton.AddToClassList("fts-profile__watch");
             _watchButton.style.display = DisplayStyle.None;
-            col.Add(_watchButton);
-
-            var body = new ScrollView();
-            body.style.flexGrow = 1f;
-            body.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
-            col.Add(body);
-
-            _conditionSection = new VisualElement();
-            _conditionSection.Add(SectionLabel(tr("profile.condition_caption")));
-            _conditionBlock = new VisualElement();
-            _conditionBlock.style.marginBottom = 12;
-            _conditionSection.Add(_conditionBlock);
-            body.Add(_conditionSection);
-
-            body.Add(SectionLabel(tr("profile.attributes_caption")));
-            _attrList = new ScrollView();
-            body.Add(_attrList);
+            _colId.Add(_watchButton);
 
             _seasonGoals = new Label(string.Empty);
-            _seasonGoals.style.color = SectionColor;
-            _seasonGoals.style.fontSize = 14;
-            _seasonGoals.style.marginTop = 10;
-            body.Add(_seasonGoals);
+            _seasonGoals.AddToClassList("fts-profile__goals");
+            _colId.Add(_seasonGoals);
 
-            VisualElement footer = UiKit.FooterBar();
-            var back = UiKit.MenuButton(tr("common.back"), () => BackClicked?.Invoke());
-            back.style.width = 150;
-            back.style.height = 44;
-            back.style.fontSize = 16;
-            footer.Add(back);
-            footer.style.flexShrink = 0f;
-            col.Add(footer);
+            _conditionSection = new VisualElement();
+            _conditionSection.AddToClassList("fts-profile__condition");
+            _conditionSection.Add(UiKit.BlockHead(tr("profile.condition_caption")));
+            _conditionBlock = new VisualElement();
+            _conditionSection.Add(_conditionBlock);
+            _colId.Add(_conditionSection);
+
+            // ---- attributes
+            _colAttr = UiKit.OptionCard();
+            _colAttr.AddToClassList("fts-profile__attrs");
+            _colAttr.Add(UiKit.BlockHead(tr("profile.attributes_caption")));
+            _attrList = new VisualElement();
+            _colAttr.Add(_attrList);
+            _grid.Add(_colAttr);
+
+            Root.RegisterCallback<AttachToPanelEvent>(_ =>
+            {
+                Responsive.Changed += Layout;
+                Layout(Responsive.Current);
+            });
+            Root.RegisterCallback<DetachFromPanelEvent>(_ => Responsive.Changed -= Layout);
+            Layout(Responsive.Current);
         }
 
         public void SetIdentity(string name, string subline, string potential)
         {
-            _name.text = name;
-            _subline.text = subline;
-            _potential.text = potential;
+            _name.text = name ?? string.Empty;
+            _subline.text = subline ?? string.Empty;
+            _potential.text = potential ?? string.Empty;
         }
 
         /// <summary>Sets the player's portrait placeholder (a monogram avatar built by the presenter).</summary>
@@ -161,7 +151,7 @@ namespace Fts.Views
             if (avatar != null) _avatarSlot.Add(avatar);
         }
 
-        public void SetSeasonGoals(string text) => _seasonGoals.text = text;
+        public void SetSeasonGoals(string text) => _seasonGoals.text = text ?? string.Empty;
 
         /// <summary>The club / division / fame line; empty hides it.</summary>
         public void SetReputation(string text)
@@ -176,7 +166,7 @@ namespace Fts.Views
             _watchButton.text = text ?? string.Empty;
             _watchButton.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
             _watchButton.SetEnabled(enabled);
-            UiKit.SetSmallButtonOn(_watchButton, on);
+            _watchButton.EnableInClassList("fts-profile__watch--on", on);
         }
 
         /// <summary>Hides the condition section for non-owned players (you don't know an opponent's form/morale exactly).</summary>
@@ -190,7 +180,7 @@ namespace Fts.Views
             var strip = new VisualElement();
             strip.style.flexDirection = FlexDirection.Row;
             strip.style.alignItems = Align.Center;
-            strip.style.height = 28;
+            strip.AddToClassList("fts-profile__strip");
             ConditionStrip.Append(strip, vm.FormArrow, vm.MoraleFace, vm.Fitness);
             _conditionBlock.Add(strip);
 
@@ -206,59 +196,59 @@ namespace Fts.Views
                 _attrList.Add(AttributeRow(vm.Name, vm.Text, vm.BarValue));
         }
 
+        private void Layout(Viewport viewport)
+        {
+            bool two = viewport != Viewport.Mobile;
+            _grid.style.flexDirection = two ? FlexDirection.Row : FlexDirection.Column;
+            _grid.style.alignItems = two ? Align.FlexStart : Align.Stretch;
+            _colId.style.flexGrow = two ? 2f : 0f;
+            _colId.style.flexBasis = two ? new StyleLength(0f) : new StyleLength(StyleKeyword.Auto);
+            _colAttr.style.flexGrow = two ? 3f : 0f;
+            _colAttr.style.flexBasis = two ? new StyleLength(0f) : new StyleLength(StyleKeyword.Auto);
+            _colAttr.style.marginLeft = two ? UiKit.SpaceMd : 0f;
+            _colAttr.style.marginTop = two ? 0f : UiKit.SpaceMd;
+        }
+
         private static Label CauseLine(string text)
         {
             var label = new Label(text ?? string.Empty);
-            label.style.color = new Color(1f, 1f, 1f, 0.85f);
-            label.style.fontSize = 13;
-            label.style.marginTop = 2;
+            label.AddToClassList("fts-profile__cause");
             label.style.whiteSpace = WhiteSpace.Normal;
             return label;
         }
 
-        private static Label SectionLabel(string caption) => UiKit.SectionLabel(caption);
-
-        /// <summary>A row: attribute name on the left, a value/range text, then a 1-100 bar.</summary>
+        /// <summary>A row: attribute name, value/range, and a bar tinted by level.</summary>
         private static VisualElement AttributeRow(string name, string text, int barValue)
         {
             int clamped = barValue < 0 ? 0 : (barValue > 100 ? 100 : barValue);
 
             var row = new VisualElement();
+            row.AddToClassList("fts-profile__attr");
             row.style.flexDirection = FlexDirection.Row;
             row.style.alignItems = Align.Center;
-            row.style.height = 26;
-            row.style.marginBottom = 2;
 
             var label = new Label(name);
-            label.style.width = 110;
-            label.style.fontSize = 13;
-            label.style.unityTextAlign = TextAnchor.MiddleLeft;
+            label.AddToClassList("fts-profile__attrname");
+            label.style.flexShrink = 0f;
             row.Add(label);
 
-            var number = new Label(text ?? clamped.ToString());
-            number.style.width = 56;
-            number.style.fontSize = 13;
-            number.style.unityTextAlign = TextAnchor.MiddleRight;
-            number.style.marginRight = 8;
-            row.Add(number);
-
             var track = new VisualElement();
+            track.AddToClassList("fts-profile__track");
             track.style.flexGrow = 1f;
-            track.style.height = 8;
-            track.style.backgroundColor = BarTrackColor;
-            track.style.borderTopLeftRadius = 3;
-            track.style.borderTopRightRadius = 3;
-            track.style.borderBottomLeftRadius = 3;
-            track.style.borderBottomRightRadius = 3;
-
+            track.style.overflow = Overflow.Hidden;
             var fill = new VisualElement();
+            fill.AddToClassList("fts-profile__fill");
             fill.style.height = Length.Percent(100);
             fill.style.width = Length.Percent(clamped);
-            fill.style.backgroundColor = AttrBarColor;
-            fill.style.borderTopLeftRadius = 3;
-            fill.style.borderBottomLeftRadius = 3;
+            fill.style.backgroundColor = clamped >= 75 ? UiKit.Accent : clamped >= 55 ? UiKit.Hex(0x3E86CC) : clamped >= 35 ? UiKit.Warning : UiKit.Danger;
             track.Add(fill);
             row.Add(track);
+
+            var number = new Label(text ?? clamped.ToString());
+            number.AddToClassList("fts-profile__attrvalue");
+            number.style.unityTextAlign = TextAnchor.MiddleRight;
+            number.style.flexShrink = 0f;
+            row.Add(number);
 
             return row;
         }

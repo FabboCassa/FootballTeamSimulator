@@ -15,10 +15,10 @@ namespace Fts.Views
     }
 
     /// <summary>
-    /// Career season-end decision screen (task 5.6): how the season measured against the board's
-    /// objective, the updated confidence/reputation, whether the user was warned or sacked, and the
-    /// clubs courting him — accept one to move, or stay. Dumb view: the presenter formats every label
-    /// and decides what's offered; the view emits Accept(clubId)/Stay and renders strings. No Sim.Core.
+    /// Career season-end decision (task 5.6), redrawn in task 14.4 on the centred page: the verdict
+    /// first — a coloured card that says safe / warned / sacked — then how the season went on the
+    /// raised card, then the clubs courting you as rows (crest, offer, Accept) and Stay as a ghost.
+    /// Dumb view: the presenter formats every label and decides what's offered.
     /// </summary>
     public sealed class CareerSeasonEndView
     {
@@ -30,129 +30,93 @@ namespace Fts.Views
         private readonly Label _summary;
         private readonly Label _standing;
         private readonly Label _banner;
-        private readonly ScrollView _offers;
+        private readonly VisualElement _offersCard;
+        private readonly VisualElement _offers;
         private readonly Button _stayButton;
 
         public CareerSeasonEndView(Func<string, string> tr)
         {
-            // Task 6.9: aligned with the shell look — themed navy background, a centred capped-width
-            // column, a section Header instead of the old giant Title, and a Card for the summary block.
-            Root = UiKit.ScreenRoot();
-
-            var col = UiKit.PageColumn(UiKit.WidthMedium);
-            col.style.flexGrow = 1f;
-            Root.Add(col);
-
-            var header = UiKit.Header(tr("careerend.title"));
-            header.style.unityTextAlign = TextAnchor.MiddleCenter;
-            header.style.marginBottom = UiKit.SpaceSm;
-            col.Add(header);
-
-            var panel = UiKit.Card();
-            _summary = new Label(string.Empty);
-            _summary.style.fontSize = 14;
-            _summary.style.color = Color.white;
-            _summary.style.whiteSpace = WhiteSpace.Normal;
-            _summary.style.marginBottom = 4;
-            panel.Add(_summary);
-
-            _standing = new Label(string.Empty);
-            _standing.style.fontSize = 13;
-            _standing.style.color = new Color(1f, 1f, 1f, 0.85f);
-            _standing.style.whiteSpace = WhiteSpace.Normal;
-            panel.Add(_standing);
-            col.Add(panel);
+            PageParts page = UiKit.CenterPage(tr("careerend.kicker"), tr("careerend.title"), UiKit.WidthMedium);
+            Root = page.Root;
+            VisualElement col = page.Column;
 
             _banner = new Label(string.Empty);
-            _banner.style.fontSize = 15;
-            _banner.style.unityFontStyleAndWeight = FontStyle.Bold;
-            _banner.style.color = Color.white;
+            _banner.AddToClassList("fts-verdict");
             _banner.style.whiteSpace = WhiteSpace.Normal;
-            _banner.style.marginTop = 6;
-            _banner.style.marginBottom = 8;
-            _banner.style.paddingTop = 8;
-            _banner.style.paddingBottom = 8;
-            _banner.style.paddingLeft = 12;
-            _banner.style.paddingRight = 12;
-            UiKit.Round(_banner, UiKit.RadiusSm);
+            _banner.style.unityTextAlign = TextAnchor.MiddleCenter;
             col.Add(_banner);
 
-            col.Add(SectionLabel(tr("careerend.offers_caption")));
+            VisualElement summary = UiKit.RaisedCard();
+            summary.AddToClassList("fts-careerend__summary");
+            _summary = new Label(string.Empty);
+            _summary.AddToClassList("fts-careerend__text");
+            _summary.style.whiteSpace = WhiteSpace.Normal;
+            summary.Add(_summary);
+            _standing = new Label(string.Empty);
+            _standing.AddToClassList("fts-careerend__meta");
+            _standing.style.whiteSpace = WhiteSpace.Normal;
+            summary.Add(_standing);
+            col.Add(summary);
 
-            _offers = new ScrollView();
-            _offers.style.flexGrow = 1f;
-            _offers.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
-            col.Add(_offers);
+            _offersCard = UiKit.OptionCard();
+            _offersCard.Add(UiKit.BlockHead(tr("careerend.offers_caption")));
+            _offers = new VisualElement();
+            _offersCard.Add(_offers);
+            col.Add(_offersCard);
 
-            VisualElement footer = UiKit.FooterBar();
-            _stayButton = UiKit.MenuButton(tr("careerend.stay"), () => StayClicked?.Invoke());
-            _stayButton.style.width = 220;
-            _stayButton.style.height = 48;
-            _stayButton.style.fontSize = 17;
-            footer.Add(_stayButton);
-            col.Add(footer);
+            _stayButton = UiKit.GhostButton(tr("careerend.stay"), () => StayClicked?.Invoke());
+            _stayButton.AddToClassList("fts-careerend__stay");
+            col.Add(_stayButton);
         }
 
-        private static Label SectionLabel(string caption) => UiKit.SectionLabel(caption);
-
-        public void SetSummary(string text) => _summary.text = text;
-        public void SetStanding(string text) => _standing.text = text;
+        public void SetSummary(string text) => _summary.text = text ?? string.Empty;
+        public void SetStanding(string text) => _standing.text = text ?? string.Empty;
 
         /// <summary>band: 0 = sacked (red), 1 = warned (amber), 2 = safe (green).</summary>
         public void SetBanner(string text, int band)
         {
-            _banner.text = text;
-            _banner.style.backgroundColor =
-                band <= 0 ? new Color(0.80f, 0.25f, 0.25f, 0.85f) :
-                band == 1 ? new Color(0.85f, 0.65f, 0.20f, 0.85f) :
-                            new Color(0.30f, 0.70f, 0.35f, 0.85f);
+            _banner.text = text ?? string.Empty;
+            _banner.EnableInClassList("fts-verdict--bad", band <= 0);
+            _banner.EnableInClassList("fts-verdict--warn", band == 1);
+            _banner.EnableInClassList("fts-verdict--good", band >= 2);
         }
 
         public void SetStay(string label, bool visible)
         {
-            _stayButton.text = label;
+            _stayButton.text = label ?? string.Empty;
             _stayButton.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
         }
 
         public void SetOffers(IReadOnlyList<OfferRowVm> rows)
         {
             _offers.Clear();
+            _offersCard.style.display = rows.Count == 0 ? DisplayStyle.None : DisplayStyle.Flex;
             foreach (OfferRowVm vm in rows)
             {
                 int clubId = vm.ClubId;
 
                 var row = new VisualElement();
+                row.AddToClassList("fts-careerend__offer");
                 row.style.flexDirection = FlexDirection.Row;
                 row.style.alignItems = Align.Center;
-                row.style.minHeight = 52;
-                row.style.marginBottom = 4;
-                row.style.paddingTop = 6;
-                row.style.paddingBottom = 6;
-                row.style.paddingLeft = 10;
-                row.style.paddingRight = 10;
-                row.style.backgroundColor = UiKit.Surface;
-                UiKit.Round(row, UiKit.RadiusSm);
 
                 if (vm.Crest != null)
                 {
-                    vm.Crest.style.marginRight = 8;
+                    vm.Crest.AddToClassList("fts-careerend__crest");
+                    vm.Crest.style.flexShrink = 0f;
                     row.Add(vm.Crest);
                 }
 
                 var label = new Label(vm.Text);
+                label.AddToClassList("fts-careerend__text");
                 label.style.flexGrow = 1f;
                 label.style.flexShrink = 1f;
                 label.style.minWidth = 0;
-                label.style.fontSize = 14;
-                label.style.color = Color.white;
                 label.style.whiteSpace = WhiteSpace.Normal;
                 row.Add(label);
 
-                var accept = new Button(() => AcceptClicked?.Invoke(clubId)) { text = vm.ActionLabel };
-                accept.style.width = 130;
-                accept.style.height = 40;
-                accept.style.flexShrink = 0f;
-                accept.style.fontSize = 14;
+                Button accept = UiKit.PrimaryButton(vm.ActionLabel, () => AcceptClicked?.Invoke(clubId));
+                accept.AddToClassList("fts-careerend__accept");
                 row.Add(accept);
 
                 _offers.Add(row);

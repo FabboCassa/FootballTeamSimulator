@@ -39,22 +39,19 @@ namespace Fts.Views
         {
             _tr = tr;
 
-            Root = UiKit.ScreenRoot();
-            VisualElement col = UiKit.PageColumn(UiKit.WidthNarrow);
-            Root.Add(col);
+            PageParts page = UiKit.StandardPage(tr("leagues.kicker"), string.Empty, null, null, UiKit.WidthNarrow + 180f);
+            Root = page.Root;
+            VisualElement col = page.Column;
+            _title = page.Title;
 
-            _title = UiKit.ScreenTitle(string.Empty);
-            _title.style.marginBottom = UiKit.SpaceSm;
-            col.Add(_title);
-
-            VisualElement panel = UiKit.Panel();
+            VisualElement panel = UiKit.RaisedCard();
             col.Add(panel);
 
             _nameCaption = UiKit.SectionLabel(string.Empty);
             _nameCaption.style.marginTop = 0;
             panel.Add(_nameCaption);
             _nameField = new TextField { maxLength = 120 };
-            _nameField.style.minHeight = 34;
+            _nameField.AddToClassList("fts-search");
             _nameField.style.marginLeft = 0;
             _nameField.style.marginRight = 0;
             _nameField.style.marginBottom = UiKit.SpaceSm;
@@ -65,17 +62,20 @@ namespace Fts.Views
 
             VisualElement sizeRow = UiKit.Row();
             panel.Add(sizeRow);
-            _sizeMinus = UiKit.SmallButton("−", () => ChangeSize(-1), 48f);
+            _sizeMinus = UiKit.SmallButton("−", () => ChangeSize(-1), 0f);
+            _sizeMinus.AddToClassList("fts-nego__step");
             _sizeMinus.style.marginLeft = 0;
             sizeRow.Add(_sizeMinus);
             _sizeValue = new Label(string.Empty);
-            _sizeValue.style.fontSize = 20;
+            _sizeValue.AddToClassList("fts-create__size");
+            UiKit.UseDisplayFont(_sizeValue);
             _sizeValue.style.unityFontStyleAndWeight = FontStyle.Bold;
             _sizeValue.style.color = UiKit.TextPrimary;
             _sizeValue.style.minWidth = 56;
             _sizeValue.style.unityTextAlign = TextAnchor.MiddleCenter;
             sizeRow.Add(_sizeValue);
-            _sizePlus = UiKit.SmallButton("+", () => ChangeSize(+1), 48f);
+            _sizePlus = UiKit.SmallButton("+", () => ChangeSize(+1), 0f);
+            _sizePlus.AddToClassList("fts-nego__step");
             sizeRow.Add(_sizePlus);
 
             _modeCaption = UiKit.HelpText(string.Empty);
@@ -94,12 +94,12 @@ namespace Fts.Views
             spacer.style.flexGrow = 1f;
             col.Add(spacer);
 
-            VisualElement footer = UiKit.FooterBar();
+            VisualElement footer = page.Head.Actions;
+            footer.AddToClassList("fts-titlehead__actions");
             _backButton = UiKit.FooterButton(string.Empty, () => BackClicked?.Invoke());
             footer.Add(_backButton);
             _createButton = UiKit.FooterPrimaryButton(string.Empty, () => CreateClicked?.Invoke());
             footer.Add(_createButton);
-            col.Add(footer);
 
             RefreshSize();
             UpdateTexts();

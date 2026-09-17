@@ -13,7 +13,7 @@ namespace Fts.Views
     /// </summary>
     public sealed class LiveMatchView
     {
-        private static readonly Color BarColor = new Color(0.07f, 0.11f, 0.20f);
+        private static readonly Color BarColor = UiKit.SurfaceDeep;
         private static readonly Color ToastColor = new Color(0f, 0f, 0f, 0.75f);
 
         public event Action ModifyClicked;
@@ -54,20 +54,20 @@ namespace Fts.Views
             scoreRow.style.justifyContent = Justify.Center;
             scoreRow.style.alignItems = Align.Center;
             _score = new Label(string.Empty);
-            _score.style.fontSize = 22;
+            _score.AddToClassList("fts-t-big");
             _score.style.unityFontStyleAndWeight = FontStyle.Bold;
             _score.style.color = Color.white;
             _score.style.marginRight = 18;
             scoreRow.Add(_score);
             _clock = new Label("0'");
-            _clock.style.fontSize = 18;
+            _clock.AddToClassList("fts-t-strong");
             _clock.style.color = new Color(1f, 1f, 1f, 0.8f);
             _clock.style.minWidth = 44;
             scoreRow.Add(_clock);
             hud.Add(scoreRow);
 
             _banner = new Label(string.Empty);
-            _banner.style.fontSize = 13;
+            _banner.AddToClassList("fts-t-meta");
             _banner.style.color = new Color(1f, 1f, 1f, 0.7f);
             _banner.style.marginTop = 4;
             _banner.style.whiteSpace = WhiteSpace.Normal;
@@ -89,7 +89,7 @@ namespace Fts.Views
             toastRow.pickingMode = PickingMode.Ignore;
             _toast = new Label(string.Empty);
             _toast.style.color = Color.white;
-            _toast.style.fontSize = 16;
+            _toast.AddToClassList("fts-t-strong");
             _toast.style.unityFontStyleAndWeight = FontStyle.Bold;
             _toast.style.backgroundColor = ToastColor;
             _toast.style.paddingLeft = 12;
@@ -173,13 +173,13 @@ namespace Fts.Views
         private static Button Wide(string text, Action onClick)
         {
             var b = new Button(onClick) { text = text };
-            b.style.height = 44;
+            b.style.minHeight = 44;
             b.style.minWidth = 120;
-            b.style.fontSize = 16;
+            b.AddToClassList("fts-t-strong");
             b.style.marginLeft = 6;
             b.style.marginRight = 6;
             b.style.color = Color.white;
-            b.style.backgroundColor = new Color(0.20f, 0.24f, 0.34f);
+            b.style.backgroundColor = UiKit.SurfaceAlt;
             return b;
         }
     }

@@ -49,7 +49,9 @@ namespace Fts.Views
             Root.Add(col);
 
             _header = UiKit.ScreenTitle(string.Empty);
-            col.Add(_header);
+            // Back and the page's actions sit beside the title, not in a footer (task 14.6).
+            PageHeadParts titleHead = UiKit.TitleHead(_header);
+            col.Add(titleHead.Root);
 
             _summary = UiKit.HelpText(string.Empty);
             col.Add(_summary);
@@ -74,12 +76,11 @@ namespace Fts.Views
             _status.style.display = DisplayStyle.None;
             col.Add(_status);
 
-            VisualElement footer = UiKit.FooterBar();
+            VisualElement footer = titleHead.Actions;
             _backButton = UiKit.FooterButton(string.Empty, () => BackClicked?.Invoke());
             footer.Add(_backButton);
             _refreshButton = UiKit.FooterButton(string.Empty, () => RefreshClicked?.Invoke());
             footer.Add(_refreshButton);
-            col.Add(footer);
 
             SetActiveTab(0);
             UpdateTexts();
@@ -124,7 +125,7 @@ namespace Fts.Views
                 OnlineTableKit.Stripe(row, vm.Highlight, i);
 
                 var title = new Label(vm.Title ?? string.Empty);
-                title.style.fontSize = 14;
+                title.AddToClassList("fts-t-body");
                 title.style.unityFontStyleAndWeight = FontStyle.Bold;
                 title.style.color = vm.Highlight ? UiKit.Accent : vm.Trophy ? UiKit.Positive : UiKit.TextPrimary;
                 title.style.flexGrow = 1f;
@@ -136,7 +137,7 @@ namespace Fts.Views
                 if (!string.IsNullOrEmpty(vm.Detail))
                 {
                     var detail = new Label(vm.Detail);
-                    detail.style.fontSize = 13;
+                    detail.AddToClassList("fts-t-meta");
                     detail.style.color = UiKit.TextMuted;
                     detail.style.unityTextAlign = TextAnchor.MiddleRight;
                     detail.style.flexShrink = 1f;

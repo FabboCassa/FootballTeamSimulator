@@ -30,21 +30,15 @@ namespace Fts.Views
     }
 
     /// <summary>
-    /// League screen: three tabs (table, fixtures by round, top scorers).
-    /// Dumb view; the presenter computes every row.
-    ///
-    /// Layout (task 6.12): the wide page scaffold. The standings live in a panel that fills the
-    /// page, with a real sticky header row, zebra striping and roomy numeric columns — instead of
-    /// 12px figures crushed against the right edge of a 680px column.
+    /// League screen (task 2.5), redrawn in task 14.4 on the standard page: kicker over the league
+    /// name, the three tabs as a segmented row, and each tab in one card. The table is now sized by
+    /// the sheet (.fts-lt*): 19-point figures in roomy columns instead of 13-point numbers pressed
+    /// against the right edge, your club tinted, points in the accent. On a phone the goals-for /
+    /// goals-against columns are hidden (the goal difference carries the same story) so the club
+    /// name keeps its room. Dumb view; the presenter computes every row.
     /// </summary>
     public sealed class LeagueView
     {
-        private const float PosWidth = 40f;
-        private const float CrestWidth = 28f;
-        private const float StatWidth = 48f;
-        private const float PointsWidth = 58f;
-        private const float RowHeight = 34f;
-
         public event Action<int> TabClicked;
         public event Action PrevRoundClicked;
         public event Action NextRoundClicked;
@@ -55,141 +49,96 @@ namespace Fts.Views
         private readonly Label _leagueLabel;
         private readonly Button[] _tabs;
         private readonly VisualElement[] _sections;
-        private readonly VisualElement _tableHeader;
-        private readonly ScrollView _tableList;
+        private readonly VisualElement _table;
         private readonly Label _roundLabel;
-        private readonly ScrollView _fixtureList;
-        private readonly ScrollView _scorerList;
+        private readonly VisualElement _fixtureList;
+        private readonly VisualElement _scorerList;
         private readonly Func<string, string> _tr;
 
         public LeagueView(Func<string, string> tr)
         {
             _tr = tr;
 
-            Root = UiKit.ScreenRoot();
+            PageParts page = UiKit.StandardPage(tr("league.kicker"), string.Empty, tr("common.back"),
+                () => BackClicked?.Invoke(), UiKit.WidthMedium);
+            Root = page.Root;
+            Root.AddToClassList("fts-league");
+            _leagueLabel = page.Title;
+            VisualElement col = page.Column;
 
-            VisualElement col = UiKit.PageColumn(UiKit.WidthWide);
-            Root.Add(col);
-
-            _leagueLabel = UiKit.ScreenTitle(string.Empty);
-            _leagueLabel.style.marginBottom = UiKit.SpaceSm;
-            col.Add(_leagueLabel);
-
-            VisualElement tabRow = UiKit.Toolbar();
             string[] tabKeys = { "league.tab.table", "league.tab.fixtures", "league.tab.scorers" };
             _tabs = new Button[tabKeys.Length];
             for (int i = 0; i < tabKeys.Length; i++)
             {
                 int index = i;
-                _tabs[i] = UiKit.TabButton(tr(tabKeys[i]), () => TabClicked?.Invoke(index));
-                tabRow.Add(_tabs[i]);
+                _tabs[i] = UiKit.SegChip(tr(tabKeys[i]), null, () => TabClicked?.Invoke(index));
             }
-            _tabs[_tabs.Length - 1].style.marginRight = 0;
+            VisualElement tabRow = UiKit.SegRow(_tabs[0], _tabs[1], _tabs[2]);
+            tabRow.AddToClassList("fts-league__tabs");
             col.Add(tabRow);
 
-            // --- Table section ---
-            VisualElement tableSection = UiKit.Panel(grow: true);
-            tableSection.style.paddingTop = UiKit.SpaceSm;
-            tableSection.style.paddingBottom = UiKit.SpaceSm;
-            _tableHeader = new VisualElement();
-            _tableHeader.AddToClassList("fts-thead");
-            _tableHeader.style.flexDirection = FlexDirection.Row;
-            _tableHeader.style.alignItems = Align.Center;
-            _tableHeader.style.flexShrink = 0f;
-            _tableHeader.style.marginBottom = UiKit.SpaceXs;
-            tableSection.Add(_tableHeader);
-            _tableList = UiKit.ListScroll();
-            tableSection.Add(_tableList);
+            // --- table
+            VisualElement tableSection = UiKit.OptionCard();
+            _table = new VisualElement();
+            tableSection.Add(_table);
 
-            // --- Fixtures section ---
-            VisualElement fixturesSection = UiKit.Panel(grow: true);
-            fixturesSection.style.paddingTop = UiKit.SpaceSm;
-            fixturesSection.style.paddingBottom = UiKit.SpaceSm;
+            // --- fixtures
+            VisualElement fixturesSection = UiKit.OptionCard();
             var roundNav = new VisualElement();
+            roundNav.AddToClassList("fts-league__roundnav");
             roundNav.style.flexDirection = FlexDirection.Row;
-            roundNav.style.justifyContent = Justify.Center;
+            roundNav.style.justifyContent = Justify.SpaceBetween;
             roundNav.style.alignItems = Align.Center;
-            roundNav.style.flexShrink = 0f;
-            roundNav.style.marginBottom = UiKit.SpaceSm;
-            Button prev = UiKit.SmallButton("<", () => PrevRoundClicked?.Invoke(), 44f);
-            prev.style.marginLeft = 0;
+            Button prev = UiKit.GhostButton("\u25C0", () => PrevRoundClicked?.Invoke());
+            prev.AddToClassList("fts-league__roundbtn");
             _roundLabel = new Label(string.Empty);
-            _roundLabel.style.color = UiKit.TextPrimary;
-            _roundLabel.style.fontSize = 15;
-            _roundLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
-            _roundLabel.style.minWidth = 180;
+            _roundLabel.AddToClassList("fts-league__round");
+            UiKit.UseDisplayFont(_roundLabel);
             _roundLabel.style.unityTextAlign = TextAnchor.MiddleCenter;
-            _roundLabel.style.marginLeft = 12;
-            _roundLabel.style.marginRight = 12;
-            Button next = UiKit.SmallButton(">", () => NextRoundClicked?.Invoke(), 44f);
-            next.style.marginLeft = 0;
+            _roundLabel.style.flexGrow = 1f;
+            Button next = UiKit.GhostButton("\u25B6", () => NextRoundClicked?.Invoke());
+            next.AddToClassList("fts-league__roundbtn");
             roundNav.Add(prev);
             roundNav.Add(_roundLabel);
             roundNav.Add(next);
             fixturesSection.Add(roundNav);
-            _fixtureList = UiKit.ListScroll();
+            _fixtureList = new VisualElement();
             fixturesSection.Add(_fixtureList);
 
-            // --- Scorers section ---
-            VisualElement scorersSection = UiKit.Panel(grow: true);
-            scorersSection.style.paddingTop = UiKit.SpaceSm;
-            scorersSection.style.paddingBottom = UiKit.SpaceSm;
-            _scorerList = UiKit.ListScroll();
+            // --- scorers
+            VisualElement scorersSection = UiKit.OptionCard();
+            _scorerList = new VisualElement();
             scorersSection.Add(_scorerList);
 
             _sections = new[] { tableSection, fixturesSection, scorersSection };
             foreach (VisualElement section in _sections)
                 col.Add(section);
 
-            VisualElement footer = UiKit.FooterBar();
-            footer.Add(UiKit.FooterButton(tr("common.back"), () => BackClicked?.Invoke()));
-            col.Add(footer);
-
-            BuildTableHeader();
             ShowTab(0);
         }
 
-        public void SetLeagueName(string name) => _leagueLabel.text = name;
+        public void SetLeagueName(string name) => _leagueLabel.text = name ?? string.Empty;
 
         public void ShowTab(int index)
         {
             for (int i = 0; i < _sections.Length; i++)
             {
                 _sections[i].style.display = i == index ? DisplayStyle.Flex : DisplayStyle.None;
-                UiKit.SetTabActive(_tabs[i], i == index);
+                UiKit.SetSegChipState(_tabs[i], i == index);
             }
         }
 
         public void SetTable(IReadOnlyList<TableRowVm> rows)
         {
-            _tableList.Clear();
+            _table.Clear();
+            _table.Add(TableRow(null, 0, true));
             for (int i = 0; i < rows.Count; i++)
-            {
-                TableRowVm vm = rows[i];
-                VisualElement row = TableRow(
-                    vm.Position.ToString(), vm.Club,
-                    vm.Played.ToString(), vm.Wins.ToString(), vm.Draws.ToString(), vm.Losses.ToString(),
-                    vm.GoalsFor.ToString(), vm.GoalsAgainst.ToString(), vm.GoalDifference.ToString(),
-                    vm.Points.ToString(),
-                    header: false, crest: vm.Crest);
-
-                row.AddToClassList("fts-trow");
-                if (vm.IsUser) row.AddToClassList("fts-trow--user");
-                else if (i % 2 == 1) row.AddToClassList("fts-trow--zebra");
-                if (!UiKit.StylesLoaded)
-                {
-                    row.style.backgroundColor = vm.IsUser
-                        ? UiKit.Hex(0x1F4A34)
-                        : (i % 2 == 1 ? new Color(1f, 1f, 1f, 0.035f) : Color.clear);
-                    UiKit.Round(row, 6);
-                }
-                _tableList.Add(row);
-            }
+                _table.Add(TableRow(rows[i], i, false));
         }
 
         public void SetFixtures(string roundLabel, IReadOnlyList<FixtureRowVm> rows)
         {
-            _roundLabel.text = roundLabel;
+            _roundLabel.text = (roundLabel ?? string.Empty).ToUpperInvariant();
             _fixtureList.Clear();
             for (int i = 0; i < rows.Count; i++)
                 _fixtureList.Add(FixtureRow(rows[i], i));
@@ -199,7 +148,7 @@ namespace Fts.Views
         {
             _scorerList.Clear();
             for (int i = 0; i < rows.Count; i++)
-                _scorerList.Add(ListRow(rows[i].Label, rows[i].IsUser, rows[i].Crest, i));
+                _scorerList.Add(ScorerRow(rows[i], i));
         }
 
         /// <summary>Empty-state illustration for the scorers tab early in the season (task 6.8).</summary>
@@ -209,182 +158,104 @@ namespace Fts.Views
             _scorerList.Add(emptyState);
         }
 
-        private void BuildTableHeader()
-        {
-            _tableHeader.Clear();
-            VisualElement header = TableRow(
-                _tr("league.col.pos"), _tr("league.col.club"),
-                _tr("league.col.p"), _tr("league.col.w"), _tr("league.col.d"), _tr("league.col.l"),
-                _tr("league.col.gf"), _tr("league.col.ga"), _tr("league.col.gd"), _tr("league.col.pts"),
-                header: true, crest: null);
-            _tableHeader.Add(header);
-        }
+        // ---------------------------------------------------------------- rows
 
-        private static VisualElement TableRow(
-            string pos, string club, string p, string w, string d, string l,
-            string gf, string ga, string gd, string pts, bool header, VisualElement crest)
+        private VisualElement TableRow(TableRowVm vm, int index, bool header)
         {
-            Color textColor = header ? UiKit.TextMuted : UiKit.TextPrimary;
-
             var row = new VisualElement();
+            row.AddToClassList("fts-lt__row");
             row.style.flexDirection = FlexDirection.Row;
-            row.style.height = RowHeight;
             row.style.alignItems = Align.Center;
-            row.style.flexShrink = 0f;
-            row.style.paddingLeft = UiKit.SpaceSm;
-            row.style.paddingRight = UiKit.SpaceSm;
+            if (header) row.AddToClassList("fts-lt__row--head");
+            else Stripe(row, vm.IsUser, index);
 
-            Label position = Cell(pos, PosWidth, textColor, TextAnchor.MiddleLeft);
-            position.style.unityFontStyleAndWeight = FontStyle.Bold;
-            row.Add(position);
+            row.Add(Cell(header ? _tr("league.col.pos") : vm.Position.ToString(), "fts-lt__pos"));
+            row.Add(CrestSlot(header ? null : vm.Crest, "fts-lt__crest"));
 
-            // Fixed-width crest slot keeps every column aligned (header passes null → empty slot).
-            var crestSlot = new VisualElement();
-            crestSlot.style.width = CrestWidth;
-            crestSlot.style.height = 22;
-            crestSlot.style.flexShrink = 0f;
-            crestSlot.style.marginRight = UiKit.SpaceSm;
-            crestSlot.style.alignItems = Align.Center;
-            crestSlot.style.justifyContent = Justify.Center;
-            if (crest != null) crestSlot.Add(crest);
-            row.Add(crestSlot);
+            Label club = Cell(header ? _tr("league.col.club") : vm.Club, "fts-lt__club");
+            club.style.flexGrow = 1f;
+            club.style.flexShrink = 1f;
+            club.style.minWidth = 0f;
+            club.style.overflow = Overflow.Hidden;
+            club.style.textOverflow = TextOverflow.Ellipsis;
+            row.Add(club);
 
-            Label clubCell = Cell(club, 0, textColor, TextAnchor.MiddleLeft);
-            clubCell.style.flexGrow = 1f;
-            clubCell.style.flexShrink = 1f;
-            clubCell.style.fontSize = header ? 12 : 14;
-            if (!header) clubCell.style.unityFontStyleAndWeight = FontStyle.Bold;
-            clubCell.style.whiteSpace = WhiteSpace.NoWrap;
-            clubCell.style.overflow = Overflow.Hidden;
-            clubCell.style.textOverflow = TextOverflow.Ellipsis;
-            row.Add(clubCell);
-
-            row.Add(Cell(p, StatWidth, textColor, TextAnchor.MiddleRight));
-            row.Add(Cell(w, StatWidth, textColor, TextAnchor.MiddleRight));
-            row.Add(Cell(d, StatWidth, textColor, TextAnchor.MiddleRight));
-            row.Add(Cell(l, StatWidth, textColor, TextAnchor.MiddleRight));
-            row.Add(Cell(gf, StatWidth, textColor, TextAnchor.MiddleRight));
-            row.Add(Cell(ga, StatWidth, textColor, TextAnchor.MiddleRight));
-            row.Add(Cell(gd, StatWidth, textColor, TextAnchor.MiddleRight));
-
-            Label points = Cell(pts, PointsWidth, header ? UiKit.TextMuted : UiKit.Accent, TextAnchor.MiddleRight);
-            points.style.unityFontStyleAndWeight = FontStyle.Bold;
-            points.style.fontSize = header ? 12 : 15;
-            row.Add(points);
-
+            row.Add(Cell(header ? _tr("league.col.p") : vm.Played.ToString(), "fts-lt__num"));
+            row.Add(Cell(header ? _tr("league.col.w") : vm.Wins.ToString(), "fts-lt__num"));
+            row.Add(Cell(header ? _tr("league.col.d") : vm.Draws.ToString(), "fts-lt__num"));
+            row.Add(Cell(header ? _tr("league.col.l") : vm.Losses.ToString(), "fts-lt__num"));
+            row.Add(Cell(header ? _tr("league.col.gf") : vm.GoalsFor.ToString(), "fts-lt__num", "fts-lt__wide"));
+            row.Add(Cell(header ? _tr("league.col.ga") : vm.GoalsAgainst.ToString(), "fts-lt__num", "fts-lt__wide"));
+            row.Add(Cell(header ? _tr("league.col.gd") : Signed(vm.GoalDifference), "fts-lt__num"));
+            row.Add(Cell(header ? _tr("league.col.pts") : vm.Points.ToString(), "fts-lt__num", "fts-lt__pts"));
             return row;
         }
 
-        private static Label Cell(string text, float width, Color color, TextAnchor align)
-        {
-            var label = new Label(text);
-            label.style.fontSize = 13;
-            label.style.color = color;
-            label.style.unityTextAlign = align;
-            if (width > 0)
-            {
-                label.style.width = width;
-                label.style.flexShrink = 0f;
-            }
-            return label;
-        }
-
-        /// <summary>A list row with an optional leading crest (scorers).</summary>
-        private static VisualElement ListRow(string text, bool isUser, VisualElement crest, int index)
-        {
-            var row = new VisualElement();
-            row.AddToClassList("fts-trow");
-            row.style.flexDirection = FlexDirection.Row;
-            row.style.alignItems = Align.Center;
-            row.style.height = RowHeight;
-            row.style.flexShrink = 0f;
-            row.style.paddingLeft = UiKit.SpaceSm;
-            row.style.paddingRight = UiKit.SpaceSm;
-            Stripe(row, isUser, index);
-
-            var rank = new Label((index + 1).ToString());
-            rank.style.width = PosWidth;
-            rank.style.flexShrink = 0f;
-            rank.style.fontSize = 13;
-            rank.style.unityFontStyleAndWeight = FontStyle.Bold;
-            rank.style.color = UiKit.TextMuted;
-            rank.style.unityTextAlign = TextAnchor.MiddleLeft;
-            row.Add(rank);
-
-            var slot = new VisualElement();
-            slot.style.width = CrestWidth;
-            slot.style.height = 22;
-            slot.style.flexShrink = 0f;
-            slot.style.marginRight = UiKit.SpaceSm;
-            slot.style.alignItems = Align.Center;
-            slot.style.justifyContent = Justify.Center;
-            if (crest != null) slot.Add(crest);
-            row.Add(slot);
-
-            var label = new Label(text);
-            label.style.fontSize = 14;
-            label.style.color = UiKit.TextPrimary;
-            label.style.flexGrow = 1f;
-            label.style.flexShrink = 1f;
-            label.style.unityTextAlign = TextAnchor.MiddleLeft;
-            label.style.whiteSpace = WhiteSpace.NoWrap;
-            label.style.overflow = Overflow.Hidden;
-            label.style.textOverflow = TextOverflow.Ellipsis;
-            row.Add(label);
-            return row;
-        }
-
-        /// <summary>A fixture row: home crest · result/vs text · away crest (task 6.8).</summary>
         private static VisualElement FixtureRow(FixtureRowVm vm, int index)
         {
             var row = new VisualElement();
-            row.AddToClassList("fts-trow");
+            row.AddToClassList("fts-lt__row");
+            row.AddToClassList("fts-lt__fixture");
             row.style.flexDirection = FlexDirection.Row;
             row.style.alignItems = Align.Center;
-            row.style.height = RowHeight + 4;
-            row.style.flexShrink = 0f;
-            row.style.paddingLeft = UiKit.SpaceSm;
-            row.style.paddingRight = UiKit.SpaceSm;
             Stripe(row, vm.IsUser, index);
 
-            row.Add(CrestSlot(vm.HomeCrest));
-
-            var label = new Label(vm.Label);
-            label.style.fontSize = 14;
-            label.style.color = UiKit.TextPrimary;
+            row.Add(CrestSlot(vm.HomeCrest, "fts-lt__crest"));
+            Label label = Cell(vm.Label, "fts-lt__fixturetext");
             label.style.flexGrow = 1f;
             label.style.flexShrink = 1f;
+            label.style.minWidth = 0f;
             label.style.unityTextAlign = TextAnchor.MiddleCenter;
-            label.style.marginLeft = UiKit.SpaceSm;
-            label.style.marginRight = UiKit.SpaceSm;
-            label.style.whiteSpace = WhiteSpace.NoWrap;
-            label.style.overflow = Overflow.Hidden;
-            label.style.textOverflow = TextOverflow.Ellipsis;
+            label.style.whiteSpace = WhiteSpace.Normal;
             row.Add(label);
-
-            row.Add(CrestSlot(vm.AwayCrest));
+            row.Add(CrestSlot(vm.AwayCrest, "fts-lt__crest"));
             return row;
         }
 
-        /// <summary>Zebra + "this is your club" tinting, class-driven with an inline fallback.</summary>
-        private static void Stripe(VisualElement row, bool isUser, int index)
+        private static VisualElement ScorerRow(ScorerRowVm vm, int index)
         {
-            if (isUser) row.AddToClassList("fts-trow--user");
-            else if (index % 2 == 1) row.AddToClassList("fts-trow--zebra");
-            if (!UiKit.StylesLoaded)
-            {
-                row.style.backgroundColor = isUser
-                    ? UiKit.Hex(0x1F4A34)
-                    : (index % 2 == 1 ? new Color(1f, 1f, 1f, 0.035f) : Color.clear);
-                UiKit.Round(row, 6);
-            }
+            var row = new VisualElement();
+            row.AddToClassList("fts-lt__row");
+            row.style.flexDirection = FlexDirection.Row;
+            row.style.alignItems = Align.Center;
+            Stripe(row, vm.IsUser, index);
+
+            row.Add(Cell((index + 1).ToString(), "fts-lt__pos"));
+            row.Add(CrestSlot(vm.Crest, "fts-lt__crest"));
+            Label label = Cell(vm.Label, "fts-lt__club");
+            label.style.flexGrow = 1f;
+            label.style.flexShrink = 1f;
+            label.style.minWidth = 0f;
+            label.style.overflow = Overflow.Hidden;
+            label.style.textOverflow = TextOverflow.Ellipsis;
+            row.Add(label);
+            return row;
         }
 
-        private static VisualElement CrestSlot(VisualElement crest)
+        private static Label Cell(string text, string cls, string cls2 = null)
+        {
+            var label = new Label(text ?? string.Empty);
+            label.AddToClassList("fts-lt__cell");
+            label.AddToClassList(cls);
+            if (cls2 != null) label.AddToClassList(cls2);
+            label.style.whiteSpace = WhiteSpace.NoWrap;
+            label.style.flexShrink = 0f;
+            return label;
+        }
+
+        private static string Signed(int value) => value > 0 ? "+" + value : value.ToString();
+
+        /// <summary>Zebra + "this is your club" tinting.</summary>
+        private static void Stripe(VisualElement row, bool isUser, int index)
+        {
+            if (isUser) row.AddToClassList("fts-lt__row--user");
+            else if (index % 2 == 1) row.AddToClassList("fts-lt__row--zebra");
+        }
+
+        private static VisualElement CrestSlot(VisualElement crest, string cls)
         {
             var slot = new VisualElement();
-            slot.style.width = CrestWidth;
-            slot.style.height = 22;
+            slot.AddToClassList(cls);
             slot.style.flexShrink = 0f;
             slot.style.alignItems = Align.Center;
             slot.style.justifyContent = Justify.Center;

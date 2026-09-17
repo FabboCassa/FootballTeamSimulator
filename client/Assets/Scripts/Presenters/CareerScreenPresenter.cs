@@ -55,41 +55,48 @@ namespace Fts.Presenters
         private void Refresh()
         {
             Club club = _career.GetUserClub();
-            _view.SetHeader(_loc.Tr("career.header", club?.Name ?? string.Empty));
+            _view.SetHeader(club?.Name ?? string.Empty);
 
-            // Short values: the caption ("Board objective", …) is baked into the tile, so the
-            // value line carries only the fact (task 6.12 stat tiles).
-            _view.SetObjective(_loc.Tr("career.objective_value", TierName(_service.Objective), _service.ObjectivePosition));
+            // Short values: the caption is baked into each tile, so the value carries only the fact.
+            _view.SetObjective(_loc.Tr("career.objective_tile", Capitalize(TierName(_service.Objective)), _service.ObjectivePosition));
             _view.SetPosition(_loc.Tr("career.position_value", _service.CurrentPosition(), _service.ClubCount));
             _view.SetReputation(_loc.Tr("career.reputation_value", _service.Reputation));
 
             int band = _service.ConfidenceBand;
             string status = _loc.Tr(band <= 0 ? "career.confidence.risk" : band == 1 ? "career.confidence.warned" : "career.confidence.safe");
-            _view.SetConfidence(_loc.Tr("career.confidence", _service.Confidence, status), _service.Confidence, band);
+            _view.SetConfidence(_loc.Tr("career.reputation_value", _service.Confidence), Capitalize(status), _service.Confidence, band);
 
-            List<string> history = BuildHistory();
+            List<CareerHistoryRowVm> history = BuildHistory();
             if (history.Count == 0)
                 _view.SetHistoryEmpty(_loc.Tr("career.history_empty"));
             else
                 _view.SetHistory(history);
         }
 
-        private List<string> BuildHistory()
+        private List<CareerHistoryRowVm> BuildHistory()
         {
-            var lines = new List<string>();
+            var rows = new List<CareerHistoryRowVm>();
             IReadOnlyList<CareerHistoryEntry> history = _service.History;
             for (int i = history.Count - 1; i >= 0; i--) // newest first
             {
                 CareerHistoryEntry e = history[i];
-                string outcome = OutcomeName((SeasonOutcome)e.Outcome);
-                string line = _loc.Tr("career.history_row", e.Year, e.ClubName, e.FinishPosition, e.ExpectedPosition, outcome);
-                if (e.Champion) line = _loc.Tr("career.history_champion", line);
-                if (e.Sacked) line = _loc.Tr("career.history_sacked", line);
-                lines.Add(line);
+                var outcome = (SeasonOutcome)e.Outcome;
+                rows.Add(new CareerHistoryRowVm
+                {
+                    Year = e.Year.ToString(),
+                    Club = e.ClubName,
+                    Detail = _loc.Tr("career.history_detail", e.FinishPosition, e.ExpectedPosition, OutcomeName(outcome)),
+                    Outcome = outcome == SeasonOutcome.Overachieved ? 1 : outcome == SeasonOutcome.Underachieved ? -1 : 0,
+                    Champion = e.Champion,
+                    Sacked = e.Sacked
+                });
             }
 
-            return lines; // empty → the view shows the illustrated empty state
+            return rows; // empty → the view shows the illustrated empty state
         }
+
+        private static string Capitalize(string text) =>
+            string.IsNullOrEmpty(text) ? string.Empty : char.ToUpperInvariant(text[0]) + text.Substring(1);
 
         private string TierName(ObjectiveTier tier)
         {

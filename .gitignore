@@ -61,3 +61,6 @@ server/.env
 # still small), but it does not need to be there again.
 test-output.txt
 *-output.txt
+
+# ba plugin logs
+.ba/logs/

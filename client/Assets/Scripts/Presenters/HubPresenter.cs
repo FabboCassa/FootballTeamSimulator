@@ -32,6 +32,8 @@ namespace Fts.Presenters
         private readonly ClubIdentityService _identity;
         private readonly OverlayHost _overlay;
         private readonly ISaveRepository _saveRepository;
+        private readonly CareerService _careerService;
+        private readonly InboxService _inbox;
         private readonly HubView _view;
         private IDisposable _dayAdvancedSubscription;
         private IDisposable _shortcutSubscription;
@@ -49,7 +51,9 @@ namespace Fts.Presenters
             ILocalizationService loc,
             ClubIdentityService identity,
             OverlayHost overlay,
-            ISaveRepository saveRepository)
+            ISaveRepository saveRepository,
+            CareerService careerService,
+            InboxService inbox)
         {
             _navigator = navigator;
             _session = session;
@@ -61,23 +65,21 @@ namespace Fts.Presenters
             _identity = identity;
             _overlay = overlay;
             _saveRepository = saveRepository;
+            _careerService = careerService;
+            _inbox = inbox;
 
+            // The club's name and crest live in the shell's top bar (task 14.3), so the overview
+            // no longer repeats them: it is a dashboard, not an identity card (task 14.4).
             _view = new HubView(loc.Tr);
-            var club = career.GetUserClub();
-            _view.SetClubName(loc.Tr("hub.career_label", club.Name, career.GetUserLeague().Name));
-
-            // Per-club generated identity (task 6.1): crest + primary-colour tint.
-            ClubVisual v = _identity.UserVisual();
-            _view.SetCrest(new CrestRenderer(
-                96f, v.Shape, v.Pattern, v.Primary, v.Secondary, v.Accent, v.Emblem,
-                UiKit.Background, club.ShortName));
-            _view.SetAccent(v.Primary);
         }
 
         public void Enter()
         {
             _view.EndSeasonClicked += OnEndSeason;
+            _view.NextMatchClicked += OnNextMatch;
             _view.OpponentReportClicked += OnOpponentReport;
+            _view.SectionClicked += OnSection;
+            Responsive.Changed += OnViewportChanged;
             _dayAdvancedSubscription = _broker.Subscribe<DayAdvancedMessage>(OnDayAdvanced);
             // Hub actions arrive as HubShortcutMessage from two publishers that both guarantee
             // the Hub is the top screen first: the 6.5 DesktopController (hotkeys, guarded) and
@@ -90,7 +92,10 @@ namespace Fts.Presenters
         public void Exit()
         {
             _view.EndSeasonClicked -= OnEndSeason;
+            _view.NextMatchClicked -= OnNextMatch;
             _view.OpponentReportClicked -= OnOpponentReport;
+            _view.SectionClicked -= OnSection;
+            Responsive.Changed -= OnViewportChanged;
             _dayAdvancedSubscription?.Dispose();
             _dayAdvancedSubscription = null;
             _shortcutSubscription?.Dispose();
@@ -138,40 +143,168 @@ namespace Fts.Presenters
             }
         }
 
+        // Crests are painter2D elements sized in C#, so they cannot restyle themselves when the
+        // breakpoint changes: rebuild the dashboard at the new size instead (same trick as the
+        // shell's crest in 14.3).
+        private void OnViewportChanged(Viewport _) => RefreshStatus();
+
+        private float CrestSize(bool big) =>
+            Responsive.IsMobile ? (big ? 120f : 44f) : (big ? 64f : 24f);
+
+        /// <summary>Fills every block of the overview dashboard (task 14.4).</summary>
         private void RefreshStatus()
         {
             int userClubId = _career.UserClubId;
-            string next = _loc.Tr("hub.status.season_complete");
-            string last = string.Empty;
+            Season season = _career.Season;
+            bool complete = _seasonService.IsSeasonComplete;
 
+            _view.SetKicker(_loc.Tr("shell.day", season.Year, season.CurrentDay));
+
+            // ---- the user's fixtures, in calendar order
+            var played = new List<Fixture>();
             Fixture nextFixture = null;
-            Fixture lastFixture = null;
-            foreach (Fixture f in _career.Season.Fixtures)
+            foreach (Fixture f in season.Fixtures)
             {
                 if (!f.Involves(userClubId)) continue;
-                if (f.Played) lastFixture = f;
+                if (f.Played) played.Add(f);
                 else if (nextFixture == null || f.Day < nextFixture.Day) nextFixture = f;
             }
+            played.Sort((a, b) => a.Day.CompareTo(b.Day));
 
+            // ---- tiles
+            League league = _career.GetUserLeague();
+            List<LeagueTableRow> table = LeagueTable.Compute(league, season);
+            int userIndex = table.FindIndex(r => r.ClubId == userClubId);
+
+            if (userIndex >= 0)
+            {
+                LeagueTableRow me = table[userIndex];
+                _view.SetPosition(_loc.Tr("career.position_value", userIndex + 1, table.Count));
+                _view.SetPoints(_loc.Tr("hub.points_value", me.Points, me.Played));
+            }
+            else
+            {
+                _view.SetPosition("—");
+                _view.SetPoints("—");
+            }
+
+            var form = new List<int>();
+            for (int i = Math.Max(0, played.Count - 5); i < played.Count; i++)
+                form.Add(Outcome(played[i], userClubId));
+            _view.SetForm(form);
+
+            _view.SetConfidence(_loc.Tr("hub.confidence_value", _careerService.Confidence), _careerService.ConfidenceBand);
+
+            // ---- next match
+            HubFixtureVm next = null;
             if (nextFixture != null)
             {
                 bool home = nextFixture.HomeClubId == userClubId;
-                int opponentId = home ? nextFixture.AwayClubId : nextFixture.HomeClubId;
-                string opponent = _career.FindClub(opponentId)?.Name ?? $"Club {opponentId}";
-                string venue = _loc.Tr(home ? "hub.home_short" : "hub.away_short");
-                next = _loc.Tr("hub.status.next", opponent, venue, nextFixture.Day, nextFixture.Round);
-            }
+                string venue = _loc.Tr(home ? "hub.venue.home" : "hub.venue.away");
+                int inDays = nextFixture.Day - season.CurrentDay;
+                string when = inDays <= 0 ? _loc.Tr("hub.when.today")
+                    : inDays == 1 ? _loc.Tr("hub.when.tomorrow")
+                    : _loc.Tr("hub.when.days", inDays);
 
-            if (lastFixture != null)
+                next = new HubFixtureVm
+                {
+                    Kicker = _loc.Tr("hub.next.kicker", nextFixture.Round, venue),
+                    HomeName = ClubName(nextFixture.HomeClubId),
+                    AwayName = ClubName(nextFixture.AwayClubId),
+                    HomeCrest = Crest(nextFixture.HomeClubId, CrestSize(true), UiKit.SurfaceRaised),
+                    AwayCrest = Crest(nextFixture.AwayClubId, CrestSize(true), UiKit.SurfaceRaised),
+                    When = when
+                };
+            }
+            _view.SetNextFixture(next, complete);
+
+            // ---- last result
+            HubResultVm last = null;
+            if (played.Count > 0)
             {
-                string homeName = _career.FindClub(lastFixture.HomeClubId)?.Name ?? "?";
-                string awayName = _career.FindClub(lastFixture.AwayClubId)?.Name ?? "?";
-                last = "\n" + _loc.Tr("hub.status.last", homeName, lastFixture.HomeGoals, lastFixture.AwayGoals, awayName);
+                Fixture f = played[played.Count - 1];
+                last = new HubResultVm
+                {
+                    HomeName = ClubName(f.HomeClubId),
+                    AwayName = ClubName(f.AwayClubId),
+                    HomeGoals = f.HomeGoals,
+                    AwayGoals = f.AwayGoals,
+                    HomeCrest = Crest(f.HomeClubId, CrestSize(true), UiKit.Surface),
+                    AwayCrest = Crest(f.AwayClubId, CrestSize(true), UiKit.Surface),
+                    Outcome = Outcome(f, userClubId)
+                };
             }
+            _view.SetLastResult(last);
 
-            _view.SetSeasonComplete(_seasonService.IsSeasonComplete);
-            _view.SetOpponentReportVisible(nextFixture != null);
-            _view.SetStatus(_loc.Tr("hub.status.day", _career.Season.Year, _career.Season.CurrentDay) + " " + next + last);
+            // ---- mini standings: five rows with the user's club in them
+            const int window = 5;
+            int from = Math.Max(0, Math.Min((userIndex < 0 ? 0 : userIndex) - window / 2, table.Count - window));
+            var rows = new List<HubTableRowVm>(window);
+            for (int i = from; i < Math.Min(table.Count, from + window); i++)
+            {
+                LeagueTableRow r = table[i];
+                rows.Add(new HubTableRowVm
+                {
+                    Position = i + 1,
+                    Club = ClubName(r.ClubId),
+                    Played = r.Played,
+                    Points = r.Points,
+                    IsUser = r.ClubId == userClubId,
+                    Crest = Crest(r.ClubId, CrestSize(false), r.ClubId == userClubId ? UserRowGround : UiKit.Surface)
+                });
+            }
+            _view.SetTable(rows);
+
+            // ---- to do
+            int unread = _inbox.UnreadCount;
+            int tired = 0;
+            Club club = _career.GetUserClub();
+            if (club?.Squad?.Players != null)
+                foreach (Player p in club.Squad.Players)
+                    if (p.Condition.Fitness < TiredFitness) tired++;
+
+            _view.SetTodo(
+                unread > 0 ? _loc.Tr("hub.todo.inbox_unread", unread) : _loc.Tr("hub.todo.inbox_clear"),
+                unread > 0,
+                tired > 0 ? _loc.Tr("hub.todo.squad_tired", tired) : _loc.Tr("hub.todo.squad_ok"),
+                tired > 0,
+                _loc.Tr("hub.todo.market_budget", MoneyFormat.Short(club?.TransferBudget ?? 0)));
+        }
+
+        /// <summary>
+        /// The ground under the user's standings row: the card surface with the 12% accent tint of
+        /// <c>.fts-hub__trow--user</c> composited on it. A crest's frame mask must match what is
+        /// behind it or it shows a square halo.
+        /// </summary>
+        private static readonly Color UserRowGround = UiKit.Hex(0x143037);
+
+        /// <summary>Below this a player reads "tired" (the same band ConditionDisplay calls tired).</summary>
+        private const int TiredFitness = 70;
+
+        private static int Outcome(Fixture f, int userClubId)
+        {
+            int mine = f.HomeClubId == userClubId ? f.HomeGoals : f.AwayGoals;
+            int theirs = f.HomeClubId == userClubId ? f.AwayGoals : f.HomeGoals;
+            return mine > theirs ? 1 : mine < theirs ? -1 : 0;
+        }
+
+        private string ClubName(int clubId) => _career.FindClub(clubId)?.Name ?? $"Club {clubId}";
+
+        private VisualElement Crest(int clubId, float size, Color mask)
+        {
+            Club club = _career.FindClub(clubId);
+            return Crests.Badge(_identity.Visual(clubId), size, club?.ShortName ?? "?", mask);
+        }
+
+        private void OnSection(string key)
+        {
+            switch (key)
+            {
+                case "inbox": OnInbox(); break;
+                case "squad": OnSquad(); break;
+                case "market": OnMarket(); break;
+                case "league": OnLeague(); break;
+            }
         }
 
         private void OnOpponentReport() => _navigator.Push<OpponentReportScreenPresenter>();

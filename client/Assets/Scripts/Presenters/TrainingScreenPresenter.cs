@@ -51,6 +51,7 @@ namespace Fts.Presenters
         public void Enter()
         {
             _view.TeamFocusCycleClicked += OnTeamFocus;
+            _view.TeamFocusSelected += OnTeamFocusSelected;
             _view.IndividualFocusCycleClicked += OnIndividualFocus;
             _view.SaveClicked += OnSave;
             _view.BackClicked += OnBack;
@@ -65,6 +66,7 @@ namespace Fts.Presenters
         public void Exit()
         {
             _view.TeamFocusCycleClicked -= OnTeamFocus;
+            _view.TeamFocusSelected -= OnTeamFocusSelected;
             _view.IndividualFocusCycleClicked -= OnIndividualFocus;
             _view.SaveClicked -= OnSave;
             _view.BackClicked -= OnBack;
@@ -73,6 +75,13 @@ namespace Fts.Presenters
         private void OnTeamFocus()
         {
             _working.TeamFocus = (TeamTrainingFocus)(((int)_working.TeamFocus + 1) % TeamFocusCount);
+            Refresh();
+        }
+
+        private void OnTeamFocusSelected(int index)
+        {
+            if (index < 0 || index >= TeamFocusCount) return;
+            _working.TeamFocus = (TeamTrainingFocus)index;
             Refresh();
         }
 
@@ -102,6 +111,7 @@ namespace Fts.Presenters
         private void Refresh()
         {
             _view.SetTeamFocus(_loc.Tr("training.team_focus", TeamFocusName(_working.TeamFocus)));
+            _view.SetTeamFocusIndex((int)_working.TeamFocus);
             _view.SetTeamHint(_loc.Tr("training.team_desc." + _working.TeamFocus.ToString().ToLowerInvariant()));
 
             var rows = new List<TrainingRowVm>();
@@ -111,7 +121,11 @@ namespace Fts.Presenters
                 {
                     PlayerId = p.Id,
                     Label = $"{p.FullName} ({RoleName(p.Role)})",
-                    FocusLabel = IndividualFocusName(_working.FocusFor(p.Id))
+                    FocusLabel = IndividualFocusName(_working.FocusFor(p.Id)),
+                    FocusIndex = (int)_working.FocusFor(p.Id),
+                    Name = p.FullName,
+                    RoleAbbr = RoleName(p.Role),
+                    RoleGroup = RoleFormat.Group(p.Role)
                 });
             }
 

@@ -149,25 +149,27 @@ namespace Fts.Views
             col.style.flexGrow = 1f;
             Root.Add(col);
 
-            _header = UiKit.ScreenTitle(string.Empty);
-            _header.style.marginBottom = UiKit.SpaceXs;
-            _header.style.flexShrink = 0f;
-            col.Add(_header);
+            // Task 14.4: the mockup's page head — kicker over a Bebas title — instead of a bare title.
+            PageHeadParts head = UiKit.PageHead();
+            head.Left.Add(UiKit.Eyebrow(tr("scouting.kicker")));
+            _header = new Label(string.Empty);
+            _header.AddToClassList("fts-pagetitle");
+            UiKit.UseDisplayFont(_header);
+            head.Left.Add(_header);
+            Button back = UiKit.GhostButton(tr("common.back"), () => BackClicked?.Invoke());
+            back.AddToClassList("fts-pageback");
+            head.Actions.Add(back);
+            col.Add(head.Root);
 
             _help = UiKit.HelpText(string.Empty);
             _help.style.flexShrink = 0f;
             col.Add(_help);
 
-            _tabs = UiKit.Row();
-            _tabs.style.flexShrink = 0f;
-            _tabs.style.marginBottom = UiKit.SpaceSm;
-            _tabAssignments = UiKit.TabButton(tr("scouting.tab.assignments"), () => TabSelected?.Invoke(0));
-            _tabReports = UiKit.TabButton(tr("scouting.tab.reports"), () => TabSelected?.Invoke(1));
-            _tabSearch = UiKit.TabButton(tr("scouting.tab.search"), () => TabSelected?.Invoke(2));
-            _tabSearch.style.marginRight = 0;
-            _tabs.Add(_tabAssignments);
-            _tabs.Add(_tabReports);
-            _tabs.Add(_tabSearch);
+            _tabAssignments = UiKit.SegChip(tr("scouting.tab.assignments"), null, () => TabSelected?.Invoke(0));
+            _tabReports = UiKit.SegChip(tr("scouting.tab.reports"), null, () => TabSelected?.Invoke(1));
+            _tabSearch = UiKit.SegChip(tr("scouting.tab.search"), null, () => TabSelected?.Invoke(2));
+            _tabs = UiKit.SegRow(_tabAssignments, _tabReports, _tabSearch);
+            _tabs.AddToClassList("fts-scout__tabs");
             col.Add(_tabs);
 
             // --- the search controls (task 11.3), hidden unless the search tab is open ---------
@@ -178,7 +180,7 @@ namespace Fts.Views
             col.Add(_searchPanel);
 
             _searchField = new TextField { maxLength = 40 };
-            _searchField.style.minHeight = 36;
+            _searchField.AddToClassList("fts-search");
             _searchField.style.marginBottom = UiKit.SpaceXs;
             _searchField.RegisterValueChangedCallback(e => SearchTextChanged?.Invoke(e.newValue ?? string.Empty));
             _searchPanel.Add(_searchField);
@@ -208,9 +210,6 @@ namespace Fts.Views
             _actionBar.style.display = DisplayStyle.None;
             col.Add(_actionBar);
 
-            VisualElement footer = UiKit.FooterBar();
-            footer.Add(UiKit.FooterButton(tr("common.back"), () => BackClicked?.Invoke()));
-            col.Add(footer);
         }
 
         public void SetHeader(string text) => _header.text = text;
@@ -221,9 +220,9 @@ namespace Fts.Views
         public void SetTabs(int active, bool visible)
         {
             _tabs.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
-            UiKit.SetTabActive(_tabAssignments, active == 0);
-            UiKit.SetTabActive(_tabReports, active == 1);
-            UiKit.SetTabActive(_tabSearch, active == 2);
+            UiKit.SetSegChipState(_tabAssignments, active == 0);
+            UiKit.SetSegChipState(_tabReports, active == 1);
+            UiKit.SetSegChipState(_tabSearch, active == 2);
         }
 
         // ------------------------------------------------------------------ the assignment board
@@ -245,6 +244,7 @@ namespace Fts.Views
                 int scoutId = vm.ScoutId;
 
                 VisualElement card = UiKit.RowCard(72f);
+                card.AddToClassList("fts-scout__card");
                 card.style.flexDirection = FlexDirection.Row;
                 card.style.alignItems = Align.Center;
 
@@ -254,18 +254,18 @@ namespace Fts.Views
                 text.style.overflow = Overflow.Hidden;
 
                 var title = new Label($"{vm.Name} · {vm.LevelText}");
-                title.style.fontSize = 14;
+                title.AddToClassList("fts-t-body");
                 title.style.unityFontStyleAndWeight = FontStyle.Bold;
                 title.style.color = UiKit.TextPrimary;
                 text.Add(title);
 
                 var attrs = new Label(vm.AttributesText);
-                attrs.style.fontSize = 11;
+                attrs.AddToClassList("fts-t-small");
                 attrs.style.color = UiKit.TextMuted;
                 text.Add(attrs);
 
                 var where = new Label(vm.Destination);
-                where.style.fontSize = 13;
+                where.AddToClassList("fts-t-meta");
                 where.style.color = vm.Out ? UiKit.Accent : UiKit.TextMuted;
                 where.style.whiteSpace = WhiteSpace.NoWrap;
                 where.style.overflow = Overflow.Hidden;
@@ -275,7 +275,7 @@ namespace Fts.Views
                 if (vm.Out)
                 {
                     var detail = new Label(vm.Detail);
-                    detail.style.fontSize = 11;
+                    detail.AddToClassList("fts-t-small");
                     detail.style.color = UiKit.TextMuted;
                     text.Add(detail);
                 }
@@ -285,14 +285,14 @@ namespace Fts.Views
                 if (vm.Out)
                 {
                     VisualElement meters = new VisualElement();
-                    meters.style.width = 168;
+                    meters.AddToClassList("fts-scout__meters");
                     meters.style.flexShrink = 0f;
                     meters.style.justifyContent = Justify.Center;
 
                     meters.Add(MeterLine(vm.AreaText, vm.AreaPercent, AreaColor));
 
                     var ceiling = new Label(vm.CeilingText);
-                    ceiling.style.fontSize = 11;
+                    ceiling.AddToClassList("fts-t-small");
                     ceiling.style.color = UiKit.TextMuted;
                     ceiling.style.marginTop = 2;
                     meters.Add(ceiling);
@@ -344,7 +344,7 @@ namespace Fts.Views
                 nameCell.style.justifyContent = Justify.Center;
 
                 var name = new Label(vm.Name);
-                name.style.fontSize = 13;
+                name.AddToClassList("fts-t-meta");
                 name.style.unityFontStyleAndWeight = FontStyle.Bold;
                 name.style.color = UiKit.TextPrimary;
                 name.style.whiteSpace = WhiteSpace.NoWrap;
@@ -353,7 +353,7 @@ namespace Fts.Views
                 nameCell.Add(name);
 
                 var source = new Label(vm.Source);
-                source.style.fontSize = 10;
+                source.AddToClassList("fts-t-small");
                 source.style.color = UiKit.TextMuted;
                 source.style.whiteSpace = WhiteSpace.NoWrap;
                 source.style.overflow = Overflow.Hidden;
@@ -371,7 +371,7 @@ namespace Fts.Views
                 bar.style.marginRight = 8;
                 knowCell.Add(bar);
                 var pct = new Label(vm.KnowledgeText);
-                pct.style.fontSize = 11;
+                pct.AddToClassList("fts-t-small");
                 pct.style.color = UiKit.TextMuted;
                 pct.style.whiteSpace = WhiteSpace.NoWrap;
                 pct.style.overflow = Overflow.Hidden;
@@ -416,7 +416,7 @@ namespace Fts.Views
 
                 var label = new Label(option.Label);
                 label.style.flexGrow = 1f;
-                label.style.fontSize = 14;
+                label.AddToClassList("fts-t-body");
                 label.style.unityFontStyleAndWeight = FontStyle.Bold;
                 label.style.color = UiKit.TextPrimary;
                 label.style.whiteSpace = WhiteSpace.NoWrap;
@@ -427,7 +427,7 @@ namespace Fts.Views
                 if (!string.IsNullOrEmpty(option.Detail))
                 {
                     var detail = new Label(option.Detail);
-                    detail.style.fontSize = 12;
+                    detail.AddToClassList("fts-t-meta");
                     detail.style.color = UiKit.TextMuted;
                     detail.style.flexShrink = 0f;
                     row.Add(detail);
@@ -459,12 +459,12 @@ namespace Fts.Views
 
                 var label = new Label(line.Label);
                 label.style.flexGrow = 1f;
-                label.style.fontSize = 14;
+                label.AddToClassList("fts-t-body");
                 label.style.color = UiKit.TextPrimary;
                 row.Add(label);
 
                 var value = new Label(line.Value);
-                value.style.fontSize = 14;
+                value.AddToClassList("fts-t-body");
                 value.style.unityFontStyleAndWeight = FontStyle.Bold;
                 value.style.color = UiKit.Accent;
                 value.style.flexShrink = 0f;
@@ -538,7 +538,7 @@ namespace Fts.Views
 
             var summary = new Label(panel.Summary ?? string.Empty);
             summary.style.flexGrow = 1f;
-            summary.style.fontSize = 12;
+            summary.AddToClassList("fts-t-meta");
             summary.style.color = UiKit.TextMuted;
             summary.style.unityTextAlign = TextAnchor.MiddleCenter;
             _actionBar.Add(summary);
@@ -587,7 +587,7 @@ namespace Fts.Views
             line.Add(bar);
 
             var label = new Label(caption);
-            label.style.fontSize = 11;
+            label.AddToClassList("fts-t-small");
             label.style.color = UiKit.TextMuted;
             label.style.whiteSpace = WhiteSpace.NoWrap;
             label.style.overflow = Overflow.Hidden;

@@ -9,7 +9,7 @@ namespace Fts.Views
     {
         /// <summary>A phone held upright: one column, big touch targets, a bottom action bar.</summary>
         Mobile,
-        /// <summary>A tablet or a small window: two columns, desktop type at mobile spacing.</summary>
+        /// <summary>A tablet (either way up) or a small window: desktop layout, touch-sized targets (task 14.9).</summary>
         Tablet,
         /// <summary>A desktop window: the full multi-column layout.</summary>
         Desktop
@@ -48,6 +48,16 @@ namespace Fts.Views
         private const float MobileMaxWidth = 760f;
         /// <summary>Below this the layout drops its third column.</summary>
         private const float TabletMaxWidth = 1180f;
+        /// <summary>
+        /// Task 14.9: an upright screen this wide in UI points is a TABLET, not a phone. A 1080x2400
+        /// handset resolves to ~970 points, a 1536x2048 tablet to ~1250 — the phone sheet (sized for
+        /// ~970 points) would draw a tablet's text a third larger than a phone's.
+        /// </summary>
+        private const float TabletMinPortraitWidth = 1100f;
+        /// <summary>Upright and at least this tall-for-its-width is always a phone (16:9 = 1.78).</summary>
+        private const float PhoneAspect = 1.6f;
+        /// <summary>Task 14.9: from this width a non-phone screen keeps its side-by-side dashboard columns.</summary>
+        public const float WideColumnsMinWidth = 1300f;
 
         /// <summary>Width in UI points the desktop mockup was drawn against.</summary>
         private const float DesktopDesignWidth = 1440f;
@@ -63,6 +73,16 @@ namespace Fts.Views
 
         /// <summary>True while <see cref="Current"/> is <see cref="Viewport.Mobile"/>.</summary>
         public static bool IsMobile => Current == Viewport.Mobile;
+
+        /// <summary>Width of the root in UI points at the last measure.</summary>
+        public static float Width { get; private set; } = DesktopDesignWidth;
+
+        /// <summary>
+        /// Task 14.9: true when a non-phone screen is wide enough for the dashboards' two columns —
+        /// a desktop or a landscape tablet, but not an upright tablet or a squeezed window.
+        /// <see cref="Changed"/> also fires when this flips (a tablet rotating stays a tablet).
+        /// </summary>
+        public static bool HasWideColumns { get; private set; } = true;
 
         /// <summary>UI points per mockup pixel for the current shape. See the class remarks.</summary>
         public static float Ui { get; private set; } = 1.35f;
@@ -97,14 +117,18 @@ namespace Fts.Views
             if (float.IsNaN(width) || width <= 1f) width = Screen.width;
             if (float.IsNaN(height) || height <= 1f) height = Screen.height;
 
-            Viewport next = Classify(width, height);
+            Viewport next = Classify(width, height, SystemInfo.deviceType == DeviceType.Handheld);
             Ui = next == Viewport.Mobile ? width / MobileDesignWidth : width / DesktopDesignWidth;
+            Width = width;
+            bool wide = next != Viewport.Mobile && width >= WideColumnsMinWidth;
+            bool wideChanged = wide != HasWideColumns;
+            HasWideColumns = wide;
 
             root.EnableInClassList(MobileClass, next == Viewport.Mobile);
             root.EnableInClassList(TabletClass, next == Viewport.Tablet);
             root.EnableInClassList(DesktopClass, next == Viewport.Desktop);
 
-            if (next == Current)
+            if (next == Current && !wideChanged)
                 return;
 
             Current = next;
@@ -112,15 +136,25 @@ namespace Fts.Views
         }
 
         /// <summary>The breakpoint rule, pure so it can be unit-tested without a panel.</summary>
-        public static Viewport Classify(float width, float height)
+        public static Viewport Classify(float width, float height) => Classify(width, height, false);
+
+        /// <summary>
+        /// Task 14.9. Upright: a phone when it is phone-tall or narrow, otherwise a tablet (a narrow
+        /// desktop with touch sizes — not a big phone). Landscape: a phone under 760 points, a tablet
+        /// under 1180 or on a handheld (touch targets, desktop columns), otherwise a desktop.
+        /// </summary>
+        public static Viewport Classify(float width, float height, bool handheld)
         {
             if (width <= 0f) return Viewport.Desktop;
 
             float aspect = height / width;
-            if (aspect >= MobileAspect || width < MobileMaxWidth)
+            if (aspect >= MobileAspect)
+                return aspect >= PhoneAspect || width < TabletMinPortraitWidth ? Viewport.Mobile : Viewport.Tablet;
+
+            if (width < MobileMaxWidth)
                 return Viewport.Mobile;
 
-            return width < TabletMaxWidth ? Viewport.Tablet : Viewport.Desktop;
+            return width < TabletMaxWidth || handheld ? Viewport.Tablet : Viewport.Desktop;
         }
     }
 }

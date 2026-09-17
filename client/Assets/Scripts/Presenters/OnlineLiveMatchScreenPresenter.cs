@@ -36,8 +36,8 @@ namespace Fts.Presenters
         // clients derive the same live minute from the shared kickoff, so change minutes stay monotonic.
         private const float LiveSecondsPerMinute = 2f;
 
-        private static readonly Color HomeColor = UiKit.Accent;
-        private static readonly Color AwayColor = UiKit.Danger;
+        private static readonly Color HomeColor = PitchGraphics.KitHome; // not the UI accent (task 14.7)
+        private static readonly Color AwayColor = PitchGraphics.KitAway; // not the danger token (task 14.7)
 
         private readonly ScreenNavigator _navigator;
         private readonly ILocalizationService _loc;

@@ -26,8 +26,8 @@ namespace Fts.Views
     public sealed class InMatchPanel
     {
         private static readonly Color Backdrop = new Color(0f, 0f, 0f, 0.78f);
-        private static readonly Color CardColor = new Color(0.12f, 0.16f, 0.26f);
-        private static readonly Color SelectedColor = new Color(0.22f, 0.42f, 0.66f);
+        private static readonly Color CardColor = UiKit.SurfaceRaised;
+        private static readonly Color SelectedColor = UiKit.SelectionSoft;
 
         public event Action<int> PitchClicked;   // slot index
         public event Action<int> BenchClicked;   // player id
@@ -75,7 +75,7 @@ namespace Fts.Views
             Root.Add(card);
 
             _title = UiKit.Title(tr("inmatch.title"));
-            _title.style.fontSize = 24;
+            _title.AddToClassList("fts-t-big");
             _title.style.marginBottom = 6;
             card.Add(_title);
 
@@ -95,12 +95,12 @@ namespace Fts.Views
 
             var instr = new Label(tr("inmatch.instructions"));
             instr.style.color = new Color(1f, 1f, 1f, 0.7f);
-            instr.style.fontSize = 13;
+            instr.AddToClassList("fts-t-meta");
             instr.style.marginBottom = 4;
             card.Add(instr);
 
             _familiarity = UiKit.Subtitle(string.Empty);
-            _familiarity.style.fontSize = 14;
+            _familiarity.AddToClassList("fts-t-body");
             _familiarity.style.marginTop = 0;
             _familiarity.style.marginBottom = 4;
             _familiarity.style.alignSelf = Align.FlexStart;
@@ -152,7 +152,7 @@ namespace Fts.Views
                 var row = new VisualElement();
                 row.style.flexDirection = FlexDirection.Row;
                 row.style.alignItems = Align.Center;
-                row.style.height = 30;
+                row.style.minHeight = 30;
                 row.style.marginBottom = 2;
                 row.style.paddingLeft = 6;
                 row.style.paddingRight = 6;
@@ -167,7 +167,7 @@ namespace Fts.Views
 
                 var name = new Label(vm.Label);
                 name.style.flexGrow = 1f;
-                name.style.fontSize = 12;
+                name.AddToClassList("fts-t-meta");
                 name.style.unityTextAlign = TextAnchor.MiddleLeft;
                 row.Add(name);
 
@@ -185,7 +185,7 @@ namespace Fts.Views
 
             var label = new Label(caption);
             label.style.color = new Color(1f, 1f, 1f, 0.7f);
-            label.style.fontSize = 13;
+            label.AddToClassList("fts-t-meta");
             label.style.marginBottom = 4;
             column.Add(label);
 
@@ -200,8 +200,8 @@ namespace Fts.Views
         private static Button InstructionButton(Action onClick)
         {
             var button = new Button(onClick);
-            button.style.height = 36;
-            button.style.fontSize = 13;
+            button.style.minHeight = 36;
+            button.AddToClassList("fts-t-meta");
             button.style.marginRight = 6;
             button.style.marginBottom = 4;
             button.style.minWidth = 150;
@@ -211,9 +211,9 @@ namespace Fts.Views
         private static Button FooterButton(string text, Action onClick)
         {
             var button = UiKit.MenuButton(text, onClick);
-            button.style.width = 160;
-            button.style.height = 44;
-            button.style.fontSize = 16;
+            button.style.minWidth = 160;
+            button.style.minHeight = 44;
+            button.AddToClassList("fts-t-strong");
             button.style.marginLeft = 6;
             button.style.marginRight = 6;
             return button;

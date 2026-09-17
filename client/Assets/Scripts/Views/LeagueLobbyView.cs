@@ -78,7 +78,9 @@ namespace Fts.Views
 
             _title = UiKit.ScreenTitle(string.Empty);
             _title.style.marginBottom = UiKit.SpaceSm;
-            col.Add(_title);
+            // Back and the page's actions sit beside the title, not in a footer (task 14.6).
+            PageHeadParts titleHead = UiKit.TitleHead(_title);
+            col.Add(titleHead.Root);
 
             ScrollView body = UiKit.ListScroll();
             col.Add(body);
@@ -90,7 +92,7 @@ namespace Fts.Views
             _inviteCaption.style.marginTop = 0;
             invitePanel.Add(_inviteCaption);
             _inviteValue = new Label(string.Empty);
-            _inviteValue.style.fontSize = 26;
+            _inviteValue.AddToClassList("fts-t-big");
             _inviteValue.style.unityFontStyleAndWeight = FontStyle.Bold;
             _inviteValue.style.color = UiKit.Accent;
             invitePanel.Add(_inviteValue);
@@ -164,13 +166,12 @@ namespace Fts.Views
             _status.style.display = DisplayStyle.None;
             col.Add(_status);
 
-            VisualElement footer = UiKit.FooterBar();
+            VisualElement footer = titleHead.Actions;
             _backButton = UiKit.FooterButton(string.Empty, () => BackClicked?.Invoke());
             footer.Add(_backButton);
             _leaveButton = UiKit.FooterButton(string.Empty, () => LeaveClicked?.Invoke());
             _leaveButton.style.color = UiKit.Danger;
             footer.Add(_leaveButton);
-            col.Add(footer);
 
             UpdateTexts();
         }
@@ -205,7 +206,7 @@ namespace Fts.Views
                 OnlineTableKit.Stripe(row, false, i);
 
                 var label = new Label(members[i] ?? string.Empty);
-                label.style.fontSize = 14;
+                label.AddToClassList("fts-t-body");
                 label.style.color = UiKit.TextPrimary;
                 label.style.flexGrow = 1f;
                 label.style.flexShrink = 1f;
@@ -324,7 +325,7 @@ namespace Fts.Views
                 OnlineTableKit.Stripe(row, false, i);
 
                 var label = new Label(p.Label ?? string.Empty);
-                label.style.fontSize = 14;
+                label.AddToClassList("fts-t-body");
                 label.style.color = UiKit.TextPrimary;
                 label.style.flexGrow = 1f;
                 label.style.flexShrink = 1f;

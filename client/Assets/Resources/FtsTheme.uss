@@ -732,8 +732,13 @@ TextField {
 .fts-hidden { display: none; }
 
 /* ============================================================================
-   APP SHELL (task 6.6, re-tuned in 14.1) — the persistent chrome the screens
-   are pushed into: top bar, left icon sidebar, portrait bottom tab bar.
+   APP SHELL (task 6.6; redrawn on the "Nuova Carriera" mockup in 14.3) — the
+   persistent chrome the screens are pushed into: a top bar, a left sidebar on a
+   wide viewport and a bottom tab bar on a phone.
+
+   The top bar speaks the mockup's grammar now: a small tracked-out KICKER over
+   the VALUE it describes, twice — where we are in the season over the club name
+   on the left, and "budget" over the figure on the right.
    ========================================================================= */
 
 .fts-shell {
@@ -744,22 +749,57 @@ TextField {
 .fts-topbar {
     flex-direction: row;
     align-items: center;
-    min-height: 84px;
-    padding: 8px 18px;
+    min-height: 92px;
+    padding: 10px 20px;
     background-color: var(--fts-surface-deep);
     border-bottom-width: 1px;
     border-bottom-color: var(--fts-divider);
 }
 
+.fts-topbar__crest {
+    margin-left: 11px;
+    margin-right: 13px;
+    flex-shrink: 0;
+}
+
+.fts-topbar__clubblock { justify-content: center; }
+
+.fts-topbar__kicker {
+    font-size: 14px;
+    letter-spacing: 3px;
+    color: var(--fts-text-label);
+}
+
 .fts-topbar__club {
-    font-size: 27px;
-    -unity-font-style: bold;
+    font-size: 30px;
     color: var(--fts-text);
 }
 
-.fts-topbar__sub {
-    font-size: 18px;
+/* The club-colour underline. Sized here rather than inline so it grows on a phone. */
+.fts-topbar__accent {
+    height: 3px;
+    width: 56px;
+    border-radius: 2px;
+    margin-top: 3px;
+    flex-shrink: 0;
+}
+
+.fts-topbar__money {
+    align-items: flex-end;
+    justify-content: center;
+    margin-right: 16px;
+    flex-shrink: 0;
+}
+
+.fts-topbar__moneyk {
+    font-size: 14px;
+    letter-spacing: 3px;
     color: var(--fts-text-label);
+}
+
+.fts-topbar__moneyv {
+    font-size: 26px;
+    color: var(--fts-accent);
 }
 
 .fts-topbar__continue {
@@ -786,6 +826,12 @@ TextField {
 .fts-iconbtn:hover { background-color: var(--fts-surface-hover); }
 .fts-iconbtn:active { background-color: var(--fts-border-strong); }
 
+/* Icon sizes are RULES, not inline styles (IconKit's class overload): an inline
+   width would freeze a glyph at 22 points inside a 110-point phone button. */
+.fts-btnicon { width: 22px; height: 22px; flex-shrink: 0; }
+.fts-navicon { width: 22px; height: 22px; flex-shrink: 0; }
+.fts-tabicon { width: 24px; height: 24px; flex-shrink: 0; }
+
 .fts-body {
     flex-direction: row;
     flex-grow: 1;
@@ -794,22 +840,38 @@ TextField {
 .fts-content { flex-grow: 1; }
 
 .fts-sidebar {
-    width: 260px;
+    width: 248px;
     background-color: var(--fts-surface-deep);
     border-right-width: 1px;
     border-right-color: var(--fts-divider);
     padding-top: 8px;
     padding-bottom: 8px;
+    flex-shrink: 0;
 }
 
-.fts-sidebar--compact { width: 86px; }
+/* The tablet rail: icons only, so it is a rail width and not a clipped sidebar. */
+.fts-sidebar--compact { width: 76px; }
+.fts-sidebar--compact .fts-navitem {
+    justify-content: center;
+    padding-left: 0;
+    padding-right: 0;
+    margin-left: 10px;
+    margin-right: 10px;
+}
+.fts-sidebar--compact .fts-navitem__label { display: none; }
+.fts-sidebar--compact .fts-navitem__rail { display: none; }
+.fts-sidebar--compact .fts-navitem__badge {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+}
 
 .fts-navitem {
     flex-direction: row;
     align-items: center;
     min-height: 62px;
-    margin: 3px 8px;
-    padding-left: 14px;
+    margin: 3px 10px;
+    padding-left: 10px;
     padding-right: 14px;
     border-width: 0;
     border-radius: 15px;
@@ -822,6 +884,19 @@ TextField {
 
 .fts-navitem--active { background-color: var(--fts-accent-soft); }
 
+/* The accent rail on the active item: the soft tint alone reads as "slightly
+   different navy" on this ground, and the mockup marks a selection, not hints it. */
+.fts-navitem__rail {
+    width: 3px;
+    height: 26px;
+    border-radius: 2px;
+    margin-right: 10px;
+    background-color: rgba(0, 0, 0, 0);
+    flex-shrink: 0;
+}
+
+.fts-navitem--active .fts-navitem__rail { background-color: var(--fts-accent); }
+
 .fts-navitem__label {
     font-size: 20px;
     -unity-font-style: bold;
@@ -832,8 +907,6 @@ TextField {
 }
 
 .fts-navitem--active .fts-navitem__label { color: var(--fts-accent); }
-
-.fts-sidebar--compact .fts-navitem__label { display: none; }
 
 .fts-navitem__badge {
     min-width: 26px;
@@ -846,10 +919,21 @@ TextField {
     font-size: 15px;
     -unity-font-style: bold;
     -unity-text-align: middle-center;
+    flex-shrink: 0;
+}
+
+/* The phone's tab bar. It used to borrow .fts-bottombar, which is the mockup's
+   CTA bar, and inherited that bar's padding by accident. */
+.fts-tabbar {
+    flex-shrink: 0;
+    background-color: var(--fts-surface-deep);
+    border-top-width: 1px;
+    border-top-color: var(--fts-divider);
 }
 
 .fts-tab {
     flex-grow: 1;
+    min-width: 64px;
     align-items: center;
     justify-content: center;
     border-width: 0;
@@ -861,6 +945,17 @@ TextField {
 
 .fts-tab:active { background-color: var(--fts-surface-hover); }
 .fts-tab--active { background-color: var(--fts-accent-soft); }
+
+.fts-tab__iconwrap {
+    align-items: center;
+    justify-content: center;
+}
+
+.fts-tab__badge {
+    position: absolute;
+    top: -6px;
+    right: -14px;
+}
 
 .fts-tab__label {
     font-size: 15px;
@@ -967,17 +1062,30 @@ TextField {
 .fts--mobile .unity-scroller--vertical { width: 20px; }
 .fts--mobile .unity-scroller--vertical .unity-base-slider__dragger { width: 14px; border-radius: 10px; }
 
-/* ---- app shell on a phone ---- */
-.fts--mobile .fts-topbar { min-height: 150px; padding: 14px 28px; }
-.fts--mobile .fts-topbar__club { font-size: 44px; }
-.fts--mobile .fts-topbar__sub { font-size: 28px; }
-.fts--mobile .fts-topbar__continue { height: 110px; margin-left: 20px; }
-.fts--mobile .fts-iconbtn { width: 110px; height: 110px; border-radius: 26px; margin-left: 8px; margin-right: 8px; }
-.fts--mobile .fts-navitem { min-height: 120px; border-radius: 26px; margin: 5px 12px; padding-left: 24px; padding-right: 24px; }
+/* ---- app shell on a phone ----------------------------------------------
+   The ROADMAP 14.3 target: 110-point icon buttons with glyphs to match, tabs
+   comfortably over the 120-point tap floor, and a tab bar that keeps its label
+   clear of the gesture bar. The safe-area inset itself is applied to the panel
+   root by SafeAreaController; the padding here is what sits inside it. */
+.fts--mobile .fts-topbar { min-height: 168px; padding: 18px 26px; }
+.fts--mobile .fts-topbar__crest { margin-left: 16px; margin-right: 20px; }
+.fts--mobile .fts-topbar__kicker { font-size: 24px; letter-spacing: 5px; }
+.fts--mobile .fts-topbar__club { font-size: 50px; }
+.fts--mobile .fts-topbar__accent { height: 6px; width: 104px; border-radius: 3px; margin-top: 6px; }
+.fts--mobile .fts-topbar__money { display: none; }
+.fts--mobile .fts-topbar__continue { height: 110px; margin-left: 18px; }
+.fts--mobile .fts-iconbtn { width: 110px; height: 110px; border-radius: 26px; margin-left: 6px; margin-right: 6px; }
+.fts--mobile .fts-btnicon { width: 46px; height: 46px; }
+.fts--mobile .fts-navicon { width: 40px; height: 40px; }
+.fts--mobile .fts-tabicon { width: 46px; height: 46px; }
+.fts--mobile .fts-navitem { min-height: 130px; border-radius: 26px; margin: 5px 12px; padding-left: 18px; padding-right: 24px; }
+.fts--mobile .fts-navitem__rail { width: 6px; height: 52px; border-radius: 3px; margin-right: 18px; }
 .fts--mobile .fts-navitem__label { font-size: 32px; margin-left: 20px; }
 .fts--mobile .fts-navitem__badge { min-width: 44px; height: 44px; border-radius: 22px; font-size: 26px; padding-left: 12px; padding-right: 12px; }
-.fts--mobile .fts-tab { padding-top: 14px; padding-bottom: 10px; }
-.fts--mobile .fts-tab__label { font-size: 24px; margin-top: 6px; }
+.fts--mobile .fts-tabbar { padding-bottom: 26px; }
+.fts--mobile .fts-tab { min-width: 150px; min-height: 150px; padding-top: 16px; padding-bottom: 12px; }
+.fts--mobile .fts-tab__label { font-size: 24px; margin-top: 8px; }
+.fts--mobile .fts-tab__badge { top: -10px; right: -24px; }
 .fts--mobile .fts-thead { border-radius: 20px; }
 .fts--mobile .fts-trow { border-radius: 18px; }
 
@@ -992,3 +1100,643 @@ TextField {
 .fts--tablet .fts-selectrow { min-height: 78px; }
 .fts--tablet .fts-chip { height: 54px; font-size: 19px; }
 .fts--tablet .fts-ghostbtn { min-height: 56px; font-size: 19px; }
+
+.fts--tablet .fts-navitem { min-height: 70px; }
+.fts--tablet .fts-navicon { width: 26px; height: 26px; }
+
+/* ============================================================================
+   THE STANDARD PAGE (task 14.4) — UiKit.StandardPage / BlockHead, shared by
+   every redrawn screen: kicker over a Bebas title, a quiet Back, block heads
+   with an accent link.
+   ========================================================================= */
+
+.fts-pagetitle { font-size: 56px; color: var(--fts-text); letter-spacing: 1px; -unity-text-align: middle-left; }
+.fts-blockhead { margin-bottom: 6px; }
+.fts-link {
+    background-color: rgba(0, 0, 0, 0);
+    border-width: 0;
+    margin: 0;
+    padding: 4px 6px;
+    font-size: 17px;
+    -unity-font-style: bold;
+    color: var(--fts-accent);
+}
+.fts-link:hover { color: #4EDDA0; background-color: rgba(0, 0, 0, 0); }
+.fts-meter { height: 18px; border-radius: 9px; }
+
+.fts--mobile .fts-pagetitle { font-size: 76px; }
+.fts--mobile .fts-pageback { display: none; }
+.fts--mobile .fts-blockhead { margin-bottom: 12px; }
+.fts--mobile .fts-link { font-size: 30px; padding: 10px 12px; }
+.fts--mobile .fts-meter { height: 30px; border-radius: 15px; }
+.fts--tablet .fts-pagetitle { font-size: 50px; }
+
+/* ============================================================================
+   THE OVERVIEW DASHBOARD (task 14.4) — HubView. Four blocks, one raised card.
+   Base sizes are desktop points; the phone block below re-sizes them for the
+   ~970-point portrait panel (see measurement 1 in ROADMAP Phase 14).
+   ========================================================================= */
+
+.fts-hub__tiles { margin-bottom: 8px; }
+.fts-hub__block { margin-bottom: 18px; }
+
+.fts-hub__fixture { padding-top: 10px; padding-bottom: 20px; }
+.fts-hub__crest { width: 72px; height: 72px; margin-right: 16px; }
+.fts-hub__crest--away { margin-right: 0; margin-left: 16px; }
+.fts-hub__team { font-size: 24px; -unity-font-style: bold; color: var(--fts-text); }
+.fts-hub__vs { font-size: 34px; letter-spacing: 2px; color: var(--fts-text-label); margin-left: 20px; margin-right: 20px; }
+.fts-hub__score { font-size: 64px; letter-spacing: 2px; color: var(--fts-text); margin-left: 24px; margin-right: 24px; }
+.fts-hub__note { font-size: 19px; color: var(--fts-text-muted); margin-top: 6px; margin-bottom: 20px; }
+
+.fts-hub__actions { flex-direction: row; align-items: stretch; }
+.fts-hub__cta { flex-grow: 1; }
+.fts-hub__report { margin-left: 12px; margin-right: 0; }
+
+.fts-hub__pips { min-height: 40px; }
+.fts-hub__pip {
+    width: 36px;
+    height: 36px;
+    margin-right: 6px;
+    border-radius: 9px;
+    font-size: 17px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    background-color: var(--fts-tag);
+    color: var(--fts-text-2);
+}
+.fts-hub__pip--wide { width: auto; padding-left: 18px; padding-right: 18px; margin-right: 0; }
+.fts-hub__pip--win { background-color: var(--fts-accent); color: var(--fts-on-accent); }
+.fts-hub__pip--loss { background-color: var(--fts-danger); color: var(--fts-text); }
+
+.fts-hub__trow { flex-direction: row; align-items: center; min-height: 46px; padding-left: 12px; padding-right: 12px; border-radius: 10px; }
+.fts-hub__trow--head { min-height: 32px; }
+.fts-hub__trow--user { background-color: var(--fts-accent-soft); }
+.fts-hub__tcell { font-size: 18px; color: var(--fts-text-2); }
+.fts-hub__trow--head .fts-hub__tcell { font-size: 14px; color: var(--fts-text-label); }
+.fts-hub__tpos { width: 36px; color: var(--fts-text-label); }
+.fts-hub__tcrest { width: 34px; }
+.fts-hub__tname { flex-grow: 1; flex-shrink: 1; min-width: 0; margin-left: 8px; }
+.fts-hub__tnum { width: 48px; -unity-text-align: middle-right; }
+.fts-hub__tpts { -unity-font-style: bold; color: var(--fts-text); }
+.fts-hub__trow--user .fts-hub__tname { -unity-font-style: bold; color: var(--fts-accent); }
+
+.fts-hub__todo:hover { border-color: var(--fts-border-strong); }
+.fts-hub__alert { color: var(--fts-amber); }
+
+/* ---- phone */
+.fts--mobile .fts-hub__tiles { margin-bottom: 14px; }
+.fts--mobile .fts-hub__block { margin-bottom: 28px; }
+.fts--mobile .fts-hub__fixture { padding-top: 16px; padding-bottom: 30px; }
+.fts--mobile .fts-hub__crest { width: 124px; height: 124px; margin-right: 22px; }
+.fts--mobile .fts-hub__crest--away { margin-right: 0; margin-left: 22px; }
+.fts--mobile .fts-hub__team { font-size: 36px; }
+.fts--mobile .fts-hub__vs { font-size: 50px; margin-left: 22px; margin-right: 22px; }
+.fts--mobile .fts-hub__score { font-size: 96px; margin-left: 26px; margin-right: 26px; }
+.fts--mobile .fts-hub__note { font-size: 30px; margin-bottom: 30px; }
+.fts--mobile .fts-hub__actions { flex-direction: column; }
+.fts--mobile .fts-hub__report { margin-left: 0; margin-top: 18px; }
+.fts--mobile .fts-hub__pips { min-height: 70px; }
+.fts--mobile .fts-hub__pip { width: 64px; height: 64px; margin-right: 10px; border-radius: 16px; font-size: 30px; }
+.fts--mobile .fts-hub__pip--wide { width: auto; padding-left: 30px; padding-right: 30px; margin-right: 0; }
+.fts--mobile .fts-hub__trow { min-height: 88px; padding-left: 20px; padding-right: 20px; border-radius: 18px; }
+.fts--mobile .fts-hub__trow--head { min-height: 56px; }
+.fts--mobile .fts-hub__tcell { font-size: 32px; }
+.fts--mobile .fts-hub__trow--head .fts-hub__tcell { font-size: 24px; }
+.fts--mobile .fts-hub__tpos { width: 60px; }
+.fts--mobile .fts-hub__tcrest { width: 58px; }
+.fts--mobile .fts-hub__tname { margin-left: 14px; }
+.fts--mobile .fts-hub__tnum { width: 84px; }
+
+/* ---- tablet: desktop sizes, one column (HubView.Layout), roomier table rows */
+.fts--tablet .fts-hub__trow { min-height: 56px; }
+
+/* ============================================================================
+   CAREER + CLUB (task 14.4) — CareerView / ClubView on the standard page.
+   ========================================================================= */
+
+.fts-career__confline { margin-bottom: 14px; }
+.fts-career__confvalue { font-size: 64px; letter-spacing: 1px; margin-right: 18px; }
+.fts-career__confstatus { font-size: 21px; -unity-font-style: bold; color: var(--fts-text-2); padding-bottom: 12px; }
+
+.fts-career__season {
+    min-height: 74px;
+    padding: 12px 18px;
+    margin-bottom: 8px;
+    border-radius: 15px;
+    border-width: 1px;
+    border-color: var(--fts-border-row);
+    background-color: var(--fts-row);
+}
+.fts-career__year { margin-right: 18px; }
+.fts-career__detail { font-size: 16px; color: var(--fts-text-label); }
+.fts-career__detail--over { color: var(--fts-positive); }
+.fts-career__detail--under { color: var(--fts-warning); }
+.fts-career__badge { margin-right: 0; margin-left: 12px; }
+.fts-career__badge--champion { background-color: var(--fts-accent); color: var(--fts-on-accent); }
+.fts-career__badge--sacked { background-color: var(--fts-danger); color: var(--fts-text); }
+
+.fts-club__facility {
+    flex-direction: row;
+    align-items: center;
+    min-height: 84px;
+    padding: 14px 18px;
+    margin-bottom: 8px;
+    border-radius: 15px;
+    border-width: 1px;
+    border-color: var(--fts-border-row);
+    background-color: var(--fts-row);
+}
+.fts-club__name { margin-right: 14px; }
+.fts-club__pips { padding-top: 2px; }
+.fts-club__pip {
+    width: 16px;
+    height: 16px;
+    margin-right: 5px;
+    border-radius: 4px;
+    border-width: 2px;
+    border-color: var(--fts-border-strong);
+}
+.fts-club__pip--on { background-color: var(--fts-accent); border-color: var(--fts-accent); }
+.fts-club__effect { margin-top: 4px; }
+.fts-club__upgrade { margin-left: 16px; margin-right: 0; }
+.fts-club__upgrade--on { background-color: var(--fts-accent); border-color: var(--fts-accent); color: var(--fts-on-accent); }
+.fts-club__upgrade--on:hover { background-color: #4EDDA0; color: var(--fts-on-accent); }
+.fts-club__upgrade:disabled { opacity: 0.55; }
+.fts-club__status { margin-top: 8px; color: var(--fts-text-muted); }
+
+.fts--mobile .fts-career__confline { margin-bottom: 22px; }
+.fts--mobile .fts-career__confvalue { font-size: 104px; margin-right: 26px; }
+.fts--mobile .fts-career__confstatus { font-size: 34px; padding-bottom: 20px; }
+.fts--mobile .fts-career__season { min-height: 140px; padding: 22px 28px; margin-bottom: 16px; border-radius: 28px; }
+.fts--mobile .fts-career__year { margin-right: 24px; }
+.fts--mobile .fts-career__detail { font-size: 28px; }
+.fts--mobile .fts-career__badge { margin-left: 18px; margin-right: 0; }
+
+.fts--mobile .fts-club__facility { flex-direction: column; align-items: stretch; min-height: 0; padding: 26px 30px; margin-bottom: 16px; border-radius: 28px; }
+.fts--mobile .fts-club__pip { width: 30px; height: 30px; margin-right: 10px; border-radius: 8px; border-width: 3px; }
+.fts--mobile .fts-club__effect { margin-top: 8px; }
+.fts--mobile .fts-club__upgrade { margin-left: 0; margin-top: 20px; }
+.fts--mobile .fts-club__status { margin-top: 14px; }
+
+/* ============================================================================
+   TASK 14.4, SLICE 2 — the working screens: Rosa, Tattiche, Allenamento,
+   Supporto, Mercato, Osservatori. The shared kits first (text scale, player
+   rows, condition strip), then one block per screen, then the phone.
+   ========================================================================= */
+
+/* ---- shared */
+.fts-headcta { margin-left: 12px; margin-top: 0; margin-bottom: 0; }
+.fts-pagehead__actions .fts-ghostbtn { margin-left: 12px; }
+.fts-status { color: var(--fts-accent); margin-bottom: 14px; }
+
+.fts-t-small { font-size: 15px; }
+.fts-t-meta { font-size: 16px; }
+.fts-t-body { font-size: 19px; }
+
+.fts-prow { margin-bottom: 8px; }
+.fts-pcell {
+    height: 52px;
+    padding: 0 14px;
+    margin-right: 8px;
+    border-radius: 11px;
+    background-color: var(--fts-row);
+}
+.fts-pcell--selected { background-color: var(--fts-accent-soft); }
+.fts-pcell__text { font-size: 19px; color: var(--fts-text); }
+.fts-pchip { min-width: 64px; }
+.fts-pchip__text { font-size: 16px; }
+
+.fts-cond { margin-left: 4px; }
+.fts-cond__bar { width: 60px; height: 10px; border-radius: 5px; background-color: rgba(0, 0, 0, 0.45); }
+.fts-cond__fill { border-radius: 5px; }
+.fts-cond__num { font-size: 16px; color: var(--fts-text-muted); width: 34px; margin-left: 8px; -unity-text-align: middle-left; }
+.fts-cond__pill { width: 28px; height: 28px; margin-left: 6px; border-radius: 8px; font-size: 14px; -unity-font-style: bold; }
+.fts-cond__pill--good { background-color: rgba(95, 211, 154, 0.22); color: var(--fts-positive); }
+.fts-cond__pill--even { background-color: var(--fts-tag); color: var(--fts-tag-text); }
+.fts-cond__pill--bad { background-color: rgba(226, 87, 76, 0.22); color: var(--fts-danger); }
+
+.fts-token__name { font-size: 15px; -unity-font-style: bold; margin-top: 3px; }
+
+/* ---- Rosa */
+.fts-squad__hint { margin-bottom: 14px; }
+.fts-squad__selection { min-height: 56px; margin-bottom: 14px; padding: 6px 6px 6px 18px; border-radius: 15px; background-color: var(--fts-accent-soft); border-width: 1px; border-color: var(--fts-accent); }
+.fts-squad__selectiontext { font-size: 19px; -unity-font-style: bold; color: var(--fts-text); }
+.fts-squad__pitch { height: 600px; border-radius: 12px; }
+.fts-squad__bench { height: 600px; }
+.fts-squad__benchrow { margin-bottom: 6px; }
+.fts-squad__benchrow--selected .fts-pchip { border-width: 2px; border-color: var(--fts-accent); }
+.fts-squad__age { width: 40px; font-size: 16px; color: var(--fts-text-label); }
+.fts-squad__rating { width: 44px; font-size: 20px; -unity-font-style: bold; color: var(--fts-text); }
+.fts-squad__ghost { font-size: 17px; padding: 6px 12px; }
+
+/* ---- Tattiche */
+.fts-tac__pitch { height: 560px; border-radius: 12px; }
+.fts-tac__axis { margin-top: 10px; margin-bottom: 8px; font-size: 16px; }
+.fts-tac__seg { margin-bottom: 6px; }
+.fts-tac__module { min-height: 60px; }
+.fts-tac__famvalue { font-size: 18px; color: var(--fts-text-2); margin-bottom: 10px; }
+
+/* ---- Allenamento */
+.fts-train__chip { min-height: 60px; }
+.fts-train__hint { margin-top: 6px; font-size: 18px; color: var(--fts-text-muted); }
+.fts-train__row { margin-bottom: 8px; }
+.fts-train__focus { min-width: 200px; margin-left: 4px; }
+.fts-train__focus--on { background-color: var(--fts-accent-soft); border-color: var(--fts-accent); color: var(--fts-accent); }
+
+/* ---- Supporto */
+.fts-support__help { margin-bottom: 16px; }
+.fts-support__row { margin-bottom: 8px; }
+.fts-support__cond { padding: 0 12px; }
+.fts-support__selected { font-size: 40px; color: var(--fts-text); margin-bottom: 14px; letter-spacing: 1px; }
+.fts-support__action {
+    min-height: 76px;
+    margin: 0 0 10px 0;
+    padding: 12px 18px;
+    border-radius: 15px;
+    border-width: 1px;
+    border-color: var(--fts-border-row);
+    background-color: var(--fts-row);
+    justify-content: center;
+}
+.fts-support__action:hover { background-color: var(--fts-surface-hover); border-color: var(--fts-accent); }
+.fts-support__action:disabled { opacity: 0.45; }
+.fts-support__actionname { font-size: 20px; -unity-font-style: bold; color: var(--fts-text); }
+.fts-support__actiondesc { font-size: 15px; color: var(--fts-text-label); margin-top: 2px; }
+.fts-support__status { font-size: 17px; color: var(--fts-accent); margin-top: 6px; }
+
+/* ---- Mercato */
+.fts-market__window { font-size: 17px; margin-top: 4px; }
+.fts-market__window--open { color: var(--fts-positive); }
+.fts-market__window--closed { color: var(--fts-amber); }
+.fts-market__tabs { margin-bottom: 14px; }
+.fts-market__filters { margin-bottom: 4px; }
+.fts-market__row { min-height: 68px; margin-bottom: 8px; padding: 8px 10px; border-radius: 15px; background-color: var(--fts-row); }
+.fts-market__row .fts-pcell { background-color: var(--fts-surface-alt); }
+.fts-market__avatar { margin-right: 14px; }
+.fts-market__who { margin-right: 12px; }
+.fts-market__name { font-size: 19px; -unity-font-style: bold; color: var(--fts-text); }
+.fts-market__meta { font-size: 15px; color: var(--fts-text-label); margin-top: 2px; }
+.fts-market__tag { font-size: 14px; -unity-font-style: bold; color: var(--fts-amber); margin-left: 10px; }
+.fts-market__ovr { width: 110px; }
+.fts-market__value { width: 110px; font-size: 20px; -unity-font-style: bold; color: var(--fts-positive); margin-right: 8px; }
+.fts-market__actiona { width: 56px; }
+.fts-market__actionb { min-width: 120px; }
+.fts-market__info { margin: 6px 0; }
+
+/* ---- Osservatori */
+.fts-scout__tabs { margin-bottom: 14px; }
+.fts-scout__card { min-height: 92px; }
+.fts-scout__meters { width: 220px; margin-left: 12px; }
+
+/* ---- phone */
+.fts--mobile .fts-screen .fts-pagehead { flex-direction: column; align-items: stretch; margin-bottom: 28px; }
+.fts--mobile .fts-pagehead__actions { margin-top: 20px; }
+.fts--mobile .fts-headcta { margin-left: 0; margin-right: 16px; flex-grow: 1; }
+.fts--mobile .fts-pagehead__actions .fts-ghostbtn { margin-left: 0; margin-right: 16px; }
+.fts--mobile .fts-status { margin-bottom: 22px; }
+.fts--mobile .fts-t-small { font-size: 26px; }
+.fts--mobile .fts-t-meta { font-size: 28px; }
+.fts--mobile .fts-t-body { font-size: 32px; }
+
+.fts--mobile .fts-prow { margin-bottom: 14px; }
+.fts--mobile .fts-pcell { height: 100px; padding: 0 22px; margin-right: 12px; border-radius: 22px; }
+.fts--mobile .fts-pcell__text { font-size: 32px; }
+.fts--mobile .fts-pchip { min-width: 110px; }
+.fts--mobile .fts-pchip__text { font-size: 28px; }
+.fts--mobile .fts-cond__bar { width: 90px; height: 16px; border-radius: 8px; }
+.fts--mobile .fts-cond__num { font-size: 28px; width: 56px; margin-left: 12px; }
+.fts--mobile .fts-cond__pill { width: 50px; height: 50px; border-radius: 14px; font-size: 24px; margin-left: 10px; }
+.fts--mobile .fts-token__name { font-size: 24px; }
+
+.fts--mobile .fts-squad__selection { min-height: 110px; border-radius: 28px; padding: 12px 12px 12px 28px; margin-bottom: 22px; }
+.fts--mobile .fts-squad__selectiontext { font-size: 32px; }
+.fts--mobile .fts-squad__pitch { height: 660px; border-radius: 22px; }
+.fts--mobile .fts-squad__bench { height: auto; }
+.fts--mobile .fts-squad__age { width: 64px; font-size: 28px; }
+.fts--mobile .fts-squad__rating { width: 72px; font-size: 34px; }
+.fts--mobile .fts-squad__ghost { font-size: 30px; padding: 10px 20px; }
+
+.fts--mobile .fts-tac__pitch { height: 640px; border-radius: 22px; }
+.fts--mobile .fts-tac__axis { font-size: 28px; margin-top: 18px; margin-bottom: 12px; }
+.fts--mobile .fts-tac__module { min-height: 110px; }
+.fts--mobile .fts-tac__famvalue { font-size: 30px; margin-bottom: 16px; }
+
+.fts--mobile .fts-train__chip { min-height: 110px; }
+.fts--mobile .fts-train__hint { font-size: 30px; margin-top: 12px; }
+.fts--mobile .fts-train__focus { min-width: 250px; }
+
+.fts--mobile .fts-support__selected { font-size: 64px; margin-bottom: 22px; }
+.fts--mobile .fts-support__action { min-height: 140px; padding: 22px 30px; border-radius: 28px; margin-bottom: 16px; }
+.fts--mobile .fts-support__actionname { font-size: 36px; }
+.fts--mobile .fts-support__actiondesc { font-size: 27px; margin-top: 6px; }
+.fts--mobile .fts-support__status { font-size: 30px; }
+
+.fts--mobile .fts-market__window { font-size: 30px; margin-top: 8px; }
+.fts--mobile .fts-market__tabs { margin-bottom: 24px; }
+.fts--mobile .fts-market__row { min-height: 130px; padding: 14px 16px; border-radius: 28px; margin-bottom: 14px; }
+.fts--mobile .fts-market__avatar { margin-right: 20px; }
+.fts--mobile .fts-market__name { font-size: 32px; }
+.fts--mobile .fts-market__meta { font-size: 26px; }
+.fts--mobile .fts-market__tag { font-size: 24px; }
+.fts--mobile .fts-market__ovr { width: 150px; }
+.fts--mobile .fts-market__value { width: 150px; font-size: 32px; }
+.fts--mobile .fts-market__actiona { width: 96px; }
+.fts--mobile .fts-market__actionb { min-width: 170px; }
+
+.fts--mobile .fts-scout__tabs { margin-bottom: 24px; }
+.fts--mobile .fts-scout__card { min-height: 170px; }
+.fts--mobile .fts-scout__meters { width: 300px; }
+
+/* ---- tablet: desktop sizes with a little more air */
+.fts--tablet .fts-pcell { height: 60px; }
+.fts--tablet .fts-squad__pitch { height: 520px; }
+.fts--tablet .fts-squad__bench { height: 520px; }
+
+/* ============================================================================
+   TASK 14.4, SLICE 3 — Campionato, Posta, Profilo giocatore, Trattativa, and a
+   text-scale pass on the season-end / match-result / opponent report screens.
+   ========================================================================= */
+
+.fts-t-strong { font-size: 21px; }
+.fts-t-big { font-size: 28px; }
+.fts-t-score { font-size: 56px; }
+
+/* ---- Campionato */
+.fts-league__tabs { margin-bottom: 14px; }
+.fts-lt__row { min-height: 52px; padding: 0 14px; border-radius: 10px; }
+.fts-lt__row--head { min-height: 38px; }
+.fts-lt__row--zebra { background-color: rgba(255, 255, 255, 0.03); }
+.fts-lt__row--user { background-color: var(--fts-accent-soft); }
+.fts-lt__cell { font-size: 19px; color: var(--fts-text-2); }
+.fts-lt__row--head .fts-lt__cell { font-size: 15px; color: var(--fts-text-label); }
+.fts-lt__pos { width: 44px; -unity-font-style: bold; color: var(--fts-text-label); }
+.fts-lt__crest { width: 40px; height: 36px; margin-right: 12px; }
+.fts-lt__club { -unity-font-style: bold; color: var(--fts-text); }
+.fts-lt__row--user .fts-lt__club { color: var(--fts-accent); }
+.fts-lt__num { width: 52px; -unity-text-align: middle-right; }
+.fts-lt__pts { width: 64px; -unity-font-style: bold; color: var(--fts-accent); }
+.fts-lt__row--head .fts-lt__pts { color: var(--fts-text-label); }
+.fts-lt__fixture { min-height: 60px; }
+.fts-lt__fixturetext { color: var(--fts-text); margin: 0 12px; }
+.fts-league__roundnav { margin-bottom: 12px; }
+.fts-league__roundbtn { min-width: 64px; margin-left: 0; }
+.fts-league__round { font-size: 30px; color: var(--fts-text); letter-spacing: 2px; }
+
+/* ---- Posta */
+.fts-inbox__bar { margin-bottom: 14px; }
+.fts-inbox__clear { color: var(--fts-danger); }
+.fts-inbox__row {
+    min-height: 70px;
+    margin-bottom: 8px;
+    padding: 10px 16px 10px 0;
+    border-radius: 15px;
+    border-width: 1px;
+    border-color: var(--fts-border-row);
+    background-color: var(--fts-row);
+    overflow: hidden;
+}
+.fts-inbox__row:hover { background-color: var(--fts-surface-hover); }
+.fts-inbox__row--unread { background-color: var(--fts-surface-raised); border-color: var(--fts-border-strong); }
+.fts-inbox__rail { width: 4px; height: 44px; margin-right: 14px; border-radius: 2px; }
+.fts-inbox__row--unread .fts-inbox__rail { background-color: var(--fts-accent); }
+.fts-inbox__pill { margin-right: 14px; }
+.fts-inbox__text { font-size: 18px; color: var(--fts-text-muted); }
+.fts-inbox__row--unread .fts-inbox__text { color: var(--fts-text); -unity-font-style: bold; }
+.fts-inbox__stamp { font-size: 15px; color: var(--fts-text-label); margin-left: 14px; min-width: 80px; }
+
+/* ---- Profilo */
+.fts-profile__avatar { margin-right: 20px; }
+.fts-profile__subline { font-size: 22px; -unity-font-style: bold; color: var(--fts-text); }
+.fts-profile__potential { font-size: 17px; color: var(--fts-text-muted); margin-top: 4px; }
+.fts-profile__reputation { margin-top: 14px; margin-bottom: 0; }
+.fts-profile__watch { margin: 14px 0 0 0; }
+.fts-profile__watch--on { background-color: var(--fts-accent-soft); border-color: var(--fts-accent); color: var(--fts-accent); }
+.fts-profile__goals { font-size: 18px; color: var(--fts-text-2); margin-top: 14px; }
+.fts-profile__condition { margin-top: 20px; padding-top: 16px; border-top-width: 1px; border-top-color: var(--fts-divider); }
+.fts-profile__strip { margin-bottom: 10px; }
+.fts-profile__cause { font-size: 16px; color: var(--fts-text-muted); margin-top: 4px; }
+.fts-profile__attr { min-height: 44px; }
+.fts-profile__attrname { width: 150px; font-size: 18px; color: var(--fts-text-2); }
+.fts-profile__track { height: 12px; border-radius: 6px; background-color: rgba(0, 0, 0, 0.4); }
+.fts-profile__fill { border-radius: 6px; }
+.fts-profile__attrvalue { width: 80px; font-size: 20px; -unity-font-style: bold; color: var(--fts-text); margin-left: 14px; }
+
+/* ---- Trattativa */
+.fts-nego__info { margin-bottom: 14px; }
+.fts-nego__line { font-size: 18px; color: var(--fts-text-2); margin-bottom: 6px; }
+.fts-nego__step { width: 72px; height: 60px; font-size: 30px; margin: 0 12px; border-radius: 12px; }
+.fts-nego__field .unity-base-text-field__input { font-size: 30px; -unity-text-align: middle-center; }
+.fts-nego__formatted { font-size: 48px; color: var(--fts-accent); margin-top: 14px; }
+.fts-nego__patience { font-size: 16px; color: var(--fts-text-label); margin-bottom: 18px; }
+.fts-nego__actions { flex-direction: row; }
+.fts-nego__primary { flex-grow: 1; margin: 0; }
+.fts-nego__secondary { flex-grow: 1; margin-left: 12px; }
+.fts-nego__status { font-size: 18px; color: var(--fts-accent); margin-top: 14px; }
+
+/* ---- phone */
+.fts--mobile .fts-t-strong { font-size: 34px; }
+.fts--mobile .fts-t-big { font-size: 44px; }
+.fts--mobile .fts-t-score { font-size: 90px; }
+
+.fts--mobile .fts-league__tabs { margin-bottom: 24px; }
+.fts--mobile .fts-lt__row { min-height: 96px; padding: 0 20px; border-radius: 20px; }
+.fts--mobile .fts-lt__row--head { min-height: 64px; }
+.fts--mobile .fts-lt__cell { font-size: 32px; }
+.fts--mobile .fts-lt__row--head .fts-lt__cell { font-size: 26px; }
+.fts--mobile .fts-lt__pos { width: 66px; }
+.fts--mobile .fts-lt__crest { width: 64px; height: 60px; margin-right: 16px; }
+.fts--mobile .fts-lt__num { width: 72px; }
+.fts--mobile .fts-lt__pts { width: 90px; }
+.fts--mobile .fts-lt__wide { display: none; }
+.fts--mobile .fts-lt__fixture { min-height: 110px; }
+.fts--mobile .fts-league__round { font-size: 48px; }
+
+.fts--mobile .fts-inbox__row { flex-wrap: wrap; min-height: 130px; padding: 18px 24px 18px 0; border-radius: 28px; margin-bottom: 14px; }
+.fts--mobile .fts-inbox__rail { width: 8px; height: 80px; margin-right: 20px; }
+.fts--mobile .fts-inbox__text { font-size: 31px; }
+.fts--mobile .fts-inbox__stamp { font-size: 26px; min-width: 120px; }
+
+.fts--mobile .fts-profile__subline { font-size: 36px; }
+.fts--mobile .fts-profile__potential { font-size: 29px; }
+.fts--mobile .fts-profile__goals { font-size: 30px; }
+.fts--mobile .fts-profile__cause { font-size: 28px; }
+.fts--mobile .fts-profile__attr { min-height: 80px; }
+.fts--mobile .fts-profile__attrname { width: 250px; font-size: 31px; }
+.fts--mobile .fts-profile__track { height: 22px; border-radius: 11px; }
+.fts--mobile .fts-profile__attrvalue { width: 130px; font-size: 34px; }
+
+.fts--mobile .fts-nego__line { font-size: 31px; }
+.fts--mobile .fts-nego__step { width: 120px; height: 118px; font-size: 52px; border-radius: 24px; }
+.fts--mobile .fts-nego__field .unity-base-text-field__input { font-size: 48px; }
+.fts--mobile .fts-nego__formatted { font-size: 80px; }
+.fts--mobile .fts-nego__patience { font-size: 28px; }
+.fts--mobile .fts-nego__actions { flex-direction: column; }
+.fts--mobile .fts-nego__secondary { margin-left: 0; margin-top: 16px; }
+.fts--mobile .fts-nego__status { font-size: 31px; }
+
+/* ============================================================================
+   TASK 14.4, SLICE 4 — everything else: the screens built on the 6.12 scaffold
+   (online leagues, ranked, auctions, season) get the new title and footer
+   scale centrally; the short one-decision screens move onto UiKit.CenterPage;
+   dialogs, toasts, empty states and the match HUD follow.
+   ========================================================================= */
+
+/* ---- the 6.12 scaffold, restyled in place */
+.fts-screentitle { font-size: 52px; letter-spacing: 1px; margin-bottom: 16px; }
+.fts-header { font-size: 40px; }
+.fts-footer .fts-btn { height: 56px; margin-top: 0; margin-bottom: 0; }
+.fts-footer .fts-btn--menu { background-color: var(--fts-ghost); border-color: var(--fts-border-strong); color: var(--fts-text-muted); }
+.fts-footer .fts-btn--menu:hover { background-color: var(--fts-surface-hover); color: var(--fts-text); }
+.fts-tabbtn { height: 56px; font-size: 19px; -unity-font-style: bold; }
+.fts-rowcard { min-height: 64px; }
+
+/* ---- centred page */
+.fts-center__col { padding: 30px 0; }
+.fts-center__kicker { margin-bottom: 6px; }
+.fts-center__title { font-size: 72px; color: var(--fts-text); letter-spacing: 2px; margin-bottom: 22px; }
+
+/* ---- main menu */
+.fts-menu__subtitle { font-size: 20px; color: var(--fts-text-muted); margin-bottom: 26px; }
+.fts-menu__block { margin-bottom: 16px; }
+.fts-menu__btn { height: auto; min-height: 60px; margin: 0 0 10px 0; font-size: 20px; }
+.fts-menu__btn--cta { min-height: 72px; font-size: 24px; }
+.fts-menu__btn--cta-ghost { border-color: var(--fts-accent); color: var(--fts-accent); }
+.fts-menu__foot { flex-direction: row; justify-content: center; flex-wrap: wrap; margin-top: 6px; }
+.fts-menu__small { margin: 0 6px; }
+.fts-menu__error { color: var(--fts-danger); font-size: 18px; margin-top: 16px; }
+
+/* ---- season end / match result / career decision */
+.fts-end__champion { align-items: center; margin-bottom: 16px; }
+.fts-end__crest { margin-bottom: 12px; }
+.fts-end__championname { font-size: 44px; color: var(--fts-amber); letter-spacing: 1px; }
+.fts-end__line { font-size: 19px; color: var(--fts-text-2); }
+.fts-end__up { border-left-width: 4px; border-left-color: var(--fts-positive); }
+.fts-end__down { border-left-width: 4px; border-left-color: var(--fts-danger); }
+.fts-end__cta { margin-top: 10px; }
+
+.fts-result__board { margin-bottom: 16px; }
+.fts-result__crest { width: 100px; height: 100px; }
+.fts-result__score { font-size: 96px; color: var(--fts-text); margin: 0 28px; letter-spacing: 2px; }
+.fts-result__subtitle { font-size: 19px; color: var(--fts-text-muted); margin-top: 6px; }
+.fts-result__event { font-size: 18px; color: var(--fts-text-muted); padding: 6px 0; border-bottom-width: 1px; border-bottom-color: var(--fts-divider); }
+.fts-result__event--goal { color: var(--fts-text); -unity-font-style: bold; }
+.fts-result__event--mine { color: var(--fts-accent); }
+
+.fts-verdict { font-size: 22px; -unity-font-style: bold; padding: 18px 20px; border-radius: 15px; margin-bottom: 16px; color: var(--fts-text); background-color: var(--fts-surface-raised); }
+.fts-verdict--good { background-color: rgba(95, 211, 154, 0.18); color: var(--fts-positive); }
+.fts-verdict--warn { background-color: rgba(242, 166, 59, 0.18); color: var(--fts-amber); }
+.fts-verdict--bad { background-color: rgba(226, 87, 76, 0.2); color: var(--fts-danger); }
+.fts-careerend__summary { margin-bottom: 16px; }
+.fts-careerend__text { font-size: 19px; color: var(--fts-text); }
+.fts-careerend__meta { font-size: 17px; color: var(--fts-text-muted); margin-top: 6px; }
+.fts-careerend__offer { min-height: 76px; padding: 10px 14px; margin-bottom: 8px; border-radius: 15px; background-color: var(--fts-row); }
+.fts-careerend__crest { margin-right: 14px; }
+.fts-careerend__accept { margin: 0 0 0 12px; }
+.fts-careerend__stay { margin: 6px 0 0 0; }
+
+/* ---- account + create league */
+.fts-login__field { margin-bottom: 12px; }
+.fts-login__btn { margin: 10px 0 0 0; }
+.fts-login__delete { color: var(--fts-danger); }
+.fts-login__deleteconfirm { background-color: var(--fts-danger); color: var(--fts-text); }
+.fts-login__danger { border-color: var(--fts-danger); margin-top: 16px; }
+.fts-login__signedin { font-size: 20px; color: var(--fts-text); margin-bottom: 12px; }
+.fts-login__server { margin-top: 20px; }
+.fts-create__size { font-size: 48px; color: var(--fts-text); min-width: 90px; }
+
+/* ---- dialogs, toasts, empty states */
+.fts-dialog { max-width: 620px; min-width: 360px; }
+.fts-dialog__message { font-size: 19px; color: var(--fts-text-muted); margin-bottom: 20px; }
+.fts-dialog__buttons { flex-direction: row; justify-content: flex-end; align-items: center; flex-wrap: wrap; }
+.fts-dialog__btn { margin: 6px 0 0 10px; min-width: 130px; }
+.fts-dialog__btn--primary { min-width: 160px; }
+.fts-toast { font-size: 19px; }
+.fts-empty__text { font-size: 18px; color: var(--fts-text-muted); -unity-text-align: middle-center; }
+
+/* ---- match HUD */
+.fts-hud__score { font-size: 48px; letter-spacing: 2px; color: var(--fts-text); }
+
+/* ---- phone */
+.fts--mobile .fts-screentitle { font-size: 74px; margin-bottom: 24px; }
+.fts--mobile .fts-header { font-size: 56px; }
+.fts--mobile .fts-footer .fts-btn { height: 110px; flex-grow: 1; }
+.fts--mobile .fts-tabbtn { height: 110px; font-size: 32px; }
+.fts--mobile .fts-rowcard { min-height: 130px; }
+
+.fts--mobile .fts-center__col { padding: 50px 0; }
+.fts--mobile .fts-center__title { font-size: 110px; margin-bottom: 36px; }
+.fts--mobile .fts-menu__subtitle { font-size: 32px; margin-bottom: 40px; }
+.fts--mobile .fts-menu__block { margin-bottom: 26px; }
+.fts--mobile .fts-menu__btn { min-height: 120px; font-size: 36px; margin-bottom: 18px; }
+.fts--mobile .fts-menu__btn--cta { min-height: 140px; font-size: 42px; }
+.fts--mobile .fts-menu__small { margin: 0 10px; }
+.fts--mobile .fts-menu__error { font-size: 30px; }
+
+.fts--mobile .fts-end__championname { font-size: 76px; }
+.fts--mobile .fts-end__line { font-size: 32px; }
+.fts--mobile .fts-end__up { border-left-width: 8px; }
+.fts--mobile .fts-end__down { border-left-width: 8px; }
+.fts--mobile .fts-result__crest { width: 170px; height: 170px; }
+.fts--mobile .fts-result__score { font-size: 150px; margin: 0 30px; }
+.fts--mobile .fts-result__subtitle { font-size: 31px; }
+.fts--mobile .fts-result__event { font-size: 30px; padding: 12px 0; }
+.fts--mobile .fts-verdict { font-size: 36px; padding: 30px; border-radius: 28px; margin-bottom: 26px; }
+.fts--mobile .fts-careerend__text { font-size: 32px; }
+.fts--mobile .fts-careerend__meta { font-size: 28px; }
+.fts--mobile .fts-careerend__offer { flex-wrap: wrap; min-height: 140px; padding: 18px 22px; border-radius: 28px; margin-bottom: 16px; }
+.fts--mobile .fts-careerend__accept { margin: 16px 0 0 0; flex-grow: 1; }
+
+.fts--mobile .fts-login__signedin { font-size: 32px; }
+.fts--mobile .fts-login__btn { margin-top: 18px; }
+.fts--mobile .fts-create__size { font-size: 80px; min-width: 150px; }
+
+.fts--mobile .fts-dialog { min-width: 0; max-width: 100%; width: 100%; }
+.fts--mobile .fts-dialog__message { font-size: 32px; margin-bottom: 30px; }
+.fts--mobile .fts-dialog__buttons { flex-direction: column; align-items: stretch; }
+.fts--mobile .fts-dialog__btn { margin: 14px 0 0 0; }
+.fts--mobile .fts-toast { font-size: 32px; }
+.fts--mobile .fts-empty__text { font-size: 30px; }
+.fts--mobile .fts-hud__score { font-size: 80px; }
+
+/* ============================================================================
+   TITLE HEAD (task 14.6) — the scaffold/online screens: Back and actions beside
+   the title at the top, not in a footer. Same button look the footer had.
+   ============================================================================ */
+.fts-titlehead { align-items: center; padding-bottom: 14px; margin-bottom: 16px; }
+.fts-titlehead__actions .fts-btn { height: 56px; margin-top: 0; margin-bottom: 0; }
+.fts-titlehead__actions .fts-btn--menu { background-color: var(--fts-ghost); border-color: var(--fts-border-strong); color: var(--fts-text-muted); }
+.fts-titlehead__actions .fts-btn--menu:hover { background-color: var(--fts-surface-hover); color: var(--fts-text); }
+.fts--mobile .fts-titlehead { flex-direction: column; align-items: stretch; padding-bottom: 20px; margin-bottom: 24px; border-bottom-width: 1px; }
+.fts--mobile .fts-titlehead__actions { margin-top: 20px; }
+.fts--mobile .fts-titlehead__actions .fts-btn { height: 110px; flex-grow: 1; margin-left: 0; margin-right: 16px; }
+
+/* ============================================================================
+   TABLET PASS (task 14.9). Decision: a tablet is a NARROW DESKTOP with touch
+   targets, not a big phone — both ways up. Responsive.Classify now keeps an
+   upright tablet (~1250 pt wide) out of the phone sheet, whose sizes are
+   computed for ~970 pt and would draw its text a third larger than a phone's.
+   Layout per screen: dashboards (Panoramica, Nuova Carriera) go one column /
+   drop the third column only when upright (Responsive.HasWideColumns); every
+   other two-column screen keeps its columns; the sidebar is icon-only only
+   when upright. Below: text one step up from desktop, tap targets >= 64 pt.
+   Last in the file on purpose so it wins over same-specificity base rules.
+   ============================================================================ */
+.fts--tablet .fts-t-small { font-size: 17px; }
+.fts--tablet .fts-t-meta { font-size: 18px; }
+.fts--tablet .fts-t-body { font-size: 21px; }
+.fts--tablet .fts-screentitle { font-size: 50px; }
+.fts--tablet .fts-tabbtn { height: 68px; font-size: 21px; }
+.fts--tablet .fts-ghostbtn { min-height: 64px; font-size: 20px; }
+.fts--tablet .fts-footer .fts-btn,
+.fts--tablet .fts-titlehead__actions .fts-btn { height: 68px; font-size: 21px; }
+.fts--tablet .fts-search { min-height: 68px; }
+.fts--tablet .fts-search .unity-base-text-field__input { font-size: 21px; }
+.fts--tablet .fts-rowcard { min-height: 76px; }
+.fts--tablet .fts-trow { min-height: 60px; }
+.fts--tablet .fts-lt__row { min-height: 62px; }
+.fts--tablet .fts-lt__cell { font-size: 21px; }
+.fts--tablet .fts-lt__fixture { min-height: 70px; }
+.fts--tablet .fts-token__name { font-size: 18px; }
+.fts--tablet .fts-tac__pitch { height: 520px; }
+.fts--tablet .fts-pcell { height: 64px; }
+.fts--tablet .fts-headcta { min-height: 68px; }

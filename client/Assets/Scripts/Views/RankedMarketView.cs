@@ -98,13 +98,15 @@ namespace Fts.Views
 
             _header = UiKit.ScreenTitle(string.Empty);
             _header.style.marginBottom = UiKit.SpaceSm;
-            col.Add(_header);
+            // Back and the page's actions sit beside the title, not in a footer (task 14.6).
+            PageHeadParts titleHead = UiKit.TitleHead(_header);
+            col.Add(titleHead.Root);
 
             // ---- budget + window ----------------------------------------------------------------
             VisualElement head = UiKit.Panel();
             col.Add(head);
             _budget = UiKit.PanelLine(string.Empty);
-            _budget.style.fontSize = 15;
+            _budget.AddToClassList("fts-t-body");
             _budget.style.unityFontStyleAndWeight = FontStyle.Bold;
             head.Add(_budget);
             _banner = UiKit.Caption(string.Empty);
@@ -177,12 +179,11 @@ namespace Fts.Views
             _status.style.display = DisplayStyle.None;
             col.Add(_status);
 
-            VisualElement footer = UiKit.FooterBar();
+            VisualElement footer = titleHead.Actions;
             _backButton = UiKit.FooterButton(string.Empty, () => BackClicked?.Invoke());
             footer.Add(_backButton);
             _refreshButton = UiKit.FooterButton(string.Empty, () => RefreshClicked?.Invoke());
             footer.Add(_refreshButton);
-            col.Add(footer);
 
             SetActiveTab(0);
             UpdateTexts();
@@ -234,7 +235,7 @@ namespace Fts.Views
                 if (vm.RoleGroup >= 0)
                 {
                     VisualElement chip = PlayerRowKit.RoleChip(vm.RoleAbbr, vm.RoleGroup, 46f);
-                    chip.style.height = 30;
+                    chip.style.minHeight = 30;
                     chip.style.marginRight = UiKit.SpaceSm;
                     row.Add(chip);
                 }
@@ -248,7 +249,7 @@ namespace Fts.Views
                 VisualElement titleRow = UiKit.Row();
                 text.Add(titleRow);
                 var title = new Label(vm.Title ?? string.Empty);
-                title.style.fontSize = 14;
+                title.AddToClassList("fts-t-body");
                 title.style.unityFontStyleAndWeight = FontStyle.Bold;
                 title.style.color = UiKit.TextPrimary;
                 title.style.flexShrink = 1f;
@@ -262,7 +263,7 @@ namespace Fts.Views
                         vm.BadgeKind == 2 ? UiKit.Danger :
                         vm.BadgeKind == 3 ? UiKit.Accent : UiKit.SurfaceAlt;
                     Label badge = UiKit.Pill(vm.Badge, background, UiKit.TextPrimary);
-                    badge.style.fontSize = 11;
+                    badge.AddToClassList("fts-t-small");
                     badge.style.marginLeft = UiKit.SpaceSm;
                     badge.style.flexShrink = 0f;
                     titleRow.Add(badge);
@@ -271,7 +272,7 @@ namespace Fts.Views
                 if (!string.IsNullOrEmpty(vm.Detail))
                 {
                     var detail = new Label(vm.Detail);
-                    detail.style.fontSize = 13;
+                    detail.AddToClassList("fts-t-meta");
                     detail.style.color = UiKit.TextMuted;
                     detail.style.whiteSpace = WhiteSpace.Normal;
                     text.Add(detail);

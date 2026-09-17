@@ -61,7 +61,9 @@ namespace Fts.Views
 
             _title = UiKit.ScreenTitle(string.Empty);
             _title.style.marginBottom = UiKit.SpaceSm;
-            col.Add(_title);
+            // Back and the page's actions sit beside the title, not in a footer (task 14.6).
+            PageHeadParts titleHead = UiKit.TitleHead(_title);
+            col.Add(titleHead.Root);
 
             // ---- join by code ------------------------------------------------------------------
             VisualElement joinPanel = UiKit.Panel();
@@ -103,7 +105,7 @@ namespace Fts.Views
             _status.style.display = DisplayStyle.None;
             col.Add(_status);
 
-            VisualElement footer = UiKit.FooterBar();
+            VisualElement footer = titleHead.Actions;
             _backButton = UiKit.FooterButton(string.Empty, () => BackClicked?.Invoke());
             footer.Add(_backButton);
             // Dev-only shortcut: seed a ready test league (hidden unless DevFlags.OnlineTestTools).
@@ -112,7 +114,6 @@ namespace Fts.Views
             footer.Add(_devSeedButton);
             _createButton = UiKit.FooterPrimaryButton(string.Empty, () => CreateClicked?.Invoke());
             footer.Add(_createButton);
-            col.Add(footer);
 
             UpdateTexts();
         }
@@ -135,7 +136,7 @@ namespace Fts.Views
                 UiKit.EnsureTapTarget(card);
 
                 var label = new Label(row.Label ?? string.Empty);
-                label.style.fontSize = 15;
+                label.AddToClassList("fts-t-body");
                 label.style.unityFontStyleAndWeight = FontStyle.Bold;
                 label.style.color = UiKit.TextPrimary;
                 label.style.flexGrow = 1f;
@@ -148,7 +149,7 @@ namespace Fts.Views
                 if (!string.IsNullOrEmpty(row.Badge))
                 {
                     Label badge = UiKit.Pill(row.Badge, UiKit.Accent, UiKit.TextPrimary);
-                    badge.style.fontSize = 12;
+                    badge.AddToClassList("fts-t-meta");
                     badge.style.marginLeft = UiKit.SpaceSm;
                     badge.style.flexShrink = 0f;
                     badge.pickingMode = PickingMode.Ignore;
@@ -156,7 +157,7 @@ namespace Fts.Views
                 }
 
                 var chevron = new Label("›");
-                chevron.style.fontSize = 20;
+                chevron.AddToClassList("fts-t-strong");
                 chevron.style.color = UiKit.TextMuted;
                 chevron.style.marginLeft = UiKit.SpaceSm;
                 chevron.style.flexShrink = 0f;

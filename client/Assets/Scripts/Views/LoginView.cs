@@ -63,15 +63,14 @@ namespace Fts.Views
         {
             _tr = tr;
 
-            Root = UiKit.Screen(UiKit.Background);
-            var col = UiKit.PageColumn(UiKit.WidthNarrow, grow: false);
-            Root.Add(col);
-
-            _title = UiKit.ScreenTitle(string.Empty);
-            col.Add(_title);
+            // Task 14.4: the centred page — kicker over the title, the form on the raised card.
+            PageParts page = UiKit.CenterPage(tr("login.kicker"), string.Empty, UiKit.WidthNarrow);
+            Root = page.Root;
+            VisualElement col = page.Column;
+            _title = page.Title;
 
             // --- sign-in / register form ---
-            _formCard = UiKit.Card();
+            _formCard = UiKit.RaisedCard();
             col.Add(_formCard);
 
             _nameCaption = UiKit.Caption(string.Empty);
@@ -90,12 +89,11 @@ namespace Fts.Views
             _formCard.Add(_passwordField);
 
             _submitButton = UiKit.PrimaryButton(string.Empty, () => SubmitClicked?.Invoke());
-            _submitButton.style.marginTop = UiKit.SpaceMd;
+            _submitButton.AddToClassList("fts-login__btn");
             _formCard.Add(_submitButton);
 
-            _toggleButton = UiKit.MenuButton(string.Empty, () => ToggleModeClicked?.Invoke());
-            _toggleButton.style.marginTop = UiKit.SpaceSm;
-            _toggleButton.style.width = StyleKeyword.Auto;
+            _toggleButton = UiKit.GhostButton(string.Empty, () => ToggleModeClicked?.Invoke());
+            _toggleButton.AddToClassList("fts-login__btn");
             _formCard.Add(_toggleButton);
 
             _status = UiKit.Caption(string.Empty);
@@ -105,26 +103,29 @@ namespace Fts.Views
             _formCard.Add(_status);
 
             // --- signed-in panel ---
-            _signedInCard = UiKit.Card();
+            _signedInCard = UiKit.RaisedCard();
             _signedInCard.style.display = DisplayStyle.None;
             col.Add(_signedInCard);
 
-            _signedInLabel = UiKit.Subtitle(string.Empty);
+            _signedInLabel = new Label(string.Empty);
+            _signedInLabel.AddToClassList("fts-login__signedin");
             _signedInLabel.style.whiteSpace = WhiteSpace.Normal;
             _signedInCard.Add(_signedInLabel);
 
             _logoutButton = UiKit.PrimaryButton(string.Empty, () => LogoutClicked?.Invoke());
+            _logoutButton.AddToClassList("fts-login__btn");
             _signedInCard.Add(_logoutButton);
 
             // Deleting the account is deliberately the quietest control on the screen: an outline
             // button, not a filled one, so it never competes with logout for a mis-tap.
-            _deleteButton = UiKit.MenuButton(string.Empty, () => DeleteRequested?.Invoke());
-            _deleteButton.style.marginTop = UiKit.SpaceSm;
-            _deleteButton.style.color = UiKit.Danger;
+            _deleteButton = UiKit.GhostButton(string.Empty, () => DeleteRequested?.Invoke());
+            _deleteButton.AddToClassList("fts-login__btn");
+            _deleteButton.AddToClassList("fts-login__delete");
             _signedInCard.Add(_deleteButton);
 
             // --- delete-account panel (hidden until asked for) ---
-            _deleteCard = UiKit.Card();
+            _deleteCard = UiKit.OptionCard();
+            _deleteCard.AddToClassList("fts-login__danger");
             _deleteCard.style.display = DisplayStyle.None;
             col.Add(_deleteCard);
 
@@ -140,12 +141,12 @@ namespace Fts.Views
             _deleteCard.Add(_deletePasswordField);
 
             _deleteConfirmButton = UiKit.PrimaryButton(string.Empty, () => DeleteConfirmClicked?.Invoke());
-            _deleteConfirmButton.style.marginTop = UiKit.SpaceSm;
-            _deleteConfirmButton.style.backgroundColor = UiKit.Danger;
+            _deleteConfirmButton.AddToClassList("fts-login__btn");
+            _deleteConfirmButton.AddToClassList("fts-login__deleteconfirm");
             _deleteCard.Add(_deleteConfirmButton);
 
-            _deleteCancelButton = UiKit.MenuButton(string.Empty, () => DeleteCancelClicked?.Invoke());
-            _deleteCancelButton.style.marginTop = UiKit.SpaceSm;
+            _deleteCancelButton = UiKit.GhostButton(string.Empty, () => DeleteCancelClicked?.Invoke());
+            _deleteCancelButton.AddToClassList("fts-login__btn");
             _deleteCard.Add(_deleteCancelButton);
 
             // The form card's status label is hidden while signed in, so this panel carries its own.
@@ -157,13 +158,13 @@ namespace Fts.Views
 
             // --- advanced: server URL ---
             _serverCaption = UiKit.Caption(string.Empty);
-            _serverCaption.style.marginTop = UiKit.SpaceMd;
+            _serverCaption.AddToClassList("fts-login__server");
             col.Add(_serverCaption);
             _serverField = Field(isPassword: false);
             col.Add(_serverField);
 
-            _backButton = UiKit.MenuButton(string.Empty, () => BackClicked?.Invoke());
-            _backButton.style.marginTop = UiKit.SpaceMd;
+            _backButton = UiKit.GhostButton(string.Empty, () => BackClicked?.Invoke());
+            _backButton.AddToClassList("fts-login__btn");
             col.Add(_backButton);
 
             SetMode(false);
@@ -272,8 +273,8 @@ namespace Fts.Views
         private static TextField Field(bool isPassword)
         {
             var field = new TextField { isPasswordField = isPassword };
-            field.style.marginBottom = UiKit.SpaceSm;
-            field.style.minHeight = 40;
+            field.AddToClassList("fts-search");
+            field.AddToClassList("fts-login__field");
             return field;
         }
     }

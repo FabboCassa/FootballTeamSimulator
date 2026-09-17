@@ -47,7 +47,7 @@ namespace Fts.Views
 
             var line = new Label(text);
             line.style.color = Color.white;
-            line.style.fontSize = 13;
+            line.AddToClassList("fts-t-meta");
             line.style.backgroundColor = Backdrop;
             line.style.paddingLeft = 8;
             line.style.paddingRight = 8;

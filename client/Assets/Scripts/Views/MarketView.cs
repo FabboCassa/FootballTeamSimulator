@@ -12,7 +12,8 @@ namespace Fts.Views
         public string Name;           // "player — club" (buy) or "player" (sell) — its own cell
         public string RoleAbbr;       // localized role abbreviation (coloured cell)
         public int RoleGroup;         // 0 GK · 1 def · 2 mid · 3 att (cell colour)
-        public string Age;            // its own cell
+        public string Age;            // its own cell (kept; the meta line carries it since 14.4)
+        public string Meta;           // quiet second line under the name: "club · 28 anni" (task 14.4)
         public string Ovr;            // scouted/exact overall — its own cell
         public string Value;          // its own cell
         public string Tag;            // optional badge, e.g. "LISTED €5M" or "shortlisted" (muted after name)
@@ -76,36 +77,36 @@ namespace Fts.Views
         private readonly VisualElement _roleBar;
         private readonly Button _sort;
         private readonly Button _shortlistOnly;
-        private readonly ScrollView _content;
+        private readonly VisualElement _content;
 
         public MarketView(Func<string, string> tr)
         {
-            Root = UiKit.ScreenRoot();
+            // Task 14.4: the standard page. The budget is the title (the number every decision on
+            // this screen is weighed against), the window is a coloured line under it, tabs are a
+            // segmented row, and the listing is one card of two-line rows.
+            PageParts page = UiKit.StandardPage(tr("market.kicker"), string.Empty, tr("common.back"),
+                () => BackClicked?.Invoke());
+            Root = page.Root;
+            Root.AddToClassList("fts-market");
+            VisualElement col = page.Column;
+            _budget = page.Title;
 
-            VisualElement col = UiKit.PageColumn(UiKit.WidthWide);
-            Root.Add(col);
-
-            // ---- headline: the budget, then the window status line.
-            _budget = UiKit.ScreenTitle(string.Empty);
-            col.Add(_budget);
-
-            _window = UiKit.HelpText(string.Empty);
-            col.Add(_window);
+            _window = new Label(string.Empty);
+            _window.AddToClassList("fts-market__window");
+            _window.style.whiteSpace = WhiteSpace.Normal;
+            page.Head.Left.Add(_window);
 
             // ---- tabs
-            VisualElement tabs = UiKit.Toolbar();
-            _tabBuy = UiKit.TabButton(tr("market.tab.buy"), () => TabSelected?.Invoke(0));
-            _tabSell = UiKit.TabButton(tr("market.tab.sell"), () => TabSelected?.Invoke(1));
-            _tabNews = UiKit.TabButton(tr("market.tab.news"), () => TabSelected?.Invoke(2));
-            _tabNews.style.marginRight = 0;
-            tabs.Add(_tabBuy);
-            tabs.Add(_tabSell);
-            tabs.Add(_tabNews);
+            _tabBuy = UiKit.SegChip(tr("market.tab.buy"), null, () => TabSelected?.Invoke(0));
+            _tabSell = UiKit.SegChip(tr("market.tab.sell"), null, () => TabSelected?.Invoke(1));
+            _tabNews = UiKit.SegChip(tr("market.tab.news"), null, () => TabSelected?.Invoke(2));
+            VisualElement tabs = UiKit.SegRow(_tabBuy, _tabSell, _tabNews);
+            tabs.AddToClassList("fts-market__tabs");
             col.Add(tabs);
 
-            // ---- filters: a full row of role chips (every role visible, the picked one lit up —
-            // task 6.12b) and, under it, the sort + shortlist toggles.
+            // ---- filters: role chips, then sort + shortlist toggles
             _filterBar = new VisualElement();
+            _filterBar.AddToClassList("fts-market__filters");
             _filterBar.style.flexShrink = 0f;
             _roleBar = UiKit.Toolbar();
             _roleBar.style.marginBottom = UiKit.SpaceXs;
@@ -119,17 +120,14 @@ namespace Fts.Views
             _filterBar.Add(optionBar);
             col.Add(_filterBar);
 
-            // ---- listing panel fills the page
-            VisualElement panel = UiKit.Panel(grow: true);
-            panel.style.paddingTop = UiKit.SpaceSm;
-            panel.style.paddingBottom = UiKit.SpaceSm;
-            _content = UiKit.ListScroll();
-            panel.Add(_content);
-            col.Add(panel);
-
-            VisualElement footer = UiKit.FooterBar();
-            footer.Add(UiKit.FooterButton(tr("common.back"), () => BackClicked?.Invoke()));
-            col.Add(footer);
+            // ---- the listing
+            VisualElement card = UiKit.OptionCard();
+            card.AddToClassList("fts-market__list");
+            // Not a ScrollView: the page already scrolls, and a nested scroller steals the wheel.
+            _content = new VisualElement();
+            _content.AddToClassList("fts-market__content");
+            card.Add(_content);
+            col.Add(card);
         }
 
         public void SetBudget(string text) => _budget.text = text;
@@ -137,14 +135,15 @@ namespace Fts.Views
         public void SetWindow(string text, bool open)
         {
             _window.text = text;
-            _window.style.color = open ? UiKit.Positive : UiKit.Amber;
+            _window.EnableInClassList("fts-market__window--open", open);
+            _window.EnableInClassList("fts-market__window--closed", !open);
         }
 
         public void SetActiveTab(int active)
         {
-            UiKit.SetTabActive(_tabBuy, active == 0);
-            UiKit.SetTabActive(_tabSell, active == 1);
-            UiKit.SetTabActive(_tabNews, active == 2);
+            UiKit.SetSegChipState(_tabBuy, active == 0);
+            UiKit.SetSegChipState(_tabSell, active == 1);
+            UiKit.SetSegChipState(_tabNews, active == 2);
         }
 
         public void SetFilterBar(
@@ -173,12 +172,8 @@ namespace Fts.Views
 
         public void AddInfoLine(string text)
         {
-            var label = new Label(text);
-            label.style.color = UiKit.TextMuted;
-            label.style.fontSize = 13;
-            label.style.whiteSpace = WhiteSpace.Normal;
-            label.style.marginTop = UiKit.SpaceXs;
-            label.style.marginBottom = UiKit.SpaceXs;
+            Label label = UiKit.HelpText(text);
+            label.AddToClassList("fts-market__info");
             _content.Add(label);
         }
 
@@ -187,56 +182,78 @@ namespace Fts.Views
             int playerId = vm.PlayerId;
 
             VisualElement row = PlayerRowKit.Row();
+            row.AddToClassList("fts-market__row");
 
             if (vm.Avatar != null)
             {
-                vm.Avatar.style.marginRight = 5;
+                vm.Avatar.AddToClassList("fts-market__avatar");
                 vm.Avatar.style.flexShrink = 0f;
                 row.Add(vm.Avatar);
             }
 
-            row.Add(PlayerRowKit.RoleChip(vm.RoleAbbr, vm.RoleGroup));
+            // Name + quiet meta line (club · age), with the optional LISTED / shortlisted tag.
+            var stack = new VisualElement();
+            stack.AddToClassList("fts-market__who");
+            stack.style.flexGrow = 1f;
+            stack.style.flexShrink = 1f;
+            stack.style.minWidth = 0f;
 
-            // Name cell (grows), with the optional LISTED/shortlisted tag muted after the name.
-            VisualElement nameCell = PlayerRowKit.Cell(0, grow: true);
-            nameCell.style.justifyContent = Justify.FlexStart;
+            var nameLine = new VisualElement();
+            nameLine.style.flexDirection = FlexDirection.Row;
+            nameLine.style.alignItems = Align.Center;
             var name = new Label(vm.Name);
-            name.style.fontSize = 14;
-            name.style.unityFontStyleAndWeight = FontStyle.Bold;
-            name.style.color = UiKit.TextPrimary;
+            name.AddToClassList("fts-market__name");
             name.style.flexShrink = 1f;
             name.style.whiteSpace = WhiteSpace.NoWrap;
             name.style.overflow = Overflow.Hidden;
             name.style.textOverflow = TextOverflow.Ellipsis;
-            nameCell.Add(name);
+            nameLine.Add(name);
             if (!string.IsNullOrEmpty(vm.Tag))
             {
                 var tag = new Label(vm.Tag);
-                tag.style.fontSize = 11;
-                tag.style.unityFontStyleAndWeight = FontStyle.Bold;
-                tag.style.color = UiKit.Amber;
-                tag.style.marginLeft = 8;
+                tag.AddToClassList("fts-market__tag");
                 tag.style.flexShrink = 0f;
-                nameCell.Add(tag);
+                nameLine.Add(tag);
             }
-            row.Add(nameCell);
+            stack.Add(nameLine);
 
-            row.Add(PlayerRowKit.TextCell(vm.Age, 48f, TextAnchor.MiddleCenter));
-            row.Add(PlayerRowKit.TextCell(vm.Ovr, 100f, TextAnchor.MiddleCenter));
-            row.Add(PlayerRowKit.TextCell(vm.Value, 104f, TextAnchor.MiddleRight, bold: true, color: UiKit.Positive));
+            string metaText = !string.IsNullOrEmpty(vm.Meta) ? vm.Meta : vm.Age;
+            if (!string.IsNullOrEmpty(metaText))
+            {
+                var meta = new Label(metaText);
+                meta.AddToClassList("fts-market__meta");
+                meta.style.whiteSpace = WhiteSpace.NoWrap;
+                meta.style.overflow = Overflow.Hidden;
+                meta.style.textOverflow = TextOverflow.Ellipsis;
+                stack.Add(meta);
+            }
+            row.Add(stack);
+
+            row.Add(PlayerRowKit.RoleChip(vm.RoleAbbr, vm.RoleGroup));
+
+            VisualElement ovr = PlayerRowKit.TextCell(vm.Ovr, 0, TextAnchor.MiddleCenter, bold: true);
+            ovr.style.width = StyleKeyword.Null;
+            ovr.AddToClassList("fts-market__ovr");
+            row.Add(ovr);
+
+            var value = new Label(vm.Value);
+            value.AddToClassList("fts-market__value");
+            value.style.unityTextAlign = TextAnchor.MiddleRight;
+            value.style.flexShrink = 0f;
+            row.Add(value);
 
             if (!string.IsNullOrEmpty(vm.ActionAText))
             {
-                Button a = UiKit.SmallButton(vm.ActionAText, () => RowActionA?.Invoke(playerId), 96f);
-                a.style.height = PlayerRowKit.RowHeight;
+                Button a = UiKit.SmallButton(vm.ActionAText, () => RowActionA?.Invoke(playerId), 0f);
+                a.AddToClassList("fts-market__actiona");
                 UiKit.SetSmallButtonOn(a, vm.ActionAHighlighted);
                 row.Add(a);
             }
 
             if (!string.IsNullOrEmpty(vm.ActionBText))
             {
-                Button b = UiKit.SmallButton(vm.ActionBText, () => RowActionB?.Invoke(playerId), 96f);
-                b.style.height = PlayerRowKit.RowHeight;
+                Button b = UiKit.SmallButton(vm.ActionBText, () => RowActionB?.Invoke(playerId), 0f);
+                b.AddToClassList("fts-market__actionb");
                 UiKit.SetSmallButtonAccent(b, vm.ActionBEnabled);
                 b.SetEnabled(vm.ActionBEnabled);
                 row.Add(b);
@@ -255,9 +272,7 @@ namespace Fts.Views
             var label = new Label(vm.Label);
             label.style.flexGrow = 1f;
             label.style.flexShrink = 1f;
-            label.style.fontSize = 14;
-            label.style.unityFontStyleAndWeight = FontStyle.Bold;
-            label.style.color = UiKit.TextPrimary;
+            label.AddToClassList("fts-market__name");
             label.style.whiteSpace = WhiteSpace.NoWrap;
             label.style.overflow = Overflow.Hidden;
             label.style.textOverflow = TextOverflow.Ellipsis;
@@ -266,8 +281,7 @@ namespace Fts.Views
             if (!string.IsNullOrEmpty(vm.Detail))
             {
                 var detail = new Label(vm.Detail);
-                detail.style.fontSize = 13;
-                detail.style.color = UiKit.TextMuted;
+                detail.AddToClassList("fts-market__meta");
                 detail.style.flexShrink = 0f;
                 detail.style.marginLeft = UiKit.SpaceSm;
                 row.Add(detail);
@@ -285,16 +299,12 @@ namespace Fts.Views
             var label = new Label(vm.Label);
             label.style.flexGrow = 1f;
             label.style.flexShrink = 1f;
-            label.style.fontSize = 14;
-            label.style.color = UiKit.TextPrimary;
+            label.AddToClassList("fts-market__name");
             label.style.whiteSpace = WhiteSpace.Normal;
             row.Add(label);
 
             var fee = new Label(vm.Fee);
-            fee.style.fontSize = 15;
-            fee.style.unityFontStyleAndWeight = FontStyle.Bold;
-            fee.style.color = UiKit.Positive;
-            fee.style.minWidth = 96;
+            fee.AddToClassList("fts-market__value");
             fee.style.flexShrink = 0f;
             fee.style.unityTextAlign = TextAnchor.MiddleRight;
             fee.style.marginRight = UiKit.SpaceSm;
@@ -313,8 +323,7 @@ namespace Fts.Views
 
         public void AddBackRow(string text)
         {
-            Button row = UiKit.SmallButton(text, () => SubBackClicked?.Invoke(), 140f);
-            row.style.height = 40;
+            Button row = UiKit.GhostButton(text, () => SubBackClicked?.Invoke());
             row.style.alignSelf = Align.FlexStart;
             row.style.marginLeft = 0;
             row.style.marginTop = UiKit.SpaceSm;

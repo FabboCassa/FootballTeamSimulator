@@ -1,0 +1,15 @@
+{"spec": "docs/specs/realistic-club-economy.md", "base": "main", "issues": [
+  {"n": 1, "deps": []},
+  {"n": 2, "deps": [1]},
+  {"n": 3, "deps": [2]},
+  {"n": 4, "deps": [2]},
+  {"n": 5, "deps": [2]},
+  {"n": 6, "deps": [1]},
+  {"n": 7, "deps": [4, 5]},
+  {"n": 8, "deps": [4, 6, 7]},
+  {"n": 9, "deps": [8]},
+  {"n": 10, "deps": [3, 4, 7]},
+  {"n": 11, "deps": [9, 10]},
+  {"n": 12, "deps": [2, 5]},
+  {"n": 13, "deps": [3, 8]}
+]}

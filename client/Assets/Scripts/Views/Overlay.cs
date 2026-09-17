@@ -34,9 +34,8 @@ namespace Fts.Views
             backdrop.style.paddingRight = UiKit.SpaceMd;
             backdrop.RegisterCallback<ClickEvent>(_ => onCancel?.Invoke());
 
-            var card = UiKit.Card();
-            card.style.maxWidth = 440;
-            card.style.minWidth = 300;
+            var card = UiKit.RaisedCard();
+            card.AddToClassList("fts-dialog");
             // Don't let clicks inside the card fall through to the backdrop (which cancels).
             card.RegisterCallback<ClickEvent>(e => e.StopPropagation());
 
@@ -45,25 +44,21 @@ namespace Fts.Views
             card.Add(titleLabel);
 
             var messageLabel = new Label(message);
-            messageLabel.style.fontSize = UiKit.FontBody;
-            messageLabel.style.color = UiKit.TextMuted;
+            messageLabel.AddToClassList("fts-dialog__message");
             messageLabel.style.whiteSpace = WhiteSpace.Normal;
             messageLabel.style.marginBottom = UiKit.SpaceMd;
             card.Add(messageLabel);
 
             var buttons = new VisualElement();
-            buttons.style.flexDirection = FlexDirection.Row;
-            buttons.style.justifyContent = Justify.FlexEnd;
+            buttons.AddToClassList("fts-dialog__buttons");
 
-            var cancel = UiKit.MenuButton(cancelText, () => onCancel?.Invoke());
-            cancel.style.width = 130;
-            cancel.style.height = 46;
-            cancel.style.marginRight = UiKit.SpaceSm;
+            var cancel = UiKit.GhostButton(cancelText, () => onCancel?.Invoke());
+            cancel.AddToClassList("fts-dialog__btn");
             buttons.Add(cancel);
 
             var confirm = UiKit.PrimaryButton(confirmText, () => onConfirm?.Invoke());
-            confirm.style.width = 150;
-            confirm.style.height = 46;
+            confirm.AddToClassList("fts-dialog__btn");
+            confirm.AddToClassList("fts-dialog__btn--primary");
             buttons.Add(confirm);
 
             card.Add(buttons);
@@ -110,7 +105,7 @@ namespace Fts.Views
 
             var pill = new Label(message);
             pill.pickingMode = PickingMode.Ignore;
-            pill.style.fontSize = UiKit.FontBody;
+            pill.AddToClassList("fts-toast");
             pill.style.unityFontStyleAndWeight = FontStyle.Bold;
             pill.style.color = UiKit.TextOnAccent;
             pill.style.backgroundColor = UiKit.Accent;

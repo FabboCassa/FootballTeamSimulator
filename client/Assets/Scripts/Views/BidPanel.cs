@@ -82,7 +82,7 @@ namespace Fts.Views
             _chipSlot.style.flexShrink = 0f;
             head.Add(_chipSlot);
             _title = UiKit.PanelLine(string.Empty);
-            _title.style.fontSize = 15;
+            _title.AddToClassList("fts-t-body");
             _title.style.unityFontStyleAndWeight = FontStyle.Bold;
             _title.style.flexGrow = 1f;
             _title.style.flexShrink = 1f;
@@ -98,7 +98,7 @@ namespace Fts.Views
             amountRow.style.marginBottom = UiKit.SpaceXs;
             Root.Add(amountRow);
             _amount = new Label(string.Empty);
-            _amount.style.fontSize = 26;
+            _amount.AddToClassList("fts-t-big");
             _amount.style.unityFontStyleAndWeight = FontStyle.Bold;
             _amount.style.color = UiKit.Accent;
             _amount.style.flexGrow = 1f;
@@ -148,7 +148,7 @@ namespace Fts.Views
             if (vm.RoleGroup >= 0)
             {
                 VisualElement chip = PlayerRowKit.RoleChip(vm.RoleAbbr, vm.RoleGroup, 48f);
-                chip.style.height = 26;
+                chip.style.minHeight = 26;
                 _chipSlot.Add(chip);
             }
             _title.text = vm.Title ?? string.Empty;

@@ -56,8 +56,8 @@ namespace Fts.Presenters
         /// <summary>Fallback playback rate, used only until the first state arrives (the server owns it).</summary>
         private const int DefaultSecondsPerMinute = 2;
 
-        private static readonly Color HomeColor = UiKit.Accent;
-        private static readonly Color AwayColor = UiKit.Danger;
+        private static readonly Color HomeColor = PitchGraphics.KitHome; // not the UI accent (task 14.7)
+        private static readonly Color AwayColor = PitchGraphics.KitAway; // not the danger token (task 14.7)
 
         private readonly ScreenNavigator _navigator;
         private readonly ILocalizationService _loc;

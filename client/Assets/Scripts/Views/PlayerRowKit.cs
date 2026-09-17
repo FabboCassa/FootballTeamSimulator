@@ -29,25 +29,32 @@ namespace Fts.Views
         public static VisualElement Row()
         {
             var row = new VisualElement();
+            row.AddToClassList("fts-prow");
             row.style.flexDirection = FlexDirection.Row;
             row.style.alignItems = Align.Center;
-            row.style.marginBottom = 5;
+            if (!UiKit.StylesLoaded) row.style.marginBottom = 5;
             return row;
         }
 
         /// <summary>An empty cell rectangle (surface box); add custom content into it.</summary>
         public static VisualElement Cell(float width, bool grow = false)
         {
+            // Sizes come from `.fts-pcell` (task 14.4) so a phone can grow the cell; inline
+            // values here are only the sheet-failed fallback.
             var cell = new VisualElement();
-            cell.style.height = RowHeight;
+            cell.AddToClassList("fts-pcell");
             cell.style.flexDirection = FlexDirection.Row;
             cell.style.alignItems = Align.Center;
             cell.style.justifyContent = Justify.Center;
-            cell.style.paddingLeft = 8;
-            cell.style.paddingRight = 8;
-            cell.style.marginRight = 5;
-            cell.style.backgroundColor = UiKit.Surface;
-            UiKit.Round(cell, UiKit.RadiusSm);
+            if (!UiKit.StylesLoaded)
+            {
+                cell.style.height = RowHeight;
+                cell.style.paddingLeft = 8;
+                cell.style.paddingRight = 8;
+                cell.style.marginRight = 5;
+                cell.style.backgroundColor = UiKit.Surface;
+                UiKit.Round(cell, UiKit.RadiusSm);
+            }
             if (grow)
             {
                 cell.style.flexGrow = 1f;
@@ -71,8 +78,9 @@ namespace Fts.Views
                 align == TextAnchor.MiddleRight ? Justify.FlexEnd : Justify.Center;
 
             var label = new Label(text ?? string.Empty);
-            label.style.fontSize = 13;
-            label.style.color = color ?? UiKit.TextPrimary;
+            label.AddToClassList("fts-pcell__text");
+            if (!UiKit.StylesLoaded) label.style.fontSize = 13;
+            if (color.HasValue) label.style.color = color.Value;
             label.style.unityTextAlign = align;
             if (bold) label.style.unityFontStyleAndWeight = FontStyle.Bold;
             label.style.whiteSpace = WhiteSpace.NoWrap;
@@ -89,8 +97,10 @@ namespace Fts.Views
             VisualElement cell = Cell(width);
             cell.style.backgroundColor = RoleColor(group);
 
+            cell.AddToClassList("fts-pchip");
             var label = new Label(abbr ?? string.Empty);
-            label.style.fontSize = 12;
+            label.AddToClassList("fts-pchip__text");
+            if (!UiKit.StylesLoaded) label.style.fontSize = 12;
             label.style.unityFontStyleAndWeight = FontStyle.Bold;
             label.style.unityTextAlign = TextAnchor.MiddleCenter;
             // Dark text on the bright yellow GK chip, white on the others.
@@ -102,7 +112,9 @@ namespace Fts.Views
         /// <summary>Tints a cell as selected (e.g. the picked player on the Support screen).</summary>
         public static void SetSelected(VisualElement cell, bool selected)
         {
-            cell.style.backgroundColor = selected ? UiKit.Hex(0x2F4A72) : UiKit.Surface;
+            cell.EnableInClassList("fts-pcell--selected", selected);
+            if (!UiKit.StylesLoaded)
+                cell.style.backgroundColor = selected ? UiKit.SelectionSoft : UiKit.Surface;
         }
     }
 }

@@ -51,8 +51,8 @@ namespace Fts.Presenters
             _view.SetTitle(_loc.Tr("season_end.title", result.EndedYear));
             _view.SetChampion(_loc.Tr("season_end.champion", ClubName(result.ChampionClubId)));
             _view.SetChampionCrest(Crests.Badge(
-                _identity.Visual(result.ChampionClubId), 36f,
-                _career.FindClub(result.ChampionClubId)?.ShortName ?? "?", UiKit.Background));
+                _identity.Visual(result.ChampionClubId), Responsive.IsMobile ? 180f : 110f,
+                _career.FindClub(result.ChampionClubId)?.ShortName ?? "?", UiKit.SurfaceRaised));
             _view.SetPromoted(_loc.Tr("season_end.promoted", JoinNames(result.PromotedClubIds)));
             _view.SetRelegated(_loc.Tr("season_end.relegated", JoinNames(result.RelegatedClubIds)));
         }

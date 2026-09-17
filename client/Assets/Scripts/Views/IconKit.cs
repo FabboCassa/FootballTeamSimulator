@@ -35,6 +35,33 @@ namespace Fts.Views
             }
             return new VectorIcon(id, tint) { style = { width = size, height = size } };
         }
+
+        /// <summary>
+        /// Creates an icon whose SIZE comes from a USS class instead of from C# (task 14.3).
+        ///
+        /// WHY THIS OVERLOAD EXISTS. An inline width beats the stylesheet, so an icon sized in
+        /// points here stays frozen at its desktop size on a phone — the same corollary 14.1 wrote
+        /// into UiKit. A 22-point glyph rattling around inside the shell's 110-point mobile icon
+        /// button was exactly that bug. <see cref="VectorIcon"/> draws into its resolved rect, so
+        /// giving it a class lets the breakpoint resize the glyph along with everything else.
+        /// <paramref name="fallbackSize"/> applies only when the sheet failed to load, so a
+        /// themeless build still shows an icon instead of a zero-sized element.
+        /// </summary>
+        public static VisualElement Icon(string id, string sizeClass, float fallbackSize, Color tint)
+        {
+            Texture2D png = PngOverride?.Invoke(id);
+            VisualElement element = png != null
+                ? new Image { image = png, scaleMode = ScaleMode.ScaleToFit }
+                : (VisualElement)new VectorIcon(id, tint);
+
+            element.AddToClassList(sizeClass);
+            if (!UiKit.StylesLoaded)
+            {
+                element.style.width = fallbackSize;
+                element.style.height = fallbackSize;
+            }
+            return element;
+        }
     }
 
     /// <summary>A single painter2D-drawn icon glyph, tintable via <see cref="SetTint"/>.</summary>

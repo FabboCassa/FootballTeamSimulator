@@ -110,7 +110,9 @@ namespace Fts.Views
 
             _header = UiKit.ScreenTitle(string.Empty);
             _header.style.marginBottom = UiKit.SpaceSm;
-            col.Add(_header);
+            // Back and the page's actions sit beside the title, not in a footer (task 14.6).
+            PageHeadParts titleHead = UiKit.TitleHead(_header);
+            col.Add(titleHead.Root);
 
             // ---- budget: the answer to "how much can I actually bid?" ---------------------------
             VisualElement tiles = UiKit.TileRow();
@@ -126,7 +128,7 @@ namespace Fts.Views
             VisualElement head = UiKit.Panel();
             col.Add(head);
             _banner = UiKit.PanelLine(string.Empty);
-            _banner.style.fontSize = 15;
+            _banner.AddToClassList("fts-t-body");
             _banner.style.unityFontStyleAndWeight = FontStyle.Bold;
             head.Add(_banner);
 
@@ -186,10 +188,9 @@ namespace Fts.Views
             _status.style.flexShrink = 0f;
             col.Add(_status);
 
-            VisualElement footer = UiKit.FooterBar();
+            VisualElement footer = titleHead.Actions;
             _backButton = UiKit.FooterButton(tr("common.back"), () => BackClicked?.Invoke());
             footer.Add(_backButton);
-            col.Add(footer);
 
             SetActiveTab(0);
             UpdateTexts();
@@ -350,7 +351,7 @@ namespace Fts.Views
 
             // Reparto colour first: the list reads as a squad, not as a spreadsheet.
             VisualElement chip = PlayerRowKit.RoleChip(vm.RoleAbbr, vm.RoleGroup, 46f);
-            chip.style.height = 30;
+            chip.style.minHeight = 30;
             chip.style.marginRight = UiKit.SpaceSm;
             chip.pickingMode = PickingMode.Ignore;
             row.Add(chip);
@@ -364,7 +365,7 @@ namespace Fts.Views
             VisualElement nameRow = UiKit.Row();
             info.Add(nameRow);
             var name = new Label(vm.PlayerName ?? string.Empty);
-            name.style.fontSize = 14;
+            name.AddToClassList("fts-t-body");
             name.style.unityFontStyleAndWeight = FontStyle.Bold;
             name.style.color = UiKit.TextPrimary;
             name.style.flexShrink = 1f;
@@ -374,7 +375,7 @@ namespace Fts.Views
             nameRow.Add(name);
 
             var meta = new Label(string.Format(_tr("auction.row_meta"), vm.Age, vm.Overall));
-            meta.style.fontSize = 12;
+            meta.AddToClassList("fts-t-meta");
             meta.style.color = UiKit.TextMuted;
             meta.style.marginLeft = UiKit.SpaceSm;
             meta.style.flexShrink = 0f;
@@ -387,19 +388,19 @@ namespace Fts.Views
                     vm.BadgeKind == 2 ? UiKit.Danger :
                     vm.BadgeKind == 3 ? UiKit.Accent : UiKit.SurfaceAlt;
                 Label badge = UiKit.Pill(vm.Badge, background, UiKit.TextPrimary);
-                badge.style.fontSize = 11;
+                badge.AddToClassList("fts-t-small");
                 badge.style.marginLeft = UiKit.SpaceSm;
                 badge.style.flexShrink = 0f;
                 nameRow.Add(badge);
             }
 
             var price = new Label(vm.PriceInfo ?? string.Empty);
-            price.style.fontSize = 13;
+            price.AddToClassList("fts-t-meta");
             price.style.color = UiKit.TextPrimary;
             info.Add(price);
 
             var leader = new Label(vm.LeaderInfo ?? string.Empty);
-            leader.style.fontSize = 12;
+            leader.AddToClassList("fts-t-meta");
             leader.style.color = vm.BadgeKind == 1 ? UiKit.Positive : UiKit.TextMuted;
             info.Add(leader);
 
@@ -410,7 +411,7 @@ namespace Fts.Views
             row.Add(right);
 
             var clock = new Label(vm.Countdown ?? string.Empty);
-            clock.style.fontSize = 12;
+            clock.AddToClassList("fts-t-meta");
             clock.style.color = UiKit.TextMuted;
             clock.style.marginBottom = 3;
             right.Add(clock);

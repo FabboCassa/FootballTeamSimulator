@@ -3,8 +3,9 @@
 Read ARCHITECTURE.md (design) and ROADMAP.md (plan + current status via checkboxes) before doing anything.
 
 ## Working agreement (do not violate)
-- **NEVER run ANY git command in this repo — `git status` and `git log` included.** The user commits from his Windows machine; concurrent git access through the synced folder corrupts the index. **`git status` is NOT read-only**: it refreshes the stat cache through `.git/index.lock`, and the sandbox bridge cannot unlink files, so the lock survives as a 0-byte file. Visual Studio's Git panel then shows the warning "potrebbe essere in esecuzione un processo GIT", reports **"nessuna modifica"** even with dozens of changed files, and refuses to commit. It happened on 2026-08-18 and again on 2026-08-20 (task 11.2) — the corpses are parked in `_to_delete/index.lock.stale*`. **The fix, if it happens again:** the sandbox cannot delete, so `mv .git/index.lock _to_delete/<name>` (the index itself is untouched and needs no repair), or from PowerShell `Remove-Item .git\index.lock`. Then do NOT run git again to "check" — that recreates it. To see what changed, list files or read them; the diff is the user's job in his own tools.
-- One roadmap task at a time. The user tests every task on his machine (`dotnet test`, Unity) before it is marked `[x]` in ROADMAP.md. Mark `[~]` while in progress.
+Git: vietato durante le sessioni normali. Eccezione: le skill /ba:auto, /ba:implement e /ba:ship
+possono usare git e gh, perché l'utente chiude Visual Studio prima di lanciarle.
+Mai force-push su main, mai reset --hard.
 - **The sandbox CAN compile and MEASURE `shared/Sim.Core` — do it, do not hand over unmeasured code.** `apt-get update && apt-get install -y dotnet-sdk-8.0` works in the container (dot.net itself is blocked, the Ubuntu archive is not); nuget.org is blocked but `Sim.Core` has NO package references, so a scratch `net8.0` csproj with a `<clear/>` NuGet.config builds it offline under `TreatWarningsAsErrors`, and a hand-written NUnit stub type-checks the whole of `Sim.Core.Tests`. A purpose-built harness then MEASURES what changed — that is how engine phase 1 found the stray-strike bug and proved three performance hypotheses wrong. The DEVICE VM has no dotnet and no route to install one, and the server/client still cannot be built anywhere but on the user's machine. If a test might be statistically fragile, say so and ask for the output.
 - Balance-sensitive changes go through the 1,000-match harness; the user pastes the printed distribution and we judge together before closing the task.
 - **Every online/multiplayer feature MUST ship dev-sim tooling — build it proactively, don't wait to be asked.** The user tests SOLO (a single account), so any feature that needs other participants (private leagues, ranked ladder, auctions, live matches, offers) is untestable without a dev way to simulate them. Provide bot autopilot + a fast-forward: fill a cohort/lobby with bots, place bids / make-accept offers, and advance the clock (tick the calendar / force-settle / bot-ready) — server behind the dev gates (`Dev:ExposeSeedEndpoints` for bot bootstrap via `DevSeedService`; `Ranked:ExposeInternalEndpoints` for `/internal/ranked/tick`+`/auctions/settle`), client behind `DevFlags.OnlineTestTools`. Pattern: DevSeedService composes the real use cases with deterministic/fresh `*@dev.local` bots; client dev buttons are hidden unless the flag is on. (Ranked so far: `POST /internal/dev/ranked/fill` fills the placement cohort; `POST /internal/ranked/tick` advances the calendar; client "Riempi con bot (dev)" + "Avanza calendario (dev)" buttons.)
@@ -14,6 +15,7 @@ Read ARCHITECTURE.md (design) and ROADMAP.md (plan + current status via checkbox
 - **Engine phase 8 is DONE AND VERIFIED ON HIS MACHINE (2026-09-12) — and it was the LAST phase of the match-engine rework plan, so the plan is complete.** `dotnet test` **646/646 green in 680.4 s** (`Sim.Core.Tests` 406, `Api.Tests` 240). **Golden master `0x5EF1EDDAFA52BAFA`, engine v10**, printed identically by `[DeterminismCheck]` and `[server-determinism]`, and pinned in `SimulationDeterminismTests.cs`, `SimulationService.cs`, `docs/ops/runbook.md`, `docs/store/release-checklist.md`. **What moved it is the goal ball resting where it crossed the line** — that changes the celebration ticks, so every match diverges after its first goal, which is also why `[press]` (5.68/5.79/5.16), `[duties]` (302 tackles, 184 interceptions) and the small-N causality counts drifted slightly from v9. **The instruction axes did NOT move it and CANNOT**: the determinism run is on neutral tactics and every instruction table reads its middle entry as the identity, so **retuning an extreme is free of the hash** — used twice in one day. **`-Scenario instructions -InstructionsStrict` → 4/4** at 315.1 ms/match: block height 40.4/46.8/51.1 m, ball won back 36.2/39.9/42.2 m from its own goal (**the question phases 4 and 5 deferred to here, answered** — `[press]` cannot separate low from medium because it measures space left to a carrier in his own third, where the trigger is off for both), passes 304/455/671, crosses 22.8/29.3/35.1 (span 12.3 against the 1.0 asked). **`-Scenario pitch -PitchMatches 200 -PitchStrict` → 20/20 in band, 25/25 checks** at 330.7 ms: goals 2.50, shots 22.0 (7.2 on target), passes 893.1 at 76.6%, km 11.80, mark 6.17, xG **1.32 against 1.32 goals**, and the print now says **`balls won back 310.0`** (the `Tackle` → `Recovery` rename reached the dump). **`balance.ps1` 28/28 with every figure unchanged**, expected by construction. **The shot appetite was a cliff and is retuned:** `MentalityShotAppetitePercent` and `TempoShotAppetitePercent` 82/83-100-122 → **96/100/106**, `WidthWidePassBiasDm` -110/+130 → **-55/+65 dm**; `[instructions-shots]` went from 0.1/13.1/46.4 to **6.4/13.1/23.0**. The shoot-or-pass comparison is a hard THRESHOLD with the chances clustered just under it — measured slopes on ln(shots) about +0.026 per point above 100 and nearer 0.15 below — so before widening the appetite again, give the threshold a soft edge. **The one red of the first run was the TEST, not the engine:** a chance is filed when it is SETTLED and the strike when it left his foot, so a ball in flight over a minute boundary put them in different minutes; the window now allows one flight of lead (`StrikeLeadFrames`). **Phase 7 closes with the same run** (`[perf-lines]` 5.99 / 6.41, inside the point the test asks). **STILL OPEN, none of it blocking:** `wide` costs half a side's goals (0.97 vs 1.97) with no visible return, and the `instructions` matrix has NO goals-against column so a defensive side's trade is invisible there (read it in `[tactics] attacking GF/GA = 80/37 | defensive GF/GA = 48/17`); `attacking` scores like `balanced` (1.93 vs 1.97) while shooting more, on 30 matches; **the instructions do not count in the fast model**, which plays a season's thousands of background fixtures — deliberate here, and the next real question; goals at neutral 2.50 against a band floor of 2.40 is the thinnest margin in the print. NOT verified: THE EYE — `replay.html`, and Unity with attacking-fast against defensive-slow.
 - **Current test count: 639 green** (engine phase 7, VERIFIED on his machine 2026-09-11 in 579.2 s: `Sim.Core.Tests` **399** = the 375 of phase 6 plus the 24 `PerformanceDataTests`, + Api.Tests 240). Golden master **`0xB0052E0B3942206A`** (engine v9, UNCHANGED by phase 7 — the performance data is read off a finished match and is deliberately outside the hash). His first phase-7 run read 637 tests, 636 green — the red was the rating calibration, now corrected, and the 23rd test pins the correction. **The golden master did NOT move and must not: `0xB0052E0B3942206A`, verified on his machine 2026-09-11 with the performance data in.**
 - **Current VERIFIED test count: 615 green** (engine phase 6, VERIFIED on his machine 2026-09-11 in 486.2 s) (`Sim.Core.Tests` **375** — the 364 of phase 5 plus the 11 `CausalityTests` — + `Api.Tests` 240), golden master **`0xB0052E0B3942206A`** (engine v9). His 8 September run read 607/615 on an engine that still carried a stale `BalanceConfig`; see the current position. The line below is phase 5's, kept for its history.
+- **THE CLIENT CAN BE TYPE-CHECKED IN THE CONTAINER (found 2026-09-17) — do it before handing over UI code.** No Unity editor is needed: the repo already holds every reference. Tar `client/Assets/Scripts`, `client/Assets/Plugins/SimCore/*.dll`, `client/Library/ScriptAssemblies/*.dll` (VContainer, UniTask, FTS.Services — editor-built, unstripped) and `client/builds/windows/FootballTeamSimulator_Data/Managed` (the UnityEngine module DLLs) into `_to_delete/`, stage it, `apt-get install -y dotnet-sdk-8.0 mono-devel`, then run Roslyn (`dotnet .../Roslyn/bincore/csc.dll -noconfig -nostdlib`) against mono's `4.5/mscorlib.dll`, `System*.dll`, `Facades/netstandard.dll` + those DLLs, building FTS.Views → FTS.MatchView → FTS.Presenters from source. The player DLLs are STRIPPED, so a scratch copy needs six patches that have nothing to do with our code: `Mathf.Deg2Rad`/`Rad2Deg`, `Vector2.Distance`, `Color.gray`, `Painter2D.lineCap/lineJoin` and the `strokeColor` getter, `VisualElement.RemoveAt`, `styleSheets.Contains`. With those, the whole client compiles with 0 errors, so ANY error is ours. It does not replace Play mode (no layout, no USS parse).
 - User machine: Windows, .NET 10 SDK, Unity 6.3 LTS (6000.3.17f1), project folder `C:\Users\Fabbo\FootballTeamSimulator`.
 - Unity project = `client/` subfolder (opened via Unity Hub); git repo = monorepo root, single GitHub repo for everything.
 - After ANY change in `shared/`, the user must run `.\tools\build-simcore.ps1` so Unity gets fresh DLLs (Sim.Core.dll + Fts.Contracts.dll → `client/Assets/Plugins/SimCore/`, gitignored, .meta committed).
@@ -21,7 +23,108 @@ Read ARCHITECTURE.md (design) and ROADMAP.md (plan + current status via checkbox
   `dotnet test shared/Sim.Core.Tests/Sim.Core.Tests.csproj --logger "console;verbosity=detailed"`
 - Current test count (phase 5, verified): **604 green** (Sim.Core.Tests **364** — the 355 of phase 4 plus the 9 `RefereeTests` of phase 5 — + Api.Tests 240) in 518.5 s, golden master **0x222F723B4993ED25** (engine v8, engine rework phase 5 + the wall fix 5c, verified on the user's machine 2026-09-06 in 577.6 s and identical digit for digit to the container's .NET 8 value; the value BEFORE the wall fix was 0x436E4440B6350A7B, also verified on his machine, and the wall fix invalidated it; phase 4's was 0xF8BE4A32C28421A1 on v7, verified on his machine 2026-09-05 and identical digit for digit to the container's .NET 10 value; phase 3's was 0xABC7B41DC6F258C2 on engine v6), and `dotnet test` takes ~6.3 minutes (378.8 s: Sim.Core.Tests 310.7 s + Api.Tests 378.1 s in parallel). The paragraph below is the historical note it replaced: 212 green (through 8.4a, +4 OnlineSeasonTick tests over 6.10a's 208). Golden master 0xCDEA5A2F7B9E5CF6. **STALE as of 13.1: the golden master changes with engine v3 — see the current position below.** Server Api.Tests: 70 green (through 8.5a, +11 LeagueAuctionTests over 8.4a's 59) + DevSeedTests (5) from the dev-seed tooling; **8.6 (live match control) DONE [x] — 8.6a (server) 85/85 green + 8.6b (Unity client) + dev "simulate the opponent" tooling Play-mode VERIFIED & ACCEPTED by the user (docker `up --build` healthy, the live match kicks off and the bot opponent joins/subs from the live screen). `[server-determinism] 0xCDEA5A2F7B9E5CF6` unchanged, NO Sim.Core change → 212 Sim.Core + golden master stand, no save bump. Still standing: commit `Migrations/AddLiveMatch*` for a clean Postgres/docker deploy (the running dev DB already has `live_matches`). Client: Season "▶ Live" launch, ~1s poll, MatchRenderer synced to KickoffUtc, InMatchPanel subs+instructions → POST /change, finish/leave (new .cs: LiveMatchView, OnlineLiveMatchScreenPresenter). DEV TOOLING (test the live match solo): server `POST /internal/dev/leagues/{id}/live/{fixtureId}/bot` (`DevSeedService.BotLiveAsync` — the fixture's @dev.local bot opens/joins + optionally a legal `LineupPlan.From(BestEleven)` sub), client dev row "Bot: entra"/"Bot: sostituzione" (gated by `DevFlags.OnlineTestTools`); `DevSeedService` ctor now takes `ILiveMatchService` (DI-resolved → the 5 DevSeedTests stay green). NEXT: Phase 9 (public ranked mode) — 8.7 (private season end) is DONE [x] and 🏁 Phase 8 is COMPLETE. **8.7 summary:** SERVER-ONLY logic, NO Sim.Core change, NO migration (reuses `LeagueStatus.Completed`=2 + existing columns); `dotnet test Api.Tests` **92/92 green**, `[server-determinism] 0xCDEA5A2F7B9E5CF6` unchanged. `ResolveNextRoundAsync` flips the league to Completed on the last matchday; `GET /leagues/{id}/season/summary` → final table + champion / top scorer (aggregated from the stored MatchReport goal events) / best defence / wooden spoon; `POST /leagues/{id}/season/new` (creator, Completed only) = FULL reset → deletes fixtures/lineups/trainings/bids/auctions/live, un-assigns clubs, re-equalises the developed squads + re-seeds 25M budgets, resets condition to neutral, reopens the draft (players KEEP their developed ability). Client 8.7b: `SeasonSummaryDto`/`SeasonAwardDto`/`TopScorerDto` + `GetSeasonSummaryAsync`/`StartNewSeasonAsync`, new `Views/OnlineSeasonEndView` + `Presenters/OnlineSeasonEndScreenPresenter` (named `Online*` because `SeasonEndView`/`season_end.*` is the SP 2.7 screen; the online one owns `seasonend.*`), opened by a "Bilancio stagione" button that appears on the Season screen once complete; loc en+it 612/612 at parity. The user's monthly-public-league vision (per-player rating → matchmaking by level → auto-enrol with opt-out → 1-week break between seasons) is recorded as the Phase 9 direction.**
 
-## Current position — ✍️ ENGINE REWORK PHASE 8 WRITTEN (2026-09-11): the instructions COUNT
+## Current position — ✍️ TASK 14.4, FIRST SLICE WRITTEN (2026-09-17): the three dashboards
+
+**CLIENT-ONLY, Play-mode/device untested, but TYPE-CHECKED (0 errors) — see the new environment fact
+below.** NO `shared/` change → 646 tests and golden master `0x5EF1EDDAFA52BAFA` stand, NO
+`build-simcore`, NO save bump, NO new `.cs` files. 14.3 (the shell) is still `[~]` awaiting his run;
+its code type-checks clean too.
+
+**The user's brief for the rest of Phase 14: "semplice, leggibile, pulita".** Every redrawn screen
+starts from `UiKit.StandardPage(kicker, title, backText, onBack, maxWidth)` (root + ONE scroller +
+centred column + kicker/Bebas title + Back ghost hidden on phones) and `UiKit.BlockHead(caption,
+link, onLink)`, puts each question it answers in ONE card, uses `StatTile`s for headline numbers,
+and keeps every size in `FtsTheme.uss` with a `.fts--mobile` override — never an inline font size
+or an inline `flexDirection` that the phone layout needs to change.
+
+**Done in this slice:** `HubView`/`HubPresenter` (Panoramica: tiles position/points/form pips/
+confidence; next-match raised card with crests + CTA + opponent report; last result; mini standings
+around the club; to-do rows Posta/Rosa/Mercato), `CareerView`/`CareerScreenPresenter` (tiles,
+confidence card, history as rows with CAMPIONE/ESONERATO badges), `ClubView`/`ClubScreenPresenter`
+(money tiles, income split, facility rows with level pips). Loc en+it **1173/1173**. Details and the ✅
+are in ROADMAP 14.4.
+
+**Slice 2 (same day):** Rosa, Tattiche, Allenamento, Supporto, Mercato, Osservatori redrawn (shared `PlayerRowKit`/`ConditionStrip` made class-based — their inline 11-14 px fonts were the readability bug; Tactics/Training now pick by chips instead of blind cycling). Loc 1190/1190. See ROADMAP 14.4.
+
+**Slices 3-4 (same day):** Campionato, Posta, Profilo, Trattativa rewritten; then the whole rest of the client — main menu, match result, season end, career decision, login, create league, dialogs/onboarding on the new `UiKit.CenterPage` / `StandardPage`, and every remaining view's inline font sizes mapped to `.fts-t-*` (`UiKit.TextClassFor`). Loc 1200/1200. Everything type-checked, nothing Play-mode tested yet — the user's run of the ROADMAP 14.4 ✅ lines is next.
+
+**Same day, the three leftovers (user: "sistema"):** (1) 14.6 — online/scaffold screens have Back + actions at the TOP via new `UiKit.TitleHead(Label)` (`.fts-titlehead`), no more footers; (2) 14.7 — pitch palette re-picked for `#080D18` (turf `#1B4A32`), neutral kits `PitchGraphics.KitHome/KitAway` instead of Accent/Danger online, `PitchGraphics.PickKit` guards career kits against turf/accent/other side; (3) 14.9 — tablet = narrow desktop: `Responsive.Classify` no longer sends an upright tablet to the phone sheet, new `Responsive.HasWideColumns`, a TABLET PASS block at the end of the USS. Details in ROADMAP 14.6/14.7/14.9. Play-mode untested. Then: `StandardPage` head made FIXED above the scroller (only the body scrolls). All of it TYPE-CHECKED 0 errors (Views, MatchView, Presenters).
+
+### Previous position — ✍️ TASK 14.3 WRITTEN (2026-09-13): the shell redrawn on the mockup
+
+**CLIENT-ONLY, Play-mode/device untested (the client cannot be built in the container). NO `shared/`
+change → `dotnet test` 646/646 and the golden master `0x5EF1EDDAFA52BAFA` stand, NO `build-simcore`,
+NO save bump, NO new `.cs` files → no Unity `.meta` to generate.**
+
+**WHAT THE TASK IS.** 14.1 rebuilt the design system and 14.2 piloted it on Nuova Carriera; 14.3 is
+the first screen of the migration proper, and it is the CHROME — the top bar, the sidebar and the
+phone's tab bar that every other screen is pushed inside. It is also where the portrait bug 14.1
+measured (a 1080x2400 handset resolves to ~970 POINTS, so `width < 720` never fired) finally gets
+verified on a real device.
+
+**THE TOP BAR NOW SPEAKS THE MOCKUP'S GRAMMAR: kicker over value, twice.** A small tracked-out
+kicker (the season/day line) over the value it describes (the club name, Bebas), the club-colour
+underline beneath; the same block again right-aligned for the budget — "BUDGET" over the figure in
+accent. `AppShell.SetClub`/`SetSubline` became `SetClubLine(kicker, name)` + `SetMoney(caption,
+value)`; `ShellController` feeds them separately. New loc key **`shell.budget`** — a BARE caption,
+because `market.budget` is the sentence "Budget: {0}" — en+it at parity **1119/1119**, key sets
+identical, placeholder counts matched.
+
+**THE DEFECT THE TASK WENT LOOKING FOR IS THE 14.1 COROLLARY AGAIN: an inline size beats USS.**
+Every shell glyph was `IconKit.Icon(id, 22f, tint)` — 22 points, inline, frozen — so on a phone a
+22-point glyph rattled inside a 110-point icon button; and the tab bar's inline `minWidth = 64`
+meant twelve tabs SQUEEZED to ~80 points each on a 970-point screen instead of scrolling, i.e. an
+80-point tap target where the ✅ asks for 120. New overload **`IconKit.Icon(id, sizeClass,
+fallbackSize, tint)`** takes a CLASS (`.fts-btnicon` / `.fts-navicon` / `.fts-tabicon`) —
+`VectorIcon` paints into its resolved rect, so the breakpoint resizes the glyph like everything
+else — and the tab's minimum width is a rule. On a phone: 46-point glyphs in 110-point buttons,
+tabs **150 x 150**.
+
+**TWO MORE DEFECTS, both found by reading rather than running.** (1) The tab bar wore
+`.fts-bottombar`, which is the MOCKUP'S CTA BAR (`UiKit.BottomBar`), so it inherited that bar's
+padding by accident; it owns `.fts-tabbar` now, with its own `padding-bottom: 26px` inside the
+panel-root safe-area inset. (2) `SafeAreaController.AppBackground` was still the pre-14.1 navy
+`0x141C30` while the ground moved to `0x080D18` — on a notched handset that painted a LIGHTER FRAME
+around the page exactly where the inset is. Its comment said "keep in sync with the UiKit token";
+it wasn't. The crest had the same bug in miniature (masked against `UiKit.Surface` while the top bar
+is the DEEP surface → a faint halo) and, because a painter2D crest is sized in C# and cannot
+restyle itself, `ShellController` now subscribes to `Responsive.Changed` and REBUILDS it at 96
+points on a phone against 44 on a desktop.
+
+**THE SIDEBAR.** An active item carries a 3-point accent rail at its left and its GLYPH is tinted
+accent (a painter2D glyph carries its own tint, so `AppShell` re-tints on `SetActiveSection`; a PNG
+override from the mod hook is left alone) — the soft tint alone read as "slightly different navy".
+The compact/tablet sidebar went 86 → **76** points with items centred, rail and label hidden and the
+badge absolutely positioned: a proper icon rail instead of a clipped sidebar. `AppShell` is now
+`IDisposable` so its static `Responsive.Changed` subscription cannot leak across careers.
+
+**`ShellSectionVm.InBottomBar` was dead metadata and now does something.** The tab bar still holds
+EVERY section — hiding six with no way to reach them on a phone would be a regression, and a "more"
+sheet is not this task — but the key ones are laid out FIRST, so the six that matter fit on screen.
+
+**TOUCHED:** `Views/AppShell.cs` (rewritten), `Views/IconKit.cs` (+1 overload),
+`Presenters/ShellController.cs`, `Services/SafeAreaController.cs`, `Resources/FtsTheme.uss` (the
+whole shell block + its mobile overrides), `Resources/Localization/{en,it}.json`.
+
+✅ **What to run:** open the project (no `build-simcore` needed — nothing in `shared/` moved) and
+check the console is clean of `[UiKit] Resources/FtsTheme.uss missing`. Then, in a career: the top
+bar reads as a kicker over the club name with the budget block on the right; the active sidebar item
+shows the accent rail AND an accent glyph; drag the window to ~900 points wide and the sidebar
+becomes a 76-point icon rail; make it tall and narrow (past 1.15:1) and the bottom tab bar replaces
+it with the six key sections visible and the rest a scroll away. **Then the ✅ proper: an Android
+build, or the Game view at 1080x2400** — bottom tab bar present, every tap target over 120 points,
+the icons filling their buttons, and nothing clipped by the notch (the inset frame should now be the
+same near-black as the page).
+
+### Previous position — 🏁 ENGINE REWORK PHASE 8 CLOSED AND VERIFIED (2026-09-12): the instructions COUNT
+
+**VERIFIED ON HIS MACHINE 2026-09-12** — `dotnet test` **646/646** in 680.4 s, golden master
+**`0x5EF1EDDAFA52BAFA`** (engine v10) printed identically by `[DeterminismCheck]` and
+`[server-determinism]`, `-Scenario instructions -InstructionsStrict` **4/4**, `-Scenario pitch
+-PitchMatches 200 -PitchStrict` **20/20 in band, 25/25 checks**, `balance.ps1` **28/28** unchanged.
+**Phase 7 closed with the same run** (`[perf-lines]` 5.99 / 6.41). 🏁 **The eight-phase match-engine
+rework is COMPLETE.** The write-up below is the phase as it was WRITTEN, kept for its reasoning.
+
 
 **WRITTEN IN A CONTAINER THAT COULD NOT COMPILE OR MEASURE ANYTHING** — the Ubuntu archive answers
 403 through the agent proxy (no `dotnet-sdk-8.0`, no NUnit stub, no harness) and npm and pypi are

@@ -169,7 +169,9 @@ namespace Fts.Views
                 return;
 
             Rect fit = PitchGraphics.FitRect(r.width, r.height);
-            _tokenD = Mathf.Clamp(Mathf.Min(fit.width, fit.height) * 0.115f, 20f, 46f);
+            // A phone resolves ~970 points across (ROADMAP 14 measurement 1), so the desktop cap would
+            // leave the discs tiny there (task 14.4).
+            _tokenD = Mathf.Clamp(Mathf.Min(fit.width, fit.height) * 0.115f, 20f, Responsive.IsMobile ? 90f : 58f);
             float colW = _tokenD * 2.6f;
 
             for (int i = 0; i < _tokens.Count && i < _vms.Count; i++)
@@ -179,6 +181,8 @@ namespace Fts.Views
                 Vector2 c = PitchGraphics.ToPixel(fit, vm.X, vm.Y, _mirror);
 
                 col.style.width = colW;
+                if (col.childCount > 0 && col[col.childCount - 1] is Label caption)
+                    caption.style.maxWidth = colW;
                 col.style.left = c.x - colW * 0.5f;
                 col.style.top = c.y - _tokenD * 0.5f;
 
@@ -242,8 +246,9 @@ namespace Fts.Views
             if (!string.IsNullOrEmpty(vm.Name))
             {
                 var name = new Label(vm.Name);
+                name.AddToClassList("fts-token__name");
                 name.style.color = CaptionColor;
-                name.style.fontSize = 11;
+                if (!UiKit.StylesLoaded) name.style.fontSize = 11;
                 name.style.marginTop = 1;
                 name.style.unityTextAlign = TextAnchor.MiddleCenter;
                 name.style.whiteSpace = WhiteSpace.NoWrap;

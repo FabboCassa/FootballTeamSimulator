@@ -59,8 +59,15 @@ namespace Fts.Presenters
             _view.PressingCycleClicked += OnPressing;
             _view.TempoCycleClicked += OnTempo;
             _view.WidthCycleClicked += OnWidth;
+            _view.FormationSelected += OnFormationSelected;
+            _view.InstructionSelected += OnInstructionSelected;
             _view.SaveClicked += OnSave;
             _view.BackClicked += OnBack;
+
+            var formationLabels = new List<string>(Formations.All.Length);
+            for (int i = 0; i < Formations.All.Length; i++)
+                formationLabels.Add(FormationName((Formation)i));
+            _view.SetFormationOptions(formationLabels);
 
             _club = _career.GetUserClub();
             _working = Clone(_career.UserTactic) ?? TacticPlan.Neutral();
@@ -76,8 +83,31 @@ namespace Fts.Presenters
             _view.PressingCycleClicked -= OnPressing;
             _view.TempoCycleClicked -= OnTempo;
             _view.WidthCycleClicked -= OnWidth;
+            _view.FormationSelected -= OnFormationSelected;
+            _view.InstructionSelected -= OnInstructionSelected;
             _view.SaveClicked -= OnSave;
             _view.BackClicked -= OnBack;
+        }
+
+        private void OnFormationSelected(int index)
+        {
+            if (index < 0 || index >= Formations.All.Length) return;
+            _working.Formation = (Formation)index;
+            Refresh();
+        }
+
+        private void OnInstructionSelected(int axis, int value)
+        {
+            if (value < 0 || value > 2) return;
+            switch (axis)
+            {
+                case 0: _working.Mentality = (Mentality)value; break;
+                case 1: _working.Pressing = (Pressing)value; break;
+                case 2: _working.Tempo = (Tempo)value; break;
+                case 3: _working.Width = (Width)value; break;
+                default: return;
+            }
+            Refresh();
         }
 
         private void OnFormation()
@@ -135,16 +165,10 @@ namespace Fts.Presenters
 
         private void Refresh()
         {
-            _view.SetFormation(_loc.Tr("tactics.label.formation", FormationName(_working.Formation)));
-            _view.SetMentality(_loc.Tr("tactics.label.mentality",
-                _loc.Tr("tactics.mentality." + _working.Mentality.ToString().ToLowerInvariant())));
-            _view.SetPressing(_loc.Tr("tactics.label.pressing",
-                _loc.Tr("tactics.pressing." + _working.Pressing.ToString().ToLowerInvariant())));
-            _view.SetTempo(_loc.Tr("tactics.label.tempo",
-                _loc.Tr("tactics.tempo." + _working.Tempo.ToString().ToLowerInvariant())));
-            _view.SetWidth(_loc.Tr("tactics.label.width",
-                _loc.Tr("tactics.width." + _working.Width.ToString().ToLowerInvariant())));
-            _view.SetFamiliarity(_loc.Tr("tactics.familiarity", FamiliarityPercent(_working)));
+            _view.SetSelection((int)_working.Formation, (int)_working.Mentality, (int)_working.Pressing,
+                (int)_working.Tempo, (int)_working.Width);
+            int familiarity = FamiliarityPercent(_working);
+            _view.SetFamiliarity(_loc.Tr("tactics.familiarity", familiarity), familiarity);
 
             // Live shape preview: our best XI in the chosen formation (task 6.7).
             Lineup xi = LineupSelector.BestEleven(_club, _working.Formation);

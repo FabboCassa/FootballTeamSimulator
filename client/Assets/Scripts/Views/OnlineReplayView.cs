@@ -12,10 +12,10 @@ namespace Fts.Views
     /// </summary>
     public sealed class OnlineReplayView
     {
-        private static readonly Color BarColor = new Color(0.07f, 0.11f, 0.20f);
+        private static readonly Color BarColor = UiKit.SurfaceDeep;
         private static readonly Color ToastColor = new Color(0f, 0f, 0f, 0.75f);
-        private static readonly Color ActiveSpeed = new Color(0.20f, 0.55f, 0.30f);
-        private static readonly Color IdleSpeed = new Color(0.20f, 0.24f, 0.34f);
+        private static readonly Color ActiveSpeed = UiKit.Accent;
+        private static readonly Color IdleSpeed = UiKit.SurfaceAlt;
 
         public event Action<float> SpeedClicked;
         public event Action SkipClicked;
@@ -48,13 +48,14 @@ namespace Fts.Views
             hud.style.paddingTop = 10;
             hud.style.paddingBottom = 10;
             _score = new Label(string.Empty);
-            _score.style.fontSize = 22;
+            _score.AddToClassList("fts-hud__score");
+            UiKit.UseDisplayFont(_score);
             _score.style.unityFontStyleAndWeight = FontStyle.Bold;
             _score.style.color = Color.white;
             _score.style.marginRight = 18;
             hud.Add(_score);
             _clock = new Label("0'");
-            _clock.style.fontSize = 18;
+            _clock.AddToClassList("fts-t-strong");
             _clock.style.color = new Color(1f, 1f, 1f, 0.8f);
             _clock.style.minWidth = 44;
             hud.Add(_clock);
@@ -74,7 +75,7 @@ namespace Fts.Views
             toastRow.pickingMode = PickingMode.Ignore;
             _toast = new Label(string.Empty);
             _toast.style.color = Color.white;
-            _toast.style.fontSize = 16;
+            _toast.AddToClassList("fts-t-strong");
             _toast.style.unityFontStyleAndWeight = FontStyle.Bold;
             _toast.style.backgroundColor = ToastColor;
             _toast.style.paddingLeft = 12;
@@ -124,7 +125,7 @@ namespace Fts.Views
             var close = new Button(() => CloseClicked?.Invoke()) { text = tr("common.back") };
             Small(close);
             close.style.marginLeft = 16;
-            close.style.width = 140;
+            close.style.minWidth = 140;
             bar.Add(close);
 
             Root.Add(bar);
@@ -136,8 +137,11 @@ namespace Fts.Views
         public void SetActiveSpeed(float speed)
         {
             for (int i = 0; i < _speeds.Length; i++)
+            {
                 _speedButtons[i].style.backgroundColor =
                     Mathf.Approximately(_speeds[i], speed) ? ActiveSpeed : IdleSpeed;
+                _speedButtons[i].style.color = Mathf.Approximately(_speeds[i], speed) ? UiKit.TextOnAccent : UiKit.TextPrimary;
+            }
         }
 
         /// <summary>Adds a line to the running commentary beside the pitch (task 13.1).</summary>
@@ -162,9 +166,9 @@ namespace Fts.Views
 
         private static void Small(Button b)
         {
-            b.style.height = 44;
+            b.style.minHeight = 44;
             b.style.minWidth = 56;
-            b.style.fontSize = 18;
+            b.AddToClassList("fts-t-strong");
             b.style.marginLeft = 4;
             b.style.marginRight = 4;
             b.style.color = Color.white;

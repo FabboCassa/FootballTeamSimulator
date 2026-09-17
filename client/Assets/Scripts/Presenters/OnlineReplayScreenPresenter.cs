@@ -26,8 +26,8 @@ namespace Fts.Presenters
         private readonly SeasonReplayTarget _target;
         private readonly OnlineReplayView _view;
 
-        private static readonly Color HomeColor = UiKit.Accent;
-        private static readonly Color AwayColor = UiKit.Danger;
+        private static readonly Color HomeColor = PitchGraphics.KitHome; // not the UI accent (task 14.7)
+        private static readonly Color AwayColor = PitchGraphics.KitAway; // not the danger token (task 14.7)
 
         private MatchRenderer _renderer;
         private int _homeClubId;
@@ -96,6 +96,11 @@ namespace Fts.Presenters
             UpdateScore();
 
             _renderer = new MatchRenderer(report, HomeColor, AwayColor);
+
+            // A stored replay is watched alone and follows no shared clock, so it gets the
+            // director: ~5 real minutes at 1x with the strikes at real time (MatchRenderer.SetPacing).
+            _renderer.SetPacing(MatchRenderer.TargetSecondsAt1x, director: true);
+
             _renderer.MinuteChanged += OnMinuteChanged;
             _renderer.EventReached += OnEventReached;
             _renderer.Finished += OnFinished;

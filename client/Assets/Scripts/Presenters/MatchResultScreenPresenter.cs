@@ -57,8 +57,8 @@ namespace Fts.Presenters
             int homeId = outcome.Fixture.HomeClubId;
             int awayId = outcome.Fixture.AwayClubId;
             _view.SetCrests(
-                Crests.Badge(_identity.Visual(homeId), 40f, ClubShort(homeId), UiKit.Background),
-                Crests.Badge(_identity.Visual(awayId), 40f, ClubShort(awayId), UiKit.Background));
+                Crests.Badge(_identity.Visual(homeId), Responsive.IsMobile ? 150f : 88f, ClubShort(homeId), UiKit.SurfaceRaised),
+                Crests.Badge(_identity.Visual(awayId), Responsive.IsMobile ? 150f : 88f, ClubShort(awayId), UiKit.SurfaceRaised));
 
             var rows = new List<MatchEventRowVm>();
             foreach (MatchEvent e in outcome.Report.Events)
