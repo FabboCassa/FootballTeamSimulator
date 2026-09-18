@@ -551,10 +551,10 @@
         public int ContractExpiringFloorPermille { get; set; } = 350;
 
         // --- League level (top-flight players priced higher) ---
-        /// <summary>Value discount per division below the top flight, in 1/1000 (150 = −15% per division down).</summary>
-        public int LeagueLevelDiscountPermille { get; set; } = 150;
-        /// <summary>Floor on the league multiplier, in 1/1000 (400 = the lowest divisions still retain 40% of top-flight pricing).</summary>
-        public int LeagueLevelFloorPermille { get; set; } = 400;
+        // Removed the standalone division-only discount (task: player market value by league, R8):
+        // ValuationModel now reuses FinanceModel.NationDivisionMultiplierPermille (FinanceBalance's
+        // NationWealth*/DivisionWealth* tunables) so a player's league discount is nation-aware and
+        // always agrees with his club's income discount, instead of duplicating the curve here.
 
         // --- Guardrails (no negative/absurd prices — the 5.1 acceptance) ---
         /// <summary>Hard floor: every player is worth at least this much (keeps prices positive even for the weakest).</summary>
