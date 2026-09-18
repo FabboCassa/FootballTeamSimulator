@@ -25,8 +25,17 @@ namespace Sim.Core.Domain
         public long SeasonPrizeIncome { get; set; }
         public long SeasonWageExpense { get; set; }
 
+        /// <summary>
+        /// Estimated revenue booked for a DATA-ONLY club (task: estimated finances, R6): a data-only
+        /// club has no fixtures and no table, so it never earns a real gate or prize (those stay zero);
+        /// <see cref="Market.FinanceProgressor.AccrueDataOnlyWeek"/> instead pays it a weekly share of
+        /// <see cref="Market.FinanceModel.EstimatedAnnualRevenue"/> into this bucket. Zero for every
+        /// playable/background club, which only ever books gate/sponsor/prize.
+        /// </summary>
+        public long SeasonEstimatedIncome { get; set; }
+
         /// <summary>Total income booked this season.</summary>
-        public long SeasonIncome => SeasonGateIncome + SeasonSponsorIncome + SeasonPrizeIncome;
+        public long SeasonIncome => SeasonGateIncome + SeasonSponsorIncome + SeasonPrizeIncome + SeasonEstimatedIncome;
 
         /// <summary>Total expenses booked this season.</summary>
         public long SeasonExpense => SeasonWageExpense;
@@ -41,6 +50,7 @@ namespace Sim.Core.Domain
             SeasonSponsorIncome = 0;
             SeasonPrizeIncome = 0;
             SeasonWageExpense = 0;
+            SeasonEstimatedIncome = 0;
         }
     }
 }
