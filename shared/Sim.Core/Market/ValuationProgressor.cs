@@ -7,8 +7,9 @@ namespace Sim.Core.Market
     /// <summary>
     /// Re-prices a whole world (task 5.1, the "periodic re-pricing" of ARCHITECTURE.md §4.7):
     /// walks every league and writes each player's <see cref="Player.MarketValue"/> via
-    /// <see cref="ValuationModel"/>, using that league's <see cref="League.Division"/> as the
-    /// price level (lower divisions discount the fee).
+    /// <see cref="ValuationModel"/>, using that league's <see cref="League.Division"/> AND
+    /// <see cref="League.EconomicReputation"/> as the price level (task: player market value by
+    /// league, R8) — lower divisions and poorer nations discount the fee.
     ///
     /// Pure and deterministic, no RNG and order-independent — valuation is a stable function
     /// of player state, so the cached values never depend on iteration order or any seed.
@@ -32,13 +33,19 @@ namespace Sim.Core.Market
                 Reprice(league);
         }
 
-        /// <summary>Re-prices every player in one league at its division level.</summary>
+        /// <summary>
+        /// Re-prices every player in one league at its division level and nation economic
+        /// reputation (task: player market value by league, R8) — <see cref="League.EconomicReputation"/>
+        /// is denormalised from <see cref="Domain.Nation.EconomicReputation"/> at generation time, so
+        /// no separate nation/World lookup is needed here.
+        /// </summary>
         public void Reprice(League league)
         {
             int level = league.Division;
+            int economicReputation = league.EconomicReputation;
             foreach (Club club in league.Clubs)
                 foreach (Player player in club.Squad.Players)
-                    ValuationModel.Reprice(player, level, _cfg);
+                    ValuationModel.Reprice(player, level, economicReputation, _cfg);
         }
     }
 }

@@ -179,6 +179,88 @@ namespace Sim.Core.Tests.Market
                 "The same player is priced lower in a lower division");
         }
 
+        // ----------------------------------------------------------- R8: league multiplier (nation x division)
+
+        [Test]
+        public void IdenticalPlayer_WorthsMoreInEngland_ThanInScotland_SameTier()
+        {
+            // England econ-rep 100 (no discount) vs Scotland 65 (NationDatabase override) — same
+            // division level 1, only the nation's economic reputation differs.
+            Player p = Uniform(PositionRole.Striker, 80, 26, 80, seasons: 3, form: 50);
+            long england = ValuationModel.Value(p, leagueLevel: 1, economicReputation: 100, Cfg);
+            long scotland = ValuationModel.Value(p, leagueLevel: 1, economicReputation: 65, Cfg);
+
+            TestContext.Out.WriteLine($"[valuation-nation] ENG tier1 = {england:N0} vs SCO tier1 = {scotland:N0}");
+            Assert.That(england, Is.GreaterThan(scotland),
+                "The same player is worth more in England tier 1 than in Scotland tier 1");
+        }
+
+        [Test]
+        public void IdenticalPlayer_WorthsMoreInItalyTier1_ThanItalyTier2()
+        {
+            // Same nation (Italy econ-rep 87), only the division changes.
+            Player p = Uniform(PositionRole.Striker, 80, 26, 80, seasons: 3, form: 50);
+            long tier1 = ValuationModel.Value(p, leagueLevel: 1, economicReputation: 87, Cfg);
+            long tier2 = ValuationModel.Value(p, leagueLevel: 2, economicReputation: 87, Cfg);
+
+            TestContext.Out.WriteLine($"[valuation-division] ITA tier1 = {tier1:N0} vs ITA tier2 = {tier2:N0}");
+            Assert.That(tier1, Is.GreaterThan(tier2),
+                "The same player is worth more in Italy tier 1 than in Italy tier 2");
+        }
+
+        [Test]
+        public void LeagueMultiplier_MatchesFinanceModel_NationDivisionHelper()
+        {
+            // The league multiplier reuses FinanceModel's nation x division permille math (#1)
+            // rather than duplicating it: a higher-economicReputation nation at the same tier is
+            // never priced below a lower-economicReputation one.
+            Player p = Uniform(PositionRole.CentreBack, 60, 27, 60, seasons: 3, form: 50);
+            long lowRep = ValuationModel.Value(p, leagueLevel: 2, economicReputation: 40, Cfg);
+            long highRep = ValuationModel.Value(p, leagueLevel: 2, economicReputation: 90, Cfg);
+
+            int lowMult = FinanceModel.NationDivisionMultiplierPermille(40, 2, Cfg.Finance);
+            int highMult = FinanceModel.NationDivisionMultiplierPermille(90, 2, Cfg.Finance);
+            Assert.That(highMult, Is.GreaterThan(lowMult), "sanity: the finance helper itself must be monotone");
+            Assert.That(highRep, Is.GreaterThanOrEqualTo(lowRep),
+                "A higher nation economic reputation must never price a player lower, at the same division");
+        }
+
+        [Test]
+        public void Value_StaysWithinMinMax_Across10kPlayers_AcrossNationsAndDivisions()
+        {
+            // Sweeps a spread of economic reputations (the real atlas range, 48-100) and divisions
+            // 1-5 across ~10k generated players — the R8 acceptance's "distribution printed".
+            int[] economicReputations = { 100, 92, 87, 72, 65, 52 };
+            var values = new List<long>(11_000);
+
+            int i = 0;
+            while (values.Count < 10_000)
+            {
+                int division = (i % 5) + 1;
+                int economicReputation = economicReputations[i % economicReputations.Length];
+                var options = new LeagueGenerationOptions { Division = division };
+                League league = new LeagueGenerator(options).Generate(new Pcg32((ulong)(5_020_000 + i)));
+
+                foreach (Club club in league.Clubs)
+                    foreach (Player p in club.Squad.Players)
+                        values.Add(ValuationModel.Value(p, division, economicReputation, Cfg));
+
+                i++;
+            }
+
+            values.Sort();
+            TestContext.Out.WriteLine(
+                $"[valuation-league-10k] {values.Count} players across nations/divisions — " +
+                $"min {values[0]:N0}, p50 {Percentile(values, 50):N0}, p90 {Percentile(values, 90):N0}, " +
+                $"max {values[^1]:N0}");
+
+            foreach (long v in values)
+            {
+                Assert.That(v, Is.GreaterThanOrEqualTo(M.MinValue), "Every price respects the floor");
+                Assert.That(v, Is.LessThanOrEqualTo(M.MaxValue), "No price may exceed the absurdity cap");
+            }
+        }
+
         // ----------------------------------------------------------- form: present but small
 
         [Test]
@@ -238,6 +320,44 @@ namespace Sim.Core.Tests.Market
                             Is.EqualTo(a.Clubs[c].Squad.Players[i].MarketValue),
                             "Whole-world re-pricing is deterministic");
             }
+        }
+
+        [Test]
+        public void Progressor_UsesLeagueEconomicReputation_NotJustDivision()
+        {
+            // Two identical-squad leagues at the same division but different EconomicReputation
+            // (denormalised from Nation onto League by task #1) must reprice differently.
+            League rich = new LeagueGenerator(new LeagueGenerationOptions { Division = 1 })
+                .Generate(new Pcg32(5_030_001));
+            League poor = new LeagueGenerator(new LeagueGenerationOptions { Division = 1 })
+                .Generate(new Pcg32(5_030_001)); // same seed -> identical squads
+            rich.EconomicReputation = 100;
+            poor.EconomicReputation = 60;
+
+            new ValuationProgressor(Cfg).Reprice(rich);
+            new ValuationProgressor(Cfg).Reprice(poor);
+
+            for (int c = 0; c < rich.Clubs.Count; c++)
+                for (int i = 0; i < rich.Clubs[c].Squad.Players.Count; i++)
+                {
+                    long richValue = rich.Clubs[c].Squad.Players[i].MarketValue;
+                    long poorValue = poor.Clubs[c].Squad.Players[i].MarketValue;
+                    Assert.That(richValue, Is.GreaterThanOrEqualTo(poorValue),
+                        "The richer nation's league must never reprice a player lower");
+                }
+
+            // At least one player must strictly differ, or the nation multiplier is a no-op.
+            bool anyDifference = false;
+            for (int c = 0; c < rich.Clubs.Count && !anyDifference; c++)
+                for (int i = 0; i < rich.Clubs[c].Squad.Players.Count; i++)
+                    if (rich.Clubs[c].Squad.Players[i].MarketValue != poor.Clubs[c].Squad.Players[i].MarketValue)
+                    {
+                        anyDifference = true;
+                        break;
+                    }
+
+            Assert.That(anyDifference, Is.True,
+                "Reprice must pick up League.EconomicReputation, not just Division");
         }
 
         // ----------------------------------------------------------- helpers

@@ -405,10 +405,11 @@
         /// <summary>Ticket price per attendee in the top flight (at full nation × division wealth). NOTE this
         /// is not a real ticket price: gate, sponsorship and prize money together stand in for a club's whole
         /// revenue (broadcast included). LOWERED again in the R4 spread-band recalibration (task: club
-        /// stature, R4 attempt 3) alongside a wider/steeper <see cref="FinanceModel.StatureMultiplierPermille"/>
-        /// ramp (see StatureMultiplierFloorPermille/CeilingPermille/Exponent below): the wider ramp needed to
-        /// make the richest/poorest-of-mean bands hold reliably across seeds pushes the AVERAGE multiplier up
-        /// well above 1x across a generated league, so this and SponsorWeeklyTopFlight/SponsorWeeklyPerStadiumTier
+        /// stature) alongside a wider/steeper <see cref="FinanceModel.StatureMultiplierPermille"/>
+        /// ramp (see StatureMultiplierFloorPermille/CeilingPermille/Exponent below) AND a widened generated
+        /// facility-tier spread (see WorldGenerator/LeagueGenerator): the wider ramp needed to make the
+        /// richest/poorest-of-mean bands hold reliably across seeds pushes the AVERAGE multiplier up well
+        /// above 1x across a generated league, so this and SponsorWeeklyTopFlight/SponsorWeeklyPerStadiumTier
         /// were all scaled back down together so an England-wealth tier-1 club still lands in the real
         /// ~340-460M band once the wider stature multiplier is folded in.</summary>
         public long TicketPriceTopFlight { get; set; } = 43;
@@ -581,10 +582,10 @@
         public int ContractExpiringFloorPermille { get; set; } = 350;
 
         // --- League level (top-flight players priced higher) ---
-        /// <summary>Value discount per division below the top flight, in 1/1000 (150 = −15% per division down).</summary>
-        public int LeagueLevelDiscountPermille { get; set; } = 150;
-        /// <summary>Floor on the league multiplier, in 1/1000 (400 = the lowest divisions still retain 40% of top-flight pricing).</summary>
-        public int LeagueLevelFloorPermille { get; set; } = 400;
+        // Removed the standalone division-only discount (task: player market value by league, R8):
+        // ValuationModel now reuses FinanceModel.NationDivisionMultiplierPermille (FinanceBalance's
+        // NationWealth*/DivisionWealth* tunables) so a player's league discount is nation-aware and
+        // always agrees with his club's income discount, instead of duplicating the curve here.
 
         // --- Guardrails (no negative/absurd prices — the 5.1 acceptance) ---
         /// <summary>Hard floor: every player is worth at least this much (keeps prices positive even for the weakest).</summary>

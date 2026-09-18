@@ -32,14 +32,35 @@ namespace Sim.Core.Market
     /// </summary>
     public static class ValuationModel
     {
-        /// <summary>Transfer value of a player in the top division (level 1).</summary>
-        public static long Value(Player player, BalanceConfig cfg) => Value(player, leagueLevel: 1, cfg);
+        /// <summary>
+        /// Nation economic reputation used by the overloads that don't take one: a top-tier nation
+        /// (no discount) — the pre-R8 baseline, so every pre-existing caller keeps pricing exactly
+        /// as before until it is wired to a real <see cref="League.EconomicReputation"/>.
+        /// </summary>
+        private const int DefaultEconomicReputation = 100;
+
+        /// <summary>Transfer value of a player in the top division (level 1) of a top-tier nation.</summary>
+        public static long Value(Player player, BalanceConfig cfg) =>
+            Value(player, leagueLevel: 1, DefaultEconomicReputation, cfg);
 
         /// <summary>
         /// Transfer value of a player in game-currency units. <paramref name="leagueLevel"/>
         /// is the division he plays in (1 = top flight); lower divisions discount the fee.
         /// </summary>
-        public static long Value(Player player, int leagueLevel, BalanceConfig cfg)
+        public static long Value(Player player, int leagueLevel, BalanceConfig cfg) =>
+            Value(player, leagueLevel, DefaultEconomicReputation, cfg);
+
+        /// <summary>
+        /// Transfer value of a player in game-currency units (task: player market value by league,
+        /// R8). <paramref name="leagueLevel"/> is the division he plays in (1 = top flight);
+        /// <paramref name="economicReputation"/> is that division's nation (1..100, see
+        /// <see cref="League.EconomicReputation"/>). Both discount the fee through the SAME
+        /// nation × division curve club income uses (<see cref="FinanceModel.NationDivisionMultiplierPermille"/>)
+        /// instead of a duplicated division-only one — so a player is worth more in a richer
+        /// nation's top flight than a poorer nation's, and more in a nation's own top flight than
+        /// its second tier.
+        /// </summary>
+        public static long Value(Player player, int leagueLevel, int economicReputation, BalanceConfig cfg)
         {
             if (player == null) throw new System.ArgumentNullException(nameof(player));
             if (cfg == null) throw new System.ArgumentNullException(nameof(cfg));
@@ -58,7 +79,7 @@ namespace Sim.Core.Market
             value = value * AgeMultiplierPermille(player.Age, m) / 1000;
             value = value * FormMultiplierPermille(player.Condition.Form, m) / 1000;
             value = value * ContractMultiplierPermille(player.Contract.SeasonsRemaining, m) / 1000;
-            value = value * LeagueMultiplierPermille(leagueLevel, m) / 1000;
+            value = value * LeagueMultiplierPermille(leagueLevel, economicReputation, cfg.Finance) / 1000;
 
             value = Round(value, m.ValueRoundingUnit);
 
@@ -67,9 +88,13 @@ namespace Sim.Core.Market
             return value;
         }
 
-        /// <summary>Computes the value and writes it into <see cref="Player.MarketValue"/>.</summary>
+        /// <summary>Computes the value (top-tier-nation baseline) and writes it into <see cref="Player.MarketValue"/>.</summary>
         public static void Reprice(Player player, int leagueLevel, BalanceConfig cfg) =>
-            player.MarketValue = Value(player, leagueLevel, cfg);
+            player.MarketValue = Value(player, leagueLevel, DefaultEconomicReputation, cfg);
+
+        /// <summary>Computes the value (nation + division aware, R8) and writes it into <see cref="Player.MarketValue"/>.</summary>
+        public static void Reprice(Player player, int leagueLevel, int economicReputation, BalanceConfig cfg) =>
+            player.MarketValue = Value(player, leagueLevel, economicReputation, cfg);
 
         // ----------------------------------------------------------------- internals
 
@@ -130,12 +155,15 @@ namespace Sim.Core.Market
             return floorP + s * (1000 - floorP) / full;
         }
 
-        /// <summary>League level (1/1000): top flight = full value, each lower division discounts, floored.</summary>
-        private static int LeagueMultiplierPermille(int leagueLevel, MarketBalance m)
+        /// <summary>
+        /// League level (1/1000): reuses <see cref="FinanceModel.NationDivisionMultiplierPermille"/>
+        /// (task #1) rather than a separate division-only curve, so a player's league discount is
+        /// nation-aware for free and always agrees with his club's income discount.
+        /// </summary>
+        private static int LeagueMultiplierPermille(int leagueLevel, int economicReputation, FinanceBalance f)
         {
             int level = leagueLevel < 1 ? 1 : leagueLevel;
-            int mult = 1000 - (level - 1) * m.LeagueLevelDiscountPermille;
-            return mult < m.LeagueLevelFloorPermille ? m.LeagueLevelFloorPermille : mult;
+            return FinanceModel.NationDivisionMultiplierPermille(economicReputation, level, f);
         }
 
         /// <summary>Deterministic integer power (no Math.Pow). Exponent ≥ 0.</summary>
