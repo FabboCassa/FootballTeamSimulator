@@ -380,7 +380,7 @@
         /// <summary>Capacity of a tier-1 stadium (seats).</summary>
         public int StadiumBaseCapacity { get; set; } = 12_000;
         /// <summary>Extra capacity per stadium tier above 1.</summary>
-        public int StadiumCapacityPerTier { get; set; } = 13_000;
+        public int StadiumCapacityPerTier { get; set; } = 8_044;
 
         // --- Scouting → scout level (task 5.4) ---
         // Scouting tier maps directly to the effective scout level (tier = level), clamped to
@@ -397,6 +397,14 @@
         public int StadiumTierStrengthFloor { get; set; } = 50;
         /// <summary>Club-strength points per extra suggested starting stadium tier (strength 50→tier 1, 70→tier 5).</summary>
         public int StrengthPerStadiumTier { get; set; } = 5;
+        /// <summary>
+        /// Max tiers <see cref="Domain.Club.Stature"/> can DEMOTE a club that strength alone already
+        /// puts at the facility cap, at stature 0 (task: club stature, R4; see
+        /// <see cref="Market.FacilityEffects.SuggestedStadiumTier(int,int,FinanceBalance)"/> for why this
+        /// only ever demotes an already-capped club rather than a symmetric offset that would also
+        /// promote weak-division clubs and erode the division-level revenue ratio, R3).
+        /// </summary>
+        public int StadiumTierStatureSpreadTiers { get; set; } = 3;
 
         // ===================== Finances =====================
         // --- Gate receipts (per home match) ---
@@ -404,22 +412,19 @@
         public int AverageAttendancePercent { get; set; } = 85;
         /// <summary>Ticket price per attendee in the top flight (at full nation × division wealth). NOTE this
         /// is not a real ticket price: gate, sponsorship and prize money together stand in for a club's whole
-        /// revenue (broadcast included). LOWERED again in the R4 spread-band recalibration (task: club
-        /// stature) alongside a wider/steeper <see cref="FinanceModel.StatureMultiplierPermille"/>
-        /// ramp (see StatureMultiplierFloorPermille/CeilingPermille/Exponent below) AND a widened generated
-        /// facility-tier spread (see WorldGenerator/LeagueGenerator): the wider ramp needed to make the
-        /// richest/poorest-of-mean bands hold reliably across seeds pushes the AVERAGE multiplier up well
-        /// above 1x across a generated league, so this and SponsorWeeklyTopFlight/SponsorWeeklyPerStadiumTier
-        /// were all scaled back down together so an England-wealth tier-1 club still lands in the real
-        /// ~340-460M band once the wider stature multiplier is folded in.</summary>
-        public long TicketPriceTopFlight { get; set; } = 43;
+        /// revenue (broadcast included). Re-derived in the R4 spread-band recalibration (task: club stature)
+        /// alongside <see cref="StadiumCapacityPerTier"/>/<see cref="SponsorWeeklyPerStadiumTier"/> and the
+        /// <see cref="FinanceModel.StatureMultiplierPermille"/> floor/ceiling/exponent below, so an
+        /// England-wealth tier-1 club still lands in the real ~340-460M band once the R4 stature multiplier
+        /// and stature-driven facility-tier split (<see cref="StadiumTierStatureSpreadTiers"/>) are folded in.</summary>
+        public long TicketPriceTopFlight { get; set; } = 66;
 
         // --- Sponsors (per week) ---
         /// <summary>Weekly sponsor income for a top-flight, tier-1-stadium club (at full nation × division wealth,
         /// before the stature multiplier — see TicketPriceTopFlight).</summary>
-        public long SponsorWeeklyTopFlight { get; set; } = 212_000;
+        public long SponsorWeeklyTopFlight { get; set; } = 340_000;
         /// <summary>Extra weekly sponsor income per stadium tier above 1 (bigger ground/brand → much bigger commercial deals). Scales strongly so big clubs' commercial income tracks their size — as in reality, where the elite earn most from commercial/broadcast — bringing their wage-to-revenue ratio down to the realistic ~63-68% (real Premier League average is ~63%) and keeping them clearly profitable (so a top-club save has a meaty transfer budget).</summary>
-        public long SponsorWeeklyPerStadiumTier { get; set; } = 254_000;
+        public long SponsorWeeklyPerStadiumTier { get; set; } = 226_666;
 
         // --- Prize money (per season, by final league position) ---
         /// <summary>Prize for finishing 1st in the top flight, at full nation × division wealth (linear down to the wooden-spoon prize for last).</summary>
@@ -444,8 +449,12 @@
         /// a lower division's naturally weaker (and so smaller-stadium) clubs add on top — a lower tier isn't
         /// just discounted, its clubs are poorer draws too, so the REALISED tier2/tier1 revenue ratio ends up
         /// well under this raw figure. Calibrated empirically (via the harness/tests, not derived) so the
-        /// realised ratio lands inside the R3 bands (28-42% / 9-15%) once that extra compression is folded in.</summary>
-        public int DivisionWealthDecayPermille { get; set; } = 690;
+        /// realised ratio lands inside the R3 bands (28-42% / 9-15%) once that extra compression is folded in.
+        /// LOWERED in the R4 recalibration (task: club stature): <see cref="StadiumTierStatureSpreadTiers"/>
+        /// only demotes clubs strength already caps at the top tier, so it barely touches lower divisions
+        /// (which rarely hit the cap on strength alone) — this constant needed to shoulder more of R3's
+        /// compression than before to keep the realised ratio in band.</summary>
+        public int DivisionWealthDecayPermille { get; set; } = 540;
         /// <summary>Floor on the division wealth multiplier, in 1/1000, so a deep pyramid never earns nothing.</summary>
         public int DivisionWealthFloorPermille { get; set; } = 50;
 
@@ -494,26 +503,23 @@
         // A multiplier (FinanceModel.StatureMultiplierPermille) applied INSIDE GateReceipts and
         // WeeklySponsor on top of nation x division wealth — the same two functions AccrueMatchday
         // / AccrueWeek already book into club.Finances, so stature drives revenue the game actually
-        // pays, not a separate lump sum. Calibrated against the REAL strength-driven facility-tier
-        // distribution a generated league produces (best-XI overall clusters many clubs at the top
-        // facility tier well before stature is involved) so the richest/poorest bands land against
-        // actual generated revenue, not an idealised even tier spread.
-        /// <summary>Gate/sponsor multiplier (1/1000) at stature 0 — the poorest-of-mean floor (R4). RAISED (from
-        /// 2000) in the attempt-3 recalibration: the previous floor left the poorest club's ratio hugging the
-        /// 0.3 band edge (measured 0.27-0.40 across seeds, undershooting in most of them, per the ClubStatureTests
-        /// per-seed table) because a low-floor multiplier crushes a weak-stature club's revenue whenever it also
-        /// draws a below-average facility tier. A higher floor gives the poorest club real headroom above 0.3.</summary>
-        public int StatureMultiplierFloorPermille { get; set; } = 3000;
-        /// <summary>Gate/sponsor multiplier (1/1000) at stature 100 — the richest-of-mean ceiling (R4). RAISED
-        /// (from 7000) alongside a steeper Exponent so the top club's revenue reliably clears the 2.4 floor with
-        /// headroom (previously it undershot in half the probed seeds).</summary>
-        public int StatureMultiplierCeilingPermille { get; set; } = 13000;
-        /// <summary>Convexity of the stature -> gate/sponsor multiplier ramp (same shape as NationWealthExponent).
-        /// RAISED (from 4) so the ramp stays flat near the floor for most of the league (concentrating the wide
-        /// floor-to-ceiling range on the very top of the stature ladder) - this is what lets the floor be raised
-        /// (helping the poorest club) without dragging the whole league's average multiplier up so far that the
-        /// richest club's ratio to the mean collapses.</summary>
-        public int StatureMultiplierExponent { get; set; } = 6;
+        // pays, not a separate lump sum. Works ALONGSIDE the facility-tier cap-split
+        // (StadiumTierStatureSpreadTiers, FacilityEffects.SuggestedStadiumTier) that widens the
+        // generated tier distribution first; the multiplier then differentiates WITHIN that widened
+        // spread by each club's own stature. Calibrated against REAL generated 16-club tier-1 leagues
+        // (FinanceProgressor.SeedWorld -> AccrueMatchday/AccrueWeek/AwardPrizeMoney over a full season,
+        // read from club.Finances.SeasonIncome) across an 8-seed sample so the richest/poorest bands
+        // hold with margin on every seed, not just a lucky one.
+        /// <summary>Gate/sponsor multiplier (1/1000) at stature 0 — the poorest-of-mean floor (R4).</summary>
+        public int StatureMultiplierFloorPermille { get; set; } = 2800;
+        /// <summary>Gate/sponsor multiplier (1/1000) at stature 100 — the richest-of-mean ceiling (R4).</summary>
+        public int StatureMultiplierCeilingPermille { get; set; } = 11500;
+        /// <summary>Convexity of the stature -> gate/sponsor multiplier ramp (same shape as NationWealthExponent,
+        /// but see FinanceModel.StatureMultiplierPermille for why it is computed by an iterative divide-back-down
+        /// rather than IntPow(s, exponent) * 1000 / IntPow(100, exponent), which overflows long at this exponent).
+        /// High enough that the ramp stays near the floor for most of the league, concentrating the
+        /// floor-to-ceiling range on the very top of the stature ladder.</summary>
+        public int StatureMultiplierExponent { get; set; } = 8;
     }
 
     /// <summary>
@@ -949,7 +955,7 @@
         /// Random jitter (+/-) applied to a club's rank-derived stature (task: club stature, R4)
         /// so it is correlated with strength (same rank order) but not equal to it.
         /// </summary>
-        public int StatureNoisePoints { get; set; } = 12;
+        public int StatureNoisePoints { get; set; } = 3;
 
         // --- Player skills ---
         /// <summary>Random jitter (+/-) applied to each player's target overall around the club baseline.</summary>

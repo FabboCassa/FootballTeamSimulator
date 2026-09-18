@@ -88,6 +88,31 @@ namespace Sim.Core.Market
             return Clamp(tier, cfg.MaxFacilityTier);
         }
 
+        /// <summary>
+        /// Starting stadium tier at generation (task: club stature, R4) — the strength-derived
+        /// suggestion above, but only ever DEMOTED, and only for a club that strength alone already
+        /// puts at the facility cap. Best-XI strength clusters many clubs at the max tier in a strong
+        /// league (e.g. 9 of 16 in a real tier-1 league) well before stature is involved — that
+        /// clustering is exactly what compresses the R4 richest/poorest bands. Splitting that cluster by
+        /// RELATIVE stature (full cap only for the highest-stature members, demoted for the rest, up to
+        /// <see cref="FinanceBalance.StadiumTierStatureSpreadTiers"/> tiers at stature 0) widens it
+        /// without ever promoting a club past what its own strength earned, and — critically — without
+        /// touching clubs strength alone did NOT already cap: a weak division's clubs rarely hit the
+        /// facility cap on strength alone (strength IS division-discounted), so this leaves the
+        /// division-level compression (R3) that best-XI strength alone provides intact, unlike a
+        /// symmetric blend/offset that would also promote weak-division clubs and erode it.
+        /// </summary>
+        public static int SuggestedStadiumTier(int clubStrength, int stature, FinanceBalance cfg)
+        {
+            int strengthTier = SuggestedStadiumTier(clubStrength, cfg);
+            if (strengthTier < cfg.MaxFacilityTier) return strengthTier;
+
+            int s = stature < 0 ? 0 : stature > 100 ? 100 : stature;
+            int demote = (100 - s) * cfg.StadiumTierStatureSpreadTiers / 100;
+
+            return Clamp(strengthTier - demote, cfg.MaxFacilityTier);
+        }
+
         private static int Clamp(int tier, int max)
         {
             if (tier < 1) return 1;

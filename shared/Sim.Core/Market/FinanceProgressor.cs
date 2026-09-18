@@ -42,7 +42,7 @@ namespace Sim.Core.Market
                 foreach (Club club in league.Clubs)
                 {
                     int strength = BudgetModel.ClubStrength(club);
-                    club.Facilities.Stadium = FacilityEffects.SuggestedStadiumTier(strength, _cfg.Finance);
+                    club.Facilities.Stadium = FacilityEffects.SuggestedStadiumTier(strength, club.Stature, _cfg.Finance);
                     club.Finances.Balance = FinanceModel.StartingBalance(league.Division, _cfg);
                     club.Finances.ResetSeasonCounters();
                 }

@@ -210,9 +210,15 @@ namespace Sim.Core.Market
             if (s < 0) s = 0;
             if (s > 100) s = 100;
 
-            // Permille ramp first (bounded 0-1000), THEN spread between floor and ceiling - never
-            // Ceiling * IntPow(s, exponent) directly, which overflows long at high exponents.
-            long rampPermille = IntPow(s, f.StatureMultiplierExponent) * 1000 / IntPow(100, f.StatureMultiplierExponent);
+            // Permille ramp (s/100)^exponent, computed by dividing back down to permille scale on
+            // EVERY multiply step (never IntPow(s, exponent) * 1000 / IntPow(100, exponent) - that
+            // overflows long at the double-digit exponents needed to keep the ramp near-flat for
+            // most of a real generated league and only pull away right at the top few stature
+            // points, which is what the R4 richest/poorest bands need on real generated data).
+            long rampPermille = 1000;
+            for (int i = 0; i < f.StatureMultiplierExponent; i++)
+                rampPermille = rampPermille * s / 100;
+
             long mult = f.StatureMultiplierFloorPermille
                         + (f.StatureMultiplierCeilingPermille - f.StatureMultiplierFloorPermille) * rampPermille / 1000;
             return (int)mult;
