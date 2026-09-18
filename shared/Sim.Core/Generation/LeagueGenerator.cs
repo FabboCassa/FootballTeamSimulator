@@ -11,6 +11,9 @@ namespace Sim.Core.Generation
     /// </summary>
     public sealed class LeagueGenerator
     {
+        /// <summary>Sequence constant for the stature sub-stream (task: club stature, R4) - arbitrary, just distinct from Pcg32's own default (54).</summary>
+        private const ulong StatureSequence = 8_000UL;
+
         private readonly LeagueGenerationOptions _options;
         private readonly GenerationBalance _cfg;
 
@@ -29,6 +32,11 @@ namespace Sim.Core.Generation
                 Division = _options.Division
             };
 
+            // Stature rides its own sub-stream, seeded from rng's CURRENT state (a pure read, no
+            // draw) so it never perturbs the club/player draws below - existing golden/determinism
+            // tests stay byte-identical.
+            var statureRng = new Pcg32(rng.GetState().State, StatureSequence);
+
             var playerGenerator = new PlayerGenerator(_cfg);
             string[] clubNames = BuildUniqueClubNames(rng);
             int nextPlayerId = _options.FirstPlayerId;
@@ -40,6 +48,7 @@ namespace Sim.Core.Generation
 
                 var club = new Club
                 {
+                    Stature = StatureModel.Assign(c, _options.ClubCount, statureRng, _cfg),
                     Id = _options.FirstClubId + c,
                     Name = clubNames[c],
                     ShortName = MakeShortName(clubNames[c]),

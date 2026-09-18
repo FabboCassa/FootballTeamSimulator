@@ -483,6 +483,21 @@
         public int BoardGrantDivisionFloorPermille { get; set; } = 250;
         /// <summary>Hard floor on a seeded transfer budget so even a skint club can do minimal business.</summary>
         public long MinTransferBudget { get; set; } = 1_000_000;
+
+        // --- Stature-driven commercial revenue (R4: intra-league wealth spread) ---
+        // A SEASON lump sum (booked by FinanceProgressor.AwardStatureRevenue, once per season,
+        // like PrizeMoney — not a per-week rate) added on top of gate/sponsor/prize: a flat
+        // baseline every club earns, rising along a convex curve to baseline + ceiling at stature
+        // 100 (see FinanceModel.StatureRevenue). Calibrated against the REAL strength-driven
+        // facility-tier distribution a generated league produces (best-XI overall clusters many
+        // clubs at the top facility tier well before stature is involved) so the richest/poorest
+        // bands land against actual generated revenue, not an idealised even tier spread.
+        /// <summary>Season commercial revenue every club earns at stature 0, at full nation x division wealth.</summary>
+        public long StatureRevenueBaseline { get; set; } = 150_000_000;
+        /// <summary>Extra season commercial revenue at stature 100 (on top of the baseline), at full nation x division wealth.</summary>
+        public long StatureRevenueCeiling { get; set; } = 1_400_000_000;
+        /// <summary>Convexity of the stature -> commercial revenue ramp (same shape as NationWealthExponent).</summary>
+        public int StatureRevenueExponent { get; set; } = 5;
     }
 
     /// <summary>
@@ -913,6 +928,12 @@
 
         /// <summary>How much weaker each lower division is (applied to top/bottom strength).</summary>
         public int DivisionStrengthStep { get; set; } = 14;
+
+        /// <summary>
+        /// Random jitter (+/-) applied to a club's rank-derived stature (task: club stature, R4)
+        /// so it is correlated with strength (same rank order) but not equal to it.
+        /// </summary>
+        public int StatureNoisePoints { get; set; } = 12;
 
         // --- Player skills ---
         /// <summary>Random jitter (+/-) applied to each player's target overall around the club baseline.</summary>

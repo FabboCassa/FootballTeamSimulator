@@ -55,5 +55,16 @@ namespace Sim.Core.Domain
         /// to a zero balance (the host seeds a starting balance at career creation), no save bump.
         /// </summary>
         public Finances Finances { get; set; } = new Finances();
+
+        /// <summary>
+        /// The club's persistent stature (0-100), task: club stature (R4). Assigned once at
+        /// generation (<see cref="Generation.StatureModel"/>) on a derived RNG sub-stream, so it
+        /// is correlated with the club's generated <see cref="Strength"/> (same rank order) but
+        /// not equal to it (independent noise) — two clubs of equal strength can end up with
+        /// different stature, and so different revenue (<see cref="Market.FinanceModel.StatureRevenue"/>).
+        /// Additive — defaults 0, so it rides existing Club serialization with no save bump; a
+        /// club with Stature 0 that predates this field simply earns no stature-driven revenue.
+        /// </summary>
+        public int Stature { get; set; }
     }
 }

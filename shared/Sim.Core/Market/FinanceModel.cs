@@ -181,6 +181,37 @@ namespace Sim.Core.Market
         public static int NationDivisionMultiplierPermille(int economicReputation, int tier, FinanceBalance f)
             => NationMultiplierPermille(economicReputation, f) * DivisionMultiplierPermille(tier, f) / 1000;
 
+        // ================= Club stature (R4: intra-league wealth spread) =================
+
+        /// <summary>
+        /// Season commercial/prestige revenue from a club's persistent <see cref="Domain.Club.Stature"/>
+        /// (task: club stature, R4) — a lump sum booked once per season by
+        /// <see cref="FinanceProgressor.AwardStatureRevenue"/>, like <see cref="PrizeMoney"/>. A flat
+        /// baseline every club earns (stature 0), rising along a convex curve
+        /// (stature/100)^<see cref="FinanceBalance.StatureRevenueExponent"/> to baseline + ceiling
+        /// at stature 100 — the SAME shape as <see cref="NationMultiplierPermille"/>, deliberately:
+        /// gate/sponsor/prize already scale with a club's strength-driven facility tier, which in
+        /// practice clusters many clubs at the same (capped) tier, so stature needs to differentiate
+        /// revenue across the WHOLE league on its own for the richest/poorest-of-mean bands (R4) to
+        /// land, not just nudge the very top. Scaled by the same nation × division wealth
+        /// multiplier as gate/sponsor/prize, so a poor nation's clubs never earn England-sized
+        /// commercial revenue purely from stature.
+        /// </summary>
+        public static long StatureRevenue(int stature, int leagueLevel, int economicReputation, BalanceConfig cfg)
+        {
+            FinanceBalance f = cfg.Finance;
+            int s = stature;
+            if (s < 0) s = 0;
+            if (s > 100) s = 100;
+
+            // Permille ramp first (bounded 0-1000), THEN multiplied by the ceiling - never
+            // Ceiling * IntPow(s, exponent) directly, which overflows long at high exponents.
+            long rampPermille = IntPow(s, f.StatureRevenueExponent) * 1000 / IntPow(100, f.StatureRevenueExponent);
+            long revenue = f.StatureRevenueBaseline + f.StatureRevenueCeiling * rampPermille / 1000;
+
+            return revenue * NationDivisionMultiplierPermille(economicReputation, leagueLevel, f) / 1000;
+        }
+
         /// <summary>Deterministic integer power (no Math.Pow). Exponent ≥ 0.</summary>
         private static long IntPow(long value, int exponent)
         {

@@ -29,6 +29,7 @@ namespace Sim.Core.Generation
         private const ulong SquadSequence = 9200UL;
         private const ulong NationalitySequence = 9300UL;
         private const ulong FixtureSequence = 9400UL;
+        private const ulong StatureSequence = 9500UL;
 
         private readonly WorldGenerationOptions _options;
         private readonly BalanceConfig _config;
@@ -182,6 +183,7 @@ namespace Sim.Core.Generation
 
             var squadRng = new Pcg32(NationSeed(seed, nationIndex), SquadSequence + (ulong)tier);
             var nationalityRng = new Pcg32(NationSeed(seed, nationIndex), NationalitySequence + (ulong)tier);
+            var statureRng = new Pcg32(NationSeed(seed, nationIndex), StatureSequence + (ulong)tier);
 
             var playerGenerator = new PlayerGenerator(_gen, culture);
             int firstClubId = WorldIds.FirstClubOf(nationIndex, tier);
@@ -203,6 +205,7 @@ namespace Sim.Core.Generation
                     Name = clubName,
                     ShortName = MakeShortName(clubName),
                     Strength = baseline,
+                    Stature = StatureModel.Assign(c, division.ClubCount, statureRng, _gen),
                     Coach = new Coach
                     {
                         Id = firstClubId + c,
