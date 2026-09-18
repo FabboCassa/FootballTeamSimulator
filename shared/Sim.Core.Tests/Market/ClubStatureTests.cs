@@ -54,8 +54,8 @@ namespace Sim.Core.Tests.Market
 
         /// <summary>
         /// Seeds used to measure real stature/strength rank decorrelation. Distinct from
-        /// <see cref="SpreadSeeds"/> on purpose - this bullet and the R4 bands must both hold on
-        /// independent seed samples, not just the same lucky eight.
+        /// <see cref="SpreadSeeds"/> on purpose - this property and the revenue-spread bands must
+        /// each hold on their own independent seed sample.
         /// </summary>
         private static readonly ulong[] InversionSeeds = { 909090, 111, 222, 333, 444, 555, 666, 888 };
 
@@ -100,13 +100,19 @@ namespace Sim.Core.Tests.Market
         // ============================================================ R4 core: intra-league wealth spread
 
         /// <summary>
-        /// A distribution of eight fixture-generation/match-simulation seeds (not one cherry-picked
-        /// seed): the R4 bands are a property the finance model must hold reliably on REAL generated
-        /// leagues, not a single lucky draw or an imposed stature/facility ladder. Eight full 16-club
-        /// double round-robin seasons run in well under a second (PlayFullSeasonAndReadRevenue is pure
-        /// integer arithmetic over the real accrual path, no I/O), so asserting all eight costs nothing.
+        /// A wide, non-cherry-picked distribution of fixture-generation/match-simulation seeds: the
+        /// revenue-spread bands are a property the finance model must hold reliably on real generated
+        /// leagues, not a single lucky draw or an imposed stature/facility ladder. Each full 16-club
+        /// double round-robin season runs in a few tens of milliseconds (PlayFullSeasonAndReadRevenue
+        /// is pure integer arithmetic over the real accrual path, no I/O), so asserting all of them
+        /// costs under a second.
         /// </summary>
-        private static readonly ulong[] SpreadSeeds = { 71_717, 1, 2, 3, 12_345, 42, 55_555, 777_777 };
+        private static readonly ulong[] SpreadSeeds =
+        {
+            71_717, 1, 2, 3, 12_345, 42, 55_555, 777_777,
+            9001, 9002, 9003, 9004, 9005, 9006, 9007, 9008, 9009, 9010, 9011, 9012,
+            2024, 555555, 31415, 20240101, 13, 999999, 88888, 76543
+        };
 
         [Test]
         public void TierOneLeague_With16Clubs_RevenueSpread_MatchesRealFootballBand()

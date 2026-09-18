@@ -4,24 +4,27 @@ using Sim.Core.Random;
 namespace Sim.Core.Generation
 {
     /// <summary>
-    /// Assigns a club's persistent <see cref="Domain.Club.Stature"/> (task: club stature, R4):
-    /// 0-100, correlated with the club's rank within its own league (its generated strength
-    /// order) but not equal to it. Two forces are balanced here, deliberately NOT via one small
-    /// global noise term (that made stature a near-rank-preserving function of strength — 0 rank
-    /// inversions across 1024 sampled club slots at the old StatureNoisePoints=3):
+    /// Assigns a club's persistent <see cref="Domain.Club.Stature"/>: 0-100, correlated with the
+    /// club's rank within its own league (its generated strength order) but not equal to it. Two
+    /// forces are balanced here, deliberately not via one small global noise term (which makes
+    /// stature a near-rank-preserving function of strength instead of a real, decorrelated draw):
     ///
-    ///  - the league's strongest club (index 0) is ANCHORED close to the stature ceiling (only
-    ///    ever nudged down, never up) so the R4 richest-club revenue band keeps landing — the
-    ///    revenue curve (<see cref="Market.FinanceModel.StatureMultiplierPermille"/>) is convex
-    ///    and only pulls away from the floor in the last few stature points, so *someone* in the
-    ///    league needs to reliably sit near 100;
-    ///  - every other club draws large, independent noise on top of its rank-derived baseline —
-    ///    large enough (relative to the ~6-7 point gap between adjacent ranks in a 16-20 club
-    ///    league) that adjacent ranks genuinely cross, so stature is correlated with strength on
-    ///    average but is a real, decorrelated second draw for any two individual clubs (and so
-    ///    different revenue, same <see cref="Market.FinanceModel.StatureMultiplierPermille"/>).
+    ///  - the league's strongest club (index 0) is anchored close to the stature ceiling (only
+    ///    ever nudged down, never up) and the weakest club (index clubCount-1) is anchored close
+    ///    to the stature floor (only ever nudged up, never down), because the revenue curve
+    ///    (<see cref="Market.FinanceModel.StatureMultiplierPermille"/>) is convex at both ends, so
+    ///    the richest/poorest-of-mean revenue ratio rides directly on whichever club happens to sit
+    ///    at each extreme — anchoring only the top leaves the bottom free to wander a full noise
+    ///    range and pushes the poorest ratio out of band on fresh seeds. Anchoring both ends keeps
+    ///    the extremes stable while every other club still draws large, independent noise, so
+    ///    adjacent-rank crossings keep happening freely in the middle of the table;
+    ///  - every non-anchored club draws large, independent noise on top of its rank-derived
+    ///    baseline — large enough (relative to the ~6-7 point gap between adjacent ranks in a
+    ///    16-20 club league) that adjacent ranks genuinely cross, so stature is correlated with
+    ///    strength on average but is a real, decorrelated second draw for any two individual clubs
+    ///    (and so different revenue, same <see cref="Market.FinanceModel.StatureMultiplierPermille"/>).
     ///
-    /// PURE and deterministic given its RNG: callers MUST pass a stream derived from (but never
+    /// Pure and deterministic given its RNG: callers must pass a stream derived from (but never
     /// consuming) the caller's own generation stream — see <see cref="WorldGenerator"/> and
     /// <see cref="LeagueGenerator"/>, both of which read <c>IRandomSource.GetState()</c> (a pure
     /// getter) to seed a dedicated sub-stream, so adding stature never perturbs the existing
@@ -42,6 +45,15 @@ namespace Sim.Core.Generation
                     ? rng.NextInt(-cfg.StatureTopAnchorNoisePoints, 1) // [-N, 0]: only ever pulls down from 100
                     : 0;
                 return Clamp(100 + topNoise);
+            }
+
+            int bottomAnchorCount = cfg.StatureBottomAnchorCount < 0 ? 0 : cfg.StatureBottomAnchorCount;
+            if (clubIndex >= clubCount - bottomAnchorCount && clubCount > 1)
+            {
+                int bottomNoise = cfg.StatureBottomAnchorNoisePoints > 0
+                    ? rng.NextInt(0, cfg.StatureBottomAnchorNoisePoints + 1) // [0, N]: only ever pulls up from 0
+                    : 0;
+                return Clamp(bottomNoise);
             }
 
             int baseline = clubCount <= 1 ? 50 : (clubCount - 1 - clubIndex) * 100 / (clubCount - 1);
