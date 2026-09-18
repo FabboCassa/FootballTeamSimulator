@@ -404,19 +404,21 @@
         public int AverageAttendancePercent { get; set; } = 85;
         /// <summary>Ticket price per attendee in the top flight (at full nation × division wealth). NOTE this
         /// is not a real ticket price: gate, sponsorship and prize money together stand in for a club's whole
-        /// revenue (broadcast included). LOWERED in the club stature rescale (task: club stature, R4) because
-        /// <see cref="FinanceModel.StatureMultiplierPermille"/> now scales this on top of nation × division
-        /// wealth, averaging well above 1x across a generated league — this and SponsorWeeklyTopFlight/
-        /// SponsorWeeklyPerStadiumTier were all scaled down together so an England-wealth tier-1 club still
-        /// lands in the real ~340-460M band once the stature multiplier is folded in.</summary>
-        public long TicketPriceTopFlight { get; set; } = 65;
+        /// revenue (broadcast included). LOWERED again in the R4 spread-band recalibration (task: club
+        /// stature, R4 attempt 3) alongside a wider/steeper <see cref="FinanceModel.StatureMultiplierPermille"/>
+        /// ramp (see StatureMultiplierFloorPermille/CeilingPermille/Exponent below): the wider ramp needed to
+        /// make the richest/poorest-of-mean bands hold reliably across seeds pushes the AVERAGE multiplier up
+        /// well above 1x across a generated league, so this and SponsorWeeklyTopFlight/SponsorWeeklyPerStadiumTier
+        /// were all scaled back down together so an England-wealth tier-1 club still lands in the real
+        /// ~340-460M band once the wider stature multiplier is folded in.</summary>
+        public long TicketPriceTopFlight { get; set; } = 43;
 
         // --- Sponsors (per week) ---
         /// <summary>Weekly sponsor income for a top-flight, tier-1-stadium club (at full nation × division wealth,
         /// before the stature multiplier — see TicketPriceTopFlight).</summary>
-        public long SponsorWeeklyTopFlight { get; set; } = 323_000;
+        public long SponsorWeeklyTopFlight { get; set; } = 212_000;
         /// <summary>Extra weekly sponsor income per stadium tier above 1 (bigger ground/brand → much bigger commercial deals). Scales strongly so big clubs' commercial income tracks their size — as in reality, where the elite earn most from commercial/broadcast — bringing their wage-to-revenue ratio down to the realistic ~63-68% (real Premier League average is ~63%) and keeping them clearly profitable (so a top-club save has a meaty transfer budget).</summary>
-        public long SponsorWeeklyPerStadiumTier { get; set; } = 388_000;
+        public long SponsorWeeklyPerStadiumTier { get; set; } = 254_000;
 
         // --- Prize money (per season, by final league position) ---
         /// <summary>Prize for finishing 1st in the top flight, at full nation × division wealth (linear down to the wooden-spoon prize for last).</summary>
@@ -495,12 +497,22 @@
         // distribution a generated league produces (best-XI overall clusters many clubs at the top
         // facility tier well before stature is involved) so the richest/poorest bands land against
         // actual generated revenue, not an idealised even tier spread.
-        /// <summary>Gate/sponsor multiplier (1/1000) at stature 0 — the poorest-of-mean floor (R4).</summary>
-        public int StatureMultiplierFloorPermille { get; set; } = 2000;
-        /// <summary>Gate/sponsor multiplier (1/1000) at stature 100 — the richest-of-mean ceiling (R4).</summary>
-        public int StatureMultiplierCeilingPermille { get; set; } = 7000;
-        /// <summary>Convexity of the stature -> gate/sponsor multiplier ramp (same shape as NationWealthExponent).</summary>
-        public int StatureMultiplierExponent { get; set; } = 4;
+        /// <summary>Gate/sponsor multiplier (1/1000) at stature 0 — the poorest-of-mean floor (R4). RAISED (from
+        /// 2000) in the attempt-3 recalibration: the previous floor left the poorest club's ratio hugging the
+        /// 0.3 band edge (measured 0.27-0.40 across seeds, undershooting in most of them, per the ClubStatureTests
+        /// per-seed table) because a low-floor multiplier crushes a weak-stature club's revenue whenever it also
+        /// draws a below-average facility tier. A higher floor gives the poorest club real headroom above 0.3.</summary>
+        public int StatureMultiplierFloorPermille { get; set; } = 3000;
+        /// <summary>Gate/sponsor multiplier (1/1000) at stature 100 — the richest-of-mean ceiling (R4). RAISED
+        /// (from 7000) alongside a steeper Exponent so the top club's revenue reliably clears the 2.4 floor with
+        /// headroom (previously it undershot in half the probed seeds).</summary>
+        public int StatureMultiplierCeilingPermille { get; set; } = 13000;
+        /// <summary>Convexity of the stature -> gate/sponsor multiplier ramp (same shape as NationWealthExponent).
+        /// RAISED (from 4) so the ramp stays flat near the floor for most of the league (concentrating the wide
+        /// floor-to-ceiling range on the very top of the stature ladder) - this is what lets the floor be raised
+        /// (helping the poorest club) without dragging the whole league's average multiplier up so far that the
+        /// richest club's ratio to the mean collapses.</summary>
+        public int StatureMultiplierExponent { get; set; } = 6;
     }
 
     /// <summary>

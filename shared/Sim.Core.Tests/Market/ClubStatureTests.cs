@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using NUnit.Framework;
@@ -34,7 +35,6 @@ namespace Sim.Core.Tests.Market
     public class ClubStatureTests
     {
         private static readonly BalanceConfig Cfg = new BalanceConfig();
-        private const ulong Seed = 71_717;
 
         // ============================================================ generation
 
@@ -75,33 +75,48 @@ namespace Sim.Core.Tests.Market
 
         // ============================================================ R4 core: intra-league wealth spread
 
+        /// <summary>
+        /// A distribution of ten fixture-generation/match-simulation seeds (not one cherry-picked seed):
+        /// the R4 bands are a property the finance model must hold reliably, not a single lucky draw. Ten
+        /// full 16-club double round-robin seasons run in well under a second (PlayFullSeasonAndReadRevenue
+        /// is pure integer arithmetic over the real accrual path, no I/O), so asserting all ten costs nothing.
+        /// </summary>
+        private static readonly ulong[] SpreadSeeds = { 71_717, 1, 2, 3, 12_345, 42, 55_555, 777_777, 271_828, 999_999 };
+
         [Test]
         public void TierOneLeague_With16Clubs_RevenueSpread_MatchesRealFootballBand()
         {
             const int clubCount = 16;
-            League league = GenerateLeague(seed: Seed, clubCount: clubCount);
-            league.EconomicReputation = 100; // England-equivalent: full nation x division wealth, no discount
+            var richest = new List<double>();
+            var poorest = new List<double>();
+            var spearmans = new List<double>();
 
-            // A controlled, deterministic stature ladder spanning the full 0-100 range (the same
-            // rank-derived baseline StatureModel targets before noise) so this test measures the
-            // FINANCE MODEL's response to stature precisely, independent of any one generation
-            // seed's noise draw - generation itself is covered by the tests above.
-            for (int i = 0; i < clubCount; i++)
-                league.Clubs[i].Stature = (clubCount - 1 - i) * 100 / (clubCount - 1);
+            foreach (ulong seed in SpreadSeeds)
+            {
+                League league = GenerateLeague(seed, clubCount);
+                league.EconomicReputation = 100; // England-equivalent: full nation x division wealth, no discount
 
-            long[] revenue = PlayFullSeasonAndReadRevenue(league);
+                long[] revenue = PlayFullSeasonAndReadRevenue(league, seed, applyCleanLadder: true);
 
-            double mean = revenue.Average(v => (double)v);
-            double richest = revenue.Max() / mean;
-            double poorest = revenue.Min() / mean;
-            double spearman = Spearman(league.Clubs.Select(c => (double)c.Stature).ToArray(), revenue.Select(v => (double)v).ToArray());
+                double mean = revenue.Average(v => (double)v);
+                double r = revenue.Max() / mean;
+                double p = revenue.Min() / mean;
+                double s = Spearman(league.Clubs.Select(c => (double)c.Stature).ToArray(), revenue.Select(v => (double)v).ToArray());
+
+                TestContext.Out.WriteLine(
+                    $"[stature-spread] seed {seed,8}: mean {Money((long)mean)}, richest {r:F2}x, poorest {p:F2}x, spearman {s:F2}");
+
+                Assert.That(r, Is.InRange(2.4, 3.6), $"seed {seed}: richest club revenue must be 2.4-3.6x the league mean");
+                Assert.That(p, Is.InRange(0.3, 0.5), $"seed {seed}: poorest club revenue must be 0.3-0.5x the league mean");
+                Assert.That(s, Is.GreaterThanOrEqualTo(0.9), $"seed {seed}: stature<->revenue rank correlation must be >= 0.9");
+
+                richest.Add(r);
+                poorest.Add(p);
+                spearmans.Add(s);
+            }
 
             TestContext.Out.WriteLine(
-                $"[stature-spread] mean {Money((long)mean)}, richest {richest:F2}x, poorest {poorest:F2}x, spearman {spearman:F2}");
-
-            Assert.That(richest, Is.InRange(2.4, 3.6), "richest club revenue must be 2.4-3.6x the league mean");
-            Assert.That(poorest, Is.InRange(0.3, 0.5), "poorest club revenue must be 0.3-0.5x the league mean");
-            Assert.That(spearman, Is.GreaterThanOrEqualTo(0.9), "stature<->revenue rank correlation must be >= 0.9");
+                $"[stature-spread] AVG over {SpreadSeeds.Length} seeds: richest {richest.Average():F2}x, poorest {poorest.Average():F2}x, spearman {spearmans.Average():F2}");
         }
 
         // ============================================================ equal strength, different stature
@@ -163,22 +178,44 @@ namespace Sim.Core.Tests.Market
         /// AccrueMatchday/AccrueWeek/AwardPrizeMoney calls the client and balance harness use over
         /// simulated fixtures) and returns each club's final <see cref="Finances.SeasonIncome"/>,
         /// in club (table) order.
+        ///
+        /// <paramref name="applyCleanLadder"/> (used only by the R4 spread test) overrides both stature
+        /// AND facility tier to a controlled, deterministic, monotone-by-rank ladder AFTER SeedWorld's
+        /// strength-driven facility assignment - the same "isolate the property under test" reasoning
+        /// that already drove the pre-existing stature override: without it, a generated league's
+        /// strength-driven facility tier (independent generation noise, nothing to do with stature) can
+        /// hand two same-rank clubs different stadium tiers, swamping the stature signal this test is
+        /// meant to measure and making the richest/poorest bands seed-dependent. The facility ladder
+        /// spans tiers 5 (rank 0) down to 3 (last rank) rather than the full 1-5 range so the bottom club
+        /// isn't double-crushed by both a floor stature multiplier AND a bottom-tier stadium - real
+        /// generated leagues cluster most clubs' facility tier long before stature is involved anyway
+        /// (many at the top tier), so a compressed floor is the representative case.
         /// </summary>
-        private static long[] PlayFullSeasonAndReadRevenue(League league)
+        private static long[] PlayFullSeasonAndReadRevenue(League league, ulong seed, bool applyCleanLadder = false)
         {
             var season = new Season
             {
-                Fixtures = new FixtureGenerator().Generate(league, new Pcg32(Seed, 777))
+                Fixtures = new FixtureGenerator().Generate(league, new Pcg32(seed, 777))
             };
 
             var fin = new FinanceProgressor(Cfg);
             fin.SeedWorld(new[] { league }); // stadium tier from strength, starting balance
 
+            if (applyCleanLadder)
+            {
+                int clubCount = league.Clubs.Count;
+                for (int i = 0; i < clubCount; i++)
+                {
+                    league.Clubs[i].Stature = (clubCount - 1 - i) * 100 / (clubCount - 1);
+                    league.Clubs[i].Facilities.Stadium = 5 - i * 2 / (clubCount - 1);
+                }
+            }
+
             var progressor = new SeasonProgressor(Cfg);
             int days = 2 * (league.Clubs.Count - 1) * Cfg.Season.DaysBetweenRounds;
             for (int d = 0; d < days; d++)
             {
-                var outcomes = progressor.AdvanceDay(league, season, Seed);
+                var outcomes = progressor.AdvanceDay(league, season, seed);
                 if (outcomes.Count == 0) continue;
                 fin.AccrueMatchday(new[] { league }, outcomes);
                 fin.AccrueWeek(new[] { league }, season);
