@@ -1,4 +1,5 @@
 using Fts.Infrastructure.Ranked;
+using Sim.Core.Career;
 using Sim.Core.Config;
 using Sim.Core.Domain;
 using Sim.Core.Generation;
@@ -183,6 +184,9 @@ internal static class EconomyScenario
             $"-> {Fmt.Pct(affordable)} of the ladder's players are within reach of a direct offer " +
             $"(top player costs {Fmt.N(Ratio(rankedTop, kitty), 1)}x the kitty)");
 
+        // --- nation & division wealth (R1-R3) --------------------------------------------------
+        RunNationDivisionWealth(opt, cfg, checks);
+
         // --- checks -------------------------------------------------------------------------------
         checks.Check(
             "no absurd prices",
@@ -243,6 +247,146 @@ internal static class EconomyScenario
             squadToIncome is >= 1.0 and <= 4.0,
             $"top division: {Fmt.N(squadToIncome, 1)}x (real football sits near 2x; far above it means clubs " +
             "hold assets they could never buy, which is what starves the transfer market)");
+    }
+
+    /// <summary>
+    /// Nation and division wealth (R1-R3 of the realistic-club-economy spec): prints mean tier-1
+    /// club revenue per nation (relative to England and in absolute terms) and the tier2/tier1,
+    /// tier3/tier1 division ratios, then checks every acceptance band. A synthetic single-tier
+    /// league is built per (nation, tier) from the SAME seed each time (only EconomicReputation and
+    /// Division vary), so club generation and every match result are byte-identical across the
+    /// sweep and only the finance multiplier moves - a precise read rather than a noisy one.
+    /// </summary>
+    private static void RunNationDivisionWealth(HarnessOptions opt, BalanceConfig cfg, CheckList checks)
+    {
+        List<NationProfile> atlas = NationDatabase.BuiltIn();
+        NationProfile england = FindNation(atlas, "ENG");
+        int englandMult = FinanceModel.NationMultiplierPermille(england.EconomicReputation, cfg.Finance);
+
+        Console.WriteLine();
+        string[] headline = { "ENG", "ESP", "GER", "ITA", "FRA", "POR", "NED", "BRA", "SCO", "SUI" };
+        var tier1Revenue = new Dictionary<string, long>();
+        foreach (string code in headline)
+        {
+            NationProfile nation = FindNation(atlas, code);
+            long revenue = MeanClubRevenueOverASeason(opt.Seed, nation.EconomicReputation, tier: 1, cfg);
+            tier1Revenue[code] = revenue;
+            double ratio = FinanceModel.NationMultiplierPermille(nation.EconomicReputation, cfg.Finance) / (double)englandMult;
+            Console.WriteLine(
+                $"[balance-nation] {code} tier1: econ-rep {nation.EconomicReputation}, mean revenue {Fmt.Money(revenue)} " +
+                $"({Fmt.Pct(ratio)} of England)");
+        }
+
+        checks.Check(
+            "England tier-1 revenue lands in the real-football band",
+            tier1Revenue["ENG"] is >= 340_000_000L and <= 460_000_000L,
+            $"{Fmt.Money(tier1Revenue["ENG"])} (band 340M-460M)");
+
+        CheckRelativeBand(checks, tier1Revenue, "ESP", 0.55, 0.75);
+        CheckRelativeBand(checks, tier1Revenue, "GER", 0.55, 0.75);
+        CheckRelativeBand(checks, tier1Revenue, "ITA", 0.42, 0.58);
+        CheckRelativeBand(checks, tier1Revenue, "FRA", 0.38, 0.52);
+        CheckRelativeBand(checks, tier1Revenue, "POR", 0.18, 0.32);
+        CheckRelativeBand(checks, tier1Revenue, "NED", 0.18, 0.32);
+        CheckRelativeBand(checks, tier1Revenue, "BRA", 0.18, 0.32);
+        CheckRelativeBand(checks, tier1Revenue, "SCO", 0.08, 0.16);
+        CheckRelativeBand(checks, tier1Revenue, "SUI", 0.08, 0.16);
+
+        double econRep50Ratio = FinanceModel.NationMultiplierPermille(50, cfg.Finance) / (double)englandMult;
+        checks.Check(
+            "a nation with economic reputation 50 lands at 2-6% of England",
+            econRep50Ratio is >= 0.02 and <= 0.06,
+            $"{Fmt.Pct(econRep50Ratio)}");
+
+        NationProfile italy = FindNation(atlas, "ITA");
+        long italyTier1 = tier1Revenue["ITA"];
+        long italyTier2 = MeanClubRevenueOverASeason(opt.Seed, italy.EconomicReputation, tier: 2, cfg);
+        long italyTier3 = MeanClubRevenueOverASeason(opt.Seed, italy.EconomicReputation, tier: 3, cfg);
+        Console.WriteLine(
+            $"[balance-nation] ITA tier2: mean revenue {Fmt.Money(italyTier2)} ({Fmt.Pct(Ratio(italyTier2, italyTier1))} of tier1)");
+        Console.WriteLine(
+            $"[balance-nation] ITA tier3: mean revenue {Fmt.Money(italyTier3)} ({Fmt.Pct(Ratio(italyTier3, italyTier1))} of tier1)");
+
+        checks.Check("Italy tier-1 revenue lands in the real-football band",
+            italyTier1 is >= 170_000_000L and <= 230_000_000L, $"{Fmt.Money(italyTier1)} (band 170M-230M)");
+        checks.Check("Italy tier-2 revenue lands in the real-football band",
+            italyTier2 is >= 55_000_000L and <= 85_000_000L, $"{Fmt.Money(italyTier2)} (band 55M-85M)");
+        checks.Check("Italy tier-3 revenue lands in the real-football band",
+            italyTier3 is >= 18_000_000L and <= 30_000_000L, $"{Fmt.Money(italyTier3)} (band 18M-30M)");
+
+        // R3: every nation with >=2 tiers keeps the SAME division ratio (it is nation-independent by
+        // construction), checked on a couple more nations to confirm that structurally.
+        foreach (string code in new[] { "ENG", "GER" })
+        {
+            NationProfile nation = FindNation(atlas, code);
+            long t1 = tier1Revenue[code];
+            long t2 = MeanClubRevenueOverASeason(opt.Seed, nation.EconomicReputation, tier: 2, cfg);
+            double ratio2 = Ratio(t2, t1);
+            Console.WriteLine($"[balance-nation] {code} tier2/tier1 = {Fmt.Pct(ratio2)}");
+            checks.Check($"{code} tier2/tier1 revenue ratio is in band",
+                ratio2 is >= 0.28 and <= 0.42, $"{Fmt.Pct(ratio2)} (band 28%-42%)");
+
+            if (nation.Divisions.Count < 3) continue;
+            long t3 = MeanClubRevenueOverASeason(opt.Seed, nation.EconomicReputation, tier: 3, cfg);
+            double ratio3 = Ratio(t3, t1);
+            Console.WriteLine($"[balance-nation] {code} tier3/tier1 = {Fmt.Pct(ratio3)}");
+            checks.Check($"{code} tier3/tier1 revenue ratio is in band",
+                ratio3 is >= 0.09 and <= 0.15, $"{Fmt.Pct(ratio3)} (band 9%-15%)");
+        }
+    }
+
+    private static void CheckRelativeBand(CheckList checks, Dictionary<string, long> tier1Revenue, string code, double lo, double hi)
+    {
+        double ratio = Ratio(tier1Revenue[code], tier1Revenue["ENG"]);
+        checks.Check($"{code} tier-1 revenue relative to England is in band",
+            ratio >= lo && ratio <= hi, $"{Fmt.Pct(ratio)} (band {lo:P0}-{hi:P0})");
+    }
+
+    private static NationProfile FindNation(List<NationProfile> atlas, string code)
+    {
+        NationProfile? found = NationDatabase.Find(atlas, code);
+        return found ?? throw new InvalidOperationException($"Nation '{code}' is missing from the built-in atlas.");
+    }
+
+    /// <summary>
+    /// A full season's mean club revenue for a synthetic single-tier, 20-club league carrying the
+    /// given nation wealth and division tier. Deliberately independent of <see cref="WorldLab"/>
+    /// (no market/condition/difficulty) so the read is about revenue alone.
+    /// </summary>
+    private static long MeanClubRevenueOverASeason(ulong seed, int economicReputation, int tier, BalanceConfig cfg)
+    {
+        const int clubCount = 20;
+        League league = new LeagueGenerator(new LeagueGenerationOptions
+        {
+            LeagueId = 9_000 + tier,
+            LeagueName = "Nation Wealth Reading",
+            Division = tier,
+            ClubCount = clubCount,
+            FirstClubId = 1,
+            FirstPlayerId = 1
+        }, cfg).Generate(new Pcg32(seed));
+        league.EconomicReputation = economicReputation;
+
+        var season = new Season { Fixtures = new FixtureGenerator().Generate(league, new Pcg32(seed, 777)) };
+
+        var fin = new FinanceProgressor(cfg);
+        fin.SeedWorld(new List<League> { league });
+        new ValuationProgressor(cfg).Reprice(new List<League> { league });
+
+        var progressor = new SeasonProgressor(cfg);
+        int days = 2 * (clubCount - 1) * cfg.Season.DaysBetweenRounds;
+        for (int d = 0; d < days; d++)
+        {
+            List<MatchOutcome> outcomes = progressor.AdvanceDay(league, season, seed);
+            if (outcomes.Count == 0) continue;
+            fin.AccrueMatchday(new List<League> { league }, outcomes);
+            fin.AccrueWeek(new List<League> { league }, season);
+        }
+        fin.AwardPrizeMoney(new List<League> { league }, season);
+
+        long total = 0;
+        foreach (Club c in league.Clubs) total += c.Finances.SeasonIncome;
+        return total / league.Clubs.Count;
     }
 
     /// <summary>What one division looked like across every club-season of the run.</summary>

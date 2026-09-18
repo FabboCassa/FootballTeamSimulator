@@ -36,6 +36,7 @@ namespace Sim.Core.Generation
                 Name = nationName,
                 Continent = Continent.Europe,
                 Reputation = Reputation,
+                EconomicReputation = Reputation,
                 CultureId = "italian"
             };
 

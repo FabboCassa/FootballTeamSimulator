@@ -24,6 +24,14 @@ namespace Sim.Core.Domain
         public int Reputation { get; set; }
 
         /// <summary>
+        /// 1..100. Economic reputation (task: nation &amp; division wealth) — how rich this nation's
+        /// football is, distinct from <see cref="Reputation"/> (how strong it is). Copied from
+        /// <see cref="Generation.NationProfile.EconomicReputation"/> at generation time; drives
+        /// <see cref="Market.FinanceModel"/>'s nation wealth multiplier via <see cref="League.EconomicReputation"/>.
+        /// </summary>
+        public int EconomicReputation { get; set; }
+
+        /// <summary>
         /// The naming culture the nation was generated with (see Generation.CultureDatabase). Kept on
         /// the saved world so players created LATER — a promoted club topping its squad up to full
         /// size — are named in the same flavour as the rest of the nation.

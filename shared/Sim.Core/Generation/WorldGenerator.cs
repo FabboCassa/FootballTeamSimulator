@@ -127,6 +127,7 @@ namespace Sim.Core.Generation
                 Name = profile.Name,
                 Continent = profile.Continent,
                 Reputation = profile.Reputation,
+                EconomicReputation = profile.EconomicReputation,
                 CultureId = profile.CultureId
             };
 
@@ -166,6 +167,7 @@ namespace Sim.Core.Generation
                 Name = $"{profile.Name} {division.Name}",
                 Division = tier,
                 NationCode = profile.Code,
+                EconomicReputation = profile.EconomicReputation,
                 DetailLevel = level
             };
 

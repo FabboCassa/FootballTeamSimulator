@@ -402,35 +402,46 @@
         // --- Gate receipts (per home match) ---
         /// <summary>Average share of capacity that attends a home match, in percent.</summary>
         public int AverageAttendancePercent { get; set; } = 85;
-        /// <summary>Ticket price per attendee in the top flight. NOTE this is not a real ticket price: gate,
-        /// sponsorship and prize money together stand in for a club's whole revenue (broadcast included),
-        /// and the 10.1 rescale multiplied all three by 4 so a top-flight club earns on the order of a real
-        /// mid-size European first-division club (~225M a season) instead of ~56M.</summary>
-        public long TicketPriceTopFlight { get; set; } = 120;
-        /// <summary>Ticket-price discount per division below the top flight, in 1/1000 (400 = −40%/division). Raised from 200 in the 10.1 rescale: the value curve is cubic, so a second-division squad is worth a QUARTER of a first-division one and its wage bill falls far faster than its income — leaving the lower division at a 38% wage share against the top flight's 63%, i.e. not "a first division in scale" but a structurally cheaper one.</summary>
-        public int TicketDivisionDiscountPermille { get; set; } = 400;
-        /// <summary>Floor on the ticket-price league multiplier, in 1/1000.</summary>
-        public int TicketDivisionFloorPermille { get; set; } = 300;
+        /// <summary>Ticket price per attendee in the top flight (at full nation × division wealth). NOTE this
+        /// is not a real ticket price: gate, sponsorship and prize money together stand in for a club's whole
+        /// revenue (broadcast included). Raised in the nation & division wealth rescale (from 120) so an
+        /// England-wealth tier-1 club (nation × division multiplier = full) lands in the real ~340-460M band
+        /// instead of the earlier flat ~225M every nation shared regardless of its wealth.</summary>
+        public long TicketPriceTopFlight { get; set; } = 200;
 
         // --- Sponsors (per week) ---
-        /// <summary>Weekly sponsor income for a top-flight, tier-1-stadium club.</summary>
-        public long SponsorWeeklyTopFlight { get; set; } = 600_000;
-        /// <summary>Extra weekly sponsor income per stadium tier above 1 (bigger ground/brand → much bigger commercial deals). Scales strongly so big clubs' commercial income tracks their size — as in reality, where the elite earn most from commercial/broadcast — bringing their wage-to-revenue ratio down to the realistic ~63-68% (real Premier League average is ~63%) and keeping them clearly profitable (so a top-club save has a meaty transfer budget). Raised from 60k after the first economy run left the champion at a 91% wage ratio.</summary>
-        public long SponsorWeeklyPerStadiumTier { get; set; } = 720_000;
-        /// <summary>Sponsor discount per division below the top flight, in 1/1000 (450 = −45%/division). Raised from 250 with the ticket discount, for the same reason: commercial income has to fall about as fast as squad value does, or the lower division ends up richer relative to its wage bill than the top flight.</summary>
-        public int SponsorDivisionDiscountPermille { get; set; } = 450;
-        /// <summary>Floor on the sponsor league multiplier, in 1/1000.</summary>
-        public int SponsorDivisionFloorPermille { get; set; } = 250;
+        /// <summary>Weekly sponsor income for a top-flight, tier-1-stadium club (at full nation × division wealth).</summary>
+        public long SponsorWeeklyTopFlight { get; set; } = 1_000_000;
+        /// <summary>Extra weekly sponsor income per stadium tier above 1 (bigger ground/brand → much bigger commercial deals). Scales strongly so big clubs' commercial income tracks their size — as in reality, where the elite earn most from commercial/broadcast — bringing their wage-to-revenue ratio down to the realistic ~63-68% (real Premier League average is ~63%) and keeping them clearly profitable (so a top-club save has a meaty transfer budget).</summary>
+        public long SponsorWeeklyPerStadiumTier { get; set; } = 1_200_000;
 
         // --- Prize money (per season, by final league position) ---
-        /// <summary>Prize for finishing 1st in the top flight (linear down to the wooden-spoon prize for last).</summary>
-        public long PrizeWinnerTopFlight { get; set; } = 32_000_000;
-        /// <summary>Prize for finishing last in the top flight.</summary>
-        public long PrizeLastTopFlight { get; set; } = 4_000_000;
-        /// <summary>Prize discount per division below the top flight, in 1/1000 (400 = −40%/division; raised from 250 with the other two, so promotion is a real financial jump and relegation a real fall).</summary>
-        public int PrizeDivisionDiscountPermille { get; set; } = 400;
-        /// <summary>Floor on the prize league multiplier, in 1/1000.</summary>
-        public int PrizeDivisionFloorPermille { get; set; } = 250;
+        /// <summary>Prize for finishing 1st in the top flight, at full nation × division wealth (linear down to the wooden-spoon prize for last).</summary>
+        public long PrizeWinnerTopFlight { get; set; } = 54_000_000;
+        /// <summary>Prize for finishing last in the top flight, at full nation × division wealth.</summary>
+        public long PrizeLastTopFlight { get; set; } = 7_000_000;
+
+        // --- Nation & division wealth (replaces the old per-component division-only discounts) ---
+        // Gate, sponsor and prize income are all scaled by ONE combined multiplier
+        // (Market.FinanceModel.NationDivisionMultiplierPermille) instead of each carrying its own
+        // division-only discount, so a tier's revenue is nation wealth × division wealth, and the
+        // tier-2/tier-1 ratio (R3) is exactly the division factor, whatever the nation.
+        /// <summary>How steeply nation wealth falls away from the richest nation (EconomicReputation 100):
+        /// multiplier = (economicReputation/100)^this, in permille. A high exponent keeps nations close in
+        /// reputation close in wealth while opening a wide gap to the top — calibrated so Spain/Germany
+        /// (EconomicReputation ~90-92) land at 55-75% of England, Italy (~87) at 42-58%, and a nation with
+        /// EconomicReputation 50 lands at 2-6%, all relative to England.</summary>
+        public int NationWealthExponent { get; set; } = 5;
+        /// <summary>Floor on the nation wealth multiplier, in 1/1000, so the poorest nation still earns something.</summary>
+        public int NationWealthFloorPermille { get; set; } = 5;
+        /// <summary>Share (1/1000) each division tier earns of the one above it BEFORE the extra compression
+        /// a lower division's naturally weaker (and so smaller-stadium) clubs add on top — a lower tier isn't
+        /// just discounted, its clubs are poorer draws too, so the REALISED tier2/tier1 revenue ratio ends up
+        /// well under this raw figure. Calibrated empirically (via the harness/tests, not derived) so the
+        /// realised ratio lands inside the R3 bands (28-42% / 9-15%) once that extra compression is folded in.</summary>
+        public int DivisionWealthDecayPermille { get; set; } = 690;
+        /// <summary>Floor on the division wealth multiplier, in 1/1000, so a deep pyramid never earns nothing.</summary>
+        public int DivisionWealthFloorPermille { get; set; } = 50;
 
         // --- Wages (per week, the dominant expense) ---
         /// <summary>
@@ -441,8 +452,11 @@
         /// income — which is why clubs could only ever buy one player a season. Values themselves were
         /// left alone: they were calibrated against Transfermarkt at 5.1 and are the side that matches
         /// reality. Target after the rescale: league wage bill ~65% of income (real Europe 64-67%).
+        /// LOWERED again from 130 to 85 in the nation &amp; division wealth rescale: gate/sponsor/prize
+        /// rose by roughly a further 1.7x at full nation wealth (see TicketPriceTopFlight and friends)
+        /// so wages needed to keep pace to hold the wage-share band.
         /// </summary>
-        public long WageWeeklyValueDivisor { get; set; } = 130;
+        public long WageWeeklyValueDivisor { get; set; } = 85;
         /// <summary>Wage multiplier (1/1000) for the club that finishes 1st — success lifts the wage bill (bonuses/renewals).</summary>
         public int WageResultCeilPermille { get; set; } = 1100;
         /// <summary>Wage multiplier (1/1000) for the club that finishes last — a poor season trims the wage bill.</summary>

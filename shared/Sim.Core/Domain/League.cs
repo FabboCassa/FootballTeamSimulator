@@ -26,6 +26,17 @@ namespace Sim.Core.Domain
         public string NationCode { get; set; } = string.Empty;
 
         /// <summary>
+        /// 1..100. Economic reputation of the nation this division belongs to (task: nation &amp;
+        /// division wealth), scaling gate/sponsor/prize revenue via <see cref="Market.FinanceModel"/>.
+        /// Denormalised from <see cref="Nation.EconomicReputation"/> onto the league at generation
+        /// time so the finance progressor never needs a nation lookup. Defaults to 100 (a top-tier
+        /// nation, i.e. no discount) — exactly the pre-change behaviour — for flat/legacy leagues
+        /// that carry no nation info (empty <see cref="NationCode"/>) and for worlds built outside the
+        /// multi-nation pipeline (ranked worlds, the balance harness). Additive — no save bump.
+        /// </summary>
+        public int EconomicReputation { get; set; } = 100;
+
+        /// <summary>
         /// How much of this league is simulated (task 11.1). Defaults to
         /// <see cref="LeagueDetailLevel.Playable"/>, which is what every pre-11.1 league was,
         /// so old saves deserialize unchanged.

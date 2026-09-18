@@ -64,3 +64,6 @@ test-output.txt
 
 # ba plugin logs
 .ba/logs/
+.ba/auto.lock
+.ba/auto.count
+.ba/auto.waiting
