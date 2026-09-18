@@ -116,24 +116,6 @@ namespace Sim.Core.Market
         }
 
         /// <summary>
-        /// Awards each club its season stature-driven commercial revenue (task: club stature, R4)
-        /// — call once per season, alongside <see cref="AwardPrizeMoney"/>. Booked as sponsor
-        /// income (no new Finances field, so no save bump).
-        /// </summary>
-        public void AwardStatureRevenue(IReadOnlyList<League> leagues)
-        {
-            foreach (League league in leagues)
-            {
-                foreach (Club club in league.Clubs)
-                {
-                    long revenue = FinanceModel.StatureRevenue(club.Stature, league.Division, league.EconomicReputation, _cfg);
-                    club.Finances.Balance += revenue;
-                    club.Finances.SeasonSponsorIncome += revenue;
-                }
-            }
-        }
-
-        /// <summary>
         /// Seeds every club's <see cref="Club.TransferBudget"/> from its finances (call at season
         /// start). Replaces the 5.2 strength-based <see cref="BudgetModel"/> seed in the live path.
         /// </summary>

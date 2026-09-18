@@ -8,7 +8,7 @@ namespace Sim.Core.Generation
     /// 0-100, correlated with the club's rank within its own league (its generated strength
     /// order) but not equal to it — a second, independent draw on top of the same rank gives two
     /// equally-strong clubs a real chance of ending up with different stature (and so different
-    /// revenue, <see cref="Market.FinanceModel.StatureRevenue"/>).
+    /// revenue, <see cref="Market.FinanceModel.StatureMultiplierPermille"/>).
     ///
     /// PURE and deterministic given its RNG: callers MUST pass a stream derived from (but never
     /// consuming) the caller's own generation stream — see <see cref="WorldGenerator"/> and

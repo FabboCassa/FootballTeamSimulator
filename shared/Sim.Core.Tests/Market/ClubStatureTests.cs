@@ -1,6 +1,7 @@
 using System.Linq;
 using System.Text.Json;
 using NUnit.Framework;
+using Sim.Core.Career;
 using Sim.Core.Config;
 using Sim.Core.Domain;
 using Sim.Core.Generation;
@@ -21,6 +22,11 @@ namespace Sim.Core.Tests.Market
     ///   - two clubs of equal strength but different stature earn different revenue;
     ///   - stature survives a JSON round-trip.
     ///
+    /// The R4 revenue bands are measured on <see cref="Finances.SeasonIncome"/> as booked by the
+    /// REAL <see cref="FinanceProgressor"/> path (AccrueMatchday/AccrueWeek/AwardPrizeMoney over a
+    /// simulated season) — the same functions the client and the balance harness call — never a
+    /// test-local hand-summed revenue array.
+    ///
     /// All of this is pure/deterministic (integer math) and never touches the match engine, so
     /// the golden master is untouched - proven elsewhere by SimulationDeterminismTests staying green.
     /// </summary>
@@ -28,6 +34,7 @@ namespace Sim.Core.Tests.Market
     public class ClubStatureTests
     {
         private static readonly BalanceConfig Cfg = new BalanceConfig();
+        private const ulong Seed = 71_717;
 
         // ============================================================ generation
 
@@ -72,7 +79,7 @@ namespace Sim.Core.Tests.Market
         public void TierOneLeague_With16Clubs_RevenueSpread_MatchesRealFootballBand()
         {
             const int clubCount = 16;
-            League league = GenerateLeague(seed: 71717, clubCount: clubCount);
+            League league = GenerateLeague(seed: Seed, clubCount: clubCount);
             league.EconomicReputation = 100; // England-equivalent: full nation x division wealth, no discount
 
             // A controlled, deterministic stature ladder spanning the full 0-100 range (the same
@@ -82,23 +89,7 @@ namespace Sim.Core.Tests.Market
             for (int i = 0; i < clubCount; i++)
                 league.Clubs[i].Stature = (clubCount - 1 - i) * 100 / (clubCount - 1);
 
-            new FinanceProgressor(Cfg).SeedWorld(new[] { league }); // stadium tier from strength, starting balance
-
-            int homeMatches = clubCount - 1;
-            int weeks = 2 * (clubCount - 1);
-            var revenue = new long[clubCount];
-            for (int i = 0; i < clubCount; i++)
-            {
-                Club club = league.Clubs[i];
-                int position = i + 1; // clubs are laid out strongest-first
-
-                long gate = FinanceModel.GateReceipts(club, league.Division, league.EconomicReputation, Cfg) * homeMatches;
-                long sponsor = FinanceModel.WeeklySponsor(club, league.Division, league.EconomicReputation, Cfg) * weeks;
-                long prize = FinanceModel.PrizeMoney(position, clubCount, league.Division, league.EconomicReputation, Cfg);
-                long stature = FinanceModel.StatureRevenue(club.Stature, league.Division, league.EconomicReputation, Cfg);
-
-                revenue[i] = gate + sponsor + prize + stature;
-            }
+            long[] revenue = PlayFullSeasonAndReadRevenue(league);
 
             double mean = revenue.Average(v => (double)v);
             double richest = revenue.Max() / mean;
@@ -118,6 +109,9 @@ namespace Sim.Core.Tests.Market
         [Test]
         public void EqualStrengthClubs_WithDifferentStature_EarnDifferentRevenue()
         {
+            // GateReceipts/WeeklySponsor ARE the functions AccrueMatchday/AccrueWeek call in the
+            // real path (Market/FinanceProgressor.cs) - calling them directly here exercises
+            // production code, not a parallel formula.
             Club richStature = new Club { Strength = 65, Stature = 100, Facilities = new Facilities { Stadium = 3 } };
             Club poorStature = new Club { Strength = 65, Stature = 0, Facilities = new Facilities { Stadium = 3 } };
 
@@ -125,11 +119,9 @@ namespace Sim.Core.Tests.Market
             const int economicReputation = 100;
 
             long richRevenue = FinanceModel.GateReceipts(richStature, leagueLevel, economicReputation, Cfg)
-                                + FinanceModel.WeeklySponsor(richStature, leagueLevel, economicReputation, Cfg)
-                                + FinanceModel.StatureRevenue(richStature.Stature, leagueLevel, economicReputation, Cfg);
+                                + FinanceModel.WeeklySponsor(richStature, leagueLevel, economicReputation, Cfg);
             long poorRevenue = FinanceModel.GateReceipts(poorStature, leagueLevel, economicReputation, Cfg)
-                                + FinanceModel.WeeklySponsor(poorStature, leagueLevel, economicReputation, Cfg)
-                                + FinanceModel.StatureRevenue(poorStature.Stature, leagueLevel, economicReputation, Cfg);
+                                + FinanceModel.WeeklySponsor(poorStature, leagueLevel, economicReputation, Cfg);
 
             Assert.That(richRevenue, Is.Not.EqualTo(poorRevenue),
                 "two clubs of equal strength but different stature must earn different revenue");
@@ -164,6 +156,36 @@ namespace Sim.Core.Tests.Market
                 FirstPlayerId = 1
             };
             return new LeagueGenerator(options, Cfg).Generate(new Pcg32(seed));
+        }
+
+        /// <summary>
+        /// Drives a full season through the REAL <see cref="FinanceProgressor"/> path (the same
+        /// AccrueMatchday/AccrueWeek/AwardPrizeMoney calls the client and balance harness use over
+        /// simulated fixtures) and returns each club's final <see cref="Finances.SeasonIncome"/>,
+        /// in club (table) order.
+        /// </summary>
+        private static long[] PlayFullSeasonAndReadRevenue(League league)
+        {
+            var season = new Season
+            {
+                Fixtures = new FixtureGenerator().Generate(league, new Pcg32(Seed, 777))
+            };
+
+            var fin = new FinanceProgressor(Cfg);
+            fin.SeedWorld(new[] { league }); // stadium tier from strength, starting balance
+
+            var progressor = new SeasonProgressor(Cfg);
+            int days = 2 * (league.Clubs.Count - 1) * Cfg.Season.DaysBetweenRounds;
+            for (int d = 0; d < days; d++)
+            {
+                var outcomes = progressor.AdvanceDay(league, season, Seed);
+                if (outcomes.Count == 0) continue;
+                fin.AccrueMatchday(new[] { league }, outcomes);
+                fin.AccrueWeek(new[] { league }, season);
+            }
+            fin.AwardPrizeMoney(new[] { league }, season);
+
+            return league.Clubs.Select(c => c.Finances.SeasonIncome).ToArray();
         }
 
         /// <summary>Spearman rank correlation. Floats are fine here - this is a test statistics helper, not persisted state.</summary>

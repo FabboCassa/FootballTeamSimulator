@@ -404,16 +404,19 @@
         public int AverageAttendancePercent { get; set; } = 85;
         /// <summary>Ticket price per attendee in the top flight (at full nation × division wealth). NOTE this
         /// is not a real ticket price: gate, sponsorship and prize money together stand in for a club's whole
-        /// revenue (broadcast included). Raised in the nation & division wealth rescale (from 120) so an
-        /// England-wealth tier-1 club (nation × division multiplier = full) lands in the real ~340-460M band
-        /// instead of the earlier flat ~225M every nation shared regardless of its wealth.</summary>
-        public long TicketPriceTopFlight { get; set; } = 200;
+        /// revenue (broadcast included). LOWERED in the club stature rescale (task: club stature, R4) because
+        /// <see cref="FinanceModel.StatureMultiplierPermille"/> now scales this on top of nation × division
+        /// wealth, averaging well above 1x across a generated league — this and SponsorWeeklyTopFlight/
+        /// SponsorWeeklyPerStadiumTier were all scaled down together so an England-wealth tier-1 club still
+        /// lands in the real ~340-460M band once the stature multiplier is folded in.</summary>
+        public long TicketPriceTopFlight { get; set; } = 65;
 
         // --- Sponsors (per week) ---
-        /// <summary>Weekly sponsor income for a top-flight, tier-1-stadium club (at full nation × division wealth).</summary>
-        public long SponsorWeeklyTopFlight { get; set; } = 1_000_000;
+        /// <summary>Weekly sponsor income for a top-flight, tier-1-stadium club (at full nation × division wealth,
+        /// before the stature multiplier — see TicketPriceTopFlight).</summary>
+        public long SponsorWeeklyTopFlight { get; set; } = 323_000;
         /// <summary>Extra weekly sponsor income per stadium tier above 1 (bigger ground/brand → much bigger commercial deals). Scales strongly so big clubs' commercial income tracks their size — as in reality, where the elite earn most from commercial/broadcast — bringing their wage-to-revenue ratio down to the realistic ~63-68% (real Premier League average is ~63%) and keeping them clearly profitable (so a top-club save has a meaty transfer budget).</summary>
-        public long SponsorWeeklyPerStadiumTier { get; set; } = 1_200_000;
+        public long SponsorWeeklyPerStadiumTier { get; set; } = 388_000;
 
         // --- Prize money (per season, by final league position) ---
         /// <summary>Prize for finishing 1st in the top flight, at full nation × division wealth (linear down to the wooden-spoon prize for last).</summary>
@@ -484,20 +487,20 @@
         /// <summary>Hard floor on a seeded transfer budget so even a skint club can do minimal business.</summary>
         public long MinTransferBudget { get; set; } = 1_000_000;
 
-        // --- Stature-driven commercial revenue (R4: intra-league wealth spread) ---
-        // A SEASON lump sum (booked by FinanceProgressor.AwardStatureRevenue, once per season,
-        // like PrizeMoney — not a per-week rate) added on top of gate/sponsor/prize: a flat
-        // baseline every club earns, rising along a convex curve to baseline + ceiling at stature
-        // 100 (see FinanceModel.StatureRevenue). Calibrated against the REAL strength-driven
-        // facility-tier distribution a generated league produces (best-XI overall clusters many
-        // clubs at the top facility tier well before stature is involved) so the richest/poorest
-        // bands land against actual generated revenue, not an idealised even tier spread.
-        /// <summary>Season commercial revenue every club earns at stature 0, at full nation x division wealth.</summary>
-        public long StatureRevenueBaseline { get; set; } = 150_000_000;
-        /// <summary>Extra season commercial revenue at stature 100 (on top of the baseline), at full nation x division wealth.</summary>
-        public long StatureRevenueCeiling { get; set; } = 1_400_000_000;
-        /// <summary>Convexity of the stature -> commercial revenue ramp (same shape as NationWealthExponent).</summary>
-        public int StatureRevenueExponent { get; set; } = 5;
+        // --- Stature-driven wealth spread (R4: intra-league wealth spread) ---
+        // A multiplier (FinanceModel.StatureMultiplierPermille) applied INSIDE GateReceipts and
+        // WeeklySponsor on top of nation x division wealth — the same two functions AccrueMatchday
+        // / AccrueWeek already book into club.Finances, so stature drives revenue the game actually
+        // pays, not a separate lump sum. Calibrated against the REAL strength-driven facility-tier
+        // distribution a generated league produces (best-XI overall clusters many clubs at the top
+        // facility tier well before stature is involved) so the richest/poorest bands land against
+        // actual generated revenue, not an idealised even tier spread.
+        /// <summary>Gate/sponsor multiplier (1/1000) at stature 0 — the poorest-of-mean floor (R4).</summary>
+        public int StatureMultiplierFloorPermille { get; set; } = 2000;
+        /// <summary>Gate/sponsor multiplier (1/1000) at stature 100 — the richest-of-mean ceiling (R4).</summary>
+        public int StatureMultiplierCeilingPermille { get; set; } = 7000;
+        /// <summary>Convexity of the stature -> gate/sponsor multiplier ramp (same shape as NationWealthExponent).</summary>
+        public int StatureMultiplierExponent { get; set; } = 4;
     }
 
     /// <summary>

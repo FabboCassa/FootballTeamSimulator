@@ -17,7 +17,10 @@ namespace Sim.Core.Market
     {
         /// <summary>
         /// Gate receipts for one home match: capacity × attendance share × ticket price, scaled by
-        /// the club's nation × division wealth (<see cref="NationDivisionMultiplierPermille"/>).
+        /// the club's nation × division wealth (<see cref="NationDivisionMultiplierPermille"/>) and
+        /// by the club's own <see cref="Domain.Club.Stature"/> (<see cref="StatureMultiplierPermille"/>,
+        /// R4) — the intra-league wealth spread, since nation × division is identical for every
+        /// club in a league.
         /// </summary>
         public static long GateReceipts(Club club, int leagueLevel, int economicReputation, BalanceConfig cfg)
         {
@@ -27,12 +30,14 @@ namespace Sim.Core.Market
             long ticket = f.TicketPriceTopFlight
                           * NationDivisionMultiplierPermille(economicReputation, leagueLevel, f)
                           / 1000;
-            return attendance * ticket;
+            long gate = attendance * ticket;
+            return gate * StatureMultiplierPermille(club.Stature, f) / 1000;
         }
 
         /// <summary>
         /// Weekly sponsor income: a base lifted by stadium tier, scaled by the club's nation ×
-        /// division wealth (<see cref="NationDivisionMultiplierPermille"/>).
+        /// division wealth (<see cref="NationDivisionMultiplierPermille"/>) and by the club's own
+        /// <see cref="Domain.Club.Stature"/> (<see cref="StatureMultiplierPermille"/>, R4).
         /// </summary>
         public static long WeeklySponsor(Club club, int leagueLevel, int economicReputation, BalanceConfig cfg)
         {
@@ -40,9 +45,10 @@ namespace Sim.Core.Market
             int tierAboveOne = club.Facilities.Stadium - 1;
             if (tierAboveOne < 0) tierAboveOne = 0;
             long sponsor = f.SponsorWeeklyTopFlight + tierAboveOne * f.SponsorWeeklyPerStadiumTier;
-            return sponsor
-                   * NationDivisionMultiplierPermille(economicReputation, leagueLevel, f)
-                   / 1000;
+            sponsor = sponsor
+                      * NationDivisionMultiplierPermille(economicReputation, leagueLevel, f)
+                      / 1000;
+            return sponsor * StatureMultiplierPermille(club.Stature, f) / 1000;
         }
 
         /// <summary>The club's weekly wage bill: the sum of every squad player's derived weekly wage.</summary>
@@ -184,32 +190,32 @@ namespace Sim.Core.Market
         // ================= Club stature (R4: intra-league wealth spread) =================
 
         /// <summary>
-        /// Season commercial/prestige revenue from a club's persistent <see cref="Domain.Club.Stature"/>
-        /// (task: club stature, R4) — a lump sum booked once per season by
-        /// <see cref="FinanceProgressor.AwardStatureRevenue"/>, like <see cref="PrizeMoney"/>. A flat
-        /// baseline every club earns (stature 0), rising along a convex curve
-        /// (stature/100)^<see cref="FinanceBalance.StatureRevenueExponent"/> to baseline + ceiling
-        /// at stature 100 — the SAME shape as <see cref="NationMultiplierPermille"/>, deliberately:
-        /// gate/sponsor/prize already scale with a club's strength-driven facility tier, which in
-        /// practice clusters many clubs at the same (capped) tier, so stature needs to differentiate
-        /// revenue across the WHOLE league on its own for the richest/poorest-of-mean bands (R4) to
-        /// land, not just nudge the very top. Scaled by the same nation × division wealth
-        /// multiplier as gate/sponsor/prize, so a poor nation's clubs never earn England-sized
-        /// commercial revenue purely from stature.
+        /// The intra-league wealth-spread multiplier (1/1000) a club's persistent
+        /// <see cref="Domain.Club.Stature"/> earns on its own gate (<see cref="GateReceipts"/>) and
+        /// sponsor (<see cref="WeeklySponsor"/>) income (task: club stature, R4) — a convex curve
+        /// (stature/100)^<see cref="FinanceBalance.StatureMultiplierExponent"/> from
+        /// <see cref="FinanceBalance.StatureMultiplierFloorPermille"/> at stature 0 to
+        /// <see cref="FinanceBalance.StatureMultiplierCeilingPermille"/> at stature 100 — the SAME
+        /// shape as <see cref="NationMultiplierPermille"/>, deliberately: gate/sponsor already scale
+        /// with a club's strength-driven facility tier, which in practice clusters many clubs at the
+        /// same (capped) tier, so stature needs to differentiate revenue across the WHOLE league on
+        /// its own for the richest/poorest-of-mean bands (R4) to land, not just nudge the very top.
+        /// Applied ON TOP of (multiplicatively with) nation × division wealth inside GateReceipts and
+        /// WeeklySponsor themselves, so it never touches PrizeMoney (position already drives that) and
+        /// cancels out of the tier2/tier1 division ratio (R3) exactly as nation × division wealth does.
         /// </summary>
-        public static long StatureRevenue(int stature, int leagueLevel, int economicReputation, BalanceConfig cfg)
+        public static int StatureMultiplierPermille(int stature, FinanceBalance f)
         {
-            FinanceBalance f = cfg.Finance;
             int s = stature;
             if (s < 0) s = 0;
             if (s > 100) s = 100;
 
-            // Permille ramp first (bounded 0-1000), THEN multiplied by the ceiling - never
+            // Permille ramp first (bounded 0-1000), THEN spread between floor and ceiling - never
             // Ceiling * IntPow(s, exponent) directly, which overflows long at high exponents.
-            long rampPermille = IntPow(s, f.StatureRevenueExponent) * 1000 / IntPow(100, f.StatureRevenueExponent);
-            long revenue = f.StatureRevenueBaseline + f.StatureRevenueCeiling * rampPermille / 1000;
-
-            return revenue * NationDivisionMultiplierPermille(economicReputation, leagueLevel, f) / 1000;
+            long rampPermille = IntPow(s, f.StatureMultiplierExponent) * 1000 / IntPow(100, f.StatureMultiplierExponent);
+            long mult = f.StatureMultiplierFloorPermille
+                        + (f.StatureMultiplierCeilingPermille - f.StatureMultiplierFloorPermille) * rampPermille / 1000;
+            return (int)mult;
         }
 
         /// <summary>Deterministic integer power (no Math.Pow). Exponent ≥ 0.</summary>
