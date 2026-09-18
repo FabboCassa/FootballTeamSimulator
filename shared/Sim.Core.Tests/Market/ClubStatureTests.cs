@@ -52,25 +52,49 @@ namespace Sim.Core.Tests.Market
             }
         }
 
+        /// <summary>
+        /// Seeds used to measure real stature/strength rank decorrelation. Distinct from
+        /// <see cref="SpreadSeeds"/> on purpose - this bullet and the R4 bands must both hold on
+        /// independent seed samples, not just the same lucky eight.
+        /// </summary>
+        private static readonly ulong[] InversionSeeds = { 909090, 111, 222, 333, 444, 555, 666, 888 };
+
         [Test]
         public void Stature_CorrelatesWithStrengthRank_ButIsNotEqualToIt()
         {
             // Clubs are laid out strongest-first (index 0 = top of the table), so the top half
-            // must, on average, carry higher stature than the bottom half - the "correlated"
-            // half of R4 - while individual clubs should NOT all land on the same clean
-            // rank-derived baseline - the "not equal" half.
-            League league = GenerateLeague(seed: 909090, clubCount: 20);
+            // must, on average, carry higher stature than the bottom half - the "correlated" half
+            // of R4 - while adjacent-rank stature crossings must genuinely happen across a seed
+            // sample - a real, measured amount of decorrelation, not a single-value deviation from
+            // the clean rank-derived baseline (which is trivially true of almost any nonzero noise).
+            int totalInversions = 0;
+            int totalAdjacentPairs = 0;
 
-            double topHalfMean = league.Clubs.Take(10).Average(c => (double)c.Stature);
-            double bottomHalfMean = league.Clubs.Skip(10).Average(c => (double)c.Stature);
-            Assert.That(topHalfMean, Is.GreaterThan(bottomHalfMean),
-                "the strongest half of the league must, on average, carry higher stature than the weakest half");
+            foreach (ulong seed in InversionSeeds)
+            {
+                League league = GenerateLeague(seed, clubCount: 20);
 
-            bool anyClubDeviatesFromTheCleanRankBaseline = league.Clubs
-                .Select((c, i) => (Club: c, Baseline: (league.Clubs.Count - 1 - i) * 100 / (league.Clubs.Count - 1)))
-                .Any(x => x.Club.Stature != x.Baseline);
-            Assert.That(anyClubDeviatesFromTheCleanRankBaseline, Is.True,
-                "stature must not be a clean, noise-free function of rank alone (independent noise required)");
+                double topHalfMean = league.Clubs.Take(10).Average(c => (double)c.Stature);
+                double bottomHalfMean = league.Clubs.Skip(10).Average(c => (double)c.Stature);
+                Assert.That(topHalfMean, Is.GreaterThan(bottomHalfMean),
+                    $"seed {seed}: the strongest half of the league must, on average, carry higher stature than the weakest half");
+
+                for (int i = 0; i < league.Clubs.Count - 1; i++)
+                {
+                    totalAdjacentPairs++;
+                    // club i is strength-ranked ABOVE club i+1; an inversion is club i+1 ending up
+                    // with equal-or-higher stature despite being the weaker club.
+                    if (league.Clubs[i + 1].Stature >= league.Clubs[i].Stature) totalInversions++;
+                }
+            }
+
+            TestContext.Out.WriteLine(
+                $"[stature-rank] {totalInversions}/{totalAdjacentPairs} adjacent-rank stature inversions across {InversionSeeds.Length} seeds");
+
+            // A meaningful, measured minimum (not zero, not a tautology): real decorrelation must
+            // show up in a double-digit share of adjacent pairs across the sample.
+            Assert.That(totalInversions, Is.GreaterThanOrEqualTo(20),
+                "adjacent-rank stature crossings must actually happen across a seed sample - stature must not be a near-rank-preserving function of strength");
         }
 
         // ============================================================ R4 core: intra-league wealth spread

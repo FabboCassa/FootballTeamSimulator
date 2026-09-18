@@ -952,10 +952,20 @@
         public int DivisionStrengthStep { get; set; } = 14;
 
         /// <summary>
-        /// Random jitter (+/-) applied to a club's rank-derived stature (task: club stature, R4)
-        /// so it is correlated with strength (same rank order) but not equal to it.
+        /// Random jitter (+/-) applied to a club's rank-derived stature (task: club stature, R4),
+        /// for every club EXCEPT the league's top-ranked one (see <see cref="StatureTopAnchorNoisePoints"/>).
+        /// Large relative to the ~6-7 point gap between adjacent ranks in a 16-20 club league, so
+        /// adjacent-rank crossings actually happen — stature is correlated with strength on
+        /// average (<see cref="Generation.StatureModel"/>) but not a rank-preserving function of it.
         /// </summary>
-        public int StatureNoisePoints { get; set; } = 3;
+        public int StatureNoisePoints { get; set; } = 10;
+
+        /// <summary>
+        /// Downward-only jitter applied to the league's top-ranked club's stature (which is
+        /// otherwise anchored at 100) — keeps it close to the stature ceiling so the R4
+        /// richest-club revenue band lands, without ever being a hardcoded constant 100.
+        /// </summary>
+        public int StatureTopAnchorNoisePoints { get; set; } = 6;
 
         // --- Player skills ---
         /// <summary>Random jitter (+/-) applied to each player's target overall around the club baseline.</summary>

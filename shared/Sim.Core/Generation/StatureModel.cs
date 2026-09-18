@@ -6,9 +6,20 @@ namespace Sim.Core.Generation
     /// <summary>
     /// Assigns a club's persistent <see cref="Domain.Club.Stature"/> (task: club stature, R4):
     /// 0-100, correlated with the club's rank within its own league (its generated strength
-    /// order) but not equal to it — a second, independent draw on top of the same rank gives two
-    /// equally-strong clubs a real chance of ending up with different stature (and so different
-    /// revenue, <see cref="Market.FinanceModel.StatureMultiplierPermille"/>).
+    /// order) but not equal to it. Two forces are balanced here, deliberately NOT via one small
+    /// global noise term (that made stature a near-rank-preserving function of strength — 0 rank
+    /// inversions across 1024 sampled club slots at the old StatureNoisePoints=3):
+    ///
+    ///  - the league's strongest club (index 0) is ANCHORED close to the stature ceiling (only
+    ///    ever nudged down, never up) so the R4 richest-club revenue band keeps landing — the
+    ///    revenue curve (<see cref="Market.FinanceModel.StatureMultiplierPermille"/>) is convex
+    ///    and only pulls away from the floor in the last few stature points, so *someone* in the
+    ///    league needs to reliably sit near 100;
+    ///  - every other club draws large, independent noise on top of its rank-derived baseline —
+    ///    large enough (relative to the ~6-7 point gap between adjacent ranks in a 16-20 club
+    ///    league) that adjacent ranks genuinely cross, so stature is correlated with strength on
+    ///    average but is a real, decorrelated second draw for any two individual clubs (and so
+    ///    different revenue, same <see cref="Market.FinanceModel.StatureMultiplierPermille"/>).
     ///
     /// PURE and deterministic given its RNG: callers MUST pass a stream derived from (but never
     /// consuming) the caller's own generation stream — see <see cref="WorldGenerator"/> and
@@ -25,16 +36,23 @@ namespace Sim.Core.Generation
         /// </summary>
         public static int Assign(int clubIndex, int clubCount, IRandomSource rng, GenerationBalance cfg)
         {
+            if (clubIndex == 0)
+            {
+                int topNoise = cfg.StatureTopAnchorNoisePoints > 0
+                    ? rng.NextInt(-cfg.StatureTopAnchorNoisePoints, 1) // [-N, 0]: only ever pulls down from 100
+                    : 0;
+                return Clamp(100 + topNoise);
+            }
+
             int baseline = clubCount <= 1 ? 50 : (clubCount - 1 - clubIndex) * 100 / (clubCount - 1);
 
             int noise = cfg.StatureNoisePoints > 0
                 ? rng.NextInt(-cfg.StatureNoisePoints, cfg.StatureNoisePoints + 1)
                 : 0;
 
-            int stature = baseline + noise;
-            if (stature < 0) stature = 0;
-            if (stature > 100) stature = 100;
-            return stature;
+            return Clamp(baseline + noise);
         }
+
+        private static int Clamp(int stature) => stature < 0 ? 0 : stature > 100 ? 100 : stature;
     }
 }
