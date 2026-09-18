@@ -23,7 +23,7 @@ namespace Sim.Core.Generation
         /// <summary>A fresh copy of the built-in atlas, in id order.</summary>
         public static List<NationProfile> BuiltIn()
         {
-            return new List<NationProfile>
+            var nations = new List<NationProfile>
             {
                 Nation("ENG", "England", Continent.Europe, 100, "english", D("Premier Division", 20), D("First Division", 24), D("Second Division", 24)),
                 Nation("ESP", "Spain", Continent.Europe, 98, "spanish", D("Primera Division", 20), D("Segunda Division", 22), D("Tercera Division", 20)),
@@ -91,6 +91,39 @@ namespace Sim.Core.Generation
                 Nation("ISL", "Iceland", Continent.Europe, 52, "nordic", D("Urvalsdeild", 12)),
                 Nation("NZL", "New Zealand", Continent.Oceania, 48, "english", D("National Premier", 10)),
             };
+
+            ApplyEconomicReputationOverrides(nations);
+            return nations;
+        }
+
+        /// <summary>
+        /// Economic-reputation overrides (task: nation & division wealth) for nations whose football
+        /// wealth does not track their sporting <see cref="NationProfile.Reputation"/> one-for-one.
+        /// Italy is the headline case — a sporting reputation (96) between Spain's (98) and Germany's
+        /// (95), but real clubs earn markedly less than either — so the curve needs a SEPARATE, lower
+        /// value to put Italy's revenue below both. Every nation not listed here falls back to its own
+        /// sporting reputation (<see cref="NationProfile.EconomicReputation"/>'s own default).
+        /// </summary>
+        private static readonly Dictionary<string, int> EconomicReputationOverrides = new Dictionary<string, int>
+        {
+            ["ESP"] = 92,
+            ["GER"] = 90,
+            ["ITA"] = 87,
+            ["FRA"] = 85,
+            ["POR"] = 75,
+            ["NED"] = 75,
+            ["BRA"] = 75,
+            ["SCO"] = 65,
+            ["SUI"] = 65,
+        };
+
+        private static void ApplyEconomicReputationOverrides(List<NationProfile> nations)
+        {
+            foreach (NationProfile nation in nations)
+            {
+                if (EconomicReputationOverrides.TryGetValue(nation.Code, out int economicReputation))
+                    nation.EconomicReputation = economicReputation;
+            }
         }
 
         /// <summary>Convenience: the profile with this code, or null.</summary>

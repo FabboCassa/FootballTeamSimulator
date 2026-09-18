@@ -41,6 +41,24 @@ namespace Sim.Core.Generation
         /// </summary>
         public int Reputation { get; set; } = 50;
 
+        private int _economicReputation = -1;
+
+        /// <summary>
+        /// 1..100. Economic reputation (revenue) — distinct from <see cref="Reputation"/> (sporting
+        /// strength / database inclusion). Defaults to <see cref="Reputation"/> unless explicitly
+        /// overridden, which is what lets the atlas order a sportingly-strong-but-economically-behind
+        /// nation (Italy) below others (Germany, Spain) without touching its sporting reputation —
+        /// see <see cref="NationDatabase"/> for the built-in overrides and
+        /// <see cref="Market.FinanceModel.NationMultiplierPermille"/> for how it turns into revenue.
+        /// The lazy fallback (rather than copying <see cref="Reputation"/> at construction) means the
+        /// two properties can be set in either order in an object initializer.
+        /// </summary>
+        public int EconomicReputation
+        {
+            get => _economicReputation >= 0 ? _economicReputation : Reputation;
+            set => _economicReputation = value;
+        }
+
         /// <summary>Key into the culture pool set (see <see cref="CultureDatabase"/>).</summary>
         public string CultureId { get; set; } = string.Empty;
 

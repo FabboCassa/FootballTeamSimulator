@@ -56,10 +56,10 @@ namespace Sim.Core.Market
         {
             foreach (MatchOutcome outcome in outcomes)
             {
-                if (!FindClub(leagues, outcome.Fixture.HomeClubId, out Club? home, out int level))
+                if (!FindClub(leagues, outcome.Fixture.HomeClubId, out Club? home, out League? homeLeague))
                     continue;
 
-                long gate = FinanceModel.GateReceipts(home!, level, _cfg);
+                long gate = FinanceModel.GateReceipts(home!, homeLeague!.Division, homeLeague.EconomicReputation, _cfg);
                 home!.Finances.Balance += gate;
                 home.Finances.SeasonGateIncome += gate;
             }
@@ -81,7 +81,7 @@ namespace Sim.Core.Market
                     int position = positions.TryGetValue(club.Id, out int p) ? p : league.Clubs.Count;
                     int resultPermille = FinanceModel.ResultPermilleForPosition(position, league.Clubs.Count, _cfg);
 
-                    long sponsor = FinanceModel.WeeklySponsor(club, league.Division, _cfg);
+                    long sponsor = FinanceModel.WeeklySponsor(club, league.Division, league.EconomicReputation, _cfg);
                     long wages = FinanceModel.WeeklyWageBill(club, resultPermille, _cfg);
 
                     club.Finances.Balance += sponsor - wages;
@@ -108,7 +108,7 @@ namespace Sim.Core.Market
                     Club? club = league.FindClub(table[i].ClubId);
                     if (club == null) continue;
 
-                    long prize = FinanceModel.PrizeMoney(i + 1, table.Count, league.Division, _cfg);
+                    long prize = FinanceModel.PrizeMoney(i + 1, table.Count, league.Division, league.EconomicReputation, _cfg);
                     club.Finances.Balance += prize;
                     club.Finances.SeasonPrizeIncome += prize;
                 }
@@ -146,7 +146,7 @@ namespace Sim.Core.Market
             return positions;
         }
 
-        private static bool FindClub(IReadOnlyList<League> leagues, int clubId, out Club? club, out int leagueLevel)
+        private static bool FindClub(IReadOnlyList<League> leagues, int clubId, out Club? club, out League? foundLeague)
         {
             foreach (League league in leagues)
             {
@@ -154,13 +154,13 @@ namespace Sim.Core.Market
                 if (found != null)
                 {
                     club = found;
-                    leagueLevel = league.Division;
+                    foundLeague = league;
                     return true;
                 }
             }
 
             club = null;
-            leagueLevel = 1;
+            foundLeague = null;
             return false;
         }
     }
