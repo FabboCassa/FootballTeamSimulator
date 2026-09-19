@@ -88,6 +88,50 @@ namespace Sim.Core.Market
             return Clamp(tier, cfg.MaxFacilityTier);
         }
 
+        /// <summary>
+        /// Starting stadium tier at generation (task: club stature, R4) — the strength-derived
+        /// suggestion above, but only ever DEMOTED, never promoted past what a club's own strength
+        /// earned. Two demotions apply, both driven by stature: (1) for a club strength alone
+        /// already puts at the facility cap — best-XI strength clusters many clubs at the max tier
+        /// in a strong league (e.g. 9 of 16 in a real tier-1 league) well before stature is involved,
+        /// which is exactly what compresses the R4 richest/poorest bands, so RELATIVE stature splits
+        /// that cluster (full cap only for the highest-stature members, demoted up to
+        /// <see cref="FinanceBalance.StadiumTierStatureSpreadTiers"/> tiers at stature 0); (2) for a
+        /// club with low-enough stature even when strength did NOT cap it (see
+        /// <see cref="FinanceBalance.StatureLowTierDemoteThreshold"/>), so revenue tracks stature for
+        /// the whole table, not just the clubs strength already capped. Neither branch ever promotes
+        /// a club, and — critically — clubs strength alone did NOT already cap or that clear the
+        /// low-stature threshold are untouched: a weak division's clubs rarely hit the facility cap
+        /// on strength alone (strength IS division-discounted), so this leaves the division-level
+        /// compression (R3) that best-XI strength alone provides intact, unlike a symmetric
+        /// blend/offset that would also promote weak-division clubs and erode it.
+        /// </summary>
+        public static int SuggestedStadiumTier(int clubStrength, int stature, FinanceBalance cfg)
+        {
+            int strengthTier = SuggestedStadiumTier(clubStrength, cfg);
+            int s = stature < 0 ? 0 : stature > 100 ? 100 : stature;
+
+            if (strengthTier >= cfg.MaxFacilityTier)
+            {
+                int demote = (100 - s) * cfg.StadiumTierStatureSpreadTiers / 100;
+                return Clamp(strengthTier - demote, cfg.MaxFacilityTier);
+            }
+
+            // A below-median-stature club (task: club stature, R4) is demoted one tier from
+            // whatever strength alone suggests, even when strength did not cap it - otherwise
+            // strength alone decides its facility tier regardless of how low its stature is,
+            // decoupling revenue from stature for roughly the bottom third of the table and
+            // dragging the R4 Spearman(stature, revenue) correlation down on fresh seeds (see
+            // FinanceBalance.StatureLowTierDemoteThreshold for the calibration). Single-tier
+            // demotion + the strengthTier > 2 guard keeps R2/R3's strength-driven division-level
+            // compression intact: a weak division rarely reaches tier 3+ on strength alone, so
+            // this branch barely touches it.
+            if (s <= cfg.StatureLowTierDemoteThreshold && strengthTier > 2)
+                return strengthTier - 1;
+
+            return strengthTier;
+        }
+
         private static int Clamp(int tier, int max)
         {
             if (tier < 1) return 1;
