@@ -469,22 +469,50 @@
 
         // --- Wages (per week, the dominant expense) ---
         /// <summary>
-        /// Weekly wage = player market value / this divisor. LOWERED from 650 to 130 in the 10.1 rescale
-        /// (wages x5) alongside revenues x4, which together close the one real gap the balance harness
-        /// found: our squads were worth 8.5 seasons of income where real football sits near 2, so wages
-        /// were 5.7% of squad value against a real ~30% and a single signing cost 42% of a club's annual
-        /// income — which is why clubs could only ever buy one player a season. Values themselves were
-        /// left alone: they were calibrated against Transfermarkt at 5.1 and are the side that matches
-        /// reality. Target after the rescale: league wage bill ~65% of income (real Europe 64-67%).
-        /// LOWERED again from 130 to 85 in the nation &amp; division wealth rescale: gate/sponsor/prize
-        /// rose by roughly a further 1.7x at full nation wealth (see TicketPriceTopFlight and friends)
-        /// so wages needed to keep pace to hold the wage-share band.
+        /// Weekly wage = a value / this divisor. For a single-player preview/negotiation wage
+        /// (<see cref="Market.WageModel"/> called with an explicit value) that value is the caller's;
+        /// for a real per-player demand and the club's AGGREGATE wage bill (task: wages set by the
+        /// paying club, R7 — <see cref="Market.FinanceModel.DemandedWeeklyWage"/>, summed by
+        /// <see cref="Market.FinanceModel.WeeklyWageBill"/>, one formula, two callers, no separate
+        /// target-share anchor) it is <see cref="Market.FinanceModel.WageAbilityValue"/> — the wage-side
+        /// ability value, NOT the market's transfer-fee <c>ValuationModel</c> value (see that method's
+        /// remarks for why the two diverge).
         /// </summary>
-        public long WageWeeklyValueDivisor { get; set; } = 85;
+        public long WageWeeklyValueDivisor { get; set; } = 800;
         /// <summary>Wage multiplier (1/1000) for the club that finishes 1st — success lifts the wage bill (bonuses/renewals).</summary>
         public int WageResultCeilPermille { get; set; } = 1100;
         /// <summary>Wage multiplier (1/1000) for the club that finishes last — a poor season trims the wage bill.</summary>
         public int WageResultFloorPermille { get; set; } = 900;
+
+        // --- Wage-side ability value (task: wages set by the paying club, R7) ---
+        // See Market.FinanceModel.WageAbilityValue's remarks for the full picture: a player's WAGE is
+        // driven by his CURRENT ability (quadratic, low floor), not the market's transfer-FEE curve
+        // (cubic, floored at MarketBalance.RatingValueFloor ~30) — reusing the fee curve would crash a
+        // real lower-division squad's total wage bill far faster than that division's revenue falls
+        // (its generated players' overall already falls with division), making the R7 bands
+        // unreachable together with the "same player >=2x at a tier-1 club" requirement below.
+        /// <summary>Overall rating at/below which a player's ABILITY-driven wage-side value is ~0. Far below <see cref="MarketBalance.RatingValueFloor"/>: a wage reflects current ability, not a resale fee.</summary>
+        public int WageValueRatingFloor { get; set; } = 0;
+        /// <summary>Currency per (overall − <see cref="WageValueRatingFloor"/>) feeding <see cref="Market.FinanceModel.WageAbilityValue"/>, before <see cref="WageWeeklyValueDivisor"/> turns it into a weekly figure.</summary>
+        public long WageValueUnitPerRating { get; set; } = 2600000;
+        /// <summary>Flat living-wage value EVERY player adds to <see cref="Market.FinanceModel.WageAbilityValue"/> regardless of ability — see that method's remarks for why this is what makes the R7 median wage/revenue ratio rise tier over tier.</summary>
+        public long WageLivingWageValue { get; set; } = 10_000_000;
+
+        // --- Wage structure (task: wages set by the paying club, R7) ---
+        // See Market.FinanceModel's "Club wage structure" remarks for the full picture. The R7 median
+        // wage/revenue bands (55-70% / 72-88% / 78-92%) are hit by calibrating (via the harness/tests)
+        // WageWeeklyValueDivisor/WageValueUnitPerRating/WageLivingWageValue above, the per-tier division
+        // table below (see WageDivisionMultiplierPermille's remarks for why it is a table, not a single
+        // decay/floor formula) and the stature floor/ceiling below, whose floor:ceiling RATIO is locked
+        // to revenue's own StatureMultiplierFloor/CeilingPermille ratio (2800:11500) so a club's wage
+        // structure and its own revenue move together as stature varies and the ratio does not depend
+        // on which stature a club happens to draw.
+        /// <summary>Division factor (1/1000) for the club wage structure, one entry per tier (see <see cref="Market.FinanceModel.WageDivisionMultiplierPermille"/>); a tier beyond this list repeats the last entry. Entry 0 (tier 1) MUST stay 1000 - the neutral top-flight baseline every other tier and the "same player, richer club" preview are measured against.</summary>
+        public int[] WageDivisionWealthPermille { get; set; } = { 1000, 499, 270 };
+        /// <summary>Wage multiplier (1/1000) at stature 0 — kept in the same ratio to <see cref="WageStatureCeilingPermille"/> as <see cref="StatureMultiplierFloorPermille"/> is to <see cref="StatureMultiplierCeilingPermille"/> (see the wage-structure remarks above).</summary>
+        public int WageStatureFloorPermille { get; set; } = 800;
+        /// <summary>Wage multiplier (1/1000) at stature 100 — see <see cref="WageStatureFloorPermille"/>.</summary>
+        public int WageStatureCeilingPermille { get; set; } = 3286;
 
         // --- Starting finances & board backing ---
         /// <summary>Operating-cash floor: the board covers shortfalls down to this, so bankruptcy is impossible (the 5.5 acceptance).</summary>

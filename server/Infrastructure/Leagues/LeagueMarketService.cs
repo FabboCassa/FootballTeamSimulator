@@ -426,7 +426,10 @@ public sealed class LeagueMarketService : ILeagueMarketService
         if (player.ClubId is not null)
             return LeagueResult<FreeAgentSigningDto>.Fail(LeagueError.PlayerUnavailable, "He already has a club.");
 
-        long demanded = _engine.DemandedWage(player);
+        // Loaded up front (task: wages set by the paying club, R7) — the demanded wage depends on THIS
+        // club's own wealth/prestige, so the club must exist before the demand can be computed.
+        var club = await _db.Clubs.Include(c => c.Players).FirstAsync(c => c.Id == clubId, ct);
+        long demanded = _engine.DemandedWage(player, club);
         long cost = LeagueMarketEngine.SigningCost(request.WeeklyWage);
 
         async Task<LeagueResult<FreeAgentSigningDto>> RefuseAsync(string why) =>
@@ -443,7 +446,6 @@ public sealed class LeagueMarketService : ILeagueMarketService
                 $"Firma solo contratti da {LeagueMarketEngine.FreeAgentMinSeasons} a "
                 + $"{LeagueMarketEngine.FreeAgentMaxSeasons} stagioni.");
 
-        var club = await _db.Clubs.Include(c => c.Players).FirstAsync(c => c.Id == clubId, ct);
         if (club.Players.Count >= LeagueMarketEngine.MaxSquadSize)
             return LeagueResult<FreeAgentSigningDto>.Fail(
                 LeagueError.SquadFull, $"Your squad is full ({LeagueMarketEngine.MaxSquadSize} players).");
@@ -762,7 +764,10 @@ public sealed class LeagueMarketService : ILeagueMarketService
             .ToListAsync(ct);
         var freeAgentDtos = freeAgents.Select(p =>
         {
-            long wage = _engine.DemandedWage(p);
+            // What HE would ask from the viewer's own club (task: wages set by the paying club, R7) — the
+            // shop window shows what signing him would actually cost this coach; a viewer without a club
+            // yet (still drafting) sees the neutral, median-stature fallback.
+            long wage = myClub is not null ? _engine.DemandedWage(p, myClub) : _engine.DemandedWage(p);
             return new LeagueFreeAgentDto(
                 p.ExternalId, FullName(p), p.Age, p.Role, p.Overall, p.MarketValue,
                 wage, LeagueMarketEngine.FreeAgentMinSeasons, LeagueMarketEngine.FreeAgentMaxSeasons,

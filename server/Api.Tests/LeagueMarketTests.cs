@@ -3,6 +3,9 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using Fts.Application.Auth;
 using Fts.Application.Leagues;
+using Fts.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using NUnit.Framework;
 
 namespace Fts.Api.Tests;
@@ -446,6 +449,85 @@ public class LeagueMarketTests
             Assert.That(outcome.Message, Is.Not.Null, "he tells you what he wants");
             Assert.That(outcome.Market.YourSquad, Has.Count.EqualTo(22));
             Assert.That(outcome.Market.YourBudget, Is.EqualTo(DraftBudget));
+        });
+    }
+
+    /// <summary>Task: wages set by the paying club, R7 — "moving to a richer club raises the demanded
+    /// wage", proved over the real HTTP + DB wiring (not just the shared Sim.Core math): the SAME free
+    /// agent, looked at by two coaches whose clubs differ only in <see cref="Fts.Infrastructure.Persistence.Entities.Club.Strength"/>
+    /// (the stand-in for stature this world has — see <see cref="Fts.Infrastructure.Leagues.LeagueMarketEngine.DemandedWage(Fts.Infrastructure.Persistence.Entities.Player,Fts.Infrastructure.Persistence.Entities.Club)"/>),
+    /// asks the richer club for more per week.</summary>
+    [Test]
+    public async Task RicherClub_IsAskedMoreForTheSameFreeAgent()
+    {
+        var (leagueId, accounts) = await CreateActiveLeague(size: 6, humans: 2);
+        var (a, b) = (accounts[0], accounts[1]);
+
+        var beforeA = await GetMarket(a.Tok, leagueId);
+        var beforeB = await GetMarket(b.Tok, leagueId);
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<FtsDbContext>();
+            var league = await db.PrivateLeagues.FirstAsync(l => l.Id == leagueId);
+            var clubA = await db.Clubs.FirstAsync(
+                c => c.WorldId == league.WorldId && c.ExternalId == beforeA.YourClubExternalId);
+            var clubB = await db.Clubs.FirstAsync(
+                c => c.WorldId == league.WorldId && c.ExternalId == beforeB.YourClubExternalId);
+            clubA.Strength = 0;   // poorest possible wage structure
+            clubB.Strength = 100; // richest possible wage structure
+            await db.SaveChangesAsync();
+        }
+
+        var afterA = await GetMarket(a.Tok, leagueId);
+        var afterB = await GetMarket(b.Tok, leagueId);
+
+        var poorSideQuote = afterA.FreeAgents.First(f => f.MarketValue > 0);
+        var richSideQuote = afterB.FreeAgents.First(f => f.ExternalId == poorSideQuote.ExternalId);
+
+        Assert.That(richSideQuote.DemandedWeeklyWage, Is.GreaterThan(poorSideQuote.DemandedWeeklyWage),
+            "the exact same free agent asks club B (Strength 100) for more than club A (Strength 0)");
+    }
+
+    /// <summary>The SIGNING endpoint itself (not just the listing quote) must recompute the demand from
+    /// the actual paying club at the moment of signing (task: wages set by the paying club, R7) — a stale
+    /// or generic figure would let a coach sign below what his OWN club would really be asked, or refuse
+    /// an offer his club could really afford.</summary>
+    [Test]
+    public async Task SigningEndpoint_UsesTheSigningClubsOwnDemand()
+    {
+        var (leagueId, accounts) = await CreateActiveLeague(size: 6, humans: 2);
+        var a = accounts[0];
+
+        var before = await GetMarket(a.Tok, leagueId);
+        // Affordable at the OLD (higher) demand, so it stays affordable once the club-Strength change
+        // below only pushes the demand DOWN.
+        var target = before.FreeAgents.First(f => f.MarketValue > 0 && f.SigningCostAtDemand <= DraftBudget);
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<FtsDbContext>();
+            var league = await db.PrivateLeagues.FirstAsync(l => l.Id == leagueId);
+            var club = await db.Clubs.FirstAsync(
+                c => c.WorldId == league.WorldId && c.ExternalId == before.YourClubExternalId);
+            club.Strength = 0; // poorest possible wage structure — pushes the demand DOWN
+            await db.SaveChangesAsync();
+        }
+
+        var after = await GetMarket(a.Tok, leagueId);
+        var recomputed = after.FreeAgents.First(f => f.ExternalId == target.ExternalId);
+        Assert.That(recomputed.DemandedWeeklyWage, Is.LessThan(target.DemandedWeeklyWage),
+            "sanity: the generated club was not already at the wage-structure floor");
+
+        // An offer at exactly the freshly recomputed (lower) demand must be accepted: if the endpoint
+        // still checked a stale/generic figure it would refuse this, asking for the old higher amount.
+        var resp = await SignFreeAgent(a.Tok, leagueId, target.ExternalId, recomputed.DemandedWeeklyWage, seasons: 3);
+        Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var outcome = (await resp.Content.ReadFromJsonAsync<FreeAgentSigningDto>())!;
+        Assert.Multiple(() =>
+        {
+            Assert.That(outcome.Signed, Is.True);
+            Assert.That(outcome.DemandedWeeklyWage, Is.EqualTo(recomputed.DemandedWeeklyWage));
         });
     }
 

@@ -59,10 +59,36 @@ public sealed class LeagueMarketEngine
 
     // --- terms -------------------------------------------------------------------------------------
 
-    /// <summary>What a free agent asks per week: the shared <see cref="WageModel"/> at a neutral season
-    /// result, so his demand tracks his value exactly as a contracted player's wage does.</summary>
-    public long DemandedWage(EntPlayer player) =>
-        Math.Max(1, WageModel.WeeklyWage(player.MarketValue, 1000, _config.Finance));
+    /// <summary>The private-league world has no nation concept (<see cref="WorldFactory"/> always builds a
+    /// single Division-1 league per world), so a signing club's wage structure holds nation wealth neutral
+    /// here — only its own wealth/prestige differentiates what it pays.</summary>
+    private const int NeutralEconomicReputation = 100;
+    private const int SingleDivisionLeagueLevel = 1;
+
+    /// <summary>What a specific club would have to pay a player per week (task: wages set by the paying
+    /// club, R7): the shared <see cref="FinanceModel.ClubWageStructurePermille"/> (nation × division ×
+    /// stature) applied to his cached value via <see cref="WageModel"/>, at a neutral season result — a
+    /// richer club pays more for the exact same player. This world has no persisted club stature
+    /// (task: club stature, R4 is a Sim.Core-only concept these entities don't carry), so the club's own
+    /// <see cref="EntClub.Strength"/> (its coarse 0-100 squad rating, the same field that already seeds its
+    /// budget) stands in for stature — the best proxy for "how well this club pays" already on the entity.</summary>
+    public long DemandedWage(EntPlayer player, EntClub club) => DemandedWage(player, club.Strength);
+
+    /// <summary>Median stature (see <see cref="Sim.Core.Config.FinanceBalance.WageStatureFloorPermille"/>/
+    /// <c>CeilingPermille</c>, symmetric around 50) — the "no specific club to ask yet" fallback for the
+    /// free-agent shop window (a coach without a club during the draft).</summary>
+    private const int NeutralStature = 50;
+
+    private long DemandedWage(EntPlayer player, int stature)
+    {
+        int structure = FinanceModel.ClubWageStructurePermille(
+            stature, SingleDivisionLeagueLevel, NeutralEconomicReputation, _config.Finance);
+        return Math.Max(1, WageModel.WeeklyWage(player.MarketValue, 1000, structure, _config.Finance));
+    }
+
+    /// <summary>What a free agent asks with no specific signing club in view (the shop-window listing
+    /// before a coach picks who to court) — a neutral, median-stature club.</summary>
+    public long DemandedWage(EntPlayer player) => DemandedWage(player, NeutralStature);
 
     /// <summary>What agreeing those terms costs the club up front.</summary>
     public static long SigningCost(long weeklyWage) => Math.Max(0, weeklyWage) * WagePrepaidWeeks;

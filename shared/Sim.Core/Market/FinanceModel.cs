@@ -51,13 +51,33 @@ namespace Sim.Core.Market
             return sponsor * StatureMultiplierPermille(club.Stature, f) / 1000;
         }
 
-        /// <summary>The club's weekly wage bill: the sum of every squad player's derived weekly wage.</summary>
-        public static long WeeklyWageBill(Club club, int seasonResultPermille, BalanceConfig cfg)
+        /// <summary>
+        /// The club's weekly wage bill (task: wages set by the paying club, R7): the SUM of what
+        /// every player in the squad actually demands from THIS club (<see cref="DemandedWeeklyWage"/>,
+        /// the same per-player formula the server uses for a real transfer negotiation) — one formula,
+        /// two callers, so a club's aggregate bill is never a separate curve from what an individual
+        /// signing would cost it. The R7 median wage/revenue bands are a property of the CALIBRATION
+        /// (<see cref="ClubWageStructurePermille"/>'s nation/division/stature factors and
+        /// <see cref="FinanceBalance.WageWeeklyValueDivisor"/>) rather than of this method, which does
+        /// no target-share anchoring of its own.
+        /// </summary>
+        public static long WeeklyWageBill(Club club, int seasonResultPermille, int leagueLevel, int economicReputation, BalanceConfig cfg)
         {
-            long bill = 0;
+            long total = 0;
             foreach (Player player in club.Squad.Players)
-                bill += WageModel.WeeklyWage(player, seasonResultPermille, cfg.Finance);
-            return bill;
+                total += DemandedWeeklyWage(player, club, seasonResultPermille, leagueLevel, economicReputation, cfg);
+            return total;
+        }
+
+        /// <summary>The division's average final-position prize (top and bottom average exactly, since
+        /// <see cref="PrizeMoney"/> is linear in position) — used to amortise a season-end lump sum into
+        /// <see cref="WeeklyWageBill"/>'s weekly revenue estimate without waiting for a final table.</summary>
+        private static long AverageSeasonPrize(int clubCount, int leagueLevel, int economicReputation, BalanceConfig cfg)
+        {
+            if (clubCount < 1) clubCount = 1;
+            long top = PrizeMoney(1, clubCount, leagueLevel, economicReputation, cfg);
+            long bottom = PrizeMoney(clubCount, clubCount, leagueLevel, economicReputation, cfg);
+            return (top + bottom) / 2;
         }
 
         /// <summary>
@@ -138,6 +158,49 @@ namespace Sim.Core.Market
             return mult < floorPermille ? floorPermille : mult;
         }
 
+        /// <summary>
+        /// The wage a specific player would be paid at a specific club (task: wages set by the paying
+        /// club, R7) — the per-player building block of <see cref="WeeklyWageBill"/>, exposed so the
+        /// client/negotiation screen can preview "what would he demand at THIS club" (e.g. during a
+        /// transfer) without re-deriving the ability-value + wage-structure math itself. Uses
+        /// <see cref="WageAbilityValue"/>, NOT the market's <see cref="ValuationModel"/> transfer-fee
+        /// curve — see that method's remarks for why.
+        /// </summary>
+        public static long DemandedWeeklyWage(Player player, Club club, int seasonResultPermille, int leagueLevel, int economicReputation, BalanceConfig cfg)
+        {
+            int structure = ClubWageStructurePermille(club.Stature, leagueLevel, economicReputation, cfg.Finance);
+            long abilityValue = WageAbilityValue(player, cfg.Finance);
+            return WageModel.WeeklyWage(abilityValue, seasonResultPermille, structure, cfg.Finance);
+        }
+
+        /// <summary>
+        /// A player's wage-side ability value (task: wages set by the paying club, R7): LINEAR in
+        /// (overall − <see cref="FinanceBalance.WageValueRatingFloor"/>) plus a flat
+        /// <see cref="FinanceBalance.WageLivingWageValue"/> EVERY player gets regardless of ability —
+        /// DELIBERATELY milder than the market's <see cref="ValuationModel"/> transfer-fee curve (cubic,
+        /// floored at <see cref="MarketBalance.RatingValueFloor"/> ≈ 30) — a real footballer's WAGE
+        /// reflects his CURRENT ability to play, not a discounted resale fee, so even a modest player
+        /// still draws a real, living wage where the market's fee curve would price him near zero. This
+        /// matters structurally: a real generated squad's overall rating already falls with division
+        /// (<see cref="Generation.LeagueGenerator"/>'s baseline), and reusing the market's fee curve for
+        /// wages compounds that fall with the fee curve's own floor/cubic steepness — the two effects
+        /// together crash a real division's total wage demand far faster than its revenue falls, making
+        /// the R7 median wage/revenue ratio (which must RISE tier over tier) unreachable together with
+        /// "the same player must earn ≥2x at a tier-1 club vs tier-2" (which bounds how much the wage
+        /// STRUCTURE alone may discount a lower division — see <see cref="WageDivisionMultiplierPermille"/>).
+        /// The flat living-wage term is what keeps the ratio rising tier over tier without touching that
+        /// bound: it is the SAME absolute amount at every tier, so it matters proportionally more for a
+        /// lower division's naturally smaller ability value — exactly a real living wage's effect on a
+        /// smaller squad budget.
+        /// </summary>
+        public static long WageAbilityValue(Player player, FinanceBalance f)
+        {
+            int overall = PlayerRating.Overall(player);
+            int excess = overall - f.WageValueRatingFloor;
+            if (excess < 0) excess = 0;
+            return f.WageValueUnitPerRating * excess + f.WageLivingWageValue;
+        }
+
         // ================= Nation & division wealth (R1-R3) =================
         //
         // Gate, sponsor and prize income are all scaled by ONE combined multiplier instead of each
@@ -206,22 +269,29 @@ namespace Sim.Core.Market
         /// </summary>
         public static int StatureMultiplierPermille(int stature, FinanceBalance f)
         {
-            int s = stature;
-            if (s < 0) s = 0;
-            if (s > 100) s = 100;
-
-            // Permille ramp (s/100)^exponent, computed by dividing back down to permille scale on
-            // EVERY multiply step (never IntPow(s, exponent) * 1000 / IntPow(100, exponent) - that
-            // overflows long at the double-digit exponents needed to keep the ramp near-flat for
-            // most of a real generated league and only pull away right at the top few stature
-            // points, which is what the R4 richest/poorest bands need on real generated data).
-            long rampPermille = 1000;
-            for (int i = 0; i < f.StatureMultiplierExponent; i++)
-                rampPermille = rampPermille * s / 100;
-
             long mult = f.StatureMultiplierFloorPermille
-                        + (f.StatureMultiplierCeilingPermille - f.StatureMultiplierFloorPermille) * rampPermille / 1000;
+                        + (f.StatureMultiplierCeilingPermille - f.StatureMultiplierFloorPermille)
+                        * ConvexRampPermille(stature, f.StatureMultiplierExponent) / 1000;
             return (int)mult;
+        }
+
+        /// <summary>
+        /// Shared convex ramp (s/100)^exponent, in permille, computed by dividing back down to
+        /// permille scale on EVERY multiply step (never IntPow(s, exponent) * 1000 / IntPow(100,
+        /// exponent) - that overflows long at the double-digit exponents needed to keep the ramp
+        /// near-flat for most of a real generated league and only pull away right at the top few
+        /// stature points). Shared by <see cref="StatureMultiplierPermille"/> (revenue) and
+        /// <see cref="WageStatureMultiplierPermille"/> (wage structure) — using the SAME shape for
+        /// both is what keeps a club's wage/revenue ratio independent of its own stature draw (see
+        /// the wage-structure remarks below).
+        /// </summary>
+        private static long ConvexRampPermille(int stature, int exponent)
+        {
+            int s = stature < 0 ? 0 : stature > 100 ? 100 : stature;
+            long ramp = 1000;
+            for (int i = 0; i < exponent; i++)
+                ramp = ramp * s / 100;
+            return ramp;
         }
 
         /// <summary>Deterministic integer power (no Math.Pow). Exponent ≥ 0.</summary>
@@ -230,6 +300,73 @@ namespace Sim.Core.Market
             long result = 1;
             for (int i = 0; i < exponent; i++) result *= value;
             return result;
+        }
+
+        // ================= Club wage structure (R7: wages set by the paying club) =================
+        //
+        // ClubWageStructurePermille answers BOTH "what would the SAME player (fixed ability) earn if
+        // he moved to a poorer/richer club" (DemandedWeeklyWage, the transfer-negotiation preview)
+        // AND, summed over a real squad, "what is THIS club's real wage bill" (WeeklyWageBill) - one
+        // formula, two callers (the user decision behind this task). Three factors:
+        //   - nation wealth (NationMultiplierPermille) — the SAME curve revenue uses, so it cancels
+        //     out of the wage/revenue ratio for any two clubs in the same nation;
+        //   - WageDivisionMultiplierPermille — a FLATTER decay than revenue's own DivisionWealthDecayPermille
+        //     (see WageDivisionWealthDecayPermille's remarks) — this is what makes the R7 median
+        //     wage/revenue ratio climb tier over tier (55-70% / 72-88% / 78-92%): wages hold up better
+        //     than revenue does going down the pyramid;
+        //   - WageStatureMultiplierPermille — the SAME convex shape (exponent) as the revenue-side
+        //     StatureMultiplierPermille, with its floor:ceiling RATIO locked to match (see that
+        //     method's remarks), so a club's wage structure and its own revenue move together as
+        //     stature varies, and the wage/revenue ratio does not depend on which stature a club
+        //     happens to draw — only squad-value noise (a real, and desired, second driver of a
+        //     club's own bill) and the tier/nation factors above still vary the ratio club to club.
+
+        /// <summary>
+        /// The paying club's wage structure multiplier (1/1000): nation wealth ×
+        /// <see cref="WageDivisionMultiplierPermille"/> × the club's own <see cref="Domain.Club.Stature"/>
+        /// (<see cref="WageStatureMultiplierPermille"/>). 1000 = a neutral (top-flight, full nation
+        /// wealth, median-stature) club. See the remarks above.
+        /// </summary>
+        public static int ClubWageStructurePermille(int stature, int leagueLevel, int economicReputation, FinanceBalance f)
+        {
+            long mult = (long)NationMultiplierPermille(economicReputation, f) * WageDivisionMultiplierPermille(leagueLevel, f) / 1000;
+            mult = mult * WageStatureMultiplierPermille(stature, f) / 1000;
+            return (int)mult;
+        }
+
+        /// <summary>
+        /// Division factor (1/1000) for the club wage structure, one entry per tier (tier 1 is always
+        /// 1000 - a neutral top-flight club - by construction of <see cref="FinanceBalance.WageDivisionWealthPermille"/>);
+        /// a tier beyond the configured list repeats the deepest entry. An explicit per-tier table
+        /// rather than a single decay/floor formula (contrast <see cref="DivisionMultiplierPermille"/>,
+        /// revenue's own) is DELIBERATE: tier 2's entry is bound tightly from above by the "same player
+        /// must earn ≥2x at a tier-1 club vs tier-2" requirement (so it decays), while tier 3's needs to
+        /// sit relatively HIGHER (not a compounded further decay of tier 2's) for the R7 median
+        /// wage/revenue ratio to keep rising into the tier-3 band — two independent constraints a single
+        /// geometric curve cannot satisfy at once.
+        /// </summary>
+        public static int WageDivisionMultiplierPermille(int tier, FinanceBalance f)
+        {
+            int[] mults = f.WageDivisionWealthPermille;
+            if (mults == null || mults.Length == 0) return 1000;
+            int index = tier - 1;
+            if (index < 0) index = 0;
+            if (index >= mults.Length) index = mults.Length - 1;
+            return mults[index];
+        }
+
+        /// <summary>
+        /// Wage multiplier (1/1000) from a club's <see cref="Domain.Club.Stature"/>: the SAME convex
+        /// shape (<see cref="FinanceBalance.StatureMultiplierExponent"/>) as the revenue-side
+        /// <see cref="StatureMultiplierPermille"/>, with its own floor/ceiling — see the wage-structure
+        /// remarks above for why this cancels a club's own stature out of its wage/revenue ratio.
+        /// </summary>
+        public static int WageStatureMultiplierPermille(int stature, FinanceBalance f)
+        {
+            long mult = f.WageStatureFloorPermille
+                        + (f.WageStatureCeilingPermille - f.WageStatureFloorPermille)
+                        * ConvexRampPermille(stature, f.StatureMultiplierExponent) / 1000;
+            return (int)mult;
         }
     }
 }
