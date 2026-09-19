@@ -62,11 +62,14 @@ namespace Sim.Core.Market
 
         /// <summary>
         /// Prize money for a final league finish: linear from the winner's prize (position 1) down
-        /// to the wooden-spoon prize (last position), then scaled by the club's nation × division
-        /// wealth (<see cref="NationDivisionMultiplierPermille"/>). <paramref name="position"/> is
-        /// 1-based; <paramref name="clubCount"/> is the division size.
+        /// to the wooden-spoon prize (last position), scaled by the club's nation × division wealth
+        /// (<see cref="NationDivisionMultiplierPermille"/>) and then by its own
+        /// <see cref="Domain.Club.Stature"/> (<see cref="PrizeStatureMultiplierPermille"/>, R6) — a
+        /// club's prestige lifts its prize on top of whatever position it actually finishes in (real
+        /// competitions pay coefficient/prestige bonuses alongside pure sporting result).
+        /// <paramref name="position"/> is 1-based; <paramref name="clubCount"/> is the division size.
         /// </summary>
-        public static long PrizeMoney(int position, int clubCount, int leagueLevel, int economicReputation, BalanceConfig cfg)
+        public static long PrizeMoney(int position, int clubCount, int leagueLevel, int economicReputation, int stature, BalanceConfig cfg)
         {
             FinanceBalance f = cfg.Finance;
             if (position < 1) position = 1;
@@ -79,9 +82,10 @@ namespace Sim.Core.Market
                 ? top
                 : top - (top - bottom) * (position - 1) / (clubCount - 1);
 
-            return prize
-                   * NationDivisionMultiplierPermille(economicReputation, leagueLevel, f)
-                   / 1000;
+            prize = prize
+                    * NationDivisionMultiplierPermille(economicReputation, leagueLevel, f)
+                    / 1000;
+            return prize * PrizeStatureMultiplierPermille(stature, f) / 1000;
         }
 
         /// <summary>
@@ -201,26 +205,41 @@ namespace Sim.Core.Market
         /// same (capped) tier, so stature needs to differentiate revenue across the WHOLE league on
         /// its own for the richest/poorest-of-mean bands (R4) to land, not just nudge the very top.
         /// Applied ON TOP of (multiplicatively with) nation × division wealth inside GateReceipts and
-        /// WeeklySponsor themselves, so it never touches PrizeMoney (position already drives that) and
-        /// cancels out of the tier2/tier1 division ratio (R3) exactly as nation × division wealth does.
+        /// WeeklySponsor themselves; cancels out of the tier2/tier1 division ratio (R3) exactly as
+        /// nation × division wealth does. <see cref="PrizeMoney"/> uses the SAME ramp shape but its
+        /// own, much gentler floor/ceiling (<see cref="PrizeStatureMultiplierPermille"/>) since
+        /// position already captures most of a club's stature-driven quality there.
         /// </summary>
         public static int StatureMultiplierPermille(int stature, FinanceBalance f)
+            => RampMultiplierPermille(stature, f.StatureMultiplierFloorPermille, f.StatureMultiplierCeilingPermille, f.StatureMultiplierExponent);
+
+        /// <summary>
+        /// The prize-money stature multiplier (1/1000, R6): a much gentler version of
+        /// <see cref="StatureMultiplierPermille"/> — floor 1000 (no discount; finishing position
+        /// already drives the bulk of prize money) rising to a modest ceiling at stature 100, same
+        /// convex ramp shape/exponent so only the very top of the stature ladder is affected.
+        /// </summary>
+        public static int PrizeStatureMultiplierPermille(int stature, FinanceBalance f)
+            => RampMultiplierPermille(stature, f.PrizeStatureMultiplierFloorPermille, f.PrizeStatureMultiplierCeilingPermille, f.StatureMultiplierExponent);
+
+        /// <summary>
+        /// Permille ramp (stature/100)^exponent from <paramref name="floorPermille"/> to
+        /// <paramref name="ceilingPermille"/>, computed by dividing back down to permille scale on
+        /// EVERY multiply step (never IntPow(s, exponent) * 1000 / IntPow(100, exponent) - that
+        /// overflows long at the double-digit exponents needed to keep the ramp near-flat for most
+        /// of a real generated league and only pull away right at the top few stature points).
+        /// </summary>
+        private static int RampMultiplierPermille(int stature, int floorPermille, int ceilingPermille, int exponent)
         {
             int s = stature;
             if (s < 0) s = 0;
             if (s > 100) s = 100;
 
-            // Permille ramp (s/100)^exponent, computed by dividing back down to permille scale on
-            // EVERY multiply step (never IntPow(s, exponent) * 1000 / IntPow(100, exponent) - that
-            // overflows long at the double-digit exponents needed to keep the ramp near-flat for
-            // most of a real generated league and only pull away right at the top few stature
-            // points, which is what the R4 richest/poorest bands need on real generated data).
             long rampPermille = 1000;
-            for (int i = 0; i < f.StatureMultiplierExponent; i++)
+            for (int i = 0; i < exponent; i++)
                 rampPermille = rampPermille * s / 100;
 
-            long mult = f.StatureMultiplierFloorPermille
-                        + (f.StatureMultiplierCeilingPermille - f.StatureMultiplierFloorPermille) * rampPermille / 1000;
+            long mult = floorPermille + (ceilingPermille - floorPermille) * rampPermille / 1000;
             return (int)mult;
         }
 
@@ -230,6 +249,68 @@ namespace Sim.Core.Market
             long result = 1;
             for (int i = 0; i < exponent; i++) result *= value;
             return result;
+        }
+
+        // ================= Estimated finances for data-only clubs (R6) =================
+        //
+        // A data-only club has no fixtures and no table (LeagueDetailLevel.DataOnly), so it never
+        // earns a real gate receipt or a real prize. Its revenue is instead ESTIMATED from what a
+        // playable club of the same nation x division x stature would earn over a season, and paid
+        // out in equal weekly instalments by FinanceProgressor.AccrueDataOnlyWeek — never as gate or
+        // prize income, so Finances.SeasonGateIncome/SeasonPrizeIncome stay at zero for these clubs.
+
+        /// <summary>
+        /// The league-average prize money (R6): the mean of <see cref="PrizeMoney"/> across every
+        /// final position 1..clubCount, at the given club's OWN stature. For the linear top-to-bottom
+        /// prize curve this mean (before the stature multiplier) is exactly the midpoint of the
+        /// winner's and wooden-spoon's prize, whatever club ends up where — used by
+        /// <see cref="EstimatedAnnualRevenue"/> for a club with no table of its own to read a real
+        /// position from.
+        /// </summary>
+        public static long AveragePrizeMoney(int stature, int leagueLevel, int economicReputation, BalanceConfig cfg)
+        {
+            FinanceBalance f = cfg.Finance;
+            long avg = (f.PrizeWinnerTopFlight + f.PrizeLastTopFlight) / 2;
+            avg = avg * NationDivisionMultiplierPermille(economicReputation, leagueLevel, f) / 1000;
+            return avg * PrizeStatureMultiplierPermille(stature, f) / 1000;
+        }
+
+        /// <summary>
+        /// Home fixtures a club plays in one season of a <paramref name="clubCount"/>-club double
+        /// round-robin (every club hosts every other club exactly once) — the same shape
+        /// <see cref="Career.FixtureGenerator"/> produces for a playable/background league.
+        /// </summary>
+        private static int SeasonHomeMatches(int clubCount) => clubCount > 1 ? clubCount - 1 : 0;
+
+        /// <summary>
+        /// A data-only club's estimated ANNUAL revenue (R6): what a playable club of the same nation x
+        /// division x stature would earn over a season — <see cref="SeasonHomeMatches"/> home fixtures'
+        /// worth of <see cref="GateReceipts"/>, a full season's worth of <see cref="WeeklySponsor"/> (one
+        /// per round, exactly like the real weekly accrual cadence), plus <see cref="AveragePrizeMoney"/>
+        /// standing in for the real per-position prize the club never gets to earn.
+        /// </summary>
+        public static long EstimatedAnnualRevenue(Club club, int leagueLevel, int economicReputation, int clubCount, BalanceConfig cfg)
+        {
+            int homeMatches = SeasonHomeMatches(clubCount);
+            int seasonWeeks = 2 * homeMatches; // double round-robin: two rounds per opponent
+
+            long gate = GateReceipts(club, leagueLevel, economicReputation, cfg) * homeMatches;
+            long sponsor = WeeklySponsor(club, leagueLevel, economicReputation, cfg) * seasonWeeks;
+            long prize = AveragePrizeMoney(club.Stature, leagueLevel, economicReputation, cfg);
+
+            return gate + sponsor + prize;
+        }
+
+        /// <summary>
+        /// One week's share of <see cref="EstimatedAnnualRevenue"/> — what <see cref="FinanceProgressor.AccrueDataOnlyWeek"/>
+        /// pays a data-only club each week, matching the weekly cadence every other league books
+        /// sponsor income on. Integer division rounds down, same as every other weekly figure here.
+        /// </summary>
+        public static long EstimatedWeeklyRevenue(Club club, int leagueLevel, int economicReputation, int clubCount, BalanceConfig cfg)
+        {
+            int seasonWeeks = 2 * SeasonHomeMatches(clubCount);
+            if (seasonWeeks <= 0) return 0;
+            return EstimatedAnnualRevenue(club, leagueLevel, economicReputation, clubCount, cfg) / seasonWeeks;
         }
     }
 }

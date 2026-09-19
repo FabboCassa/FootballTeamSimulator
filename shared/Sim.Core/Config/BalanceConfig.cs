@@ -526,6 +526,16 @@
         /// High enough that the ramp stays near the floor for most of the league, concentrating the
         /// floor-to-ceiling range on the very top of the stature ladder.</summary>
         public int StatureMultiplierExponent { get; set; } = 8;
+
+        // --- Prize-money stature spread (R6: estimated finances) ---
+        // A much gentler version of the gate/sponsor stature ramp above, applied inside
+        // FinanceModel.PrizeMoney/AveragePrizeMoney: prize is already driven by finishing position,
+        // so stature only adds a modest prestige premium on top, concentrated (same ramp exponent)
+        // on the very top of the stature ladder.
+        /// <summary>Prize multiplier (1/1000) at stature 0 — no discount below the position-based prize.</summary>
+        public int PrizeStatureMultiplierFloorPermille { get; set; } = 1000;
+        /// <summary>Prize multiplier (1/1000) at stature 100 — a modest prestige premium on top of position.</summary>
+        public int PrizeStatureMultiplierCeilingPermille { get; set; } = 1400;
     }
 
     /// <summary>
