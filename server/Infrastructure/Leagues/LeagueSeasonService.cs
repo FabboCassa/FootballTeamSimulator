@@ -535,6 +535,11 @@ public sealed class LeagueSeasonService : ILeagueSeasonService
         var marketEngine = new LeagueMarketEngine(_db, _config);
         await marketEngine.ExpirePendingOffersAsync(league.Id, now, ct);
 
+        // Stature-based income AND wages (task: stature-based income for private leagues, R12): a
+        // resolved round books gate + sponsor revenue scaled by Stature, then debits the squad's demanded
+        // wage bill (via the same marketEngine instance used for this round's window, above).
+        PrivateLeagueFinance.AccrueRoundRevenue(entByGuid, roundFixtures, marketEngine, _config);
+
         await _db.SaveChangesAsync(ct);
 
         // …and if the round just opened the mid-season window, the bot clubs do their business first, so
