@@ -124,23 +124,55 @@ namespace Sim.Core.Market
         }
 
         /// <summary>
-        /// The season transfer kitty the board backs: a share of current cash reserves plus a flat
-        /// board grant (league-scaled), floored. Replaces the 5.2 strength-based seed in the live
-        /// path — so a club that has spent its cash gets a smaller kitty (overspending blocks signings).
+        /// The season transfer kitty the board backs (task: realistic transfer budgets, R9): a share
+        /// of current cash reserves plus a flat board grant, floored. The grant is scaled by the SAME
+        /// nation wealth (<see cref="NationMultiplierPermille"/>, R1) and club
+        /// <see cref="Domain.Club.Stature"/> (<see cref="StatureMultiplierPermille"/>, R4) multipliers
+        /// that gate/sponsor revenue use — reused rather than duplicated — times its OWN, much steeper
+        /// division factor (<see cref="BoardGrantDivisionMultiplierPermille"/>; see its remarks for
+        /// why the grant needs a dedicated curve rather than reusing revenue's/wages' flatter ones).
+        /// The cash share needs no separate scaling: <see cref="Domain.Finances.Balance"/> already
+        /// carries the nation x division x stature spread through <see cref="GateReceipts"/>/
+        /// <see cref="WeeklySponsor"/>/<see cref="PrizeMoney"/>. Replaces the 5.2 strength-based seed
+        /// in the live path — so a club that has spent its cash gets a smaller kitty (overspending
+        /// blocks signings).
         /// </summary>
-        public static long SeasonTransferBudget(Club club, int leagueLevel, BalanceConfig cfg)
+        public static long SeasonTransferBudget(Club club, int leagueLevel, int economicReputation, BalanceConfig cfg)
         {
             FinanceBalance f = cfg.Finance;
             long cashShare = club.Finances.Balance * f.TransferBudgetCashPercent / 100;
             if (cashShare < 0) cashShare = 0;
 
-            long grant = f.BoardGrantTopFlight
-                         * LeagueMultiplierPermille(leagueLevel, f.BoardGrantDivisionDiscountPermille, f.BoardGrantDivisionFloorPermille)
-                         / 1000;
+            long grant = f.BoardGrantTopFlight * NationMultiplierPermille(economicReputation, f) / 1000;
+            grant = grant * BoardGrantDivisionMultiplierPermille(leagueLevel, f) / 1000;
+            grant = grant * StatureMultiplierPermille(club.Stature, f) / 1000;
 
             long budget = cashShare + grant;
             if (budget < f.MinTransferBudget) budget = f.MinTransferBudget;
             return budget;
+        }
+
+        /// <summary>
+        /// Division factor (1/1000) for the board grant (task: realistic transfer budgets, R9), one
+        /// entry per tier (see <see cref="FinanceBalance.BoardGrantDivisionWealthPermille"/>); a tier
+        /// beyond the configured list repeats the deepest entry — same table-lookup shape as
+        /// <see cref="WageDivisionMultiplierPermille"/>. Deliberately its OWN, much steeper curve
+        /// (rather than reusing <see cref="DivisionMultiplierPermille"/>/<see cref="WageDivisionMultiplierPermille"/>):
+        /// a club's accumulated cash share is ALREADY division-discounted through a full season of
+        /// gate/sponsor/prize revenue minus wages (both flatter curves), so a REUSED flat division
+        /// factor on the grant lands the blended tier-2/tier-1 budget ratio near 50% — the R9
+        /// acceptance (median tier-2 <= 25% of tier-1, in a single simulated season) needs the
+        /// board's DISCRETIONARY top-up itself to be far more concentrated at the top, the way a real
+        /// board's TV-money-backed war chest is.
+        /// </summary>
+        public static int BoardGrantDivisionMultiplierPermille(int tier, FinanceBalance f)
+        {
+            int[] mults = f.BoardGrantDivisionWealthPermille;
+            if (mults == null || mults.Length == 0) return 1000;
+            int index = tier - 1;
+            if (index < 0) index = 0;
+            if (index >= mults.Length) index = mults.Length - 1;
+            return mults[index];
         }
 
         /// <summary>League level (1/1000): top flight = full, each lower division discounts, floored.</summary>
