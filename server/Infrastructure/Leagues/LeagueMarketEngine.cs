@@ -67,8 +67,12 @@ public sealed class LeagueMarketEngine
 
     /// <summary>What a specific club would have to pay a player per week (task: wages set by the paying
     /// club, R7): the shared <see cref="FinanceModel.ClubWageStructurePermille"/> (nation × division ×
-    /// stature × facility tier) applied to his cached value via <see cref="WageModel"/>, at a neutral
-    /// season result — a richer club pays more for the exact same player. This world has no persisted
+    /// stature × facility tier) applied to his ABILITY value (<see cref="FinanceModel.WageAbilityValue(int,Sim.Core.Config.FinanceBalance)"/>
+    /// — the SAME curve <see cref="FinanceModel.DemandedWeeklyWage"/> uses, never his cached transfer-fee
+    /// <see cref="EntPlayer.MarketValue"/>, a different scale calibrated against
+    /// <see cref="Sim.Core.Config.FinanceBalance.WageWeeklyValueDivisor"/> for the ability
+    /// value, not the fee) via <see cref="WageModel"/>, at a neutral season result — a richer club pays
+    /// more for the exact same player. This world has no persisted
     /// club stature (task: club stature, R4 is a Sim.Core-only concept these entities don't carry), so
     /// the club's own <see cref="EntClub.Strength"/> (its coarse 0-100 squad rating, the same field that
     /// already seeds its budget) stands in for stature — the best proxy for "how well this club pays"
@@ -95,7 +99,12 @@ public sealed class LeagueMarketEngine
     {
         int structure = FinanceModel.ClubWageStructurePermille(
             stature, SingleDivisionLeagueLevel, NeutralEconomicReputation, facilityTier, _config.Finance);
-        return Math.Max(1, WageModel.WeeklyWage(player.MarketValue, 1000, structure, _config.Finance));
+        // Ability value, NOT player.MarketValue (the transfer-fee curve) — the two scales are calibrated
+        // against DIFFERENT divisors (see the class doc above), so mixing them here previously underpaid
+        // every demand ~13x. WageAbilityValue(int, ...) is the SAME formula Sim.Core's
+        // FinanceModel.DemandedWeeklyWage uses, just fed from the entity's denormalised Overall column.
+        long abilityValue = FinanceModel.WageAbilityValue(player.Overall, _config.Finance);
+        return Math.Max(1, WageModel.WeeklyWage(abilityValue, 1000, structure, _config.Finance));
     }
 
     /// <summary>What a free agent asks with no specific signing club in view (the shop-window listing

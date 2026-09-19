@@ -186,9 +186,20 @@ namespace Sim.Core.Market
         /// lower division's naturally smaller ability value — exactly a real living wage's effect on a
         /// smaller squad budget.
         /// </summary>
-        public static long WageAbilityValue(Player player, FinanceBalance f)
+        public static long WageAbilityValue(Player player, FinanceBalance f) =>
+            WageAbilityValue(PlayerRating.Overall(player), f);
+
+        /// <summary>
+        /// The overall-only half of <see cref="WageAbilityValue(Player, FinanceBalance)"/> (task: wages
+        /// set by the paying club, R7) — exposed so a caller that only has a denormalised overall rating
+        /// (the server's <c>Fts.Infrastructure.Persistence.Entities.Player.Overall</c> column, not a full
+        /// Sim.Core <see cref="Player"/>) can feed the SAME ability-value curve into
+        /// <see cref="WageModel.WeeklyWage(long, int, int, FinanceBalance)"/> that
+        /// <see cref="DemandedWeeklyWage"/> uses, instead of duplicating this formula or — the bug this
+        /// overload fixes — feeding a transfer-fee <c>MarketValue</c> into the ability-calibrated divisor.
+        /// </summary>
+        public static long WageAbilityValue(int overall, FinanceBalance f)
         {
-            int overall = PlayerRating.Overall(player);
             int excess = overall - f.WageValueRatingFloor;
             if (excess < 0) excess = 0;
             return f.WageValueUnitPerRating * excess + f.WageLivingWageValue;

@@ -3,10 +3,18 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using Fts.Application.Auth;
 using Fts.Application.Leagues;
+using Fts.Infrastructure.Leagues;
 using Fts.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using NUnit.Framework;
+using Sim.Core.Config;
+using Sim.Core.Domain;
+using Sim.Core.Market;
+using EntClub = Fts.Infrastructure.Persistence.Entities.Club;
+using EntPlayer = Fts.Infrastructure.Persistence.Entities.Player;
+using SimClub = Sim.Core.Domain.Club;
+using SimPlayer = Sim.Core.Domain.Player;
 
 namespace Fts.Api.Tests;
 
@@ -727,4 +735,92 @@ public class LeagueMarketTests
     }
 
     private sealed record Account(string Tok, Guid Id, int? ClubExternalId);
+}
+
+/// <summary>
+/// Task: wages set by the paying club, R7 — pins the ABSOLUTE scale of the server's per-player wage
+/// demand against the shared Sim.Core formula, not just relative ordering (<see cref="LeagueMarketTests.RicherClub_IsAskedMoreForTheSameFreeAgent"/>
+/// already covers that). Root-cause regression for the "one formula, two callers" bug: the server used
+/// to feed <c>Player.MarketValue</c> (the transfer-fee curve, <see cref="ValuationModel"/>) into the
+/// divisor Sim.Core calibrated for <see cref="FinanceModel.WageAbilityValue(int, FinanceBalance)"/>
+/// (the ability curve) — an overall-70 free agent demanded ~18,400/week instead of the intended
+/// ~240,000/week, ~13x too low. No database needed: <see cref="LeagueMarketEngine.DemandedWage(EntPlayer, EntClub)"/>
+/// is pure given a <see cref="BalanceConfig"/>.
+/// </summary>
+[TestFixture]
+public class LeagueMarketWageScaleTests
+{
+    private readonly BalanceConfig _cfg = new();
+
+    /// <summary>Every skill pinned at 70: since each role's weight row (<see cref="PlayerRating"/>)
+    /// sums to 100, the weighted average — and so <see cref="PlayerRating.Overall"/> — is exactly 70
+    /// regardless of role.</summary>
+    private static SimPlayer OverallSeventy()
+    {
+        var p = new SimPlayer { Role = PositionRole.Striker };
+        PlayerAttributes a = p.Attributes;
+        a.Pace = a.Strength = a.Stamina = a.Technique = a.Passing =
+            a.Dribbling = a.Shooting = a.Defending = a.Positioning = a.Goalkeeping = 70;
+        return p;
+    }
+
+    /// <summary>The server-side entity a coach actually reads/pays through, built from the same
+    /// SimPlayer so both paths start from an identical overall.</summary>
+    private static EntPlayer AsEntity(SimPlayer sim, long marketValue) => new()
+    {
+        Overall = PlayerRating.Overall(sim),
+        Role = (int)sim.Role,
+        MarketValue = marketValue,
+    };
+
+    [TestCase(20, TestName = "TierOne")]
+    [TestCase(55, TestName = "TierTwo")]
+    public void ServerDemand_EqualsSharedSimCoreFormula_ForTheEquivalentClub(int clubStrength)
+    {
+        SimPlayer simPlayer = OverallSeventy();
+        EntPlayer entPlayer = AsEntity(simPlayer, marketValue: 14_700_000);
+        var entClub = new EntClub { Strength = clubStrength };
+
+        // The exact mapping LeagueMarketEngine.DemandedWage(EntPlayer, EntClub) uses: club.Strength
+        // stands in for both stature and (via SuggestedStadiumTier) facility tier.
+        int facilityTier = FacilityEffects.SuggestedStadiumTier(clubStrength, clubStrength, _cfg.Finance);
+        var simClub = new SimClub { Stature = clubStrength };
+        simClub.Facilities.Stadium = facilityTier;
+
+        var engine = new LeagueMarketEngine(null!, _cfg);
+        long serverDemand = engine.DemandedWage(entPlayer, entClub);
+
+        long expected = FinanceModel.DemandedWeeklyWage(
+            simPlayer, simClub, seasonResultPermille: 1000, leagueLevel: 1, economicReputation: 100, _cfg);
+
+        TestContext.Out.WriteLine(
+            $"[wage-scale] overall 70, club strength {clubStrength} (facility tier {facilityTier}): server={serverDemand}/week");
+
+        Assert.That(serverDemand, Is.EqualTo(expected),
+            "the server must derive its demand from the SAME ability-value + wage-structure pipeline as Sim.Core, not from MarketValue");
+    }
+
+    [Test]
+    public void FreeAgentDemand_StaysInASaneRangeAgainstMarketValue_NotOrdersOfMagnitudeOff()
+    {
+        // The concrete bug this pins: overall 70 used to demand MarketValue/800 (~18,400/week against a
+        // ~14.7M MarketValue) — under 0.15% of value per week, a rounding error rather than a wage. A real
+        // footballer's weekly wage is a few tenths of a percent to a few percent of his transfer value, so
+        // demanding less than 1% of MarketValue signals the old bug is back.
+        SimPlayer simPlayer = OverallSeventy();
+        EntPlayer entPlayer = AsEntity(simPlayer, marketValue: 14_700_000);
+        var entClub = new EntClub { Strength = 50 };
+        var engine = new LeagueMarketEngine(null!, _cfg);
+
+        long demand = engine.DemandedWage(entPlayer, entClub);
+        long signingCost = LeagueMarketEngine.SigningCost(demand);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(demand, Is.GreaterThan(entPlayer.MarketValue / 100),
+                "sane lower bound: at least 1% of MarketValue per week, not a rounding error against it");
+            Assert.That(signingCost, Is.LessThan(entPlayer.MarketValue * 10),
+                "sane upper bound: a year's wages should not dwarf the whole transfer-fee scale by 10x+");
+        });
+    }
 }
