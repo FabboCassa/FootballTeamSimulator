@@ -54,14 +54,24 @@ namespace Sim.Core.Tests.Market
         }
 
         [Test]
-        public void ClubWageStructure_IsNationTimesDivisionTimesStature()
+        public void ClubWageStructure_IsNationTimesDivisionTimesStatureTimesFacility()
         {
             int nation = FinanceModel.NationMultiplierPermille(70, F);
             int division = FinanceModel.WageDivisionMultiplierPermille(2, F);
             int stature = FinanceModel.WageStatureMultiplierPermille(80, F);
-            int expected = (int)((long)nation * division / 1000 * stature / 1000);
+            int facility = FinanceModel.WageFacilityMultiplierPermille(3, F);
+            long expected = (long)nation * division / 1000 * stature / 1000 * facility / 1000;
 
-            Assert.That(FinanceModel.ClubWageStructurePermille(80, 2, 70, F), Is.EqualTo(expected));
+            Assert.That(FinanceModel.ClubWageStructurePermille(80, 2, 70, 3, F), Is.EqualTo(expected));
+        }
+
+        [Test]
+        public void ClubWageStructure_RisesWithFacilityTier()
+        {
+            int poorFacility = FinanceModel.ClubWageStructurePermille(50, 1, 100, facilityTier: 1, F);
+            int richFacility = FinanceModel.ClubWageStructurePermille(50, 1, 100, facilityTier: 5, F);
+            Assert.That(richFacility, Is.GreaterThan(poorFacility),
+                "a bigger stadium must mean a heavier wage structure, all else equal");
         }
 
         // ============================================================ same player, richer club
@@ -115,11 +125,14 @@ namespace Sim.Core.Tests.Market
         // ============================================================ median wage/revenue by tier
 
         /// <summary>
-        /// 24 distinct 16-club Italy-tier seeds (a real generated league's wage bill now targets a
-        /// SHARE of that club's own revenue capacity — see <see cref="FinanceModel.WeeklyWageBill"/> —
-        /// so the median lands inside each tier's band as a structural property, not a lucky sample;
-        /// a wider, unfiltered self-probe of 150 further seeds per tier outside this list, run while
-        /// calibrating this test, landed 0/150 misses per tier).
+        /// 24 distinct 16-club Italy-tier seeds. The wage bill charged is the SUM of the squad's
+        /// structure-aware per-player <see cref="FinanceModel.DemandedWeeklyWage"/> — see
+        /// <see cref="FinanceModel.WeeklyWageBill"/> — no separate revenue-share target of its own;
+        /// the median landing inside each tier's band is instead a property of the CALIBRATION
+        /// (<see cref="FinanceModel.ClubWageStructurePermille"/>'s nation/division/stature/facility
+        /// factors and the ability-value constants in <see cref="Config.FinanceBalance"/>), so it
+        /// must also hold on seeds outside this list — a wider, unfiltered self-probe run while
+        /// calibrating this test is reported by the task that added it.
         /// </summary>
         private static readonly ulong[] TierSeeds =
         {
@@ -194,6 +207,67 @@ namespace Sim.Core.Tests.Market
 
             int n = ratios.Count;
             return n % 2 == 1 ? ratios[n / 2] : (ratios[n / 2 - 1] + ratios[n / 2]) / 2.0;
+        }
+
+        // ============================================================ bill = sum of per-player demands
+
+        [Test]
+        public void WeeklyWageBill_EqualsSum_OfDemandedWeeklyWage_OverTheSquad()
+        {
+            List<NationProfile> atlas = NationDatabase.BuiltIn();
+            int italyRep = NationDatabase.Find(atlas, "ITA")!.EconomicReputation;
+
+            Club club = new Club { Stature = 62 };
+            for (int i = 0; i < 18; i++)
+                club.Squad.Players.Add(MakePlayer(overall: 40 + i * 2, potential: 40 + i * 2, age: 25));
+
+            const int resultPermille = 1050;
+            const int leagueLevel = 2;
+
+            long bill = FinanceModel.WeeklyWageBill(club, resultPermille, leagueLevel, italyRep, Cfg);
+            long summed = club.Squad.Players.Sum(p => FinanceModel.DemandedWeeklyWage(p, club, resultPermille, leagueLevel, italyRep, Cfg));
+
+            Assert.That(bill, Is.EqualTo(summed),
+                "the club's aggregate wage bill must be exactly the sum of what each player individually demands from it - one formula, two callers, no separate target-share anchor");
+        }
+
+        [Test]
+        public void WeeklyWageBill_DoublingSquadAbilityValue_RoughlyDoublesTheBill()
+        {
+            // Attempt-3's rejected design anchored the bill to a share of revenue with a clamped
+            // squad-value factor (0.85-1.15x), so doubling squad value barely moved it. The current
+            // bill is a plain SUM of per-player demands (see WeeklyWageBill), which is linear in each
+            // player's wage-side ability value by construction - this proves there is no such clamp.
+            List<NationProfile> atlas = NationDatabase.BuiltIn();
+            int italyRep = NationDatabase.Find(atlas, "ITA")!.EconomicReputation;
+            Club club = new Club { Stature = 55 };
+
+            // overall 30 -> ability value ~88M; overall 64 -> ~176M (almost exactly double), see
+            // FinanceModel.WageAbilityValue: unitPerRating*(overall-floor) + flat living wage.
+            const int baselineOverall = 30;
+            const int doubledOverall = 64;
+            const int squadSize = 20;
+            const int leagueLevel = 1;
+
+            var baselineSquad = new List<Player>();
+            var doubledSquad = new List<Player>();
+            for (int i = 0; i < squadSize; i++)
+            {
+                baselineSquad.Add(MakePlayer(overall: baselineOverall, potential: baselineOverall, age: 26));
+                doubledSquad.Add(MakePlayer(overall: doubledOverall, potential: doubledOverall, age: 26));
+            }
+
+            club.Squad.Players.Clear();
+            club.Squad.Players.AddRange(baselineSquad);
+            long baselineBill = FinanceModel.WeeklyWageBill(club, 1000, leagueLevel, italyRep, Cfg);
+
+            club.Squad.Players.Clear();
+            club.Squad.Players.AddRange(doubledSquad);
+            long doubledBill = FinanceModel.WeeklyWageBill(club, 1000, leagueLevel, italyRep, Cfg);
+
+            double ratio = (double)doubledBill / baselineBill;
+            TestContext.Out.WriteLine($"[bill-scaling] baseline={baselineBill:N0} doubled={doubledBill:N0} ratio={ratio:F2}");
+            Assert.That(ratio, Is.InRange(1.8, 2.2), "roughly doubling the squad's wage-side ability value must roughly double the bill, not be clamped/anchored away from it");
         }
 
         // ============================================================ zero insolvency

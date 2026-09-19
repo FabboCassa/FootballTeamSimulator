@@ -69,17 +69,6 @@ namespace Sim.Core.Market
             return total;
         }
 
-        /// <summary>The division's average final-position prize (top and bottom average exactly, since
-        /// <see cref="PrizeMoney"/> is linear in position) — used to amortise a season-end lump sum into
-        /// <see cref="WeeklyWageBill"/>'s weekly revenue estimate without waiting for a final table.</summary>
-        private static long AverageSeasonPrize(int clubCount, int leagueLevel, int economicReputation, BalanceConfig cfg)
-        {
-            if (clubCount < 1) clubCount = 1;
-            long top = PrizeMoney(1, clubCount, leagueLevel, economicReputation, cfg);
-            long bottom = PrizeMoney(clubCount, clubCount, leagueLevel, economicReputation, cfg);
-            return (top + bottom) / 2;
-        }
-
         /// <summary>
         /// Prize money for a final league finish: linear from the winner's prize (position 1) down
         /// to the wooden-spoon prize (last position), scaled by the club's nation × division wealth
@@ -172,7 +161,7 @@ namespace Sim.Core.Market
         /// </summary>
         public static long DemandedWeeklyWage(Player player, Club club, int seasonResultPermille, int leagueLevel, int economicReputation, BalanceConfig cfg)
         {
-            int structure = ClubWageStructurePermille(club.Stature, leagueLevel, economicReputation, cfg.Finance);
+            int structure = ClubWageStructurePermille(club.Stature, leagueLevel, economicReputation, club.Facilities.Stadium, cfg.Finance);
             long abilityValue = WageAbilityValue(player, cfg.Finance);
             return WageModel.WeeklyWage(abilityValue, seasonResultPermille, structure, cfg.Finance);
         }
@@ -350,23 +339,24 @@ namespace Sim.Core.Market
         /// (<see cref="WageStatureMultiplierPermille"/>). 1000 = a neutral (top-flight, full nation
         /// wealth, median-stature) club. See the remarks above.
         /// </summary>
-        public static int ClubWageStructurePermille(int stature, int leagueLevel, int economicReputation, FinanceBalance f)
+        public static int ClubWageStructurePermille(int stature, int leagueLevel, int economicReputation, int facilityTier, FinanceBalance f)
         {
             long mult = (long)NationMultiplierPermille(economicReputation, f) * WageDivisionMultiplierPermille(leagueLevel, f) / 1000;
             mult = mult * WageStatureMultiplierPermille(stature, f) / 1000;
+            mult = mult * WageFacilityMultiplierPermille(facilityTier, f) / 1000;
             return (int)mult;
         }
 
         /// <summary>
-        /// Division factor (1/1000) for the club wage structure, one entry per tier (tier 1 is always
-        /// 1000 - a neutral top-flight club - by construction of <see cref="FinanceBalance.WageDivisionWealthPermille"/>);
-        /// a tier beyond the configured list repeats the deepest entry. An explicit per-tier table
-        /// rather than a single decay/floor formula (contrast <see cref="DivisionMultiplierPermille"/>,
-        /// revenue's own) is DELIBERATE: tier 2's entry is bound tightly from above by the "same player
-        /// must earn ≥2x at a tier-1 club vs tier-2" requirement (so it decays), while tier 3's needs to
-        /// sit relatively HIGHER (not a compounded further decay of tier 2's) for the R7 median
-        /// wage/revenue ratio to keep rising into the tier-3 band — two independent constraints a single
-        /// geometric curve cannot satisfy at once.
+        /// Division factor (1/1000) for the club wage structure, one entry per tier (see
+        /// <see cref="FinanceBalance.WageDivisionWealthPermille"/>); a tier beyond the configured list
+        /// repeats the deepest entry. An explicit per-tier table rather than a single decay/floor
+        /// formula (contrast <see cref="DivisionMultiplierPermille"/>, revenue's own) is DELIBERATE:
+        /// tier 2's entry is bound tightly from above by the "same player must earn ≥2x at a tier-1
+        /// club vs tier-2" requirement (entry[0]/entry[1] ≥ 2), while tier 3's needs to sit relatively
+        /// HIGHER (not a compounded further decay of tier 2's) for the R7 median wage/revenue ratio to
+        /// keep rising into the tier-3 band — independent constraints a single geometric curve cannot
+        /// satisfy at once.
         /// </summary>
         public static int WageDivisionMultiplierPermille(int tier, FinanceBalance f)
         {
@@ -390,6 +380,30 @@ namespace Sim.Core.Market
                         + (f.WageStatureCeilingPermille - f.WageStatureFloorPermille)
                         * ConvexRampPermille(stature, f.StatureMultiplierExponent) / 1000;
             return (int)mult;
+        }
+
+        /// <summary>
+        /// Facility-tier factor (1/1000) for the club wage structure (task: wages set by the paying
+        /// club, R7, point 2 of the user decision): a club's OWN stadium tier — the same
+        /// <see cref="Domain.Facilities.Stadium"/> that <see cref="FacilityEffects.SuggestedStadiumTier(int,int,FinanceBalance)"/>
+        /// derives from strength AND stature at generation — feeds the wage bill exactly like it
+        /// already feeds gate/sponsor revenue, so a club stuck at the smallest stadium (roughly half
+        /// of any generated league, by strength alone) also carries a correspondingly lighter wage
+        /// bill instead of one sized only by its squad's ability value. This is what keeps the R7
+        /// median wage/revenue ratio stable across seeds: without it, a league whose facility-tier
+        /// split happens to land right at the median club pushes the ratio far outside its band (the
+        /// squad's ability value barely falls at the facility floor while gate/sponsor crash hard).
+        /// See <see cref="FinanceBalance.WageFacilityWealthPermille"/> for why the calibrated table is
+        /// deliberately flat above the smallest tier rather than mirroring capacity's own per-tier lift.
+        /// </summary>
+        public static int WageFacilityMultiplierPermille(int facilityTier, FinanceBalance f)
+        {
+            int[] mults = f.WageFacilityWealthPermille;
+            if (mults == null || mults.Length == 0) return 1000;
+            int index = facilityTier - 1;
+            if (index < 0) index = 0;
+            if (index >= mults.Length) index = mults.Length - 1;
+            return mults[index];
         }
 
         // ================= Estimated finances for data-only clubs (R6) =================

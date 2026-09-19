@@ -504,16 +504,35 @@
         // wage/revenue bands (55-70% / 72-88% / 78-92%) are hit by calibrating (via the harness/tests)
         // WageWeeklyValueDivisor/WageValueUnitPerRating/WageLivingWageValue above, the per-tier division
         // table below (see WageDivisionMultiplierPermille's remarks for why it is a table, not a single
-        // decay/floor formula) and the stature floor/ceiling below, whose floor:ceiling RATIO is locked
-        // to revenue's own StatureMultiplierFloor/CeilingPermille ratio (2800:11500) so a club's wage
-        // structure and its own revenue move together as stature varies and the ratio does not depend
-        // on which stature a club happens to draw.
-        /// <summary>Division factor (1/1000) for the club wage structure, one entry per tier (see <see cref="Market.FinanceModel.WageDivisionMultiplierPermille"/>); a tier beyond this list repeats the last entry. Entry 0 (tier 1) MUST stay 1000 - the neutral top-flight baseline every other tier and the "same player, richer club" preview are measured against.</summary>
-        public int[] WageDivisionWealthPermille { get; set; } = { 1000, 499, 270 };
-        /// <summary>Wage multiplier (1/1000) at stature 0 — kept in the same ratio to <see cref="WageStatureCeilingPermille"/> as <see cref="StatureMultiplierFloorPermille"/> is to <see cref="StatureMultiplierCeilingPermille"/> (see the wage-structure remarks above).</summary>
+        // decay/floor formula), the stature floor/ceiling below and the facility table further below.
+        // The tier-1 entry is no longer pinned to exactly 1000: the "same player must earn >=2x at a
+        // tier-1 club vs tier-2" requirement only constrains the RATIO entry[0]/entry[1] (>= 2), and
+        // hitting the tier-1 AND tier-2 bands' MIDDLES at once (62%/80%) needs that ratio near its
+        // floor of 2 — entry[0] alone has room to move a little off 1000 to land tier 1's own band.
+        /// <summary>Division factor (1/1000) for the club wage structure, one entry per tier (see <see cref="Market.FinanceModel.WageDivisionMultiplierPermille"/>); a tier beyond this list repeats the last entry.</summary>
+        public int[] WageDivisionWealthPermille { get; set; } = { 1050, 520, 352 };
+        /// <summary>Wage multiplier (1/1000) at stature 0 (see the wage-structure remarks above).</summary>
         public int WageStatureFloorPermille { get; set; } = 800;
         /// <summary>Wage multiplier (1/1000) at stature 100 — see <see cref="WageStatureFloorPermille"/>.</summary>
         public int WageStatureCeilingPermille { get; set; } = 3286;
+
+        /// <summary>
+        /// Facility-tier factor (1/1000) for the club wage structure, one entry per stadium tier
+        /// (see <see cref="Market.FinanceModel.WageFacilityMultiplierPermille"/>); a tier beyond this
+        /// list repeats the last entry. Correlates a club's wage bill with its OWN stadium size — the
+        /// same facility tier that <see cref="Market.FacilityEffects.SuggestedStadiumTier(int,int,FinanceBalance)"/>
+        /// derives from strength AND stature (task: wages set by the paying club, R7, point 2 of the
+        /// user decision) — so a club stuck at the smallest stadium (roughly half of any division-2
+        /// league and almost all of a division-3 one, by strength alone) also carries a LIGHTER wage
+        /// bill instead of one sized only by its squad's ability value, which crashes far more slowly
+        /// than gate/sponsor revenue does across that same facility floor and was pushing the median
+        /// wage/revenue ratio over 100% on real seeds whenever a league's facility-tier split happened
+        /// to land near the median club. Deliberately flat from tier 2 up (only the smallest stadium is
+        /// discounted): the tier-2/tier-3 division multipliers above already carry each LOWER
+        /// division's overall wage level, and a further per-tier facility premium on top of THOSE would
+        /// double-count the same strength-driven split the division table already prices in.
+        /// </summary>
+        public int[] WageFacilityWealthPermille { get; set; } = { 800, 1000, 1000, 1000, 1000 };
 
         // --- Starting finances & board backing ---
         /// <summary>Operating-cash floor: the board covers shortfalls down to this, so bankruptcy is impossible (the 5.5 acceptance).</summary>
