@@ -544,15 +544,23 @@
         /// <summary>Floor on the starting-balance league multiplier, in 1/1000.</summary>
         public int StartingBalanceDivisionFloorPermille { get; set; } = 300;
 
-        // --- Transfer budget from finances (replaces the 5.2 strength-based seed in the live path) ---
+        // --- Transfer budget from finances (task: realistic transfer budgets, R9) ---
+        // The board grant is scaled by the SAME nation (Market.FinanceModel.NationMultiplierPermille,
+        // R1) and club stature (Market.FinanceModel.StatureMultiplierPermille, R4) multipliers that
+        // gate/sponsor revenue already use — reused, not duplicated, so a poorer nation/low-stature
+        // club never gets a board top-up disproportionate to what it actually earns. The DIVISION
+        // factor below is its own, much steeper table (contrast the flatter revenue-side
+        // DivisionWealthDecayPermille and wage-side WageDivisionWealthPermille): a real board's
+        // discretionary transfer war-chest is concentrated at the top far more sharply than either
+        // matchday revenue or the wage bill (think TV-money-funded spending power), which is what
+        // makes the median tier-2 <= 25% of tier-1 acceptance reachable in a single season — cash
+        // share alone (division-discounted only through accumulated revenue/wages) lands nearer 50%.
         /// <summary>Percent of current cash reserves the board makes available for transfers each season.</summary>
-        public int TransferBudgetCashPercent { get; set; } = 50;
-        /// <summary>Flat board grant on top of the cash share, for a top-flight club (division-discounted).</summary>
-        public long BoardGrantTopFlight { get; set; } = 40_000_000;
-        /// <summary>Board-grant discount per division below the top flight, in 1/1000.</summary>
-        public int BoardGrantDivisionDiscountPermille { get; set; } = 250;
-        /// <summary>Floor on the board-grant league multiplier, in 1/1000.</summary>
-        public int BoardGrantDivisionFloorPermille { get; set; } = 250;
+        public int TransferBudgetCashPercent { get; set; } = 18;
+        /// <summary>Flat board grant on top of the cash share, for a top-flight, full-wealth-nation, median-stature club (nation x division x stature scaled from here).</summary>
+        public long BoardGrantTopFlight { get; set; } = 110_000_000;
+        /// <summary>Board-grant division factor (1/1000), one entry per tier; a tier beyond this list repeats the last entry. See the remarks above for why this is steeper than revenue's/wages' own division curves.</summary>
+        public int[] BoardGrantDivisionWealthPermille { get; set; } = { 1000, 35, 12 };
         /// <summary>Hard floor on a seeded transfer budget so even a skint club can do minimal business.</summary>
         public long MinTransferBudget { get; set; } = 1_000_000;
 

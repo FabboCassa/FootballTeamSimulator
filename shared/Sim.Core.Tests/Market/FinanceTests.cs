@@ -149,11 +149,11 @@ namespace Sim.Core.Tests.Market
             fin.SeedWorld(new[] { league });
 
             Club club = league.Clubs[0];
-            long flush = FinanceModel.SeasonTransferBudget(club, league.Division, Cfg);
+            long flush = FinanceModel.SeasonTransferBudget(club, league.Division, league.EconomicReputation, Cfg);
 
             // Simulate a club that has blown its reserves on transfers.
             club.Finances.Balance = 0;
-            long broke = FinanceModel.SeasonTransferBudget(club, league.Division, Cfg);
+            long broke = FinanceModel.SeasonTransferBudget(club, league.Division, league.EconomicReputation, Cfg);
 
             TestContext.Out.WriteLine(
                 $"[finance-budget] cash-flush budget {Money(flush)} vs spent-out budget {Money(broke)} (board grant only)");

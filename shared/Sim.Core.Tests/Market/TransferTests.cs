@@ -287,6 +287,50 @@ namespace Sim.Core.Tests.Market
             }
         }
 
+        // ----------------------------------------------------------------- R9 structural guard
+
+        /// <summary>
+        /// Direct unit-level proof of the R9 signing cap (the fuller season/AI-personality
+        /// simulation lives in TransferBudgetTests): inflates every D2 club's budget far past
+        /// what it could ever earn, removing budget as the binding constraint, then asserts the
+        /// cap still holds — proving the guard is a hard rule in TransferMarket itself, not a
+        /// side-effect of D2 budgets normally staying small.
+        /// </summary>
+        [Test]
+        public void RunWindow_NeverSignsATier2ClubAboveTheNationsTier1NinetiethPercentile()
+        {
+            List<League> leagues = NewWorld();
+            League d1 = leagues[0];
+            League d2 = leagues[1];
+
+            new ValuationProgressor(Cfg).Reprice(leagues);
+            long[] tier1Values = d1.Clubs.SelectMany(c => c.Squad.Players)
+                .Select(p => p.MarketValue).OrderBy(v => v).ToArray();
+            long p90 = tier1Values[(tier1Values.Length - 1) * 90 / 100];
+
+            var valueById = new Dictionary<int, long>();
+            foreach (Club c in d1.Clubs.Concat(d2.Clubs))
+                foreach (Player p in c.Squad.Players)
+                    valueById[p.Id] = p.MarketValue;
+
+            // Remove budget as the binding constraint.
+            foreach (Club club in d2.Clubs)
+                club.TransferBudget = tier1Values[tier1Values.Length - 1] * 10;
+
+            var tier2Ids = new HashSet<int>(d2.Clubs.Select(c => c.Id));
+            List<TransferRecord> records = new TransferMarket(Cfg).RunWindow(leagues, WorldSeed, windowIndex: 0);
+
+            var violations = records
+                .Where(r => tier2Ids.Contains(r.ToClubId) && valueById[r.PlayerId] > p90)
+                .ToList();
+            foreach (TransferRecord v in violations)
+                TestContext.Out.WriteLine(
+                    $"[budget-cap-violation] player {v.PlayerId} value {valueById[v.PlayerId]:N0} > p90 {p90:N0}, bought by club {v.ToClubId}");
+
+            Assert.That(violations, Is.Empty,
+                "no tier-2 club may sign a player valued above its nation's tier-1 90th percentile, even with an inflated budget");
+        }
+
         [Test]
         public void AutoNegotiate_PoorBuyerCannotReachAStarterFloor()
         {
