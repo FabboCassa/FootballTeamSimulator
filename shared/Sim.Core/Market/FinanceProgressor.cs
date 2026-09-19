@@ -51,17 +51,65 @@ namespace Sim.Core.Market
             SeedTransferBudgets(leagues);
         }
 
+        /// <summary>
+        /// Seeds EVERY club in the whole world (task: estimated finances, R6): playable, background
+        /// AND data-only alike, since every club needs a facility tier and a starting balance whether
+        /// or not it plays a real season — a data-only club's <see cref="Domain.Club.Facilities"/> and
+        /// starting <see cref="Domain.Finances.Balance"/> feed straight into its estimated weekly
+        /// revenue (<see cref="FinanceModel.EstimatedWeeklyRevenue"/>) exactly like a playable club's
+        /// real gate/sponsor income.
+        /// </summary>
+        public void SeedWorld(World world) => SeedWorld(world.AllLeagues());
+
         /// <summary>Credits the home club of every fixture played today its gate receipts.</summary>
         public void AccrueMatchday(IReadOnlyList<League> leagues, IReadOnlyList<MatchOutcome> outcomes)
         {
             foreach (MatchOutcome outcome in outcomes)
-            {
-                if (!FindClub(leagues, outcome.Fixture.HomeClubId, out Club? home, out League? homeLeague))
-                    continue;
+                CreditGate(leagues, outcome.Fixture.HomeClubId);
+        }
 
-                long gate = FinanceModel.GateReceipts(home!, homeLeague!.Division, homeLeague.EconomicReputation, _cfg);
-                home!.Finances.Balance += gate;
-                home.Finances.SeasonGateIncome += gate;
+        /// <summary>
+        /// Credits gate receipts from already-resolved fixtures directly (task: estimated finances,
+        /// R6) — used for BACKGROUND leagues, whose matches are resolved by
+        /// <see cref="Career.QuickResultResolver"/> and never produce a <see cref="MatchOutcome"/>
+        /// (no minute-by-minute engine runs for them, so there is no report to wrap).
+        /// </summary>
+        public void AccrueMatchday(IReadOnlyList<League> leagues, IReadOnlyList<Fixture> playedFixtures)
+        {
+            foreach (Fixture fixture in playedFixtures)
+                CreditGate(leagues, fixture.HomeClubId);
+        }
+
+        private void CreditGate(IReadOnlyList<League> leagues, int homeClubId)
+        {
+            if (!FindClub(leagues, homeClubId, out Club? home, out League? homeLeague))
+                return;
+
+            long gate = FinanceModel.GateReceipts(home!, homeLeague!.Division, homeLeague.EconomicReputation, _cfg);
+            home!.Finances.Balance += gate;
+            home.Finances.SeasonGateIncome += gate;
+        }
+
+        /// <summary>
+        /// Books one week of ESTIMATED revenue for every DATA-ONLY club (task: estimated finances,
+        /// R6). Unlike <see cref="AccrueMatchday(IReadOnlyList{League},IReadOnlyList{MatchOutcome})"/>/
+        /// <see cref="AccrueWeek"/> this needs no fixtures or table — a data-only league has neither —
+        /// so it pays a flat weekly instalment of <see cref="FinanceModel.EstimatedWeeklyRevenue"/>
+        /// straight onto the balance and into <see cref="Domain.Finances.SeasonEstimatedIncome"/>,
+        /// leaving SeasonGateIncome/SeasonPrizeIncome at zero (no games were played, so there is no
+        /// real gate or prize to book) and never touching wages (no wage model runs for these clubs).
+        /// </summary>
+        public void AccrueDataOnlyWeek(IReadOnlyList<League> leagues)
+        {
+            foreach (League league in leagues)
+            {
+                int clubCount = league.Clubs.Count;
+                foreach (Club club in league.Clubs)
+                {
+                    long revenue = FinanceModel.EstimatedWeeklyRevenue(club, league.Division, league.EconomicReputation, clubCount, _cfg);
+                    club.Finances.Balance += revenue;
+                    club.Finances.SeasonEstimatedIncome += revenue;
+                }
             }
         }
 
@@ -109,7 +157,7 @@ namespace Sim.Core.Market
                     Club? club = league.FindClub(table[i].ClubId);
                     if (club == null) continue;
 
-                    long prize = FinanceModel.PrizeMoney(i + 1, table.Count, league.Division, league.EconomicReputation, _cfg);
+                    long prize = FinanceModel.PrizeMoney(i + 1, table.Count, league.Division, league.EconomicReputation, club.Stature, _cfg);
                     club.Finances.Balance += prize;
                     club.Finances.SeasonPrizeIncome += prize;
                 }

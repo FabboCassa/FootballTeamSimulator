@@ -23,6 +23,7 @@
         public ScoutingBalance Scouting { get; set; } = new ScoutingBalance();
         public FinanceBalance Finance { get; set; } = new FinanceBalance();
         public CareerBalance Career { get; set; } = new CareerBalance();
+        public StatureBalance Stature { get; set; } = new StatureBalance();
         public DifficultyBalance Difficulty { get; set; } = new DifficultyBalance();
         public IdentityBalance Identity { get; set; } = new IdentityBalance();
         public PositioningBalance Positioning { get; set; } = new PositioningBalance();
@@ -553,6 +554,16 @@
         /// High enough that the ramp stays near the floor for most of the league, concentrating the
         /// floor-to-ceiling range on the very top of the stature ladder.</summary>
         public int StatureMultiplierExponent { get; set; } = 8;
+
+        // --- Prize-money stature spread (R6: estimated finances) ---
+        // A much gentler version of the gate/sponsor stature ramp above, applied inside
+        // FinanceModel.PrizeMoney/AveragePrizeMoney: prize is already driven by finishing position,
+        // so stature only adds a modest prestige premium on top, concentrated (same ramp exponent)
+        // on the very top of the stature ladder.
+        /// <summary>Prize multiplier (1/1000) at stature 0 — no discount below the position-based prize.</summary>
+        public int PrizeStatureMultiplierFloorPermille { get; set; } = 1000;
+        /// <summary>Prize multiplier (1/1000) at stature 100 — a modest prestige premium on top of position.</summary>
+        public int PrizeStatureMultiplierCeilingPermille { get; set; } = 1400;
     }
 
     /// <summary>
@@ -2212,6 +2223,35 @@
 
         /// <summary>Initial reputation seeded for an AI coach is derived from his club's stature; this is the floor so even minnow coaches have a little standing.</summary>
         public int SeedReputationFloor { get; set; } = 20;
+    }
+
+    /// <summary>
+    /// Tunables for season-end <see cref="Domain.Club.Stature"/> evolution (task: season-end
+    /// stature evolution, R5). Stature is otherwise fixed at generation
+    /// (<see cref="Generation.StatureModel"/>) — this is the only place it moves after that, and
+    /// only once per season, from a finished season's result. Every delta is capped so a single
+    /// season, however dramatic, can only ever nudge a club's standing.
+    /// </summary>
+    public sealed class StatureBalance
+    {
+        /// <summary>Stature points gained/lost per league position finished above/below the board's expectation.</summary>
+        public int DeltaPerPositionVsExpectation { get; set; } = 1;
+
+        /// <summary>Extra stature awarded for winning the division outright (finishing position 1).</summary>
+        public int TitleBonus { get; set; } = 4;
+
+        /// <summary>Extra stature awarded for promotion to a higher division.</summary>
+        public int PromotionBonus { get; set; } = 3;
+
+        /// <summary>Stature lost for relegation to a lower division.</summary>
+        public int RelegationPenalty { get; set; } = 5;
+
+        /// <summary>
+        /// Hard cap on a single season's stature change (up or down). Sized so that even a club
+        /// winning its title every single season needs several seasons to climb from a league-median
+        /// stature to a top-3 one (see <c>StatureProgressorTests</c>), rather than jumping there in one.
+        /// </summary>
+        public int MaxDeltaPerSeason { get; set; } = 6;
     }
 
     /// <summary>
