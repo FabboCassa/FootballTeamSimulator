@@ -76,7 +76,7 @@ namespace Sim.Core.Tests.Market
             (League league, Season season) = NewWorld();
             var fin = new FinanceProgressor(Cfg);
             fin.SeedWorld(new[] { league });
-            new ValuationProgressor(Cfg).Reprice(new[] { league }); // wages read MarketValue
+            new ValuationProgressor(Cfg).Reprice(new[] { league }); // MarketValue feeds transfers/negotiation, not wages (R7: wages use a neutral value + the club's own structure)
 
             var p = new SeasonProgressor();
             for (int d = 0; d < Days; d++)
@@ -111,8 +111,10 @@ namespace Sim.Core.Tests.Market
             Assert.That(insolvent, Is.Zero, "No club may end the season below the operating floor (bankruptcy is impossible)");
             Assert.That(totalIncome, Is.GreaterThan(0), "Clubs must earn income across a season");
             Assert.That(totalWages, Is.GreaterThan(0), "Clubs must pay wages across a season");
-            Assert.That(wageShare, Is.InRange(0.45, 0.85),
-                "League wages should sit in the realistic ~63% band (real Premier League average), leaving clubs profitable enough to do transfers");
+            // NewWorld() generates a tier-1, full-wealth (EconomicReputation 100) league, so this is
+            // the R7 tier-1 wage/revenue band (55-70%), not the old flat [0.45,0.85] band.
+            Assert.That(wageShare, Is.InRange(0.55, 0.70),
+                "Tier-1 league wages should sit in the R7 55-70% band, leaving clubs profitable enough to do transfers");
         }
 
         // ============================================================ bankruptcy impossible

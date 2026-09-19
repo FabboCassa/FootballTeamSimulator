@@ -130,7 +130,8 @@ namespace Sim.Core.Market
                     int resultPermille = FinanceModel.ResultPermilleForPosition(position, league.Clubs.Count, _cfg);
 
                     long sponsor = FinanceModel.WeeklySponsor(club, league.Division, league.EconomicReputation, _cfg);
-                    long wages = FinanceModel.WeeklyWageBill(club, resultPermille, _cfg);
+                    long wages = FinanceModel.WeeklyWageBill(
+                        club, resultPermille, league.Division, league.EconomicReputation, _cfg);
 
                     club.Finances.Balance += sponsor - wages;
                     club.Finances.SeasonSponsorIncome += sponsor;

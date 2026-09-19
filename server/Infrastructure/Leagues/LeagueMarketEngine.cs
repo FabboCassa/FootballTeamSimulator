@@ -59,10 +59,57 @@ public sealed class LeagueMarketEngine
 
     // --- terms -------------------------------------------------------------------------------------
 
-    /// <summary>What a free agent asks per week: the shared <see cref="WageModel"/> at a neutral season
-    /// result, so his demand tracks his value exactly as a contracted player's wage does.</summary>
-    public long DemandedWage(EntPlayer player) =>
-        Math.Max(1, WageModel.WeeklyWage(player.MarketValue, 1000, _config.Finance));
+    /// <summary>The private-league world has no nation concept (<see cref="WorldFactory"/> always builds a
+    /// single Division-1 league per world), so a signing club's wage structure holds nation wealth neutral
+    /// here — only its own wealth/prestige differentiates what it pays.</summary>
+    private const int NeutralEconomicReputation = 100;
+    private const int SingleDivisionLeagueLevel = 1;
+
+    /// <summary>What a specific club would have to pay a player per week (task: wages set by the paying
+    /// club, R7): the shared <see cref="FinanceModel.ClubWageStructurePermille"/> (nation × division ×
+    /// stature × facility tier) applied to his ABILITY value (<see cref="FinanceModel.WageAbilityValue(int,Sim.Core.Config.FinanceBalance)"/>
+    /// — the SAME curve <see cref="FinanceModel.DemandedWeeklyWage"/> uses, never his cached transfer-fee
+    /// <see cref="EntPlayer.MarketValue"/>, a different scale calibrated against
+    /// <see cref="Sim.Core.Config.FinanceBalance.WageWeeklyValueDivisor"/> for the ability
+    /// value, not the fee) via <see cref="WageModel"/>, at a neutral season result — a richer club pays
+    /// more for the exact same player. This world has no persisted
+    /// club stature (task: club stature, R4 is a Sim.Core-only concept these entities don't carry), so
+    /// the club's own <see cref="EntClub.Strength"/> (its coarse 0-100 squad rating, the same field that
+    /// already seeds its budget) stands in for stature — the best proxy for "how well this club pays"
+    /// already on the entity — and ALSO for the facility tier (task: wages set by the paying club, R7,
+    /// point 2 of the user decision), via the same <see cref="FacilityEffects.SuggestedStadiumTier(int,int,FinanceBalance)"/>
+    /// a real generated club's starting stadium comes from, so a weak-strength private-league club is
+    /// not charged a stadium-sized wage bill it has no matching entity field to earn.</summary>
+    public long DemandedWage(EntPlayer player, EntClub club)
+    {
+        int facilityTier = FacilityEffects.SuggestedStadiumTier(club.Strength, club.Strength, _config.Finance);
+        return DemandedWage(player, club.Strength, facilityTier);
+    }
+
+    /// <summary>Median stature (see <see cref="Sim.Core.Config.FinanceBalance.WageStatureFloorPermille"/>/
+    /// <c>CeilingPermille</c>, symmetric around 50) — the "no specific club to ask yet" fallback for the
+    /// free-agent shop window (a coach without a club during the draft).</summary>
+    private const int NeutralStature = 50;
+
+    /// <summary>Tier-1 (smallest) stadium — the "no specific club to ask yet" facility fallback, paired
+    /// with <see cref="NeutralStature"/> for the free-agent shop window.</summary>
+    private const int NeutralFacilityTier = 1;
+
+    private long DemandedWage(EntPlayer player, int stature, int facilityTier)
+    {
+        int structure = FinanceModel.ClubWageStructurePermille(
+            stature, SingleDivisionLeagueLevel, NeutralEconomicReputation, facilityTier, _config.Finance);
+        // Ability value, NOT player.MarketValue (the transfer-fee curve) — the two scales are calibrated
+        // against DIFFERENT divisors (see the class doc above), so mixing them here previously underpaid
+        // every demand ~13x. WageAbilityValue(int, ...) is the SAME formula Sim.Core's
+        // FinanceModel.DemandedWeeklyWage uses, just fed from the entity's denormalised Overall column.
+        long abilityValue = FinanceModel.WageAbilityValue(player.Overall, _config.Finance);
+        return Math.Max(1, WageModel.WeeklyWage(abilityValue, 1000, structure, _config.Finance));
+    }
+
+    /// <summary>What a free agent asks with no specific signing club in view (the shop-window listing
+    /// before a coach picks who to court) — a neutral, median-stature, smallest-stadium club.</summary>
+    public long DemandedWage(EntPlayer player) => DemandedWage(player, NeutralStature, NeutralFacilityTier);
 
     /// <summary>What agreeing those terms costs the club up front.</summary>
     public static long SigningCost(long weeklyWage) => Math.Max(0, weeklyWage) * WagePrepaidWeeks;

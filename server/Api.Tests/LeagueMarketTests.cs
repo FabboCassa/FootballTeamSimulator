@@ -3,7 +3,18 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using Fts.Application.Auth;
 using Fts.Application.Leagues;
+using Fts.Infrastructure.Leagues;
+using Fts.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using NUnit.Framework;
+using Sim.Core.Config;
+using Sim.Core.Domain;
+using Sim.Core.Market;
+using EntClub = Fts.Infrastructure.Persistence.Entities.Club;
+using EntPlayer = Fts.Infrastructure.Persistence.Entities.Player;
+using SimClub = Sim.Core.Domain.Club;
+using SimPlayer = Sim.Core.Domain.Player;
 
 namespace Fts.Api.Tests;
 
@@ -449,6 +460,85 @@ public class LeagueMarketTests
         });
     }
 
+    /// <summary>Task: wages set by the paying club, R7 — "moving to a richer club raises the demanded
+    /// wage", proved over the real HTTP + DB wiring (not just the shared Sim.Core math): the SAME free
+    /// agent, looked at by two coaches whose clubs differ only in <see cref="Fts.Infrastructure.Persistence.Entities.Club.Strength"/>
+    /// (the stand-in for stature this world has — see <see cref="Fts.Infrastructure.Leagues.LeagueMarketEngine.DemandedWage(Fts.Infrastructure.Persistence.Entities.Player,Fts.Infrastructure.Persistence.Entities.Club)"/>),
+    /// asks the richer club for more per week.</summary>
+    [Test]
+    public async Task RicherClub_IsAskedMoreForTheSameFreeAgent()
+    {
+        var (leagueId, accounts) = await CreateActiveLeague(size: 6, humans: 2);
+        var (a, b) = (accounts[0], accounts[1]);
+
+        var beforeA = await GetMarket(a.Tok, leagueId);
+        var beforeB = await GetMarket(b.Tok, leagueId);
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<FtsDbContext>();
+            var league = await db.PrivateLeagues.FirstAsync(l => l.Id == leagueId);
+            var clubA = await db.Clubs.FirstAsync(
+                c => c.WorldId == league.WorldId && c.ExternalId == beforeA.YourClubExternalId);
+            var clubB = await db.Clubs.FirstAsync(
+                c => c.WorldId == league.WorldId && c.ExternalId == beforeB.YourClubExternalId);
+            clubA.Strength = 0;   // poorest possible wage structure
+            clubB.Strength = 100; // richest possible wage structure
+            await db.SaveChangesAsync();
+        }
+
+        var afterA = await GetMarket(a.Tok, leagueId);
+        var afterB = await GetMarket(b.Tok, leagueId);
+
+        var poorSideQuote = afterA.FreeAgents.First(f => f.MarketValue > 0);
+        var richSideQuote = afterB.FreeAgents.First(f => f.ExternalId == poorSideQuote.ExternalId);
+
+        Assert.That(richSideQuote.DemandedWeeklyWage, Is.GreaterThan(poorSideQuote.DemandedWeeklyWage),
+            "the exact same free agent asks club B (Strength 100) for more than club A (Strength 0)");
+    }
+
+    /// <summary>The SIGNING endpoint itself (not just the listing quote) must recompute the demand from
+    /// the actual paying club at the moment of signing (task: wages set by the paying club, R7) — a stale
+    /// or generic figure would let a coach sign below what his OWN club would really be asked, or refuse
+    /// an offer his club could really afford.</summary>
+    [Test]
+    public async Task SigningEndpoint_UsesTheSigningClubsOwnDemand()
+    {
+        var (leagueId, accounts) = await CreateActiveLeague(size: 6, humans: 2);
+        var a = accounts[0];
+
+        var before = await GetMarket(a.Tok, leagueId);
+        // Affordable at the OLD (higher) demand, so it stays affordable once the club-Strength change
+        // below only pushes the demand DOWN.
+        var target = before.FreeAgents.First(f => f.MarketValue > 0 && f.SigningCostAtDemand <= DraftBudget);
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<FtsDbContext>();
+            var league = await db.PrivateLeagues.FirstAsync(l => l.Id == leagueId);
+            var club = await db.Clubs.FirstAsync(
+                c => c.WorldId == league.WorldId && c.ExternalId == before.YourClubExternalId);
+            club.Strength = 0; // poorest possible wage structure — pushes the demand DOWN
+            await db.SaveChangesAsync();
+        }
+
+        var after = await GetMarket(a.Tok, leagueId);
+        var recomputed = after.FreeAgents.First(f => f.ExternalId == target.ExternalId);
+        Assert.That(recomputed.DemandedWeeklyWage, Is.LessThan(target.DemandedWeeklyWage),
+            "sanity: the generated club was not already at the wage-structure floor");
+
+        // An offer at exactly the freshly recomputed (lower) demand must be accepted: if the endpoint
+        // still checked a stale/generic figure it would refuse this, asking for the old higher amount.
+        var resp = await SignFreeAgent(a.Tok, leagueId, target.ExternalId, recomputed.DemandedWeeklyWage, seasons: 3);
+        Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var outcome = (await resp.Content.ReadFromJsonAsync<FreeAgentSigningDto>())!;
+        Assert.Multiple(() =>
+        {
+            Assert.That(outcome.Signed, Is.True);
+            Assert.That(outcome.DemandedWeeklyWage, Is.EqualTo(recomputed.DemandedWeeklyWage));
+        });
+    }
+
     [Test]
     public async Task FreeAgent_WithAContractLengthHeWillNotSign_IsRefused()
     {
@@ -645,4 +735,92 @@ public class LeagueMarketTests
     }
 
     private sealed record Account(string Tok, Guid Id, int? ClubExternalId);
+}
+
+/// <summary>
+/// Task: wages set by the paying club, R7 — pins the ABSOLUTE scale of the server's per-player wage
+/// demand against the shared Sim.Core formula, not just relative ordering (<see cref="LeagueMarketTests.RicherClub_IsAskedMoreForTheSameFreeAgent"/>
+/// already covers that). Root-cause regression for the "one formula, two callers" bug: the server used
+/// to feed <c>Player.MarketValue</c> (the transfer-fee curve, <see cref="ValuationModel"/>) into the
+/// divisor Sim.Core calibrated for <see cref="FinanceModel.WageAbilityValue(int, FinanceBalance)"/>
+/// (the ability curve) — an overall-70 free agent demanded ~18,400/week instead of the intended
+/// ~240,000/week, ~13x too low. No database needed: <see cref="LeagueMarketEngine.DemandedWage(EntPlayer, EntClub)"/>
+/// is pure given a <see cref="BalanceConfig"/>.
+/// </summary>
+[TestFixture]
+public class LeagueMarketWageScaleTests
+{
+    private readonly BalanceConfig _cfg = new();
+
+    /// <summary>Every skill pinned at 70: since each role's weight row (<see cref="PlayerRating"/>)
+    /// sums to 100, the weighted average — and so <see cref="PlayerRating.Overall"/> — is exactly 70
+    /// regardless of role.</summary>
+    private static SimPlayer OverallSeventy()
+    {
+        var p = new SimPlayer { Role = PositionRole.Striker };
+        PlayerAttributes a = p.Attributes;
+        a.Pace = a.Strength = a.Stamina = a.Technique = a.Passing =
+            a.Dribbling = a.Shooting = a.Defending = a.Positioning = a.Goalkeeping = 70;
+        return p;
+    }
+
+    /// <summary>The server-side entity a coach actually reads/pays through, built from the same
+    /// SimPlayer so both paths start from an identical overall.</summary>
+    private static EntPlayer AsEntity(SimPlayer sim, long marketValue) => new()
+    {
+        Overall = PlayerRating.Overall(sim),
+        Role = (int)sim.Role,
+        MarketValue = marketValue,
+    };
+
+    [TestCase(20, TestName = "TierOne")]
+    [TestCase(55, TestName = "TierTwo")]
+    public void ServerDemand_EqualsSharedSimCoreFormula_ForTheEquivalentClub(int clubStrength)
+    {
+        SimPlayer simPlayer = OverallSeventy();
+        EntPlayer entPlayer = AsEntity(simPlayer, marketValue: 14_700_000);
+        var entClub = new EntClub { Strength = clubStrength };
+
+        // The exact mapping LeagueMarketEngine.DemandedWage(EntPlayer, EntClub) uses: club.Strength
+        // stands in for both stature and (via SuggestedStadiumTier) facility tier.
+        int facilityTier = FacilityEffects.SuggestedStadiumTier(clubStrength, clubStrength, _cfg.Finance);
+        var simClub = new SimClub { Stature = clubStrength };
+        simClub.Facilities.Stadium = facilityTier;
+
+        var engine = new LeagueMarketEngine(null!, _cfg);
+        long serverDemand = engine.DemandedWage(entPlayer, entClub);
+
+        long expected = FinanceModel.DemandedWeeklyWage(
+            simPlayer, simClub, seasonResultPermille: 1000, leagueLevel: 1, economicReputation: 100, _cfg);
+
+        TestContext.Out.WriteLine(
+            $"[wage-scale] overall 70, club strength {clubStrength} (facility tier {facilityTier}): server={serverDemand}/week");
+
+        Assert.That(serverDemand, Is.EqualTo(expected),
+            "the server must derive its demand from the SAME ability-value + wage-structure pipeline as Sim.Core, not from MarketValue");
+    }
+
+    [Test]
+    public void FreeAgentDemand_StaysInASaneRangeAgainstMarketValue_NotOrdersOfMagnitudeOff()
+    {
+        // The concrete bug this pins: overall 70 used to demand MarketValue/800 (~18,400/week against a
+        // ~14.7M MarketValue) — under 0.15% of value per week, a rounding error rather than a wage. A real
+        // footballer's weekly wage is a few tenths of a percent to a few percent of his transfer value, so
+        // demanding less than 1% of MarketValue signals the old bug is back.
+        SimPlayer simPlayer = OverallSeventy();
+        EntPlayer entPlayer = AsEntity(simPlayer, marketValue: 14_700_000);
+        var entClub = new EntClub { Strength = 50 };
+        var engine = new LeagueMarketEngine(null!, _cfg);
+
+        long demand = engine.DemandedWage(entPlayer, entClub);
+        long signingCost = LeagueMarketEngine.SigningCost(demand);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(demand, Is.GreaterThan(entPlayer.MarketValue / 100),
+                "sane lower bound: at least 1% of MarketValue per week, not a rounding error against it");
+            Assert.That(signingCost, Is.LessThan(entPlayer.MarketValue * 10),
+                "sane upper bound: a year's wages should not dwarf the whole transfer-fee scale by 10x+");
+        });
+    }
 }
