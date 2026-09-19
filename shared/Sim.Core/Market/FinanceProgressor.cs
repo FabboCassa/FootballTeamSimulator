@@ -172,7 +172,7 @@ namespace Sim.Core.Market
         {
             foreach (League league in leagues)
                 foreach (Club club in league.Clubs)
-                    club.TransferBudget = FinanceModel.SeasonTransferBudget(club, league.Division, _cfg);
+                    club.TransferBudget = FinanceModel.SeasonTransferBudget(club, league.Division, league.EconomicReputation, _cfg);
         }
 
         /// <summary>Clears every club's season-to-date income/expense counters (call at rollover).</summary>

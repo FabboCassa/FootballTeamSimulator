@@ -19,9 +19,13 @@ namespace Sim.Core.Market
     ///
     /// The human's club (<paramref name="humanClubId"/>) is excluded as both buyer and seller: the
     /// user drives his own transfers through the negotiation UI (task 5.3), so the AI never trades
-    /// his players without consent. Two guards keep deals sensible — a buyer never bids above its
-    /// budget or its willingness ceiling, and a seller (via <see cref="NegotiationModel.MinSalePrice"/>)
-    /// never sells a best-XI player for peanuts.
+    /// his players without consent. Three guards keep deals sensible — a buyer never bids above its
+    /// budget or its willingness ceiling, a seller (via <see cref="NegotiationModel.MinSalePrice"/>)
+    /// never sells a best-XI player for peanuts, and a lower-division buyer never signs above its own
+    /// nation's tier-1 90th-percentile player value (task: realistic transfer budgets, R9) — a HARD
+    /// cap in this buying path, not merely a consequence of tier-2 budgets normally staying small:
+    /// a cash-rich lower-division club's budget CAN exceed that p90 value (accumulated cash + a
+    /// generous board grant), and without this guard it would simply buy whatever it could afford.
     /// </summary>
     public sealed class TransferMarket
     {
@@ -49,6 +53,7 @@ namespace Sim.Core.Market
 
             var clubById = new Dictionary<int, Club>();
             var levelByClub = new Dictionary<int, int>();
+            var nationByClub = new Dictionary<int, string>();
             var buyerIds = new List<int>();
             var orderedClubIds = new List<int>(); // explicit, sorted seller scan order (platform-independent)
             foreach (League league in leagues)
@@ -57,11 +62,18 @@ namespace Sim.Core.Market
                 {
                     clubById[club.Id] = club;
                     levelByClub[club.Id] = league.Division;
+                    nationByClub[club.Id] = league.NationCode;
                     orderedClubIds.Add(club.Id);
                     if (club.Id != humanClubId) buyerIds.Add(club.Id);
                 }
             }
             orderedClubIds.Sort();
+
+            // R9 signing cap: each nation's tier-1 90th-percentile player value, computed fresh
+            // (post-reprice) every window — a fixed constant would drift from what "tier-1" means as
+            // the world ages. Nations with no division-1 league in this world get no cap (nothing to
+            // measure against).
+            Dictionary<string, long> tier1P90ByNation = Tier1P90ByNation(leagues);
 
             // Deterministic buyer order (Fisher-Yates with the window RNG).
             var rng = new Pcg32(worldSeed ^ (WindowSeedMix * (ulong)(uint)(windowIndex + 1)), 4242UL);
@@ -95,7 +107,8 @@ namespace Sim.Core.Market
                 while (signings < _t.MaxSigningsPerClubPerWindow && records.Count < _t.MaxTransfersPerWindow)
                 {
                     TransferRecord? deal = TrySignOne(buyer, buyerId, buyerProfile, worldSeed,
-                                                      clubById, orderedClubIds, levelByClub, humanClubId, Analyze, analysisCache);
+                                                      clubById, orderedClubIds, levelByClub, nationByClub, tier1P90ByNation,
+                                                      humanClubId, Analyze, analysisCache);
                     if (deal == null) break;
                     records.Add(deal);
                     signings++;
@@ -108,11 +121,18 @@ namespace Sim.Core.Market
         /// <summary>Attempts a single signing for the buyer across its needs; returns the deal or null.</summary>
         private TransferRecord? TrySignOne(
             Club buyer, int buyerId, PersonalityProfile buyerProfile, ulong worldSeed,
-            Dictionary<int, Club> clubById, List<int> orderedClubIds, Dictionary<int, int> levelByClub, int humanClubId,
+            Dictionary<int, Club> clubById, List<int> orderedClubIds, Dictionary<int, int> levelByClub,
+            Dictionary<int, string> nationByClub, Dictionary<string, long> tier1P90ByNation, int humanClubId,
             System.Func<int, SquadAnalysis> analyze, Dictionary<int, SquadAnalysis> analysisCache)
         {
             SquadAnalysis buyerAnalysis = analyze(buyerId);
             bool youthFocused = buyerProfile.YouthBiasPermille > 1000;
+
+            // R9: a lower-division buyer may never even consider a player above its nation's tier-1
+            // p90 value — nation with no measured tier-1 (no cap entry) leaves buyers unrestricted.
+            long? buyerCap = levelByClub[buyerId] != 1 && tier1P90ByNation.TryGetValue(nationByClub[buyerId], out long cap)
+                ? cap
+                : (long?)null;
 
             foreach (RoleNeed need in buyerAnalysis.Needs)
             {
@@ -138,6 +158,8 @@ namespace Sim.Core.Market
                         long value = player.MarketValue > 0
                             ? player.MarketValue
                             : ValuationModel.Value(player, levelByClub[sellerId], _cfg);
+
+                        if (buyerCap.HasValue && value > buyerCap.Value) continue; // R9 hard cap
 
                         long minSale = NegotiationModel.MinSalePrice(value, imp, _t);
                         long buyerMax = NegotiationModel.BuyerMaxPrice(value, buyerProfile, buyer.TransferBudget, _t);
@@ -187,6 +209,40 @@ namespace Sim.Core.Market
             }
 
             return null;
+        }
+
+        /// <summary>
+        /// The 90th-percentile player market value of every division-1 league, grouped by
+        /// <see cref="League.NationCode"/> (task: realistic transfer budgets, R9) — the reference
+        /// ceiling <see cref="TrySignOne"/> enforces against lower-division buyers. Assumes
+        /// <see cref="RunWindow"/> already repriced the world, so <see cref="Player.MarketValue"/>
+        /// reflects this window.
+        /// </summary>
+        private static Dictionary<string, long> Tier1P90ByNation(IReadOnlyList<League> leagues)
+        {
+            var valuesByNation = new Dictionary<string, List<long>>();
+            foreach (League league in leagues)
+            {
+                if (league.Division != 1) continue;
+                if (!valuesByNation.TryGetValue(league.NationCode, out List<long> values))
+                {
+                    values = new List<long>();
+                    valuesByNation[league.NationCode] = values;
+                }
+                foreach (Club club in league.Clubs)
+                    foreach (Player player in club.Squad.Players)
+                        values.Add(player.MarketValue);
+            }
+
+            var result = new Dictionary<string, long>();
+            foreach (KeyValuePair<string, List<long>> entry in valuesByNation)
+            {
+                List<long> sorted = entry.Value;
+                if (sorted.Count == 0) continue;
+                sorted.Sort();
+                result[entry.Key] = sorted[(sorted.Count - 1) * 90 / 100];
+            }
+            return result;
         }
 
         /// <summary>A scored buy target for a need, scanned before any negotiation.</summary>
