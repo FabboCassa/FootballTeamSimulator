@@ -1,4 +1,4 @@
-﻿namespace Sim.Core.Config
+namespace Sim.Core.Config
 {
     /// <summary>
     /// THE single home for every gameplay tunable (ARCHITECTURE.md 4.1 rule 4).
@@ -747,6 +747,28 @@
         public int MaxTransfersPerWindow { get; set; } = 400;
         /// <summary>Seasons remaining written onto a transferred player's contract on signing.</summary>
         public int SignedContractSeasons { get; set; } = 4;
+
+        // --- Prestige & transfer refusal (task: prestige-based transfer refusal, R11) ---
+        /// <summary>Weight (permille) of league wealth in club prestige (600 = 60%).</summary>
+        public int PrestigeLeagueWeightPermille { get; set; } = 600;
+        /// <summary>Weight (permille) of club stature (0-100 x 10) in club prestige (400 = 40%).</summary>
+        public int PrestigeStatureWeightPermille { get; set; } = 400;
+        /// <summary>Maximum drop in club prestige points a prime starter will tolerate before refusing (150 pts).</summary>
+        public int PrestigeMaxStarterDrop { get; set; } = 150;
+        /// <summary>Extra prestige drop (points) tolerated by non-best-XI players (squad/surplus) seeking minutes (300 pts).</summary>
+        public int PrestigeBenchToleranceDrop { get; set; } = 300;
+        /// <summary>Extra prestige drop (points) tolerated by young (&lt;=21) or veteran (&gt;=32) players (150 pts).</summary>
+        public int PrestigeAgeToleranceDrop { get; set; } = 150;
+        /// <summary>Age at or below which a player has lower prestige requirements (21).</summary>
+        public int PrestigeYoungAgeThreshold { get; set; } = 21;
+        /// <summary>Age at or above which a player has lower prestige requirements (32).</summary>
+        public int PrestigeVeteranAgeThreshold { get; set; } = 32;
+        /// <summary>Overall rating above which a player expects higher prestige (75).</summary>
+        public int PrestigeEliteOverallThreshold { get; set; } = 75;
+        /// <summary>Extra prestige required per overall point above the elite threshold (10 pts/point).</summary>
+        public int PrestigePerOverallPoint { get; set; } = 10;
+        /// <summary>Floor on required prestige so a player never demands less than this minimum (50 pts).</summary>
+        public int PrestigeMinFloor { get; set; } = 50;
     }
 
     /// <summary>
