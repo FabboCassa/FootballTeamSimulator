@@ -149,6 +149,11 @@ namespace Fts.Services
         /// <summary>The division level of the club holding a player (1 = top); used by the valuation fallback.</summary>
         public int LevelOf(int clubId)
         {
+            if (_career.World != null)
+            {
+                League l = _career.World.LeagueOf(clubId);
+                if (l != null) return l.Division;
+            }
             foreach (League league in _career.Leagues)
                 if (league.FindClub(clubId) != null)
                     return league.Division;

@@ -64,6 +64,8 @@ namespace Fts.Views
         public event Action<int> OfferAccept;          // offer index
         public event Action<int> OfferReject;          // offer index
         public event Action SubBackClicked;            // leave the club picker
+        public event Action PagePreviousClicked;
+        public event Action PageNextClicked;
         public event Action BackClicked;
 
         public VisualElement Root { get; }
@@ -329,6 +331,31 @@ namespace Fts.Views
             row.style.marginTop = UiKit.SpaceSm;
             row.style.marginBottom = UiKit.SpaceXs;
             _content.Add(row);
+        }
+
+        public void AddPager(string summaryText, bool hasPrevious, bool hasNext)
+        {
+            var bar = UiKit.Toolbar();
+            bar.AddToClassList("fts-market__pager");
+            bar.style.marginTop = UiKit.SpaceSm;
+            bar.style.alignItems = Align.Center;
+
+            Button previous = UiKit.SmallButton("\u25C0", () => PagePreviousClicked?.Invoke(), 72f);
+            previous.SetEnabled(hasPrevious);
+            bar.Add(previous);
+
+            var summary = new Label(summaryText ?? string.Empty);
+            summary.style.flexGrow = 1f;
+            summary.AddToClassList("fts-t-meta");
+            summary.style.color = UiKit.TextMuted;
+            summary.style.unityTextAlign = TextAnchor.MiddleCenter;
+            bar.Add(summary);
+
+            Button next = UiKit.SmallButton("\u25B6", () => PageNextClicked?.Invoke(), 72f);
+            next.SetEnabled(hasNext);
+            bar.Add(next);
+
+            _content.Add(bar);
         }
     }
 }

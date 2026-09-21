@@ -105,7 +105,8 @@ namespace Fts.Presenters
                 NetPositive = f.SeasonNet >= 0,
                 Gate = MoneyFormat.Short(f.SeasonGateIncome),
                 Sponsor = MoneyFormat.Short(f.SeasonSponsorIncome),
-                Prize = MoneyFormat.Short(f.SeasonPrizeIncome)
+                Prize = MoneyFormat.Short(f.SeasonPrizeIncome),
+                Budget = MoneyFormat.Short(_club.TransferBudget)
             });
 
             var rows = new List<FacilityRowVm>
