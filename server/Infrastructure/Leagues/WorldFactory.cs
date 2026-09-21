@@ -75,6 +75,7 @@ public static class WorldFactory
                 Name = simClub.Name,
                 ShortName = simClub.ShortName,
                 Strength = SquadStrength(simClub),
+                Stature = simClub.Stature,
                 TransferBudget = 0,
                 Balance = 0,
             };

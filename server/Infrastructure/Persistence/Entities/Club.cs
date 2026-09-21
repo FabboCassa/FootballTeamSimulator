@@ -24,6 +24,20 @@ public sealed class Club
     /// <summary>Coarse squad strength used for seeding budgets, finances and objectives.</summary>
     public int Strength { get; set; }
 
+    /// <summary>
+    /// The club's persistent stature (0-100), mirroring <see cref="Sim.Core.Domain.Club.Stature"/>
+    /// (task: club stature, R4) — set once at <see cref="Leagues.WorldFactory"/> generation time from
+    /// the Sim.Core world, so a private-league/ranked club's intra-league wealth spread
+    /// (<see cref="Sim.Core.Market.FinanceModel.StatureMultiplierPermille"/>) round-trips to the server
+    /// the same way <see cref="Strength"/> already does. Additive — defaults 0, so pre-existing rows
+    /// (migration <c>AddClubStature</c>) simply earn no stature-driven revenue until the world is
+    /// regenerated. Deliberately NOT used by <see cref="Leagues.LeagueMarketEngine"/>'s wage demand,
+    /// which keeps using <see cref="Strength"/> as its stature proxy (task: wages set by the paying
+    /// club, R7) — changing that wage path is out of scope here and would move
+    /// <c>LeagueMarketWageScaleTests</c>' pinned absolute scale.
+    /// </summary>
+    public int Stature { get; set; }
+
     /// <summary>Spendable transfer kitty (seeded from finances each season).</summary>
     public long TransferBudget { get; set; }
 
