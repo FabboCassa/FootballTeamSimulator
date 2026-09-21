@@ -62,7 +62,9 @@ namespace Fts.Services
                 // Start-of-season kitties now come from each club's FINANCES (task 5.5): a share of
                 // cash reserves + a board grant, replacing the 5.2 strength-based seed. A club that
                 // banked a profitable season gets a bigger budget; one that spent down gets less.
-                _finance.SeedTransferBudgets(_career.Leagues); // overwrites; only here
+                // World-wide (task: worldwide AI market, R10): every club in the WHOLE world needs a
+                // kitty, not just the user's own playable pyramid, since RunWindow now trades there too.
+                _finance.SeedTransferBudgets(_career.World.AllLeagues()); // overwrites; only here
 
                 // Difficulty (task 5.7b): scale the freshly-seeded kitties — the user's club up on Easy,
                 // the AI clubs up on Hard (more aggressive in the market). Applied BEFORE the window so
@@ -98,7 +100,9 @@ namespace Fts.Services
             DifficultySettings s = DifficultyModel.Resolve(_career.Difficulty, _config);
             long minBudget = _t.MinBudget;
 
-            foreach (League league in _career.Leagues)
+            // World-wide (R10): the AI market now trades across the whole world, so every AI club's
+            // kitty is scaled, not just the user's own pyramid.
+            foreach (League league in _career.World.AllLeagues())
             {
                 foreach (Club club in league.Clubs)
                 {
@@ -112,8 +116,10 @@ namespace Fts.Services
 
         private void RunWindow(int windowIndex)
         {
+            // World-wide (task: worldwide AI market, R10): the AI market trades across playable,
+            // background AND data-only clubs alike, not just the user's own playable pyramid.
             List<TransferRecord> records =
-                _market.RunWindow(_career.Leagues, _career.Seed, windowIndex, _career.UserClubId);
+                _market.RunWindow(_career.World, _career.Seed, windowIndex, _career.UserClubId);
 
             _career.TransferNews.AddRange(records);
             Debug.Log($"[Market] Season {_career.Season.Year} window {windowIndex}: {records.Count} AI transfers.");

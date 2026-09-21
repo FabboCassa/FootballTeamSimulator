@@ -95,7 +95,10 @@ namespace Sim.Core.Market
             var starters = new HashSet<int>();
             long ratingSum = 0;
             int ratingCount = 0;
-            Lineup xi = LineupSelector.BestEleven(club);
+            // BestAvailable, not BestEleven (task: worldwide AI market, R10): a data-only club can
+            // carry fewer than 11 "key players", and this reads a club's spine off-pitch — it must
+            // not enforce the match-day "exactly 11, exactly 1 GK" contract Lineup.Validate checks.
+            Lineup xi = LineupSelector.BestAvailable(club);
             foreach (LineupSlot slot in xi.Slots)
             {
                 starters.Add(slot.Player.Id);
