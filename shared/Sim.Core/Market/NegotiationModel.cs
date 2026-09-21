@@ -1,5 +1,7 @@
 using Sim.Core.Config;
 
+using Sim.Core.Domain;
+
 namespace Sim.Core.Market
 {
     /// <summary>How important a player is to his club — shapes the asking price and the floor below which he is never sold.</summary>
@@ -13,7 +15,7 @@ namespace Sim.Core.Market
         Starter = 2
     }
 
-    public enum SellerDecision { Accept, Counter, Reject }
+    public enum SellerDecision { Accept, Counter, Reject, Refuse }
     public enum BuyerDecision { Accept, Offer, GiveUp }
 
     /// <summary>A seller's reply to an offer.</summary>
@@ -22,10 +24,18 @@ namespace Sim.Core.Market
         public readonly SellerDecision Decision;
         /// <summary>The new (lower) asking price when <see cref="Decision"/> is Counter.</summary>
         public readonly long CounterAsk;
+        public readonly RefusalReason RefusalReason;
+
         public SellerResponse(SellerDecision decision, long counterAsk)
+            : this(decision, counterAsk, RefusalReason.None)
+        {
+        }
+
+        public SellerResponse(SellerDecision decision, long counterAsk, RefusalReason refusalReason)
         {
             Decision = decision;
             CounterAsk = counterAsk;
+            RefusalReason = refusalReason;
         }
     }
 
@@ -48,12 +58,25 @@ namespace Sim.Core.Market
         public readonly bool Agreed;
         public readonly long Fee;
         public readonly int Rounds;
+        public readonly NegotiationOutcome Outcome;
+        public readonly RefusalReason RefusalReason;
+
         public NegotiationResult(bool agreed, long fee, int rounds)
+            : this(agreed, fee, rounds, agreed ? NegotiationOutcome.Agreed : NegotiationOutcome.Rejected, RefusalReason.None)
+        {
+        }
+
+        public NegotiationResult(bool agreed, long fee, int rounds, NegotiationOutcome outcome, RefusalReason refusalReason = RefusalReason.None)
         {
             Agreed = agreed;
             Fee = fee;
             Rounds = rounds;
+            Outcome = outcome;
+            RefusalReason = refusalReason;
         }
+
+        public static NegotiationResult Refused(RefusalReason reason) =>
+            new NegotiationResult(false, 0, 0, NegotiationOutcome.Refused, reason);
     }
 
     /// <summary>
@@ -201,6 +224,52 @@ namespace Sim.Core.Market
             if (offer >= ask && offer >= minSale)
                 return new NegotiationResult(true, offer, cfg.MaxNegotiationRounds);
             return new NegotiationResult(false, 0, cfg.MaxNegotiationRounds);
+        }
+
+        /// <summary>
+        /// The seller's reply to <paramref name="offer"/>, checking prestige-based player refusal first
+        /// (task: prestige-based transfer refusal, R11). If the buyer's prestige is below the player's
+        /// threshold, returns <see cref="SellerDecision.Refuse"/> with <see cref="RefusalReason.PrestigeTooLow"/>.
+        /// </summary>
+        public static SellerResponse EvaluateOffer(
+            Player player, PlayerImportance importance,
+            Club seller, int sellerLeagueLevel, int sellerEconomicReputation,
+            Club buyer, int buyerLeagueLevel, int buyerEconomicReputation,
+            long currentAsk, long offer, long minSale, BalanceConfig cfg)
+        {
+            RefusalReason refusal = PrestigeModel.EvaluateRefusal(
+                player, importance,
+                seller, sellerLeagueLevel, sellerEconomicReputation,
+                buyer, buyerLeagueLevel, buyerEconomicReputation,
+                cfg);
+            if (refusal != RefusalReason.None)
+                return new SellerResponse(SellerDecision.Refuse, currentAsk, refusal);
+
+            return EvaluateOffer(currentAsk, offer, minSale, cfg.Transfer);
+        }
+
+        /// <summary>
+        /// Runs a full automatic negotiation between an AI buyer and an AI seller, checking
+        /// prestige-based player refusal first (task: prestige-based transfer refusal, R11).
+        /// If the buyer's prestige is too low for this player, returns
+        /// <see cref="NegotiationOutcome.Refused"/> with <see cref="RefusalReason.PrestigeTooLow"/>.
+        /// </summary>
+        public static NegotiationResult AutoNegotiate(
+            Player player, PlayerImportance importance,
+            Club seller, int sellerLeagueLevel, int sellerEconomicReputation,
+            Club buyer, int buyerLeagueLevel, int buyerEconomicReputation,
+            long value, PersonalityProfile sellerProfile, PersonalityProfile buyerProfile, long buyerBudget,
+            BalanceConfig cfg)
+        {
+            RefusalReason refusal = PrestigeModel.EvaluateRefusal(
+                player, importance,
+                seller, sellerLeagueLevel, sellerEconomicReputation,
+                buyer, buyerLeagueLevel, buyerEconomicReputation,
+                cfg);
+            if (refusal != RefusalReason.None)
+                return NegotiationResult.Refused(refusal);
+
+            return AutoNegotiate(value, importance, sellerProfile, buyerProfile, buyerBudget, cfg.Transfer);
         }
     }
 }

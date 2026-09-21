@@ -64,6 +64,7 @@ namespace Sim.Core.Market
             var clubById = new Dictionary<int, Club>();
             var levelByClub = new Dictionary<int, int>();
             var nationByClub = new Dictionary<int, string>();
+            var econRepByClub = new Dictionary<int, int>();
             var buyerIds = new List<int>();
             var orderedClubIds = new List<int>(); // explicit, sorted seller scan order (platform-independent)
             foreach (League league in leagues)
@@ -73,6 +74,7 @@ namespace Sim.Core.Market
                     clubById[club.Id] = club;
                     levelByClub[club.Id] = league.Division;
                     nationByClub[club.Id] = league.NationCode;
+                    econRepByClub[club.Id] = league.EconomicReputation;
                     orderedClubIds.Add(club.Id);
                     if (club.Id != humanClubId) buyerIds.Add(club.Id);
                 }
@@ -117,7 +119,7 @@ namespace Sim.Core.Market
                 while (signings < _t.MaxSigningsPerClubPerWindow && records.Count < _t.MaxTransfersPerWindow)
                 {
                     TransferRecord? deal = TrySignOne(buyer, buyerId, buyerProfile, worldSeed,
-                                                      clubById, orderedClubIds, levelByClub, nationByClub, tier1P90ByNation,
+                                                      clubById, orderedClubIds, levelByClub, nationByClub, econRepByClub, tier1P90ByNation,
                                                       humanClubId, Analyze, analysisCache);
                     if (deal == null) break;
                     records.Add(deal);
@@ -132,7 +134,7 @@ namespace Sim.Core.Market
         private TransferRecord? TrySignOne(
             Club buyer, int buyerId, PersonalityProfile buyerProfile, ulong worldSeed,
             Dictionary<int, Club> clubById, List<int> orderedClubIds, Dictionary<int, int> levelByClub,
-            Dictionary<int, string> nationByClub, Dictionary<string, long> tier1P90ByNation, int humanClubId,
+            Dictionary<int, string> nationByClub, Dictionary<int, int> econRepByClub, Dictionary<string, long> tier1P90ByNation, int humanClubId,
             System.Func<int, SquadAnalysis> analyze, Dictionary<int, SquadAnalysis> analysisCache)
         {
             SquadAnalysis buyerAnalysis = analyze(buyerId);
@@ -180,6 +182,11 @@ namespace Sim.Core.Market
 
                         if (buyerCap.HasValue && value > buyerCap.Value) continue; // R9 hard cap
 
+                        // R11: prestige refusal — player refuses a buying club whose prestige is below his threshold
+                        if (PrestigeModel.IsRefused(player, imp, seller, levelByClub[sellerId], econRepByClub[sellerId],
+                                                    buyer, levelByClub[buyerId], econRepByClub[buyerId], _cfg))
+                            continue;
+
                         long minSale = NegotiationModel.MinSalePrice(value, imp, _t);
                         long buyerMax = NegotiationModel.BuyerMaxPrice(value, buyerProfile, buyer.TransferBudget, _t);
                         if (buyerMax < minSale) continue; // can't reach the floor — skip
@@ -199,7 +206,9 @@ namespace Sim.Core.Market
                     PersonalityProfile sellerProfile =
                         ClubPersonalities.Profile(ClubPersonalities.For(c.Seller.Id, worldSeed));
                     NegotiationResult result = NegotiationModel.AutoNegotiate(
-                        c.Value, c.Importance, sellerProfile, buyerProfile, buyer.TransferBudget, _t);
+                        c.Player, c.Importance, c.Seller, levelByClub[c.Seller.Id], econRepByClub[c.Seller.Id],
+                        buyer, levelByClub[buyerId], econRepByClub[buyerId],
+                        c.Value, sellerProfile, buyerProfile, buyer.TransferBudget, _cfg);
 
                     if (!result.Agreed || result.Fee > buyer.TransferBudget) continue;
 
