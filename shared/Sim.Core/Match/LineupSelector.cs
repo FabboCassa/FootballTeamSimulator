@@ -31,6 +31,26 @@ namespace Sim.Core.Match
 
         public static Lineup BestEleven(Club club, PositionRole[] formation)
         {
+            Lineup lineup = FillGreedy(club, formation);
+            lineup.Validate();
+            return lineup;
+        }
+
+        /// <summary>
+        /// The same greedy best-XI pick, WITHOUT <see cref="Lineup.Validate"/>'s "exactly 11, exactly
+        /// 1 GK" match-day contract (task: worldwide AI market, R10). Non-match consumers that read a
+        /// club's spine off-pitch — <see cref="Market.SquadAnalysis"/> chief among them — must also
+        /// work for a DATA-ONLY club, which by design carries far fewer than 11 "key players" (task
+        /// 11.1's <c>DataOnlyPlayersPerClub</c>). For an 11+ player squad this returns EXACTLY what
+        /// <see cref="BestEleven(Club, PositionRole[])"/> returns (same greedy pass); it only differs
+        /// by not throwing when the squad is too small to fill every slot.
+        /// </summary>
+        public static Lineup BestAvailable(Club club, PositionRole[] formation) => FillGreedy(club, formation);
+
+        public static Lineup BestAvailable(Club club) => BestAvailable(club, DefaultFormation);
+
+        private static Lineup FillGreedy(Club club, PositionRole[] formation)
+        {
             var lineup = new Lineup { ClubId = club.Id };
             var used = new HashSet<int>();
 
@@ -59,7 +79,6 @@ namespace Sim.Core.Match
                 }
             }
 
-            lineup.Validate();
             return lineup;
         }
 

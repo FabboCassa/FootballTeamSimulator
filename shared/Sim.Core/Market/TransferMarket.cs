@@ -42,6 +42,16 @@ namespace Sim.Core.Market
         }
 
         /// <summary>
+        /// Runs one transfer window over the WHOLE world — playable, background AND data-only leagues
+        /// alike (task: worldwide AI market, R10), not just the leagues the host simulates in full
+        /// detail. A data-only club has no fixtures or table, but it still holds real players and a
+        /// transfer budget, so it belongs in the same market as everyone else; only the human's own
+        /// club (still resolved from the WHOLE world, not just his playable pyramid) is excluded.
+        /// </summary>
+        public List<TransferRecord> RunWindow(World world, ulong worldSeed, int windowIndex, int humanClubId = -1)
+            => RunWindow(world.AllLeagues(), worldSeed, windowIndex, humanClubId);
+
+        /// <summary>
         /// Runs one transfer window over every league and returns the completed transfers, in the
         /// order they were agreed. Re-prices the world first so negotiations use fresh values; does
         /// NOT re-seed budgets (a window spends from the budgets the host seeded at season start).
@@ -146,6 +156,15 @@ namespace Sim.Core.Market
                 {
                     if (sellerId == buyerId || sellerId == humanClubId) continue;
                     Club seller = clubById[sellerId];
+
+                    // CanSell's squad-size floor (MinSquadSize) is a per-CLUB fact, true or false for
+                    // every one of its players alike — a data-only/background club below the floor
+                    // (the common case at world scale, by design: a 7-player data-only squad must
+                    // never be drained) can NEVER be a seller. Reject the whole club before touching a
+                    // single player, instead of paying a full rating computation per player only to
+                    // have CanSell veto every one of them the same way. Exactly the same candidates
+                    // survive; this only skips work that was always going to be thrown away.
+                    if (seller.Squad.Players.Count <= _t.MinSquadSize) continue;
                     SquadAnalysis sa = analyze(sellerId);
 
                     foreach (Player player in seller.Squad.Players)
