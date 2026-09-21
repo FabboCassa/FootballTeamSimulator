@@ -103,14 +103,11 @@ namespace Fts.Services
 
         public CareerState Create(ulong seed, World world, int userClubId, DifficultyLevel difficulty)
         {
-            // Finances, facilities and coaches are seeded for every division that actually plays a
-            // season — the player's own AND the background ones. Background clubs need them because
-            // one of them can be promoted into a playable tier at the next rollover and would
-            // otherwise arrive with no money and a blank coach. Data-only clubs are skipped: they
-            // have no fixtures, no table and no way into the career.
-            List<League> living = LivingLeagues(world);
+            // Finances and facilities are seeded for EVERY club in the World (task 10, R13):
+            // playable, background and data-only alike.
+            new FinanceProgressor(_config).SeedWorld(world);
 
-            new FinanceProgressor(_config).SeedWorld(living);
+            List<League> living = LivingLeagues(world);
 
             // The user's scouting department is the scouting FACILITY (task 5.5): start at tier 3
             // (a 3-scout, level-3 dept) so scouting is meaningful from day one. AI clubs keep tier 1.

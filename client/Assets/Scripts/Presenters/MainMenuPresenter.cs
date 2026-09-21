@@ -78,7 +78,7 @@ namespace Fts.Presenters
                     _view.SetContinueVisible(false);
                     break;
                 case SaveLoadStatus.IncompatibleVersion:
-                    _view.ShowError(_loc.Tr("mainmenu.error.newer_version"));
+                    _view.ShowError(_loc.Tr("mainmenu.error.incompatible_save"));
                     break;
                 default:
                     _view.ShowError(_loc.Tr("mainmenu.error.corrupted"));

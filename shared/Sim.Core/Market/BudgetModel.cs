@@ -28,8 +28,8 @@ namespace Sim.Core.Market
         /// <summary>Best-XI average overall — the club's quality, used to size its budget.</summary>
         public static int ClubStrength(Club club)
         {
-            Lineup xi = LineupSelector.BestEleven(club);
-            if (xi.Slots.Count == 0) return 0;
+            Lineup xi = LineupSelector.BestAvailable(club);
+            if (xi.Slots.Count == 0) return club.Strength;
             long sum = 0;
             foreach (LineupSlot slot in xi.Slots)
                 sum += PlayerRating.OverallFor(slot.Player, slot.Role);

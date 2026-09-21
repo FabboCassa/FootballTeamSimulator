@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Sim.Core.Career;
+using Sim.Core.Config;
 using Sim.Core.Domain;
 using Sim.Core.Market;
 
@@ -14,6 +15,7 @@ namespace Fts.Services
     {
         private readonly CareerState _career;
         private readonly Persistence.ISaveRepository _saveRepository;
+        private readonly BalanceConfig _config = new BalanceConfig();
         private readonly FinanceProgressor _finance = new FinanceProgressor();
 
         /// <summary>
@@ -59,6 +61,10 @@ namespace Fts.Services
             if (!IsSeasonComplete)
                 return;
             _finance.AwardPrizeMoney(_career.Leagues, _career.Season);
+
+            var backgroundLeagues = _career.World.LeaguesAt(LeagueDetailLevel.Background);
+            if (backgroundLeagues.Count > 0)
+                _finance.AwardPrizeMoney(backgroundLeagues, _career.World.BackgroundSeason);
         }
 
         /// <summary>
@@ -85,17 +91,64 @@ namespace Fts.Services
             if (!IsSeasonComplete)
                 return;
 
+            // Capture pre-rollover finishes and expected positions for stature evolution (R5, R13).
+            var finishes = new Dictionary<int, (int actual, int expected)>();
+            var boardModel = new BoardModel(_config);
+
+            foreach (Nation nation in _career.World.Nations)
+            {
+                foreach (League league in nation.Leagues)
+                {
+                    if (league.DetailLevel == LeagueDetailLevel.DataOnly)
+                        continue;
+
+                    Season season = league.DetailLevel == LeagueDetailLevel.Playable ? _career.Season : _career.World.BackgroundSeason;
+                    List<LeagueTableRow> table = LeagueTable.Compute(league, season, _config.Season);
+                    for (int i = 0; i < table.Count; i++)
+                    {
+                        Club club = league.FindClub(table[i].ClubId);
+                        if (club == null) continue;
+
+                        int actual = i + 1;
+                        int expected = club.Coach != null && club.Coach.ObjectiveExpectedPosition >= 1
+                            ? club.Coach.ObjectiveExpectedPosition
+                            : boardModel.ExpectedPosition(club, league, 0);
+
+                        finishes[club.Id] = (actual, expected);
+                    }
+                }
+            }
+
             // Task 11.1b: the whole world rolls over, not just the player's divisions — promotion and
             // relegation run down every simulated pyramid, the background season is finished and
             // rebuilt, and a club promoted out of a background tier into a playable one has its squad
             // topped up on the way in.
-            LastWorldRollover = new WorldRollover().EndSeason(_career.World, _career.Season, _career.Seed);
+            LastWorldRollover = new WorldRollover(_config).EndSeason(_career.World, _career.Season, _career.Seed);
             _career.Season = LastWorldRollover.NewCareerSeason;
             LastRollover = ToUserView(LastWorldRollover);
 
-            // Clear the season-to-date income/expense display counters for the new season (task 5.5);
+            // Apply stature evolution to every club in simulated leagues.
+            var statureProgressor = new StatureProgressor(_config);
+            var promotedSet = new HashSet<int>(LastWorldRollover.PromotedClubIds);
+            var relegatedSet = new HashSet<int>(LastWorldRollover.RelegatedClubIds);
+
+            foreach (var kvp in finishes)
+            {
+                int clubId = kvp.Key;
+                var (actual, expected) = kvp.Value;
+                Club club = _career.World.FindClub(clubId);
+                if (club != null)
+                {
+                    bool promoted = promotedSet.Contains(clubId);
+                    bool relegated = relegatedSet.Contains(clubId);
+                    statureProgressor.ApplySeasonEnd(club, actual, expected, promoted, relegated);
+                }
+            }
+
+            // Clear the season-to-date income/expense display counters for the new season (task 5.5, R13);
             // the cash balance (and the prize just credited) carries over and seeds the new budget.
-            FinanceProgressor.ResetSeasonCounters(_career.Leagues);
+            FinanceProgressor.ResetSeasonCounters(_career.World.AllLeagues());
+            _finance.SeedTransferBudgets(_career.World.AllLeagues());
 
             // New season: restart the season-local training-week counter so development
             // keeps running every season (the new season's CurrentDay resets to 1; without

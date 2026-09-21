@@ -83,7 +83,9 @@ namespace Fts.Services
         /// one's reports). An old save loads with all three empty and its existing named watches are
         /// lifted into Player-kind briefs on first load — the watch list, the accumulated knowledge
         /// and the ranges a v16 career had are all preserved exactly.
-        public int SaveVersion { get; set; } = 17;
+        /// v18 (realistic club economy): world-wide finance and stature seeding, stature evolution at season
+        /// end, world-wide background and data-only weekly accrual. Older saves are incompatible.
+        public int SaveVersion { get; set; } = 18;
 
         /// <summary>Seed used to generate the world (kept for debugging/replays).</summary>
         public ulong Seed { get; set; }
