@@ -29,6 +29,7 @@ namespace Fts.Views
         public string Gate;
         public string Sponsor;
         public string Prize;
+        public string Budget;
     }
 
     /// <summary>
@@ -56,6 +57,7 @@ namespace Fts.Views
         private readonly Label _gate;
         private readonly Label _sponsor;
         private readonly Label _prize;
+        private readonly Label _budget;
         private readonly VisualElement _facilities;
         private readonly Label _status;
 
@@ -84,6 +86,7 @@ namespace Fts.Views
             _gate = UiKit.SummaryRow(income, tr("club.income.gate"), "—");
             _sponsor = UiKit.SummaryRow(income, tr("club.income.sponsor"), "—");
             _prize = UiKit.SummaryRow(income, tr("club.income.prize"), "—");
+            _budget = UiKit.SummaryRow(income, tr("club.budget"), "—");
             col.Add(income);
 
             // ---- 2. facilities
@@ -128,6 +131,7 @@ namespace Fts.Views
             _gate.text = vm.Gate ?? string.Empty;
             _sponsor.text = vm.Sponsor ?? string.Empty;
             _prize.text = vm.Prize ?? string.Empty;
+            if (_budget != null) _budget.text = vm.Budget ?? string.Empty;
         }
 
         public void SetFacilities(IReadOnlyList<FacilityRowVm> rows)

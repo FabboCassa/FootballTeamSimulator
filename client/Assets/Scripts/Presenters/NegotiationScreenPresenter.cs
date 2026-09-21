@@ -80,8 +80,8 @@ namespace Fts.Presenters
             _view.BackClicked += OnBack;
 
             _selling = _target.Mode == NegotiationMode.Sell;
-            _player = _career.FindPlayer(_target.PlayerId);
-            _counterparty = _career.FindClub(_target.CounterpartyClubId);
+            _player = _career.FindPlayer(_target.PlayerId) ?? (_career.World != null ? _career.World.FindPlayer(_target.PlayerId) : null);
+            _counterparty = _career.FindClub(_target.CounterpartyClubId) ?? (_career.World != null ? _career.World.FindClub(_target.CounterpartyClubId) : null);
             _userClub = _career.GetUserClub();
 
             if (_player == null || _counterparty == null || _userClub == null)
@@ -145,6 +145,32 @@ namespace Fts.Presenters
                 {
                     _brokenOff = true;
                     _view.SetStatus(_loc.Tr("negotiation.status.not_for_sale", _counterparty.Name));
+                }
+                else
+                {
+                    League sellerLeague = FindLeagueOfClub(_counterparty.Id);
+                    League userLeague = FindLeagueOfClub(_userClub.Id);
+                    int sellerDivision = sellerLeague?.Division ?? 1;
+                    int sellerEconRep = sellerLeague?.EconomicReputation ?? 100;
+                    int userDivision = userLeague?.Division ?? 1;
+                    int userEconRep = userLeague?.EconomicReputation ?? 100;
+
+                    RefusalReason refusal = PrestigeModel.EvaluateRefusal(
+                        _player,
+                        importance,
+                        _counterparty,
+                        sellerDivision,
+                        sellerEconRep,
+                        _userClub,
+                        userDivision,
+                        userEconRep,
+                        new BalanceConfig());
+
+                    if (refusal != RefusalReason.None)
+                    {
+                        _brokenOff = true;
+                        _view.SetStatus(_loc.Tr("negotiation.status.refused", _player.FullName));
+                    }
                 }
 
                 PersonalityProfile sellerProfile = ClubPersonalities.Profile(ClubPersonalities.For(_counterparty.Id, _career.Seed));
@@ -377,5 +403,20 @@ namespace Fts.Presenters
 
         private string RoleName(PositionRole role) =>
             _loc.Tr("role." + role.ToString().ToLowerInvariant());
+
+        private League FindLeagueOfClub(int clubId)
+        {
+            if (_career.World != null)
+            {
+                League l = _career.World.LeagueOf(clubId);
+                if (l != null) return l;
+            }
+            foreach (League league in _career.Leagues)
+            {
+                if (league.FindClub(clubId) != null)
+                    return league;
+            }
+            return null;
+        }
     }
 }

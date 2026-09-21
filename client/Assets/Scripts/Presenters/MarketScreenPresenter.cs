@@ -39,6 +39,7 @@ namespace Fts.Presenters
         private readonly TransferBalance _cfg = new BalanceConfig().Transfer;
 
         private int _tab;             // 0 buy, 1 sell, 2 news
+        private int _buyPage;         // 0-based page for Buy tab
         private int _roleFilter = -1; // -1 = all roles
         private int _sort;            // 0 overall, 1 value, 2 age
         private bool _shortlistOnly;
@@ -81,6 +82,8 @@ namespace Fts.Presenters
             _view.OfferAccept += OnOfferAccept;
             _view.OfferReject += OnOfferReject;
             _view.SubBackClicked += OnSubBack;
+            _view.PagePreviousClicked += OnPagePrevious;
+            _view.PageNextClicked += OnPageNext;
             _view.BackClicked += OnBack;
 
             _market.GenerateListingOffers();
@@ -99,6 +102,8 @@ namespace Fts.Presenters
             _view.OfferAccept -= OnOfferAccept;
             _view.OfferReject -= OnOfferReject;
             _view.SubBackClicked -= OnSubBack;
+            _view.PagePreviousClicked -= OnPagePrevious;
+            _view.PageNextClicked -= OnPageNext;
             _view.BackClicked -= OnBack;
         }
 
@@ -111,6 +116,7 @@ namespace Fts.Presenters
         private void OnTab(int tab)
         {
             _tab = tab;
+            _buyPage = 0;
             _sellPicking = -1;
             Refresh();
         }
@@ -119,18 +125,36 @@ namespace Fts.Presenters
         private void OnRoleFilter(int role)
         {
             _roleFilter = role < 0 || role > RoleMax ? -1 : role;
+            _buyPage = 0;
             Refresh();
         }
 
         private void OnSort()
         {
             _sort = (_sort + 1) % 3;
+            _buyPage = 0;
             Refresh();
         }
 
         private void OnShortlistOnly()
         {
             _shortlistOnly = !_shortlistOnly;
+            _buyPage = 0;
+            Refresh();
+        }
+
+        private void OnPagePrevious()
+        {
+            if (_buyPage > 0)
+            {
+                _buyPage--;
+                Refresh();
+            }
+        }
+
+        private void OnPageNext()
+        {
+            _buyPage++;
             Refresh();
         }
 
@@ -235,6 +259,144 @@ namespace Fts.Presenters
         private void RenderBuy(MarketWindow window)
         {
             var analyses = new Dictionary<int, SquadAnalysis>();
+
+            if (_shortlistOnly)
+            {
+                var shortlistPlayers = new List<Player>();
+                foreach (int id in _career.Shortlist)
+                {
+                    Player p = _career.FindPlayer(id) ?? (_career.World != null ? _career.World.FindPlayer(id) : null);
+                    if (p == null) continue;
+                    Club club = ClubOfPlayer(p.Id);
+                    if (club == null || club.Id == _career.UserClubId) continue;
+                    if (_roleFilter >= 0 && (int)p.Role != _roleFilter) continue;
+                    shortlistPlayers.Add(p);
+                }
+
+                shortlistPlayers.Sort(CompareBuy);
+
+                if (shortlistPlayers.Count == 0)
+                {
+                    _view.AddEmptyState("scouting", _loc.Tr("market.buy_empty"));
+                    return;
+                }
+
+                int total = shortlistPlayers.Count;
+                int pageCount = (total + MaxBuyRows - 1) / MaxBuyRows;
+                if (_buyPage >= pageCount) _buyPage = pageCount > 0 ? pageCount - 1 : 0;
+                if (_buyPage < 0) _buyPage = 0;
+
+                int from = _buyPage * MaxBuyRows;
+                int to = System.Math.Min(from + MaxBuyRows, total);
+
+                for (int i = from; i < to; i++)
+                {
+                    Player p = shortlistPlayers[i];
+                    Club club = ClubOfPlayer(p.Id);
+                    if (club == null) continue;
+
+                    if (!analyses.TryGetValue(club.Id, out SquadAnalysis sa))
+                    {
+                        sa = SquadAnalysis.Analyze(club, _cfg);
+                        analyses[club.Id] = sa;
+                    }
+
+                    _view.AddPlayerRow(new MarketRowVm
+                    {
+                        PlayerId = p.Id,
+                        Name = p.FullName,
+                        Meta = _loc.Tr("market.meta_buy", club.Name, p.Age),
+                        RoleAbbr = RoleName(p.Role),
+                        RoleGroup = RoleFormat.Group(p.Role),
+                        Age = p.Age.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                        Ovr = ScoutedOvr(p),
+                        Value = MoneyFormat.Short(_market.ValueOf(p, club.Id)),
+                        Tag = _loc.Tr("market.tag.shortlisted"),
+                        ActionAText = "★",
+                        ActionAHighlighted = true,
+                        ActionBText = _loc.Tr("market.buy"),
+                        ActionBEnabled = window.IsOpen && sa.CanSell(p, _cfg),
+                        Avatar = Avatar(p, club.Id)
+                    });
+                }
+
+                if (pageCount > 1)
+                {
+                    string summary = _loc.Tr("market.page.summary", _buyPage + 1, pageCount, total);
+                    _view.AddPager(summary, _buyPage > 0, _buyPage < pageCount - 1);
+                }
+                return;
+            }
+
+            if (_career.World != null)
+            {
+                var query = new PlayerSearchQuery
+                {
+                    Page = _buyPage,
+                    PageSize = MaxBuyRows,
+                    ExcludeOwnClub = true,
+                    ObserverClubId = _career.UserClubId
+                };
+                if (_roleFilter >= 0)
+                    query.Filters.Role = _roleFilter;
+
+                switch (_sort)
+                {
+                    case 1: query.Sort = PlayerSearchSort.Value; break;
+                    case 2: query.Sort = PlayerSearchSort.Age; break;
+                    default: query.Sort = PlayerSearchSort.Ability; break;
+                }
+
+                PlayerSearchPage page = _scouting.Search(query);
+                _buyPage = page.Page;
+
+                if (page.Hits.Count == 0)
+                {
+                    _view.AddEmptyState("scouting", _loc.Tr("market.buy_empty"));
+                    return;
+                }
+
+                foreach (PlayerSearchHit hit in page.Hits)
+                {
+                    Player p = hit.Player;
+                    Club club = hit.Club ?? ClubOfPlayer(p.Id);
+                    if (club == null) continue;
+
+                    if (!analyses.TryGetValue(club.Id, out SquadAnalysis sa))
+                    {
+                        sa = SquadAnalysis.Analyze(club, _cfg);
+                        analyses[club.Id] = sa;
+                    }
+
+                    bool shortlisted = _career.Shortlist.Contains(p.Id);
+                    _view.AddPlayerRow(new MarketRowVm
+                    {
+                        PlayerId = p.Id,
+                        Name = p.FullName,
+                        Meta = _loc.Tr("market.meta_buy", club.Name, p.Age),
+                        RoleAbbr = RoleName(p.Role),
+                        RoleGroup = RoleFormat.Group(p.Role),
+                        Age = p.Age.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                        Ovr = ScoutedOvr(p),
+                        Value = MoneyFormat.Short(_market.ValueOf(p, club.Id)),
+                        Tag = shortlisted ? _loc.Tr("market.tag.shortlisted") : string.Empty,
+                        ActionAText = shortlisted ? "★" : "☆",
+                        ActionAHighlighted = shortlisted,
+                        ActionBText = _loc.Tr("market.buy"),
+                        ActionBEnabled = window.IsOpen && sa.CanSell(p, _cfg),
+                        Avatar = Avatar(p, club.Id)
+                    });
+                }
+
+                if (page.PageCount > 1)
+                {
+                    string summary = _loc.Tr("market.page.summary", page.Page + 1, page.PageCount, page.Total);
+                    _view.AddPager(summary, page.Page > 0, page.Page < page.PageCount - 1);
+                }
+                return;
+            }
+
+            // Fallback if world is null
             var rows = new List<Player>();
             foreach (League league in _career.Leagues)
             {
@@ -244,7 +406,6 @@ namespace Fts.Presenters
                     foreach (Player p in club.Squad.Players)
                     {
                         if (_roleFilter >= 0 && (int)p.Role != _roleFilter) continue;
-                        if (_shortlistOnly && !_career.Shortlist.Contains(p.Id)) continue;
                         rows.Add(p);
                     }
                 }
@@ -258,10 +419,17 @@ namespace Fts.Presenters
                 return;
             }
 
-            int shown = 0;
-            foreach (Player p in rows)
+            int fbTotal = rows.Count;
+            int fbPageCount = (fbTotal + MaxBuyRows - 1) / MaxBuyRows;
+            if (_buyPage >= fbPageCount) _buyPage = fbPageCount > 0 ? fbPageCount - 1 : 0;
+            if (_buyPage < 0) _buyPage = 0;
+
+            int fbFrom = _buyPage * MaxBuyRows;
+            int fbTo = System.Math.Min(fbFrom + MaxBuyRows, fbTotal);
+
+            for (int i = fbFrom; i < fbTo; i++)
             {
-                if (shown >= MaxBuyRows) break;
+                Player p = rows[i];
                 Club club = ClubOfPlayer(p.Id);
                 if (club == null) continue;
 
@@ -289,11 +457,13 @@ namespace Fts.Presenters
                     ActionBEnabled = window.IsOpen && sa.CanSell(p, _cfg),
                     Avatar = Avatar(p, club.Id)
                 });
-                shown++;
             }
 
-            if (rows.Count > shown)
-                _view.AddInfoLine(_loc.Tr("market.more_results", rows.Count - shown));
+            if (fbPageCount > 1)
+            {
+                string summary = _loc.Tr("market.page.summary", _buyPage + 1, fbPageCount, fbTotal);
+                _view.AddPager(summary, _buyPage > 0, _buyPage < fbPageCount - 1);
+            }
         }
 
         private void RenderSell(MarketWindow window)
@@ -475,6 +645,11 @@ namespace Fts.Presenters
 
         private Club ClubOfPlayer(int playerId)
         {
+            if (_career.World != null)
+            {
+                Club worldClub = _career.World.ClubOfPlayer(playerId);
+                if (worldClub != null) return worldClub;
+            }
             foreach (League league in _career.Leagues)
                 foreach (Club club in league.Clubs)
                     foreach (Player p in club.Squad.Players)
