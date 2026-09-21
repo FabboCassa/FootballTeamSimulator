@@ -1,4 +1,4 @@
-﻿{
+{
   "app.title": "Football Team Simulator",
   "common.back": "Indietro",
   "common.continue": "Continua",
@@ -38,7 +38,8 @@
   "login.error.network": "Impossibile raggiungere il server. Controlla l'URL del server e la connessione.",
   "login.error.server": "Errore lato server. Riprova.",
   "mainmenu.error.corrupted": "Il salvataggio è danneggiato e non può essere caricato. Inizia una nuova carriera.",
-  "mainmenu.error.newer_version": "Questo salvataggio è stato creato da una versione più recente del gioco e non può essere caricato.",
+  "mainmenu.error.incompatible_save": "Salvataggio incompatibile, inizia una nuova carriera.",
+  "mainmenu.error.newer_version": "Salvataggio incompatibile, inizia una nuova carriera.",
   "career_setup.title": "Nuova carriera",
   "career_setup.reroll": "Rigenera mondo",
   "career_setup.difficulty": "Difficoltà:",

@@ -169,6 +169,19 @@ namespace Fts.Services
             // (world seed, fixture id), never on when it was resolved.
             _background.AdvanceTo(_career.World, _career.Season.CurrentDay, _career.Seed);
 
+            var backgroundLeagues = _career.World.LeaguesAt(LeagueDetailLevel.Background);
+            if (backgroundLeagues.Count > 0)
+            {
+                var playedToday = new List<Fixture>();
+                foreach (Fixture f in _career.World.BackgroundSeason.Fixtures)
+                {
+                    if (f.Played && f.Day == _career.Season.CurrentDay)
+                        playedToday.Add(f);
+                }
+                if (playedToday.Count > 0)
+                    _finance.AccrueMatchday(backgroundLeagues, playedToday);
+            }
+
             // Credit gate receipts to the home club of every fixture played today (task 5.5).
             // Mutates only Finances.Balance, never attributes/condition — the user-match re-sim
             // is unaffected. Sponsors/wages settle weekly inside EvolveTrainingUpTo above.
@@ -246,6 +259,14 @@ namespace Fts.Services
                 // player's cached MarketValue (kept fresh by the weekly re-price below). Only
                 // Finances change — attributes/condition are untouched, so the re-sim is safe.
                 _finance.AccrueWeek(_career.Leagues, _career.Season);
+
+                var backgroundLeagues = _career.World.LeaguesAt(LeagueDetailLevel.Background);
+                if (backgroundLeagues.Count > 0)
+                    _finance.AccrueWeek(backgroundLeagues, _career.World.BackgroundSeason);
+
+                var dataOnlyLeagues = _career.World.LeaguesAt(LeagueDetailLevel.DataOnly);
+                if (dataOnlyLeagues.Count > 0)
+                    _finance.AccrueDataOnlyWeek(dataOnlyLeagues);
 
                 // The Tactical team focus drills the user's current tactic (the "affects
                 // tactic familiarity" half of 4.3); every other focus gains nothing here.

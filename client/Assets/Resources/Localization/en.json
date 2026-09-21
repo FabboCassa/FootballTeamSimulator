@@ -1,4 +1,4 @@
-﻿{
+{
   "app.title": "Football Team Simulator",
   "common.back": "Back",
   "common.continue": "Continue",
@@ -38,7 +38,8 @@
   "login.error.network": "Can't reach the server. Check the server URL and your connection.",
   "login.error.server": "Something went wrong on the server. Please try again.",
   "mainmenu.error.corrupted": "The save file is corrupted and cannot be loaded. Please start a new career.",
-  "mainmenu.error.newer_version": "This save was created by a newer game version and cannot be loaded.",
+  "mainmenu.error.incompatible_save": "Incompatible save, start a new career.",
+  "mainmenu.error.newer_version": "Incompatible save, start a new career.",
   "career_setup.title": "New career",
   "career_setup.reroll": "Reroll world",
   "career_setup.difficulty": "Difficulty:",
