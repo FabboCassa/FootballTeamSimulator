@@ -1,15 +1,142 @@
-{"spec": "docs/specs/realistic-club-economy.md", "base": "main", "issues": [
-  {"n": 1, "deps": []},
-  {"n": 2, "deps": [1]},
-  {"n": 3, "deps": [2]},
-  {"n": 4, "deps": [2]},
-  {"n": 5, "deps": [2]},
-  {"n": 6, "deps": [1]},
-  {"n": 7, "deps": [4, 5]},
-  {"n": 8, "deps": [4, 6, 7]},
-  {"n": 9, "deps": [8]},
-  {"n": 10, "deps": [3, 4, 7]},
-  {"n": 11, "deps": [9, 10]},
-  {"n": 12, "deps": [2, 5]},
-  {"n": 13, "deps": [3, 8]}
-]}
+{
+ "spec": "docs/specs/watchable-match-engine.md",
+ "base": "main",
+ "issues": [
+  {
+   "n": 28,
+   "deps": [],
+   "kind": "refactor"
+  },
+  {
+   "n": 29,
+   "deps": [
+    28
+   ],
+   "kind": "refactor"
+  },
+  {
+   "n": 30,
+   "deps": [
+    29
+   ],
+   "kind": "feature"
+  },
+  {
+   "n": 31,
+   "deps": [],
+   "kind": "feature"
+  },
+  {
+   "n": 32,
+   "deps": [
+    29
+   ],
+   "kind": "feature"
+  },
+  {
+   "n": 33,
+   "deps": [
+    32
+   ],
+   "kind": "feature"
+  },
+  {
+   "n": 34,
+   "deps": [
+    31,
+    33
+   ],
+   "kind": "feature"
+  },
+  {
+   "n": 35,
+   "deps": [
+    32
+   ],
+   "kind": "feature"
+  },
+  {
+   "n": 36,
+   "deps": [
+    29
+   ],
+   "kind": "feature"
+  },
+  {
+   "n": 37,
+   "deps": [
+    30,
+    36
+   ],
+   "kind": "feature"
+  },
+  {
+   "n": 38,
+   "deps": [
+    34,
+    35,
+    37
+   ],
+   "kind": "feature"
+  },
+  {
+   "n": 39,
+   "deps": [
+    38
+   ],
+   "kind": "feature"
+  },
+  {
+   "n": 40,
+   "deps": [],
+   "kind": "feature"
+  },
+  {
+   "n": 41,
+   "deps": [
+    40
+   ],
+   "kind": "feature"
+  },
+  {
+   "n": 42,
+   "deps": [
+    36,
+    40
+   ],
+   "kind": "feature"
+  },
+  {
+   "n": 43,
+   "deps": [
+    41,
+    42
+   ],
+   "kind": "feature"
+  },
+  {
+   "n": 44,
+   "deps": [
+    36,
+    43
+   ],
+   "kind": "feature"
+  },
+  {
+   "n": 45,
+   "deps": [
+    40,
+    41
+   ],
+   "kind": "feature"
+  },
+  {
+   "n": 46,
+   "deps": [
+    38,
+    39
+   ],
+   "kind": "feature"
+  }
+ ]
+}

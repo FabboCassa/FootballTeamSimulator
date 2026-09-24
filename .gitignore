@@ -67,3 +67,5 @@ test-output.txt
 .ba/auto.lock
 .ba/auto.count
 .ba/auto.waiting
+.ba/cache/
+.ba/security/
