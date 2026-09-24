@@ -98,8 +98,8 @@ namespace Fts.Presenters
             _renderer = new MatchRenderer(report, HomeColor, AwayColor);
 
             // A stored replay is watched alone and follows no shared clock, so it gets the
-            // director: ~5 real minutes at 1x with the strikes at real time (MatchRenderer.SetPacing).
-            _renderer.SetPacing(MatchRenderer.TargetSecondsAt1x, director: true);
+            // broadcast director (MatchRenderer.UseBroadcastDirector).
+            _renderer.UseBroadcastDirector();
 
             _renderer.MinuteChanged += OnMinuteChanged;
             _renderer.EventReached += OnEventReached;

@@ -7,7 +7,7 @@ namespace Fts.Views
     /// <summary>
     /// Chrome for the watchable match (task 3.1): a top HUD (score + clock), a slot the
     /// presenter fills with the live figures, the pitch area (the renderer is inserted by the
-    /// presenter), an event toast overlay, and a bottom control bar (speed 0.5x/1x/2x/4x, Skip,
+    /// presenter), an event toast overlay, and a bottom control bar (speed 1x/2x/4x, Skip,
     /// Continue).
     ///
     /// The figures arrive as a whole strip rather than as numbers because the strip is painted in
@@ -22,8 +22,6 @@ namespace Fts.Views
         private static readonly Color ToastColor = new Color(0f, 0f, 0f, 0.75f);
         private static readonly Color ActiveSpeed = UiKit.Accent;
         private static readonly Color IdleSpeed = UiKit.SurfaceAlt;
-        private static readonly Color SlowMotionChip = new Color(0.95f, 0.72f, 0.20f, 0.92f);
-        private static readonly Color SlowMotionText = new Color(0.08f, 0.09f, 0.12f);
 
         public event Action<float> SpeedClicked;
         public event Action SkipClicked;
@@ -43,17 +41,12 @@ namespace Fts.Views
         private VisualElement _homeCrestSlot;
         private VisualElement _awayCrestSlot;
         private readonly Label _toast;
-        private readonly Label _slowMotion;
         private readonly ActionFeed _feed = new ActionFeed();
         private Button _skip;
         private Button _pause;
         private Button _continue;
         private readonly Button[] _speedButtons;
-        // 0.5x is not a gimmick: at 1x the director spends half the budget on the strikes and has
-        // to run the rest of the match at about thirty-five times real time, which is a lot of
-        // football going past. Halving it is the one honest lever on that — a ten-minute match
-        // with the ordinary play at a readable pace and the strikes in slow motion proper.
-        private readonly float[] _speeds = { 0.5f, 1f, 2f, 4f };
+        private readonly float[] _speeds = { 1f, 2f, 4f };
         private IVisualElementScheduledItem _toastHide;
 
         public MatchWatchView(Func<string, string> tr)
@@ -92,21 +85,6 @@ namespace Fts.Views
             _toast.style.paddingBottom = 6;
             _toast.style.display = DisplayStyle.None;
             toastRow.Add(_toast);
-
-            // The slow-motion chip sits beside the toast: when the director drops playback to real
-            // time the picture suddenly crawls, and without a word on screen that reads as a stall.
-            _slowMotion = new Label(tr("match.slow_motion"));
-            _slowMotion.style.color = SlowMotionText;
-            _slowMotion.AddToClassList("fts-t-meta");
-            _slowMotion.style.unityFontStyleAndWeight = FontStyle.Bold;
-            _slowMotion.style.backgroundColor = SlowMotionChip;
-            _slowMotion.style.paddingLeft = 9;
-            _slowMotion.style.paddingRight = 9;
-            _slowMotion.style.paddingTop = 3;
-            _slowMotion.style.paddingBottom = 3;
-            _slowMotion.style.marginLeft = 8;
-            _slowMotion.style.display = DisplayStyle.None;
-            toastRow.Add(_slowMotion);
 
             PitchContainer.Add(toastRow);
             PitchContainer.Add(_feed.Root);
@@ -166,7 +144,7 @@ namespace Fts.Views
             bar.style.paddingTop = 8;
             bar.style.paddingBottom = 8;
 
-            string[] speedKeys = { "match.speed_05x", "match.speed_1x", "match.speed_2x", "match.speed_4x" };
+            string[] speedKeys = { "match.speed_1x", "match.speed_2x", "match.speed_4x" };
             for (int i = 0; i < _speeds.Length; i++)
             {
                 float speed = _speeds[i];
@@ -234,10 +212,6 @@ namespace Fts.Views
 
         /// <summary>Empties the commentary (a re-simulated remainder starts fresh).</summary>
         public void ClearActions() => _feed.Clear();
-
-        /// <summary>Shows or hides the real-time slow-motion chip.</summary>
-        public void SetSlowMotion(bool on) =>
-            _slowMotion.style.display = on ? DisplayStyle.Flex : DisplayStyle.None;
 
         public void ShowToast(string text)
         {

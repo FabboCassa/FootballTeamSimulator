@@ -405,19 +405,17 @@ namespace Fts.Presenters
             _renderer = new MatchRenderer(report, _homeColor, _awayColor);
 
             // The watched match answers to nobody's clock but this player's, so it gets the
-            // director: ~5 real minutes at 1x, with the strikes played at REAL TIME. (The online
-            // live screens deliberately do not — see MatchRenderer.SetPacing.)
-            _renderer.SetPacing(MatchRenderer.TargetSecondsAt1x, director: true);
+            // broadcast director. (The online live screens deliberately do not — see
+            // MatchRenderer.UseBroadcastDirector.)
+            _renderer.UseBroadcastDirector();
 
             _renderer.MinuteChanged += OnMinuteChanged;
             _renderer.EventReached += OnEventReached;
             _renderer.Finished += OnFinished;
             _renderer.ActionReached += OnActionReached;
             _renderer.StatsChanged += OnStatsChanged;
-            _renderer.SlowMotionChanged += OnSlowMotionChanged;
             _view.PitchContainer.Insert(0, _renderer); // behind the toast overlay
             _view.ClearActions();
-            _view.SetSlowMotion(false);
 
             _renderer.SetSpeed(_speed);
             _view.SetFinished(false);
@@ -444,8 +442,6 @@ namespace Fts.Presenters
             _renderer.Finished -= OnFinished;
             _renderer.ActionReached -= OnActionReached;
             _renderer.StatsChanged -= OnStatsChanged;
-            _renderer.SlowMotionChanged -= OnSlowMotionChanged;
-            _view.SetSlowMotion(false);
             if (_renderer.parent != null)
                 _renderer.RemoveFromHierarchy();
             _renderer = null;
@@ -465,8 +461,6 @@ namespace Fts.Presenters
 
         /// <summary>The figures of the match so far, straight onto the strip under the HUD.</summary>
         private void OnStatsChanged(MatchLiveStats stats) => _statsStrip?.Set(stats);
-
-        private void OnSlowMotionChanged(bool on) => _view.SetSlowMotion(on);
 
         private string NameOfSlot(bool home, int slot)
         {
