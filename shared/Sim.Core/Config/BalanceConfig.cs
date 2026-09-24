@@ -1795,6 +1795,9 @@ namespace Sim.Core.Config
         public int ShotQualityPressurePercent { get; set; } = 45;
         public int ShotQualityFinishingPercent { get; set; } = 60;
 
+        /// <summary>xT grid, xG and pitch-control tunables (watchable-match-engine R3).</summary>
+        public ActionModelBalance ActionModels { get; set; } = new ActionModelBalance();
+
         /// <summary>
         /// Placement, as a share of the way from the middle of the goal to the post: where a
         /// strike of no quality at all is aimed. Quality carries it the rest of the way, so a
