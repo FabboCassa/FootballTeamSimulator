@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using Fts.Views;
 using Sim.Core.Match;
+using Sim.Core.Match.Broadcast;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -23,16 +24,13 @@ namespace Fts.MatchView
     /// it is going to, or the trajectory of a shot), or dead on a spot. Players wear
     /// their shirt numbers. A short trail follows the ball so a pass reads as a pass.
     ///
-    /// PACING (the director). Playback advances in wall-clock time (scheduler delta) and
-    /// interpolates linearly between stream ticks so motion stays smooth at any frame rate,
-    /// but it does NOT advance at one rate throughout. Ninety minutes compressed evenly into
-    /// a few real minutes is thirty times real speed, and at thirty times real speed a shot
-    /// — two or three frames of the stream — is on screen for a twentieth of a second and
-    /// nobody has ever seen one. So the frames AROUND a strike, a goal, a penalty or a
-    /// sending-off play at REAL TIME, and the rest of the match is compressed harder to pay
-    /// for them, landing the whole thing on <see cref="TargetSecondsAt1x"/>. See
-    /// <see cref="SetPacing"/>: the online live screens, which follow a clock shared with
-    /// another human being, opt OUT and keep the flat rate.
+    /// PACING. Playback advances in wall-clock time (scheduler delta) and interpolates linearly
+    /// between stream ticks so motion stays smooth at any frame rate. By default it runs at one
+    /// flat rate (<see cref="BaseSecondsAt1x"/>). A watched match opts into the broadcast
+    /// director (<see cref="UseBroadcastDirector"/>): its timeline plays each segment at real
+    /// time or twice that and jumps the cut ones (spec R12-R13), so nothing is ever slower than
+    /// real time at 1x. The online live screens, which follow a clock shared with another human
+    /// being, stay on the flat rate.
     ///
     /// Shirt numbers are real <see cref="Label"/> children rather than painter text: a label
     /// centres itself in the token's own box, which is the only way a two-digit number stays
@@ -47,25 +45,6 @@ namespace Fts.MatchView
         // the shared-clock live screens derive the match minute from this number — do not change
         // it without changing LiveSecondsPerMinute there too.
         public const float BaseSecondsAt1x = 180f;
-
-        /// <summary>
-        /// What a watched match costs at 1x with the director on. The whole ninety minutes lands
-        /// here — slow-motion included — because the rest of the match is compressed to pay for
-        /// the slow-motion. Raise it for a more watchable match and a longer sitting: 420f is a
-        /// seven-minute match with the same real-time highlights.
-        /// </summary>
-        public const float TargetSecondsAt1x = 300f;
-
-        /// <summary>Frames of the stream before and after a highlight that play at real time (2 frames = 1s).</summary>
-        private const int HighlightLeadFrames = 8;   // 4 seconds of football before the strike
-        private const int HighlightTailFrames = 6;   // 3 seconds after it
-
-        /// <summary>
-        /// The director never spends more than this share of the budget on slow-motion. A match
-        /// with thirty strikes would otherwise be nothing but slow-motion and would run twice as
-        /// long as the caller asked for.
-        /// </summary>
-        private const float MaxHighlightShare = 0.55f;
 
         private const int PumpIntervalMs = 16; // ~60 fps
 
@@ -88,23 +67,17 @@ namespace Fts.MatchView
         private readonly Color _homeNumberColor;
         private readonly Color _awayNumberColor;
 
+        private readonly MatchReport _report;
         private readonly List<MatchEvent> _events;
         private readonly PositionStream _stream;
         private readonly List<BallAction> _actions;
         private readonly int _players;
         private readonly int _ticksPerMinute;
         private readonly int _lastTick;
+        private readonly float _flatTicksPerSecond;
 
-        /// <summary>Frames per real second that IS real time (the stream runs at 120 frames a match minute).</summary>
-        private readonly float _realTimeTicksPerSecond;
-
-        /// <summary>True on the frames the director plays at real time. Empty when the director is off.</summary>
-        private bool[] _highlight = Array.Empty<bool>();
-
-        private float _fastTicksPerSecond;   // everything that is not a highlight
-        private float _slowTicksPerSecond;   // the highlights themselves
-        private bool _director;
-        private bool _inSlowMotion;
+        /// <summary>The director's clock; null on the flat rate.</summary>
+        private BroadcastPlayback _playback;
 
         // Shirt numbers, one label a man. Kept as children so the text centres itself.
         private readonly Label[] _homeNumbers;
@@ -155,9 +128,6 @@ namespace Fts.MatchView
         /// <summary>Fired when the live figures move, so a panel can redraw without polling.</summary>
         public event Action<MatchLiveStats> StatsChanged;
 
-        /// <summary>Fired when playback enters or leaves real-time slow-motion.</summary>
-        public event Action<bool> SlowMotionChanged;
-
         /// <summary>Fired once when playback reaches full time (or on Skip).</summary>
         public event Action Finished;
 
@@ -179,13 +149,14 @@ namespace Fts.MatchView
             _homeNumberColor = ReadableOn(homeColor);
             _awayNumberColor = ReadableOn(awayColor);
 
+            _report = report;
             _events = report?.Events ?? new List<MatchEvent>();
             _stream = report?.Positions ?? new PositionStream();
             _actions = _stream.Actions ?? new List<BallAction>();
             _players = _stream.PlayerCount;
             _ticksPerMinute = _stream.TicksPerMinute > 0 ? _stream.TicksPerMinute : 1;
             _lastTick = _stream.TickCount > 0 ? _stream.TickCount - 1 : 0;
-            _realTimeTicksPerSecond = _ticksPerMinute / 60f;
+            _flatTicksPerSecond = _lastTick / BaseSecondsAt1x;
 
             foreach (BallAction action in _actions)
                 if (action.Kind == BallActionKind.HalfTime)
@@ -196,8 +167,6 @@ namespace Fts.MatchView
 
             _homeNumbers = BuildNumbers(_stream.HomeShirts, _homeNumberColor, _homeColor, _homeKeeperColor);
             _awayNumbers = BuildNumbers(_stream.AwayShirts, _awayNumberColor, _awayColor, _awayKeeperColor);
-
-            SetPacing(BaseSecondsAt1x, director: false);
 
             // Fill the host container (its alignItems must not shrink us to content).
             style.position = Position.Absolute;
@@ -212,94 +181,28 @@ namespace Fts.MatchView
         /// <summary>True when there is something to play (a stripped report has nothing).</summary>
         public bool HasStream => _lastTick > 0 && _players > 0;
 
-        /// <summary>True while the director is holding playback at real time.</summary>
-        public bool InSlowMotion => _inSlowMotion;
-
         // ------------------------------------------------------------- pacing
 
         /// <summary>
-        /// How long the match should take at 1x, and whether the director may spend part of that
-        /// budget running the strikes at real time.
-        ///
-        /// <paramref name="director"/> MUST stay false on the shared-clock live screens: there the
-        /// displayed minute is agreed with another client from wall-clock time, and a renderer that
-        /// slowed down for a shot would drift away from it. A finished replay — the career watch
-        /// screen, a stored replay — answers to nobody's clock and gets the director.
+        /// Plays the broadcast director's timeline instead of the flat rate, from wherever playback
+        /// is now. It MUST NOT be used on the shared-clock live screens: there the displayed minute
+        /// is agreed with another client from wall-clock time, and a cut would drift away from it.
+        /// A finished replay — the career watch screen, a stored replay — answers to nobody's clock.
         /// </summary>
-        public void SetPacing(float targetSecondsAt1x, bool director)
+        public void UseBroadcastDirector()
         {
-            float target = targetSecondsAt1x > 1f ? targetSecondsAt1x : BaseSecondsAt1x;
-            _director = director && HasStream;
-
-            if (!_director)
-            {
-                _highlight = Array.Empty<bool>();
-                _fastTicksPerSecond = _lastTick > 0 ? _lastTick / target : 0f;
-                _slowTicksPerSecond = _fastTicksPerSecond;
-                SetSlowMotion(false);
+            if (!HasStream)
                 return;
-            }
 
-            _highlight = BuildHighlights();
+            BroadcastTimeline timeline = new BroadcastDirector().Build(_report);
+            if (timeline.FrameCount == 0)
+                return; // nothing the director can read: the flat rate still plays the match
 
-            int slowFrames = 0;
-            for (int i = 0; i < _highlight.Length; i++)
-                if (_highlight[i])
-                    slowFrames++;
-
-            int fastFrames = (_lastTick + 1) - slowFrames;
-
-            // What the highlights would cost at true real time, capped so they cannot eat the match.
-            float slowSeconds = slowFrames / _realTimeTicksPerSecond;
-            float slowBudget = target * MaxHighlightShare;
-            if (slowSeconds > slowBudget)
-                slowSeconds = slowBudget;
-
-            float fastSeconds = target - slowSeconds;
-            _slowTicksPerSecond = slowSeconds > 0f ? slowFrames / slowSeconds : _realTimeTicksPerSecond;
-            _fastTicksPerSecond = fastSeconds > 0f ? fastFrames / fastSeconds : _lastTick / target;
-
-            // A pathological stream (all highlight, or none) must never stall playback.
-            if (_slowTicksPerSecond <= 0f) _slowTicksPerSecond = _realTimeTicksPerSecond;
-            if (_fastTicksPerSecond <= 0f) _fastTicksPerSecond = _lastTick / target;
+            _playback = new BroadcastPlayback(timeline, Mathf.FloorToInt(_tickPos));
+            _playback.SetSpeed(PlaybackSpeed(_speed));
         }
 
-        /// <summary>
-        /// The frames worth watching: a strike, the goal it becomes, a penalty, a sending-off —
-        /// with the run-up to it, which is where the football actually is.
-        ///
-        /// Saves, misses and blocks are deliberately NOT in the list: each one lands within a frame
-        /// or two of the shot that caused it and is already inside that shot's window. Corners and
-        /// free kicks are left out too — there are twenty-odd a match and taking them at real time
-        /// would spend the whole budget on restarts.
-        /// </summary>
-        private bool[] BuildHighlights()
-        {
-            var flags = new bool[_lastTick + 1];
-
-            foreach (BallAction a in _actions)
-            {
-                if (a.Kind != BallActionKind.Shot && a.Kind != BallActionKind.Goal
-                    && a.Kind != BallActionKind.Penalty && a.Kind != BallActionKind.RedCard)
-                    continue;
-
-                int from = Mathf.Max(0, a.Tick - HighlightLeadFrames);
-                int to = Mathf.Min(_lastTick, a.Tick + HighlightTailFrames);
-
-                // Never run the window across the change of ends: the two halves are drawn in
-                // mirrored coordinates and the slow-motion would be of the mirror, not the ball.
-                if (SecondHalf(a.Tick) && from < _secondHalfFrom) from = _secondHalfFrom;
-                if (!SecondHalf(a.Tick) && to >= _secondHalfFrom) to = _secondHalfFrom - 1;
-
-                for (int t = from; t <= to; t++)
-                    flags[t] = true;
-            }
-
-            return flags;
-        }
-
-        private bool IsHighlight(int tick) =>
-            _highlight.Length > 0 && tick >= 0 && tick < _highlight.Length && _highlight[tick];
+        private static int PlaybackSpeed(float speed) => Mathf.Max(1, Mathf.RoundToInt(speed));
 
         // ------------------------------------------------------------- playback
 
@@ -328,6 +231,7 @@ namespace Fts.MatchView
         {
             int m = minute < 0 ? 0 : (minute > 90 ? 90 : minute);
             _tickPos = Mathf.Min(m * _ticksPerMinute, _lastTick);
+            _playback?.Seek(Mathf.FloorToInt(_tickPos));
 
             _nextEvent = 0;
             while (_nextEvent < _events.Count && _events[_nextEvent].Minute <= m)
@@ -345,7 +249,11 @@ namespace Fts.MatchView
         }
 
         /// <summary>1x / 2x / 4x.</summary>
-        public void SetSpeed(float speed) => _speed = speed > 0f ? speed : 1f;
+        public void SetSpeed(float speed)
+        {
+            _speed = speed > 0f ? speed : 1f;
+            _playback?.SetSpeed(PlaybackSpeed(_speed));
+        }
 
         /// <summary>Jump straight to full time without replaying the remaining toasts.</summary>
         public void Skip()
@@ -354,6 +262,7 @@ namespace Fts.MatchView
                 return;
 
             _tickPos = _lastTick;
+            _playback?.Skip();
             _nextEvent = _events.Count;
             _nextAction = _actions.Count;
             SetMinute(90);
@@ -369,13 +278,17 @@ namespace Fts.MatchView
                 return;
 
             float dt = Mathf.Min(ts.deltaTime / 1000f, 0.1f); // clamp long stalls
-            int at = Mathf.Clamp(Mathf.FloorToInt(_tickPos), 0, _lastTick);
-            bool slow = IsHighlight(at);
-            SetSlowMotion(slow);
-
-            _tickPos += dt * (slow ? _slowTicksPerSecond : _fastTicksPerSecond) * _speed;
-            if (_tickPos > _lastTick)
-                _tickPos = _lastTick;
+            if (_playback != null)
+            {
+                _playback.Advance(dt);
+                _tickPos = (float)_playback.Position;
+            }
+            else
+            {
+                _tickPos += dt * _flatTicksPerSecond * _speed;
+                if (_tickPos > _lastTick)
+                    _tickPos = _lastTick;
+            }
 
             bool statsMoved = AdvancePossession();
 
@@ -389,7 +302,9 @@ namespace Fts.MatchView
                 ActionReached?.Invoke(action);
             }
 
-            int minute = Mathf.Min(90, Mathf.FloorToInt(_tickPos / _ticksPerMinute));
+            int minute = _playback != null
+                ? _playback.Minute
+                : Mathf.Min(90, Mathf.FloorToInt(_tickPos / _ticksPerMinute));
             if (minute != _lastMinute)
                 statsMoved = true; // the possession share is worth a redraw once a minute
             SetMinute(minute);
@@ -412,21 +327,12 @@ namespace Fts.MatchView
             MinuteChanged?.Invoke(minute);
         }
 
-        private void SetSlowMotion(bool slow)
-        {
-            if (slow == _inSlowMotion)
-                return;
-            _inSlowMotion = slow;
-            SlowMotionChanged?.Invoke(slow);
-        }
-
         private void Finish()
         {
             if (_finished)
                 return;
             _finished = true;
             _pump?.Pause();
-            SetSlowMotion(false);
             Finished?.Invoke();
         }
 
