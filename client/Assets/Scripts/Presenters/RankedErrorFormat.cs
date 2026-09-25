@@ -36,6 +36,7 @@ namespace Fts.Presenters
             RankedApiError.NotYourMatch => "ranked.error.not_your_match",
             RankedApiError.InvalidLiveChange => "ranked.error.invalid_live_change",
             RankedApiError.LiveAlreadyFinished => "ranked.error.live_finished",
+            RankedApiError.EngineVersionMismatch => "ranked.error.engine_version_mismatch",
             RankedApiError.ReplayTooOld => "ranked.error.replay_too_old",
             _ => "ranked.error.server",
         };

@@ -301,8 +301,9 @@ namespace Fts.Services.Online
         public async UniTask<RankedApiResult<RankedLiveStateDto>> OpenLiveAsync(string fixtureId)
         {
             if (!_api.IsSignedIn) return RankedApiResult<RankedLiveStateDto>.Fail(RankedApiError.NotSignedIn);
+            // The screen builds its timeline with this build's engine; the server refuses another (R16).
             var (status, text, network) = await _api.SendAuthedAsync(
-                "POST", "/ranked/live/" + fixtureId + "/open");
+                "POST", "/ranked/live/" + fixtureId + "/open?engineVersion=" + MatchEngine.Version);
             return ParseLive(status, text, network);
         }
 
@@ -486,6 +487,19 @@ namespace Fts.Services.Online
             return IsSuccess(status, network);
         }
 
+        /// <summary>
+        /// DEV ONLY (spec R16): jump a live ranked match to <paramref name="minute"/> by moving its shared
+        /// kickoff back along the director timeline. Every screen and the server's future-minute guard follow,
+        /// because they all read that one clock.
+        /// </summary>
+        public async UniTask<bool> FastForwardLiveDevAsync(string fixtureId, int minute)
+        {
+            if (!_api.IsSignedIn) return false;
+            var (status, _, network) = await _api.SendAuthedAsync(
+                "POST", "/internal/dev/ranked/live/" + fixtureId + "/fast-forward?minute=" + minute);
+            return IsSuccess(status, network);
+        }
+
         // ---------------------------------------------------------------- helpers
 
         private static RankedApiResult<RankedStateDto> ParseState(long status, string text, bool network)
@@ -518,7 +532,8 @@ namespace Fts.Services.Online
                      : body != null && body.Contains("lot_duration_invalid") ? RankedApiError.LotDurationInvalid
                      : body != null && body.Contains("invalid_live_change") ? RankedApiError.InvalidLiveChange
                      : RankedApiError.Validation,
-                409 => body != null && body.Contains("replay_not_ready") ? RankedApiError.ReplayNotReady
+                409 => body != null && body.Contains("engine_version_mismatch") ? RankedApiError.EngineVersionMismatch
+                     : body != null && body.Contains("replay_not_ready") ? RankedApiError.ReplayNotReady
                      : body != null && body.Contains("auction_closed") ? RankedApiError.AuctionClosed
                      : body != null && body.Contains("no_capacity") ? RankedApiError.NoCapacity
                      // Phase 9.5 integrity guards.

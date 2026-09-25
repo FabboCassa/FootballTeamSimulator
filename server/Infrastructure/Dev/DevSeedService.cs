@@ -220,7 +220,7 @@ public sealed class DevSeedService : IDevSeedService
         Guid botClubId = side.ClubId.Value;
 
         // The bot joins (marks itself present); the match goes Live once the human is present too.
-        var open = await _liveMatch.OpenAsync(botUserId, leagueId, fixtureId, ct);
+        var open = await _liveMatch.OpenAsync(botUserId, leagueId, fixtureId, MatchEngine.Version, ct);
         if (!open.Success) return new DevBotLiveResult(open.Error.ToString(), false, false, 0);
 
         LiveMatchStateDto state = open.Value!;
@@ -249,6 +249,47 @@ public sealed class DevSeedService : IDevSeedService
         }
 
         return new DevBotLiveResult(state.Status.ToString(), wentLive, subMade, usedMinute);
+    }
+
+    public async Task<DevLiveFastForwardResult> FastForwardLiveAsync(
+        Guid leagueId, Guid fixtureId, int minute, CancellationToken ct = default)
+    {
+        var live = await _db.LiveMatches.FirstOrDefaultAsync(
+            l => l.FixtureId == fixtureId && l.PrivateLeagueId == leagueId, ct);
+        if (live is null) return new DevLiveFastForwardResult("live_not_found", 0, null);
+        if (live.Status != LiveMatchStatus.Live || live.KickoffUtc is null)
+            return new DevLiveFastForwardResult("not_live", 0, live.KickoffUtc);
+
+        return await FastForwardAsync(live.ReportJson, live.KickoffUtc.Value, minute, k => live.KickoffUtc = k, ct);
+    }
+
+    public async Task<DevLiveFastForwardResult> RankedFastForwardLiveAsync(
+        Guid fixtureId, int minute, CancellationToken ct = default)
+    {
+        var live = await _db.RankedLiveMatches.FirstOrDefaultAsync(l => l.FixtureId == fixtureId, ct);
+        if (live is null) return new DevLiveFastForwardResult("live_not_found", 0, null);
+        if (live.Status != LiveMatchStatus.Live)
+            return new DevLiveFastForwardResult("not_live", 0, live.KickoffUtc);
+
+        return await FastForwardAsync(live.ReportJson, live.KickoffUtc, minute, k => live.KickoffUtc = k, ct);
+    }
+
+    /// <summary>Moves a live session's kickoff back so the shared clock shows <paramref name="minute"/> now —
+    /// never forward, so no screen has to rewind what it already showed.</summary>
+    private async Task<DevLiveFastForwardResult> FastForwardAsync(
+        string? reportJson, DateTime kickoff, int minute, Action<DateTime> setKickoff, CancellationToken ct)
+    {
+        var now = DateTime.UtcNow;
+        int target = Clamp(minute, 1, 90);
+        DateTime? showing = LiveMatchClock.KickoffShowing(reportJson, target, now);
+        if (showing is null) return new DevLiveFastForwardResult("no_report", 0, kickoff);
+        if (showing.Value >= kickoff)
+            return new DevLiveFastForwardResult(
+                "already_past", LiveMatchClock.MinuteAt(reportJson, kickoff, now), kickoff);
+
+        setKickoff(showing.Value);
+        await _db.SaveChangesAsync(ct);
+        return new DevLiveFastForwardResult("ok", LiveMatchClock.MinuteAt(reportJson, showing.Value, now), showing.Value);
     }
 
     /// <summary>A legal substitution for the bot's club: its best XI with one bench player brought on for
@@ -308,7 +349,7 @@ public sealed class DevSeedService : IDevSeedService
                 "Il posto avversario e' un club AI (nessun account): gioca gia' con i suoi ordini salvati.");
         }
 
-        var open = await _rankedLive.OpenAsync(botUserId.Value, fixtureId, ct);
+        var open = await _rankedLive.OpenAsync(botUserId.Value, fixtureId, MatchEngine.Version, ct);
         if (!open.Success)
             return new DevRankedLiveResult(open.Error.ToString(), false, false, 0, false, open.Message);
 
@@ -326,12 +367,10 @@ public sealed class DevSeedService : IDevSeedService
 
                 // Not before an already-applied change (the server enforces monotonic minutes), and not in
                 // the match's future either (task 12.3's ranked guard) — so the tool asks for the EARLIER of
-                // the requested minute and the minute the clock says has been played.
+                // the requested minute and the minute the shared clock says has been played.
                 int last = 0;
                 foreach (RankedLiveChangeDto ch in state.Changes) if (ch.FromMinute > last) last = ch.FromMinute;
-                int perMinute = System.Math.Max(1, state.SecondsPerMatchMinute);
-                int playedNow = (int)System.Math.Min(90,
-                    System.Math.Max(0, (state.ServerUtc - state.KickoffUtc).TotalSeconds / perMinute));
+                int playedNow = LiveMatchClock.MinuteAt(state.ReportJson, state.KickoffUtc, state.ServerUtc);
                 int wanted = System.Math.Min(request.Minute, System.Math.Max(1, playedNow));
                 usedMinute = Clamp(System.Math.Max(wanted, System.Math.Max(1, last)), 1, 90);
 

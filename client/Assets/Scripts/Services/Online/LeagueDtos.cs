@@ -508,6 +508,7 @@ namespace Fts.Services.Online
         public int awayGoals;
         public List<LiveChangeRowDto> changes = new List<LiveChangeRowDto>();
         public string reportJson;
+        public int engineVersion; // the match engine the report is simulated with (R16)
     }
 
     /// <summary>Body for POST /leagues/{id}/live/{fixtureId}/change. The side is inferred server-side from
@@ -617,6 +618,7 @@ namespace Fts.Services.Online
         IntegrityBlocked,  // 409 integrity_blocked (9.5 band — a gift or a bribe)
         Server,        // 5xx / unexpected
         ReplayTooOld,  // 13.1 — recorded by an older match engine, no longer renderable
+        EngineVersionMismatch, // 409 engine_version_mismatch (R16 — live match on another engine)
     }
 
     /// <summary>Result of a league call: the value on success, or an error the presenter maps to loc.</summary>

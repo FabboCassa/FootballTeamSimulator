@@ -74,9 +74,6 @@ namespace Fts.Services.Online
         public string worldTimeZoneId;
         public int liveOpensBeforeSeconds;
         public int liveGraceSeconds;
-        /// <summary>Real seconds per match minute. The SERVER owns this number because it judges pause-point
-        /// changes by it — so the renderer must use it rather than a constant of its own.</summary>
-        public int liveSecondsPerMatchMinute;
         public bool liveEnabled;
     }
 
@@ -485,8 +482,9 @@ namespace Fts.Services.Online
     /// The clock fields are the point of the task. <see cref="kickoffUtc"/> is the APPOINTMENT — the
     /// calendar's instant, not "when both players showed up" — so two devices in different countries render
     /// the same minute at the same moment. <see cref="serverUtc"/> lets the presenter correct its own drift
-    /// instead of trusting the device. <see cref="secondsPerMatchMinute"/> is the playback rate the SERVER
-    /// validates changes against, so the renderer must use it rather than a constant of its own.
+    /// instead of trusting the device. The moment on screen is the broadcast director's timeline of
+    /// <see cref="reportJson"/> played from the kickoff (spec R16) — the same clock the SERVER validates
+    /// changes against — so <see cref="engineVersion"/> must be this build's engine.
     ///
     /// PARSE EVERY TIMESTAMP AS UTC. The server is UTC throughout, but the string can arrive without a
     /// trailing "Z" (a DateTime whose Kind was lost in the database and in JSON). Parsed as local time, an
@@ -516,12 +514,12 @@ namespace Fts.Services.Online
         public string opensUtc;
         public string closesUtc;
         public string serverUtc;
-        public int secondsPerMatchMinute;
         public int homeGoals;
         public int awayGoals;
         public List<LiveChangeRowDto> changes = new List<LiveChangeRowDto>();
         /// <summary>The full serialized Sim.Core MatchReport (parse with Newtonsoft, like a replay).</summary>
         public string reportJson;
+        public int engineVersion; // the match engine the report is simulated with (R16)
     }
 
     /// <summary>Body for POST /ranked/live/{fixtureId}/change. The side is inferred server-side from the
@@ -567,6 +565,7 @@ namespace Fts.Services.Online
         NotYourMatch,       // 403 not_your_match       — you may watch it, but not coach either side
         InvalidLiveChange,  // 400 invalid_live_change  — bad minute, in the match's future, or an illegal XI
         LiveAlreadyFinished,
+        EngineVersionMismatch, // 409 engine_version_mismatch — the live match runs on another engine (R16)
         // Task 13.1 — the movement stream changed shape.
         ReplayTooOld,       // recorded by an older match engine, no longer renderable// 409 live_already_finished
     }

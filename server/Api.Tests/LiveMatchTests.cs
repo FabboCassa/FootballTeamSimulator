@@ -3,9 +3,15 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Fts.Application.Auth;
+using Fts.Application.Dev;
 using Fts.Application.Leagues;
+using Fts.Infrastructure.Leagues;
+using Fts.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using NUnit.Framework;
 using Sim.Core.Match;
+using Sim.Core.Match.Broadcast;
 
 namespace Fts.Api.Tests;
 
@@ -178,6 +184,149 @@ public class LiveMatchTests
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Conflict), "already played / not current round");
     }
 
+    // --- engine version (spec watchable-match-engine R16) -------------------------------------------
+
+    /// <summary>Every client derives the shown moment from the director timeline of the report, so a build
+    /// on another engine would show another moment: it is refused, and told why.</summary>
+    [Test]
+    public async Task Open_WithADifferentEngineVersion_IsRefusedWithAClearMessage()
+    {
+        var fx = await SetUpLiveFixture();
+
+        var resp = await OpenRaw(fx.HomeAcc.Tok, fx.LeagueId, fx.FixtureId, MatchEngine.Version - 1);
+
+        Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
+        using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
+        Assert.That(doc.RootElement.GetProperty("error").GetString(), Is.EqualTo("engine_version_mismatch"));
+        string message = doc.RootElement.GetProperty("message").GetString()!;
+        Assert.Multiple(() =>
+        {
+            Assert.That(message, Does.Contain($"v{MatchEngine.Version - 1}"), "names the client's engine");
+            Assert.That(message, Does.Contain($"v{MatchEngine.Version}"), "names the match's engine");
+            Assert.That(message, Does.Contain("Update"), "says what to do");
+        });
+
+        // Refused means nothing happened: the home side was not marked present.
+        await OpenLive(fx.AwayAcc.Tok, fx.LeagueId, fx.FixtureId);
+        var state = await GetLive(fx.AwayAcc.Tok, fx.LeagueId, fx.FixtureId);
+        Assert.That(state.HomePresent, Is.False, "a refused client never joined the match");
+    }
+
+    [Test]
+    public async Task OpenAndJoin_WithoutAnEngineVersion_AreRefused()
+    {
+        var fx = await SetUpLiveFixture();
+        await OpenLive(fx.HomeAcc.Tok, fx.LeagueId, fx.FixtureId);
+
+        var open = await OpenRaw(fx.AwayAcc.Tok, fx.LeagueId, fx.FixtureId, engineVersion: null);
+        var join = await JoinRaw(fx.AwayAcc.Tok, fx.LeagueId, fx.FixtureId, engineVersion: null);
+
+        string openBody = await open.Content.ReadAsStringAsync();
+        string joinBody = await join.Content.ReadAsStringAsync();
+        Assert.Multiple(() =>
+        {
+            Assert.That(open.StatusCode, Is.EqualTo(HttpStatusCode.Conflict), "an old build says no version");
+            Assert.That(openBody, Does.Contain("engine_version_mismatch"));
+            Assert.That(join.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
+            Assert.That(joinBody, Does.Contain("engine_version_mismatch"));
+        });
+    }
+
+    /// <summary>The state names the engine the STORED report was simulated with, not the server's constant: a
+    /// report from another engine is announced as such, so a client can refuse to build its timeline.</summary>
+    [Test]
+    public async Task State_CarriesTheEngineVersionOfTheStoredReport()
+    {
+        var fx = await SetUpLiveFixture();
+        await OpenLive(fx.HomeAcc.Tok, fx.LeagueId, fx.FixtureId);
+        var live = await JoinLive(fx.AwayAcc.Tok, fx.LeagueId, fx.FixtureId);
+        Assert.That(live.EngineVersion, Is.EqualTo(MatchEngine.Version), "a fresh kickoff runs on this engine");
+
+        const int olderEngine = MatchEngine.Version - 1;
+        string current = $"{{\"EngineVersion\":{MatchEngine.Version},";
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<FtsDbContext>();
+            var row = await db.LiveMatches.SingleAsync(l => l.FixtureId == fx.FixtureId);
+            Assert.That(row.ReportJson, Does.StartWith(current), "the stored report opens with its engine version");
+            row.ReportJson = $"{{\"EngineVersion\":{olderEngine}," + row.ReportJson![current.Length..];
+            await db.SaveChangesAsync();
+        }
+
+        var state = await GetLive(fx.HomeAcc.Tok, fx.LeagueId, fx.FixtureId);
+        Assert.That(state.EngineVersion, Is.EqualTo(olderEngine), "the version is read from the stored report");
+    }
+
+    // --- dev tooling (spec watchable-match-engine R16: bot autopilot + fast-forward keep working) ---------
+
+    /// <summary>The solo tester's opponent: the private-league bot endpoint still takes the fixture Live and
+    /// substitutes, through the real (engine-version-checked) open.</summary>
+    [Test]
+    public async Task DevBot_TakesTheFixtureLive_AndSubstitutes()
+    {
+        var solo = await SetUpSoloLiveFixture();
+        await OpenLive(solo.Tok, solo.LeagueId, solo.FixtureId);
+
+        var resp = await _client.PostAsJsonAsync(
+            $"/internal/dev/leagues/{solo.LeagueId}/live/{solo.FixtureId}/bot", new { sub = true, minute = 30 });
+        Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var bot = (await resp.Content.ReadFromJsonAsync<DevBotLiveResult>())!;
+
+        var state = await GetLive(solo.Tok, solo.LeagueId, solo.FixtureId);
+        Assert.Multiple(() =>
+        {
+            Assert.That(bot.WentLive, Is.True, bot.Status);
+            Assert.That(bot.SubMade, Is.True, bot.Status);
+            Assert.That(state.Status, Is.EqualTo(LiveMatchStatus.Live));
+            Assert.That(state.HomePresent && state.AwayPresent, Is.True, "the bot turned up");
+            Assert.That(state.Changes, Has.Count.EqualTo(1));
+            Assert.That(state.Changes[0].FromMinute, Is.EqualTo(30));
+            Assert.That(state.Changes[0].Side, Is.Not.EqualTo(state.YourSide), "on the bot's side");
+        });
+    }
+
+    /// <summary>A live match now lasts the director timeline (~10 real minutes at 1x), so the dev fast-forward
+    /// moves the shared kickoff back by exactly the timeline's playback time to the asked minute — and never
+    /// forward, so no screen has to rewind.</summary>
+    [Test]
+    public async Task DevFastForward_MovesTheSharedKickoff_AlongTheDirectorTimeline()
+    {
+        var solo = await SetUpSoloLiveFixture();
+        await OpenLive(solo.Tok, solo.LeagueId, solo.FixtureId);
+        await _client.PostAsJsonAsync($"/internal/dev/leagues/{solo.LeagueId}/live/{solo.FixtureId}/bot", new { });
+        var before = await GetLive(solo.Tok, solo.LeagueId, solo.FixtureId);
+        Assert.That(before.Status, Is.EqualTo(LiveMatchStatus.Live));
+
+        var ff = await FastForward(solo.LeagueId, solo.FixtureId, 60);
+        DateTime now = DateTime.UtcNow;
+        var after = await GetLive(solo.Tok, solo.LeagueId, solo.FixtureId);
+
+        var clock = new LiveBroadcastClock(
+            new BroadcastDirector().Build(ReplayStore.Read(after.ReportJson!)!), after.KickoffUtc!.Value);
+        double elapsed = (now - after.KickoffUtc.Value).TotalSeconds;
+        Assert.Multiple(() =>
+        {
+            Assert.That(ff.Status, Is.EqualTo("ok"));
+            Assert.That(ff.Minute, Is.GreaterThanOrEqualTo(60));
+            Assert.That(after.KickoffUtc, Is.LessThan(before.KickoffUtc), "the kickoff moved back");
+            Assert.That(elapsed, Is.EqualTo(clock.SecondsToReach(60)).Within(5.0),
+                "moved by the director timeline's playback time to minute 60");
+            Assert.That(clock.MinuteAt(now), Is.GreaterThanOrEqualTo(ff.Minute), "every screen now shows minute 60");
+        });
+
+        var back = await FastForward(solo.LeagueId, solo.FixtureId, 10);
+        var unchanged = await GetLive(solo.Tok, solo.LeagueId, solo.FixtureId);
+        Assert.Multiple(() =>
+        {
+            Assert.That(back.Status, Is.EqualTo("already_past"));
+            Assert.That(unchanged.KickoffUtc, Is.EqualTo(after.KickoffUtc), "the clock never runs backwards");
+        });
+
+        TestContext.Out.WriteLine(
+            $"[live-fast-forward] minute 60 is {clock.SecondsToReach(60):F1} s after kickoff; full time at " +
+            $"{clock.SecondsToReach(90):F1} s");
+    }
+
     [Test]
     public async Task Get_WithNoSession_ReturnsNotFound_AndByNonMember_ReturnsForbidden()
     {
@@ -261,6 +410,33 @@ public class LiveMatchTests
         string CreatorTok,
         LeagueDetailDto Detail);
 
+    private sealed record SoloFixture(string Tok, Guid LeagueId, Guid FixtureId);
+
+    /// <summary>The solo tester's shape: one human among dev bots in an Active league, and his round-1
+    /// fixture — whose opponent is therefore a bot the dev autopilot can drive.</summary>
+    private async Task<SoloFixture> SetUpSoloLiveFixture()
+    {
+        var (tok, id) = await RegisterAccount();
+        var seedResp = await _client.PostAsJsonAsync("/internal/dev/test-league",
+            new { size = 4, bots = 4, toStatus = "Active", creatorUserId = id });
+        Assert.That(seedResp.StatusCode, Is.EqualTo(HttpStatusCode.OK), "the dev seed is mapped under Testing");
+        var seed = (await seedResp.Content.ReadFromJsonAsync<DevSeedResult>())!;
+        int myClub = seed.Members.Single(m => m.UserId == id).ClubExternalId!.Value;
+
+        var season = await GetSeason(tok, seed.LeagueId);
+        var fixture = season.Fixtures.First(f =>
+            f.Round == 1 && (f.HomeClubExternalId == myClub || f.AwayClubExternalId == myClub));
+        return new SoloFixture(tok, seed.LeagueId, fixture.Id);
+    }
+
+    private async Task<DevLiveFastForwardResult> FastForward(Guid leagueId, Guid fixtureId, int minute)
+    {
+        var resp = await _client.PostAsync(
+            $"/internal/dev/leagues/{leagueId}/live/{fixtureId}/fast-forward?minute={minute}", content: null);
+        Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        return (await resp.Content.ReadFromJsonAsync<DevLiveFastForwardResult>())!;
+    }
+
     /// <summary>Draft a size-4 league to Active and pick the round-1 human-vs-human fixture, returning the
     /// two side owners plus a third member (a non-participant) and the creator token.</summary>
     private async Task<LiveFixture> SetUpLiveFixture()
@@ -308,12 +484,24 @@ public class LiveMatchTests
         return (await resp.Content.ReadFromJsonAsync<LiveMatchStateDto>())!;
     }
 
-    private Task<HttpResponseMessage> OpenRaw(string tok, Guid leagueId, Guid fixtureId) =>
-        _client.SendAsync(Authed(HttpMethod.Post, $"/leagues/{leagueId}/live/{fixtureId}/open", tok));
+    /// <summary>A client announces the match engine it will build the director timeline with; null is an
+    /// old build that does not say.</summary>
+    private Task<HttpResponseMessage> OpenRaw(
+        string tok, Guid leagueId, Guid fixtureId, int? engineVersion = MatchEngine.Version) =>
+        _client.SendAsync(Authed(HttpMethod.Post,
+            $"/leagues/{leagueId}/live/{fixtureId}/open{VersionQuery(engineVersion)}", tok));
+
+    private Task<HttpResponseMessage> JoinRaw(
+        string tok, Guid leagueId, Guid fixtureId, int? engineVersion = MatchEngine.Version) =>
+        _client.SendAsync(Authed(HttpMethod.Post,
+            $"/leagues/{leagueId}/live/{fixtureId}/join{VersionQuery(engineVersion)}", tok));
+
+    private static string VersionQuery(int? engineVersion) =>
+        engineVersion.HasValue ? $"?engineVersion={engineVersion.Value}" : string.Empty;
 
     private async Task<LiveMatchStateDto> JoinLive(string tok, Guid leagueId, Guid fixtureId)
     {
-        var resp = await _client.SendAsync(Authed(HttpMethod.Post, $"/leagues/{leagueId}/live/{fixtureId}/join", tok));
+        var resp = await JoinRaw(tok, leagueId, fixtureId);
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK), "join live should succeed");
         return (await resp.Content.ReadFromJsonAsync<LiveMatchStateDto>())!;
     }

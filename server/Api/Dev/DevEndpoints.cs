@@ -35,6 +35,12 @@ public static class DevEndpoints
             Guid id, Guid fixtureId, DevBotLiveRequest? req, IDevSeedService dev, CancellationToken ct) =>
             Results.Ok(await dev.BotLiveAsync(id, fixtureId, req ?? new DevBotLiveRequest(), ct)));
 
+        // Live fast-forward (R16): the match plays ~10 real minutes on the director timeline, so a solo tester
+        // jumps to `minute` by moving the session's shared kickoff back. Query param, bodyless POST.
+        group.MapPost("/leagues/{id:guid}/live/{fixtureId:guid}/fast-forward", async (
+            Guid id, Guid fixtureId, int? minute, IDevSeedService dev, CancellationToken ct) =>
+            Results.Ok(await dev.FastForwardLiveAsync(id, fixtureId, minute ?? 45, ct)));
+
         // Cleanup: the deterministic bots leave every league they are in.
         group.MapPost("/reset", async (int? bots, IDevSeedService dev, CancellationToken ct) =>
             Results.Ok(await dev.ResetAsync(bots ?? 8, ct)));
@@ -63,6 +69,12 @@ public static class DevEndpoints
             Guid fixtureId, bool? sub, int? minute, bool? finish, IDevSeedService dev, CancellationToken ct) =>
             Results.Ok(await dev.RankedBotLiveAsync(
                 fixtureId, new DevRankedLiveRequest(sub ?? false, minute ?? 45, finish ?? false), ct)));
+
+        // Ranked live fast-forward (R16): same as the private-league one, and the server's future-minute guard
+        // follows it, because it reads the same shared clock.
+        group.MapPost("/ranked/live/{fixtureId:guid}/fast-forward", async (
+            Guid fixtureId, int? minute, IDevSeedService dev, CancellationToken ct) =>
+            Results.Ok(await dev.RankedFastForwardLiveAsync(fixtureId, minute ?? 45, ct)));
 
         // Ranked market autopilot (9.2b): the group's bot coaches outbid on the open auction lots and answer
         // the offers the human sent them — query params so a bodyless POST binds cleanly.

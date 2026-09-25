@@ -32,8 +32,10 @@ namespace Fts.Infrastructure.Ranked;
 /// orders, which is exactly what an absent human's side does — so there is no second code path.</item>
 /// <item><b>A change cannot be made in the match's future.</b> The whole 90' is in the report the client
 /// holds, so without a check a doctored client could read the ending and then "substitute" at minute 10 with
-/// hindsight. The server therefore refuses a minute that runs past what the wall clock says has been played,
-/// with a tolerance for latency. A private league is a lobby of friends; this is ranked.</item>
+/// hindsight. The server therefore refuses a minute that runs past what the shared clock says has been played
+/// — the broadcast director's timeline of the stored report, played from kickoff, which is exactly the
+/// minute both screens show (watchable-match-engine R16) — with a tolerance for latency. A private league is
+/// a lobby of friends; this is ranked.</item>
 /// </list>
 ///
 /// What is NOT different is the result: with no changes submitted, a live session's report is byte-for-byte
@@ -69,8 +71,15 @@ public sealed class RankedLiveMatchService : IRankedLiveMatchService
     // --- open / leave ------------------------------------------------------------------------------
 
     public async Task<RankedResult<RankedLiveStateDto>> OpenAsync(
-        Guid userId, Guid fixtureId, CancellationToken ct = default)
+        Guid userId, Guid fixtureId, int? clientEngineVersion, CancellationToken ct = default)
     {
+        if (clientEngineVersion != MatchEngine.Version)
+            return Fail(
+                $"Questa partita dal vivo gira sul motore v{MatchEngine.Version}, il tuo gioco su "
+                + (clientEngineVersion.HasValue ? $"v{clientEngineVersion.Value}" : "una versione precedente")
+                + ". Aggiorna il gioco per giocarla dal vivo.",
+                RankedError.EngineVersionMismatch);
+
         var (error, message, ctx) = await LoadAsync(userId, fixtureId, ct);
         if (ctx is null) return Fail(message, error);
         if (!ctx.IsParticipant)
@@ -218,9 +227,9 @@ public sealed class RankedLiveMatchService : IRankedLiveMatchService
         // match's future. `LiveChangeMinuteTolerance` absorbs latency and clock skew; 0 disables the check.
         if (_opt.LiveChangeMinuteTolerance > 0)
         {
-            int playable = PlayedMinuteAt(live.KickoffUtc, now) + _opt.LiveChangeMinuteTolerance;
-            if (request.FromMinute > playable)
-                return Fail($"Quel minuto non è ancora stato giocato (siamo al {PlayedMinuteAt(live.KickoffUtc, now)}').",
+            int played = LiveMatchClock.MinuteAt(live.ReportJson, live.KickoffUtc, now);
+            if (request.FromMinute > played + _opt.LiveChangeMinuteTolerance)
+                return Fail($"Quel minuto non è ancora stato giocato (siamo al {played}').",
                     RankedError.InvalidLiveChange);
         }
 
@@ -345,15 +354,6 @@ public sealed class RankedLiveMatchService : IRankedLiveMatchService
     /// fails to do) can hold a whole group's matchday hostage.</summary>
     private DateTime ClosesAt(RankedFixture f) => f.KickoffUtc.AddSeconds(Math.Max(0, _opt.LiveGraceSeconds));
 
-    /// <summary>The match minute the wall clock says has been played, clamped to the 90'.</summary>
-    private int PlayedMinuteAt(DateTime kickoffUtc, DateTime now)
-    {
-        int perMinute = Math.Max(1, _opt.LiveSecondsPerMatchMinute);
-        double elapsed = (now - kickoffUtc).TotalSeconds;
-        if (elapsed <= 0) return 0;
-        return (int)Math.Min(90, Math.Floor(elapsed / perMinute));
-    }
-
     private static void MarkPresent(RankedLiveMatch live, Guid userId)
     {
         if (live.HomeUserId == userId) live.HomePresent = true;
@@ -453,11 +453,11 @@ public sealed class RankedLiveMatchService : IRankedLiveMatchService
             OpensUtc: OpensAt(ctx.Fixture),
             ClosesUtc: ClosesAt(ctx.Fixture),
             ServerUtc: DateTime.UtcNow,
-            SecondsPerMatchMinute: Math.Max(1, _opt.LiveSecondsPerMatchMinute),
             HomeGoals: live.HomeGoals,
             AwayGoals: live.AwayGoals,
             Changes: changes,
-            ReportJson: live.ReportJson);
+            ReportJson: live.ReportJson,
+            EngineVersion: LiveMatchClock.EngineVersionOf(live.ReportJson));
     }
 
     private async Task SafeBroadcastAsync(Guid fixtureId, RankedLiveStateDto state, CancellationToken ct)

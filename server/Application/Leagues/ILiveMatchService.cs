@@ -15,14 +15,16 @@ namespace Fts.Application.Leagues;
 public interface ILiveMatchService
 {
     /// <summary>Open (or return the existing) live session for a fixture. The caller must be one of the two
-    /// human members of a current-round, unplayed, human-vs-human fixture; marks the caller present.</summary>
+    /// human members of a current-round, unplayed, human-vs-human fixture; marks the caller present. A client
+    /// whose <paramref name="clientEngineVersion"/> is not the server's match engine (or missing) is refused
+    /// with <see cref="LeagueError.EngineVersionMismatch"/>: it would build another director timeline.</summary>
     Task<LeagueResult<LiveMatchStateDto>> OpenAsync(
-        Guid userId, Guid leagueId, Guid fixtureId, CancellationToken ct = default);
+        Guid userId, Guid leagueId, Guid fixtureId, int? clientEngineVersion, CancellationToken ct = default);
 
     /// <summary>Join a session (mark the caller present). When both members are present the match goes Live
-    /// and kickoff is stamped.</summary>
+    /// and kickoff is stamped. The engine version is checked as in <see cref="OpenAsync"/>.</summary>
     Task<LeagueResult<LiveMatchStateDto>> JoinAsync(
-        Guid userId, Guid leagueId, Guid fixtureId, CancellationToken ct = default);
+        Guid userId, Guid leagueId, Guid fixtureId, int? clientEngineVersion, CancellationToken ct = default);
 
     /// <summary>The current live-match state (any league member may watch; only the two side owners may
     /// change).</summary>
