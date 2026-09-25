@@ -29,6 +29,8 @@ namespace Sim.Core.Match
                 h = Mix(h, (int)e.Type);
                 h = Mix(h, e.ClubId);
                 h = Mix(h, e.PlayerId);
+                // Only a shout event carries its kind, so a match without shouts hashes as before.
+                if (e.Type == MatchEventType.Shout) h = Mix(h, (int)e.Shout);
             }
 
             PositionStream? stream = report.Positions;
