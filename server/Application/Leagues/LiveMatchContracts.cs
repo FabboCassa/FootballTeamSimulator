@@ -54,7 +54,10 @@ public sealed record LiveChangeDto(int FromMinute, LiveSide Side);
 /// <summary>The full live-match state pushed to both clients (and returned by the GET). Carries the whole
 /// serialized <see cref="MatchReport"/> in <see cref="ReportJson"/> so the client re-renders the changed
 /// remainder directly — one hop, "state streamed". (A friend-league report is modest; if it ever bloats,
-/// switch the push to a light signal + a GET of the report, as 8.3 noted for the replay blob.)</summary>
+/// switch the push to a light signal + a GET of the report, as 8.3 noted for the replay blob.)
+/// <see cref="EngineVersion"/> is the match engine the report is simulated with: every client derives the
+/// shown moment from the report's director timeline, so only a client on the same engine shows the same
+/// moment (watchable-match-engine R16).</summary>
 public sealed record LiveMatchStateDto(
     Guid FixtureId,
     int Round,
@@ -70,4 +73,5 @@ public sealed record LiveMatchStateDto(
     int HomeGoals,
     int AwayGoals,
     IReadOnlyList<LiveChangeDto> Changes,
-    string? ReportJson);
+    string? ReportJson,
+    int EngineVersion);

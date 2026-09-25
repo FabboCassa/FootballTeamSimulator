@@ -348,11 +348,14 @@ namespace Fts.Services.Online
         /// <summary>Open (or return) the live session for a fixture — marks the caller present. Both members
         /// opening the same fixture kicks it off (Live).</summary>
         public UniTask<LeagueApiResult<LiveMatchStateDto>> OpenLiveAsync(string leagueId, string fixtureId) =>
-            LivePostAsync(leagueId, fixtureId, "/open");
+            LivePostAsync(leagueId, fixtureId, "/open" + EngineVersionQuery);
 
         /// <summary>Join a session (mark present). Open already does this — kept for completeness.</summary>
         public UniTask<LeagueApiResult<LiveMatchStateDto>> JoinLiveAsync(string leagueId, string fixtureId) =>
-            LivePostAsync(leagueId, fixtureId, "/join");
+            LivePostAsync(leagueId, fixtureId, "/join" + EngineVersionQuery);
+
+        /// <summary>The live screen builds its timeline with this build's engine; the server refuses another.</summary>
+        private static readonly string EngineVersionQuery = "?engineVersion=" + MatchEngine.Version;
 
         /// <summary>The current live-match state (members only). Polled ~1s while the screen is open.</summary>
         public async UniTask<LeagueApiResult<LiveMatchStateDto>> GetLiveAsync(string leagueId, string fixtureId)
@@ -452,6 +455,16 @@ namespace Fts.Services.Online
                 : LeagueApiResult<DevBotLiveResultDto>.Ok(dto);
         }
 
+        /// <summary>DEV ONLY (spec R16): jump the live match to <paramref name="minute"/> by moving its shared
+        /// kickoff back along the director timeline, so both screens show that minute.</summary>
+        public async UniTask<bool> FastForwardLiveDevAsync(string leagueId, string fixtureId, int minute)
+        {
+            if (!_api.IsSignedIn) return false;
+            var (status, _, network) = await _api.SendAuthedAsync(
+                "POST", "/internal/dev/leagues/" + leagueId + "/live/" + fixtureId + "/fast-forward?minute=" + minute);
+            return IsSuccess(status, network);
+        }
+
         // ---------------------------------------------------------------- helpers
 
         private static LeagueApiResult<LeagueSeasonDto> ParseSeason(long status, string text, bool network)
@@ -494,7 +507,8 @@ namespace Fts.Services.Online
                      : body != null && body.Contains("insufficient_budget") ? LeagueApiError.InsufficientBudget
                      : body != null && body.Contains("invalid_live_change") ? LeagueApiError.InvalidLiveChange
                      : LeagueApiError.Validation,
-                409 => body != null && body.Contains("market_closed") ? LeagueApiError.MarketClosed
+                409 => body != null && body.Contains("engine_version_mismatch") ? LeagueApiError.EngineVersionMismatch
+                     : body != null && body.Contains("market_closed") ? LeagueApiError.MarketClosed
                      : body != null && body.Contains("offer_resolved") ? LeagueApiError.OfferResolved
                      : body != null && body.Contains("player_unavailable") ? LeagueApiError.PlayerUnavailable
                      : body != null && body.Contains("squad_too_small") ? LeagueApiError.SquadTooSmall

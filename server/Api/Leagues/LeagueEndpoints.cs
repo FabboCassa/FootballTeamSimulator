@@ -204,6 +204,7 @@ public static class LeagueEndpoints
         LeagueError.LiveMatchNotLive => Results.Conflict(new { error = "live_match_not_live", message }),
         LeagueError.LiveMatchAlreadyFinished => Results.Conflict(new { error = "live_match_already_finished", message }),
         LeagueError.InvalidLiveChange => Results.BadRequest(new { error = "invalid_live_change", message }),
+        LeagueError.EngineVersionMismatch => Results.Conflict(new { error = "engine_version_mismatch", message }),
 
         LeagueError.MarketClosed => Results.Conflict(new { error = "market_closed", message }),
         LeagueError.OfferNotFound => Results.NotFound(new { error = "offer_not_found", message }),

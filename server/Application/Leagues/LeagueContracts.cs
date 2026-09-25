@@ -171,6 +171,11 @@ public enum LeagueError
     SquadFull,
     /// <summary>The fee sits outside the anti-collusion band around the player's market value — 9.5/12.1.</summary>
     IntegrityBlocked,
+
+    // --- Live match on the director timeline (watchable-match-engine R16) ----------------------
+    /// <summary>The client builds live timelines with another match engine (or does not say which), so it
+    /// would show a different moment than the other viewer: it must update first.</summary>
+    EngineVersionMismatch,
 }
 
 /// <summary>Result wrapper so the service never throws for expected failures. Exactly one of

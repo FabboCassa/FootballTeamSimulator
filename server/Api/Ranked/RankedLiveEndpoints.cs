@@ -27,11 +27,13 @@ public static class RankedLiveEndpoints
 
         // Open (or rejoin) the live session — marks the caller present. Refused outside the window around
         // kickoff, for a fixture that is not the caller's, and once the matchday has been resolved.
+        // ?engineVersion= is the client's match engine; another one (or none) is refused (R16).
         group.MapPost("/open", async (
-            Guid fixtureId, ClaimsPrincipal user, IRankedLiveMatchService live, CancellationToken ct) =>
+            Guid fixtureId, int? engineVersion, ClaimsPrincipal user, IRankedLiveMatchService live,
+            CancellationToken ct) =>
         {
             if (!RankedEndpoints.TryGetUserIdShared(user, out var userId)) return Results.Unauthorized();
-            var result = await live.OpenAsync(userId, fixtureId, ct);
+            var result = await live.OpenAsync(userId, fixtureId, engineVersion, ct);
             return result.Success ? Results.Ok(result.Value) : RankedEndpoints.MapErrorShared(result.Error, result.Message);
         }).RequireRateLimiting(IntegrityRateLimits.Writes);
 

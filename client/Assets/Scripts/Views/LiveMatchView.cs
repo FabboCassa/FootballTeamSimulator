@@ -21,6 +21,7 @@ namespace Fts.Views
         public event Action BackClicked;
         public event Action BotJoinClicked; // dev-only
         public event Action BotSubClicked;  // dev-only
+        public event Action FastForwardClicked; // dev-only
 
         public VisualElement Root { get; }
         public VisualElement PitchContainer { get; }
@@ -129,7 +130,7 @@ namespace Fts.Views
             bar.Add(back);
             Root.Add(bar);
 
-            // Dev-only row (shown by the presenter when DevFlags.OnlineTestTools): simulate the opponent.
+            // Dev-only row (shown by the presenter when DevFlags.OnlineTestTools): simulate the opponent, or jump the shared clock ahead.
             _devRow = new VisualElement();
             _devRow.style.flexDirection = FlexDirection.Row;
             _devRow.style.justifyContent = Justify.Center;
@@ -138,6 +139,7 @@ namespace Fts.Views
             _devRow.style.display = DisplayStyle.None;
             _devRow.Add(Wide(tr("live.bot_join"), () => BotJoinClicked?.Invoke()));
             _devRow.Add(Wide(tr("live.bot_sub"), () => BotSubClicked?.Invoke()));
+            _devRow.Add(Wide(tr("live.dev_fast_forward"), () => FastForwardClicked?.Invoke()));
             Root.Add(_devRow);
         }
 

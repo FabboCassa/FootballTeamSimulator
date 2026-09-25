@@ -52,8 +52,11 @@ public sealed class LiveMatchService : ILiveMatchService
     // --- open / join / leave -----------------------------------------------------------------------
 
     public async Task<LeagueResult<LiveMatchStateDto>> OpenAsync(
-        Guid userId, Guid leagueId, Guid fixtureId, CancellationToken ct = default)
+        Guid userId, Guid leagueId, Guid fixtureId, int? clientEngineVersion, CancellationToken ct = default)
     {
+        if (clientEngineVersion != MatchEngine.Version)
+            return EngineMismatch(clientEngineVersion);
+
         var league = await _db.PrivateLeagues.FirstOrDefaultAsync(l => l.Id == leagueId, ct);
         if (league is null)
             return Fail("League not found.", LeagueError.NotFound);
@@ -120,8 +123,11 @@ public sealed class LiveMatchService : ILiveMatchService
     }
 
     public async Task<LeagueResult<LiveMatchStateDto>> JoinAsync(
-        Guid userId, Guid leagueId, Guid fixtureId, CancellationToken ct = default)
+        Guid userId, Guid leagueId, Guid fixtureId, int? clientEngineVersion, CancellationToken ct = default)
     {
+        if (clientEngineVersion != MatchEngine.Version)
+            return EngineMismatch(clientEngineVersion);
+
         var (error, message, live) = await LoadParticipantAsync(userId, leagueId, fixtureId, ct);
         if (live is null) return Fail(message, error);
 
@@ -394,7 +400,8 @@ public sealed class LiveMatchService : ILiveMatchService
             HomeGoals: live.HomeGoals,
             AwayGoals: live.AwayGoals,
             Changes: changes,
-            ReportJson: live.ReportJson);
+            ReportJson: live.ReportJson,
+            EngineVersion: LiveMatchClock.EngineVersionOf(live.ReportJson));
     }
 
     private async Task SafeBroadcastAsync(Guid fixtureId, LiveMatchStateDto state, CancellationToken ct)
@@ -402,6 +409,12 @@ public sealed class LiveMatchService : ILiveMatchService
         try { await _broadcaster.MatchChangedAsync(fixtureId, state, ct); }
         catch { /* a broadcast failure must not fail the committed change */ }
     }
+
+    private static LeagueResult<LiveMatchStateDto> EngineMismatch(int? clientEngineVersion) => Fail(
+        $"This live match runs on match engine v{MatchEngine.Version}, but your game is on "
+        + (clientEngineVersion.HasValue ? $"v{clientEngineVersion.Value}" : "an older version")
+        + ". Update the game to play it live.",
+        LeagueError.EngineVersionMismatch);
 
     private static LeagueResult<LiveMatchStateDto> Fail(string? message, LeagueError error) =>
         LeagueResult<LiveMatchStateDto>.Fail(error, message);

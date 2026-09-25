@@ -403,12 +403,6 @@ namespace Fts.Presenters
             DetachRenderer();
 
             _renderer = new MatchRenderer(report, _homeColor, _awayColor);
-
-            // The watched match answers to nobody's clock but this player's, so it gets the
-            // broadcast director. (The online live screens deliberately do not — see
-            // MatchRenderer.UseBroadcastDirector.)
-            _renderer.UseBroadcastDirector();
-
             _renderer.MinuteChanged += OnMinuteChanged;
             _renderer.EventReached += OnEventReached;
             _renderer.Finished += OnFinished;

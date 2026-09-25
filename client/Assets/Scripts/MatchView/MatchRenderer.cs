@@ -25,12 +25,11 @@ namespace Fts.MatchView
     /// their shirt numbers. A short trail follows the ball so a pass reads as a pass.
     ///
     /// PACING. Playback advances in wall-clock time (scheduler delta) and interpolates linearly
-    /// between stream ticks so motion stays smooth at any frame rate. By default it runs at one
-    /// flat rate (<see cref="BaseSecondsAt1x"/>). A watched match opts into the broadcast
-    /// director (<see cref="UseBroadcastDirector"/>): its timeline plays each segment at real
-    /// time or twice that and jumps the cut ones (spec R12-R13), so nothing is ever slower than
-    /// real time at 1x. The online live screens, which follow a clock shared with another human
-    /// being, stay on the flat rate.
+    /// between stream ticks so motion stays smooth at any frame rate. It plays the broadcast
+    /// director's timeline (<see cref="Timeline"/>): each segment at real time or twice that, the
+    /// cut ones jumped (spec R12-R13), so nothing is ever slower than real time at 1x. A screen
+    /// whose moment is agreed with another viewer hands the renderer that clock instead
+    /// (<see cref="FollowClock"/>), and the renderer then only draws where the clock says.
     ///
     /// Shirt numbers are real <see cref="Label"/> children rather than painter text: a label
     /// centres itself in the token's own box, which is the only way a two-digit number stays
@@ -41,11 +40,6 @@ namespace Fts.MatchView
     /// </summary>
     public sealed class MatchRenderer : VisualElement
     {
-        // 90 minutes play in this many real seconds at 1x when the pacing is FLAT (no director):
-        // the shared-clock live screens derive the match minute from this number — do not change
-        // it without changing LiveSecondsPerMinute there too.
-        public const float BaseSecondsAt1x = 180f;
-
         private const int PumpIntervalMs = 16; // ~60 fps
 
         // Geometry in decimetres (Sim.Core pitch space), scaled to pixels on draw.
@@ -67,17 +61,18 @@ namespace Fts.MatchView
         private readonly Color _homeNumberColor;
         private readonly Color _awayNumberColor;
 
-        private readonly MatchReport _report;
         private readonly List<MatchEvent> _events;
         private readonly PositionStream _stream;
         private readonly List<BallAction> _actions;
         private readonly int _players;
         private readonly int _ticksPerMinute;
         private readonly int _lastTick;
-        private readonly float _flatTicksPerSecond;
 
-        /// <summary>The director's clock; null on the flat rate.</summary>
-        private BroadcastPlayback _playback;
+        /// <summary>The director's clock, advanced by the pump unless a shared clock is followed.</summary>
+        private readonly BroadcastPlayback _playback;
+
+        /// <summary>The stream position a shared clock shows now; null when the renderer keeps its own time.</summary>
+        private Func<double> _sharedClock;
 
         // Shirt numbers, one label a man. Kept as children so the text centres itself.
         private readonly Label[] _homeNumbers;
@@ -149,14 +144,14 @@ namespace Fts.MatchView
             _homeNumberColor = ReadableOn(homeColor);
             _awayNumberColor = ReadableOn(awayColor);
 
-            _report = report;
             _events = report?.Events ?? new List<MatchEvent>();
             _stream = report?.Positions ?? new PositionStream();
             _actions = _stream.Actions ?? new List<BallAction>();
             _players = _stream.PlayerCount;
             _ticksPerMinute = _stream.TicksPerMinute > 0 ? _stream.TicksPerMinute : 1;
             _lastTick = _stream.TickCount > 0 ? _stream.TickCount - 1 : 0;
-            _flatTicksPerSecond = _lastTick / BaseSecondsAt1x;
+            Timeline = new BroadcastDirector().Build(report);
+            _playback = new BroadcastPlayback(Timeline);
 
             foreach (BallAction action in _actions)
                 if (action.Kind == BallActionKind.HalfTime)
@@ -181,26 +176,18 @@ namespace Fts.MatchView
         /// <summary>True when there is something to play (a stripped report has nothing).</summary>
         public bool HasStream => _lastTick > 0 && _players > 0;
 
+        /// <summary>The director's timeline of this report, so a shared clock can be built on the same one.</summary>
+        public BroadcastTimeline Timeline { get; }
+
         // ------------------------------------------------------------- pacing
 
         /// <summary>
-        /// Plays the broadcast director's timeline instead of the flat rate, from wherever playback
-        /// is now. It MUST NOT be used on the shared-clock live screens: there the displayed minute
-        /// is agreed with another client from wall-clock time, and a cut would drift away from it.
-        /// A finished replay — the career watch screen, a stored replay — answers to nobody's clock.
+        /// Draws, at every pump, the stream position <paramref name="framePosition"/> returns instead
+        /// of advancing on its own: the online live screens show the moment their shared clock
+        /// agrees with the other viewer, so a stalled frame or a slow device never drifts from it.
+        /// Speed and Skip no longer apply.
         /// </summary>
-        public void UseBroadcastDirector()
-        {
-            if (!HasStream)
-                return;
-
-            BroadcastTimeline timeline = new BroadcastDirector().Build(_report);
-            if (timeline.FrameCount == 0)
-                return; // nothing the director can read: the flat rate still plays the match
-
-            _playback = new BroadcastPlayback(timeline, Mathf.FloorToInt(_tickPos));
-            _playback.SetSpeed(PlaybackSpeed(_speed));
-        }
+        public void FollowClock(Func<double> framePosition) => _sharedClock = framePosition;
 
         private static int PlaybackSpeed(float speed) => Mathf.Max(1, Mathf.RoundToInt(speed));
 
@@ -231,7 +218,7 @@ namespace Fts.MatchView
         {
             int m = minute < 0 ? 0 : (minute > 90 ? 90 : minute);
             _tickPos = Mathf.Min(m * _ticksPerMinute, _lastTick);
-            _playback?.Seek(Mathf.FloorToInt(_tickPos));
+            _playback.Seek(Mathf.FloorToInt(_tickPos));
 
             _nextEvent = 0;
             while (_nextEvent < _events.Count && _events[_nextEvent].Minute <= m)
@@ -252,7 +239,7 @@ namespace Fts.MatchView
         public void SetSpeed(float speed)
         {
             _speed = speed > 0f ? speed : 1f;
-            _playback?.SetSpeed(PlaybackSpeed(_speed));
+            _playback.SetSpeed(PlaybackSpeed(_speed));
         }
 
         /// <summary>Jump straight to full time without replaying the remaining toasts.</summary>
@@ -262,7 +249,7 @@ namespace Fts.MatchView
                 return;
 
             _tickPos = _lastTick;
-            _playback?.Skip();
+            _playback.Skip();
             _nextEvent = _events.Count;
             _nextAction = _actions.Count;
             SetMinute(90);
@@ -277,17 +264,15 @@ namespace Fts.MatchView
             if (_finished)
                 return;
 
-            float dt = Mathf.Min(ts.deltaTime / 1000f, 0.1f); // clamp long stalls
-            if (_playback != null)
+            if (_sharedClock != null)
             {
-                _playback.Advance(dt);
-                _tickPos = (float)_playback.Position;
+                _tickPos = Mathf.Clamp((float)_sharedClock(), 0f, _lastTick);
             }
             else
             {
-                _tickPos += dt * _flatTicksPerSecond * _speed;
-                if (_tickPos > _lastTick)
-                    _tickPos = _lastTick;
+                float dt = Mathf.Min(ts.deltaTime / 1000f, 0.1f); // clamp long stalls
+                _playback.Advance(dt);
+                _tickPos = (float)_playback.Position;
             }
 
             bool statsMoved = AdvancePossession();
@@ -302,9 +287,9 @@ namespace Fts.MatchView
                 ActionReached?.Invoke(action);
             }
 
-            int minute = _playback != null
-                ? _playback.Minute
-                : Mathf.Min(90, Mathf.FloorToInt(_tickPos / _ticksPerMinute));
+            int minute = _sharedClock == null ? _playback.Minute
+                : _tickPos >= _lastTick ? BroadcastPlayback.FullTimeMinute
+                : Mathf.Min(BroadcastPlayback.FullTimeMinute, Mathf.FloorToInt(_tickPos / _ticksPerMinute));
             if (minute != _lastMinute)
                 statsMoved = true; // the possession share is worth a redraw once a minute
             SetMinute(minute);

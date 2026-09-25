@@ -377,6 +377,7 @@ public static class RankedEndpoints
         RankedError.LiveNotOpen => Results.Conflict(new { error = "live_not_open", message }),
         RankedError.LiveAlreadyFinished => Results.Conflict(new { error = "live_already_finished", message }),
         RankedError.InvalidLiveChange => Results.BadRequest(new { error = "invalid_live_change", message }),
+        RankedError.EngineVersionMismatch => Results.Conflict(new { error = "engine_version_mismatch", message }),
         RankedError.NotYourMatch => Results.Json(
             new { error = "not_your_match", message }, statusCode: StatusCodes.Status403Forbidden),
         RankedError.RateLimited => Results.Json(

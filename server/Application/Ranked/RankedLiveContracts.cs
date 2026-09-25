@@ -45,10 +45,12 @@ public sealed record RankedLiveChangeDto(int FromMinute, LiveSide Side);
 /// serialized <c>MatchReport</c> in <see cref="ReportJson"/> so the client re-renders the changed remainder
 /// in one hop.
 ///
-/// The three clock fields are the point of the task: <see cref="KickoffUtc"/> is the appointment,
-/// <see cref="ServerUtc"/> lets a client correct its own drift instead of guessing, and
-/// <see cref="SecondsPerMatchMinute"/> is the playback rate the SERVER validates changes against — so the
-/// client renders on the same number the server judges by, rather than on a constant of its own.
+/// The clock is the point of the task: <see cref="KickoffUtc"/> is the appointment and
+/// <see cref="ServerUtc"/> lets a client correct its own drift instead of guessing. The moment on screen is
+/// the broadcast director's timeline of <see cref="ReportJson"/> played from the kickoff instant — the same
+/// Sim.Core clock the server validates changes against (watchable-match-engine R16).
+/// <see cref="EngineVersion"/> is the match engine the report was simulated with: only a client on that
+/// engine builds the same timeline.
 /// </summary>
 public sealed record RankedLiveStateDto(
     Guid FixtureId,
@@ -68,11 +70,11 @@ public sealed record RankedLiveStateDto(
     DateTime OpensUtc,
     DateTime ClosesUtc,
     DateTime ServerUtc,
-    int SecondsPerMatchMinute,
     int HomeGoals,
     int AwayGoals,
     IReadOnlyList<RankedLiveChangeDto> Changes,
-    string? ReportJson);
+    string? ReportJson,
+    int EngineVersion);
 
 /// <summary>
 /// Live ranked match use cases (task 12.3). A coach opens his own current-matchday fixture from
@@ -86,8 +88,11 @@ public interface IRankedLiveMatchService
 {
     /// <summary>Open (or rejoin) the live session for one of the caller's own fixtures, marking him present.
     /// Refuses outside the window around kickoff, for a fixture that is not the caller's, and for one whose
-    /// matchday has already been resolved.</summary>
-    Task<RankedResult<RankedLiveStateDto>> OpenAsync(Guid userId, Guid fixtureId, CancellationToken ct = default);
+    /// matchday has already been resolved. A client whose <paramref name="clientEngineVersion"/> is not the
+    /// server's match engine (or missing) is refused with <see cref="RankedError.EngineVersionMismatch"/>: it
+    /// would build another director timeline and show another minute.</summary>
+    Task<RankedResult<RankedLiveStateDto>> OpenAsync(
+        Guid userId, Guid fixtureId, int? clientEngineVersion, CancellationToken ct = default);
 
     /// <summary>The current live state. Any coach in the group may watch; only the two sides may change.</summary>
     Task<RankedResult<RankedLiveStateDto>> GetAsync(Guid userId, Guid fixtureId, CancellationToken ct = default);
