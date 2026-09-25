@@ -11,11 +11,15 @@ namespace Sim.Core.Match.Movement
         private readonly Offside _offside;
         private readonly FreeKickWall _wall;
 
-        public Restarts(MatchContext ctx, Offside offside, FreeKickWall wall)
+        /// <summary>How close to goal a free kick gets a wall: v10's shooting range, v11's set-piece range.</summary>
+        private readonly int _wallRangeU;
+
+        public Restarts(MatchContext ctx, Offside offside, FreeKickWall wall, int wallRangeDm)
         {
             _ctx = ctx;
             _offside = offside;
             _wall = wall;
+            _wallRangeU = U.Units(wallRangeDm);
         }
 
         /// <summary>
@@ -96,11 +100,11 @@ namespace Sim.Core.Match.Movement
             _ctx.DeadAt = tick + _ctx.Cfg.DeadBallTicks;
 
             // And the wall, decided here and once (Law 13): the three men nearest the ball at the
-            // whistle, when the kick is inside shooting range of the goal they are defending.
+            // whistle, when the kick is inside range of the goal they are defending.
             int defending = 1 - side;
             int defendedGoalX = U.Units(MovementGeometry.OwnGoalX(defending == 0));
             bool walled = kind == BallActionKind.FreeKick
-                && U.Distance(_ctx.Ball.X, _ctx.Ball.Y, defendedGoalX, U.CenterYU) < U.Units(_ctx.Cfg.MaxShootRangeDm);
+                && U.Distance(_ctx.Ball.X, _ctx.Ball.Y, defendedGoalX, U.CenterYU) < _wallRangeU;
             _wall.FormWall(walled ? defending : -1);
 
             _ctx.Sheet.Record(tick, kind, side == 0, _ctx.DeadTaker, -1);

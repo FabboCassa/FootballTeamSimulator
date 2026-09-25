@@ -438,12 +438,13 @@ namespace Sim.Core.Match.Movement
                 _skShooting, _skTechnique, _receiver, _lastTouch);
             _offside = new Offside(_ctx, _skPositioning);
             _freeKickWall = new FreeKickWall(_ctx);
-            _restarts = new Restarts(_ctx, _offside, _freeKickWall);
+            _restarts = new Restarts(_ctx, _offside, _freeKickWall, WallRangeDm);
             _referee = new Referee(_ctx, _restarts, _offside, _skDefending);
             _outOfPlay = new OutOfPlay(_ctx, _restarts, _stepFromX, _stepFromY, _stepToX, _stepToY);
 
             _tactics[0] = MovementTactics.From(tactics?.Home, _cfg);
             _tactics[1] = MovementTactics.From(tactics?.Away, _cfg);
+            SetTempo(tactics);
 
             // On the centre spot before anybody takes up a position: the block is built around
             // the ball, and a ball still sitting at the origin drags all twenty-two men onto one
@@ -576,6 +577,7 @@ namespace Sim.Core.Match.Movement
                 _away = _feed.Current.Away;
                 _tactics[0] = MovementTactics.From(_feed.Current.Tactics?.Home, _cfg);
                 _tactics[1] = MovementTactics.From(_feed.Current.Tactics?.Away, _cfg);
+                SetTempo(_feed.Current.Tactics);
 
                 for (int side = 0; side < SideCount; side++)
                 {
@@ -866,11 +868,7 @@ namespace Sim.Core.Match.Movement
 
         private void TakeRestart(int tick, int side, int slot)
         {
-            _ball.Dead = false;
-            Collect(side, slot);
-            _hold[side * _n + slot] = 1;
-            _ctx.RestartGrace = tick + _cfg.RestartGraceTicks;
-            _ctx.RestartTaker = side * _n + slot;
+            BeginRestart(tick, side, slot);
 
             // A penalty is STRUCK, from the spot (Law 14).
             if (_ctx.DeadKind == BallActionKind.Penalty)
@@ -891,6 +889,16 @@ namespace Sim.Core.Match.Movement
                     _ball.ForceForTicks(distance, _cfg.TicksOfMs(1200), _maxPassForce));
                 _sheet.Record(tick, BallActionKind.Cross, home, slot, -1);
             }
+        }
+
+        /// <summary>The ball is back in play, at the taker's feet.</summary>
+        private void BeginRestart(int tick, int side, int slot)
+        {
+            _ball.Dead = false;
+            Collect(side, slot);
+            _hold[side * _n + slot] = 1;
+            _ctx.RestartGrace = tick + _cfg.RestartGraceTicks;
+            _ctx.RestartTaker = side * _n + slot;
         }
 
         /// <summary>

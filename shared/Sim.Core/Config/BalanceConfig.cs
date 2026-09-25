@@ -1179,6 +1179,50 @@ namespace Sim.Core.Config
         public int PhaseTransitionMs { get; set; } = 5000;
         public int PhaseTransitionTicks => TicksOfMs(PhaseTransitionMs);
 
+        // --- V11 set pieces (R6). Read only by the V11 brain; V10 never looks at them. ---
+
+        /// <summary>A free kick this close to the goal it attacks gets a wall and is shot or crossed.</summary>
+        public int SetPieceRangeDm { get; set; } = 350;
+
+        /// <summary>
+        /// What a free kick swung into the box is worth, as the goal odds (permille) the taker
+        /// weighs a direct shot's odds against. Above it he shoots; below it he crosses.
+        /// </summary>
+        public int FreeKickCrossOddsPermille { get; set; } = 80;
+
+        /// <summary>Of the corners, how many are aimed at the near-post man; the rest go to the far post.</summary>
+        public int CornerNearPostPermille { get; set; } = 400;
+
+        /// <summary>Where the corner roles stand, in decimetres out from the goal line.</summary>
+        public int CornerNearPostDepthDm { get; set; } = 55;
+        public int CornerFarPostDepthDm { get; set; } = 65;
+        public int CornerEdgeDepthDm { get; set; } = 185;
+
+        /// <summary>How far across from the middle of the goal the near-post and far-post men stand.</summary>
+        public int CornerPostOffsetDm { get; set; } = 40;
+
+        /// <summary>How long a set piece waits, past the usual pause, for its men to be in place.</summary>
+        public int SetPieceWaitMs { get; set; } = 8000;
+        public int SetPieceWaitTicks => TicksOfMs(SetPieceWaitMs);
+
+        /// <summary>How long everybody has to be in place before the set piece is taken, so the eye sees it.</summary>
+        public int SetPieceSettleMs { get; set; } = 1000;
+        public int SetPieceSettleTicks => TicksOfMs(SetPieceSettleMs);
+
+        /// <summary>How far behind the spot the penalty taker starts his run-up.</summary>
+        public int PenaltyRunUpDm { get; set; } = 70;
+
+        /// <summary>
+        /// Whether a goal kick / a throw-in is played long (1) or short (0), by Tempo
+        /// Slow/Normal/Fast — the build-up instruction.
+        /// </summary>
+        public int[] GoalKickLongByTempo { get; set; } = { 0, 1, 1 };
+        public int[] ThrowInLongByTempo { get; set; } = { 0, 0, 1 };
+
+        /// <summary>The nearest a restart is played to a man, and the furthest a thrown ball goes.</summary>
+        public int RestartMinPassDm { get; set; } = 40;
+        public int ThrowInMaxDm { get; set; } = 350;
+
         // --- Time base ---
 
         /// <summary>
