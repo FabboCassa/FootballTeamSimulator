@@ -85,10 +85,14 @@ namespace Sim.Core.Match.Movement
         /// </summary>
         public readonly int ShotAppetitePercent;
 
+        /// <summary>The instructions these were read from, for the V11 brain, which reads them its own way.</summary>
+        public readonly TacticInstructions Instructions;
+
         private MovementTactics(
             int linePushDm, int frontLineGapDm, int widthPercent, int widePassBiasDm,
             int pressReachU, int pressTriggerDepthDm, int secondPressDepthDm, int pressStandOffU,
-            int supporters, int holdMin, int holdMax, int forwardBias, int shotAppetitePercent)
+            int supporters, int holdMin, int holdMax, int forwardBias, int shotAppetitePercent,
+            TacticInstructions instructions)
         {
             LinePushDm = linePushDm;
             FrontLineGapDm = frontLineGapDm;
@@ -103,6 +107,7 @@ namespace Sim.Core.Match.Movement
             HoldTicksMax = holdMax;
             ForwardBias = forwardBias;
             ShotAppetitePercent = shotAppetitePercent;
+            Instructions = instructions;
         }
 
         public static MovementTactics From(TacticContext? context, MatchBalance cfg)
@@ -138,10 +143,11 @@ namespace Sim.Core.Match.Movement
                 holdMin: cfg.TicksOfMs(Pick(cfg.TempoHoldMsMin, tempo)),
                 holdMax: cfg.TicksOfMs(Pick(cfg.TempoHoldMsMax, tempo)),
                 forwardBias: Pick(cfg.TempoForwardBias, tempo),
-                shotAppetitePercent: appetite);
+                shotAppetitePercent: appetite,
+                instructions: i);
         }
 
-        private static int Pick(int[] table, int index) =>
+        internal static int Pick(int[] table, int index) =>
             table != null && index >= 0 && index < table.Length ? table[index] : 0;
 
         /// <summary>
@@ -149,7 +155,7 @@ namespace Sim.Core.Match.Movement
         /// fell back to 0 would switch the thing it scales off altogether — a config someone has
         /// hand-edited down to two entries would stop the press instead of leaving it neutral.
         /// </summary>
-        private static int Percent(int[] table, int index) =>
+        internal static int Percent(int[] table, int index) =>
             table != null && index >= 0 && index < table.Length ? table[index] : 100;
     }
 }

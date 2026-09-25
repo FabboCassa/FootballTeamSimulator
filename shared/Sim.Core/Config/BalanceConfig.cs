@@ -1179,6 +1179,109 @@ namespace Sim.Core.Config
         public int PhaseTransitionMs { get; set; } = 5000;
         public int PhaseTransitionTicks => TicksOfMs(PhaseTransitionMs);
 
+        // --- V11 positioning, runs and overlaps (R2). Read only by the V11 brain. ---
+        // The back line is placed as V10's is (BackLineMinDepthDm, BallLag, BallFollow, MaxDepth,
+        // MentalityLinePushDm), then shifted by the phase; per-phase tables are indexed by TeamPhase.
+
+        /// <summary>Back-line shift per phase for the side WITH the ball, in dm toward the goal it attacks.</summary>
+        public int[] V11LineShiftInPossessionDm { get; set; } = { 0, 40, 80, 60, 0, 0 };
+
+        /// <summary>Back-line shift per phase for the side WITHOUT the ball: squeeze a build-up, drop in transition.</summary>
+        public int[] V11LineShiftOutOfPossessionDm { get; set; } = { 40, 0, -30, 0, -60, 0 };
+
+        /// <summary>Line height out of possession, by Pressing (low · medium · high), in dm.</summary>
+        public int[] V11PressingLinePushDm { get; set; } = { -60, 0, 60 };
+
+        /// <summary>
+        /// R2's "off target": a man further than this from his phase target spot (25 m), while he is
+        /// not on the ball, chasing, pressing, covering or marking, is far from it for that tick.
+        /// </summary>
+        public int V11OffTargetDm { get; set; } = 250;
+
+        /// <summary>
+        /// R2's "for more than 5 s": the first this-many ms of an unbroken spell further than
+        /// V11OffTargetDm are the run back into position, and only the rest counts as off target.
+        /// </summary>
+        public int V11OffTargetGraceMs { get; set; } = 5000;
+        public int V11OffTargetGraceTicks => TicksOfMs(V11OffTargetGraceMs);
+
+        /// <summary>
+        /// Line spacing and width of the V11 shape with and without the ball, in percent of
+        /// LineSpacingDm and of the width instruction. Closer together than V10's 120/55 and
+        /// 118/60: every turnover moves the whole shape from one to the other, and the further
+        /// apart they are the longer the front men are stranded off target (R2).
+        /// </summary>
+        public int V11AttackLineSpacingPercent { get; set; } = 100;
+        public int V11DefendLineSpacingPercent { get; set; } = 70;
+        public int V11AttackWidthPercent { get; set; } = 110;
+        public int V11DefendWidthPercent { get; set; } = 80;
+
+        /// <summary>How long a side takes to open from its block into its attacking shape.</summary>
+        public int V11ShapeExpandMs { get; set; } = 4000;
+        public int V11ShapeExpandTicks => TicksOfMs(V11ShapeExpandMs);
+
+        /// <summary>How long a side takes to drop from its attacking shape into its block.</summary>
+        public int V11ShapeCollapseMs { get; set; } = 5000;
+        public int V11ShapeCollapseTicks => TicksOfMs(V11ShapeCollapseMs);
+
+        /// <summary>A man further than this from where he is going sprints there, with or without the ball.</summary>
+        public int V11CatchUpSprintDm { get; set; } = 100;
+
+        /// <summary>A supporting run or an overlap goes no further than this from the man's phase target spot.</summary>
+        public int V11SupportLeashDm { get; set; } = 200;
+
+        /// <summary>How far short of the offside line a man in possession holds when he is not running.</summary>
+        public int V11OnsideHoldDm { get; set; } = 15;
+
+        /// <summary>How far beyond the offside line a run in behind is aimed.</summary>
+        public int V11RunDepthDm { get; set; } = 120;
+
+        /// <summary>A run in behind stops this far short of the goal line.</summary>
+        public int V11RunGoalGapDm { get; set; } = 80;
+
+        /// <summary>The least room between the line and the run's end for there to be space behind at all.</summary>
+        public int V11RunMinSpaceDm { get; set; } = 60;
+
+        /// <summary>No opponent may stand this close to the run's end, or the space is covered.</summary>
+        public int V11RunSpaceRadiusDm { get; set; } = 70;
+
+        /// <summary>No opponent may stand this close to the line from the ball to the run's end.</summary>
+        public int V11RunLaneHalfWidthDm { get; set; } = 25;
+
+        /// <summary>The longest pass a run in behind is made for.</summary>
+        public int V11RunPassMaxDm { get; set; } = 350;
+
+        /// <summary>A forward further than this behind the line is too deep to time a run against it.</summary>
+        public int V11RunStartBandDm { get; set; } = 150;
+
+        /// <summary>A run in behind is aimed no wider than this from the centre of the pitch.</summary>
+        public int V11RunChannelDm { get; set; } = 220;
+
+        /// <summary>How long a run in behind lasts if the ball is not played into it.</summary>
+        public int V11RunMs { get; set; } = 3000;
+        public int V11RunTicks => TicksOfMs(V11RunMs);
+
+        /// <summary>Overlap appetite by Width (narrow · normal · wide); added to the Mentality one.</summary>
+        public int[] V11OverlapWidthScore { get; set; } = { 0, 1, 2 };
+
+        /// <summary>Overlap appetite by Mentality (defensive · balanced · attacking).</summary>
+        public int[] V11OverlapMentalityScore { get; set; } = { 0, 1, 2 };
+
+        /// <summary>A full-back overlaps when his side's width plus mentality appetite reaches this.</summary>
+        public int V11OverlapThreshold { get; set; } = 2;
+
+        /// <summary>A full-back overlaps a man on the ball no further than this ahead of his own spot.</summary>
+        public int V11OverlapReachDm { get; set; } = 150;
+
+        /// <summary>How far past the man on the ball the overlapping full-back runs.</summary>
+        public int V11OverlapAheadDm { get; set; } = 100;
+
+        /// <summary>How far inside the touchline the overlap runs.</summary>
+        public int V11OverlapTouchlineGapDm { get; set; } = 40;
+
+        /// <summary>The ball must be at least this far off the centre, on his flank, for a full-back to overlap.</summary>
+        public int V11OverlapFlankMinDm { get; set; } = 60;
+
         // --- Time base ---
 
         /// <summary>
