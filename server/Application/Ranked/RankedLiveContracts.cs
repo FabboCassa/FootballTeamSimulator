@@ -30,11 +30,12 @@ namespace Fts.Application.Ranked;
 /// </summary>
 
 /// <summary>The caller submits a pause-point change for THEIR side (the server infers the side from the
-/// caller's seat). At least one of <see cref="Lineup"/> (a substitution / reshaped XI) or
-/// <see cref="Tactic"/> (an instruction change) must be present. <see cref="FromMinute"/> is the client's
-/// current rendered minute (1..90); it may not move behind an already-applied change, nor run ahead of the
-/// minute the wall clock says has actually been played.</summary>
-public sealed record SubmitRankedLiveChangeRequest(int FromMinute, LineupPlan? Lineup, TacticPlan? Tactic);
+/// caller's seat). At least one of <see cref="Lineup"/> (a substitution / reshaped XI),
+/// <see cref="Tactic"/> (an instruction change) or <see cref="Shout"/> (a touchline shout) must be present.
+/// <see cref="FromMinute"/> is the client's current rendered minute (1..90); it may not move behind an
+/// already-applied change, nor run ahead of the minute the wall clock says has actually been played.</summary>
+public sealed record SubmitRankedLiveChangeRequest(
+    int FromMinute, LineupPlan? Lineup, TacticPlan? Tactic, TouchlineShout Shout = TouchlineShout.None);
 
 /// <summary>A light description of an applied change for the opponent's UI timeline (who changed when) —
 /// the detail is already baked into the streamed report.</summary>

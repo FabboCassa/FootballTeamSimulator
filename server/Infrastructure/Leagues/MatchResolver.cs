@@ -69,7 +69,8 @@ public static class MatchResolver
     /// Resolves a fixture played LIVE (Phase 8.6): folds the accumulated pause-point inputs into the
     /// authoritative <see cref="MatchPlan"/> and re-runs the whole 90' from the fixture seed. Each
     /// <see cref="LiveChange"/> updates only its own side (a substitution / reshaped XI via a new
-    /// <see cref="LineupPlan"/>, and/or an instruction change via a new <see cref="TacticPlan"/>), keeping
+    /// <see cref="LineupPlan"/>, an instruction change via a new <see cref="TacticPlan"/>, and/or a
+    /// touchline shout called by that side's bench from that minute), keeping
     /// the other side as it was, then emits a <see cref="MatchInputChange"/> from that minute. Because the
     /// engine is a pure function of (plan, seed), the minutes before a change stay byte-identical and only
     /// the remainder re-rolls — that is what lets both connected clients render the same match in sync. The
@@ -104,7 +105,8 @@ public static class MatchResolver
             }
 
             plan = plan.WithChange(ch.FromMinute,
-                new MatchInput(homeLineup, awayLineup, BuildTactics(homeTactic, awayTactic, famMax)));
+                new MatchInput(homeLineup, awayLineup, BuildTactics(homeTactic, awayTactic, famMax))
+                    .WithShout(ch.Side == LiveSide.Home, ch.Shout));
         }
 
         var homeRules = homeInputs?.Plan?.Resolve(home, null, famMax);

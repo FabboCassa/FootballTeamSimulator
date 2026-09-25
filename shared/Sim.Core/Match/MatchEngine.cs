@@ -186,7 +186,7 @@ namespace Sim.Core.Match
                 AwayClubId = plan.Initial.Away.ClubId
             };
 
-            var feed = new MatchInputFeed(plan, homeRules, awayRules, _tactics.FamiliarityMax);
+            var feed = new MatchInputFeed(plan, homeRules, awayRules, _tactics.FamiliarityMax, _cfg);
 
             // ENGINE PHASE 6. A match with a stream is a match somebody will watch, so it is
             // PLAYED and the pitch writes the report. Everything below this line is the fast
@@ -222,6 +222,9 @@ namespace Sim.Core.Match
             TeamRatings homeRatings = default, awayRatings = default;
             double homePossession = 0;
 
+            // Shouts have no lever in the minute model; they are only written on the timeline.
+            int shoutsWritten = feed.WriteShoutEvents(report, 0);
+
             for (int minute = 1; minute <= MatchMinutes; minute++)
             {
                 // Apply every change effective by this minute, before any draw, so the prefix is
@@ -229,6 +232,7 @@ namespace Sim.Core.Match
                 // against the score from minutes < this one. Neither touches the RNG, so a plan
                 // with no changes and no rules consumes draws in exactly the order engine v1 did.
                 if (feed.Advance(minute, report.HomeGoals, report.AwayGoals)) active = feed.Current;
+                if (feed.ShoutsChanged) shoutsWritten = feed.WriteShoutEvents(report, shoutsWritten);
 
                 ComputeRatings(active, minute, out homeRatings, out awayRatings, out homePossession);
 
