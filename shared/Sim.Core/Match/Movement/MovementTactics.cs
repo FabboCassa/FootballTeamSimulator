@@ -28,6 +28,9 @@ namespace Sim.Core.Match.Movement
     /// the golden master, the twenty `pitch` readings and every balance figure are untouched by
     /// this phase, and <c>InstructionsTests.Neutral_Instructions_AreTheIdentity</c> holds the
     /// claim to it.
+    ///
+    /// A touchline shout (watchable-match spec R11) is folded in on top, through a
+    /// <see cref="ShoutEffect"/> that is the identity in the same sense when nobody shouts.
     /// </summary>
     internal readonly struct MovementTactics
     {
@@ -85,10 +88,20 @@ namespace Sim.Core.Match.Movement
         /// </summary>
         public readonly int ShotAppetitePercent;
 
+        /// <summary>Percent applied to the match fatigue the side's legs carry (a shout's cost).</summary>
+        public readonly int FatiguePercent;
+
+        /// <summary>Percent of the pressure a man on the ball feels, anywhere on the pitch.</summary>
+        public readonly int PressureFeltPercent;
+
+        /// <summary>Percent of the pressure a man on the ball feels in his own half.</summary>
+        public readonly int OwnHalfPressureFeltPercent;
+
         private MovementTactics(
             int linePushDm, int frontLineGapDm, int widthPercent, int widePassBiasDm,
             int pressReachU, int pressTriggerDepthDm, int secondPressDepthDm, int pressStandOffU,
-            int supporters, int holdMin, int holdMax, int forwardBias, int shotAppetitePercent)
+            int supporters, int holdMin, int holdMax, int forwardBias, int shotAppetitePercent,
+            ShoutEffect shout)
         {
             LinePushDm = linePushDm;
             FrontLineGapDm = frontLineGapDm;
@@ -103,9 +116,12 @@ namespace Sim.Core.Match.Movement
             HoldTicksMax = holdMax;
             ForwardBias = forwardBias;
             ShotAppetitePercent = shotAppetitePercent;
+            FatiguePercent = shout.FatiguePercent;
+            PressureFeltPercent = shout.PressureFeltPercent;
+            OwnHalfPressureFeltPercent = shout.OwnHalfPressureFeltPercent;
         }
 
-        public static MovementTactics From(TacticContext? context, MatchBalance cfg)
+        public static MovementTactics From(TacticContext? context, MatchBalance cfg, ShoutEffect shout)
         {
             TacticInstructions i = context.HasValue
                 ? context.Value.Tactic.Instructions
@@ -120,25 +136,36 @@ namespace Sim.Core.Match.Movement
             // again — so a neutral side prices a goal at exactly GoalValueDm, as phase 6 left it.
             int appetite =
                 Percent(cfg.MentalityShotAppetitePercent, mentality)
-                * Percent(cfg.TempoShotAppetitePercent, tempo) / 100;
+                * Percent(cfg.TempoShotAppetitePercent, tempo) / 100
+                * shout.ShotAppetitePercent / 100;
+
+            int forwardBias = Pick(cfg.TempoForwardBias, tempo) + shout.ForwardBias;
+            if (shout.ForwardBias != 0 && forwardBias < 0) forwardBias = 0;
+
+            int supporters = Pick(cfg.MentalitySupporters, mentality) + shout.Supporters;
+            if (shout.Supporters != 0 && supporters < 0) supporters = 0;
 
             return new MovementTactics(
-                linePushDm: Pick(cfg.MentalityLinePushDm, mentality),
+                linePushDm: Pick(cfg.MentalityLinePushDm, mentality) + shout.LinePushDm,
                 frontLineGapDm: cfg.FrontLineGoalGapDm
-                                * Percent(cfg.MentalityFrontLineGapPercent, mentality) / 100,
+                                * Percent(cfg.MentalityFrontLineGapPercent, mentality) / 100
+                                * shout.FrontLineGapPercent / 100,
                 widthPercent: Percent(cfg.WidthSpreadPercent, width),
                 widePassBiasDm: Pick(cfg.WidthWidePassBiasDm, width),
-                pressReachU: U.Units(Pick(cfg.PressReachDm, pressing)),
-                pressTriggerDepthDm: Pick(cfg.PressTriggerDepthDm, pressing),
+                pressReachU: U.Units(Pick(cfg.PressReachDm, pressing)) * shout.PressReachPercent / 100,
+                pressTriggerDepthDm: Pick(cfg.PressTriggerDepthDm, pressing) + shout.PressTriggerDepthDm,
                 secondPressDepthDm: cfg.SecondPressDepthDm
-                                    * Percent(cfg.PressingSecondPressPercent, pressing) / 100,
+                                    * Percent(cfg.PressingSecondPressPercent, pressing) / 100
+                                    * shout.SecondPressPercent / 100,
                 pressStandOffU: U.Units(cfg.PressDistanceDm)
-                                * Percent(cfg.PressingStandOffPercent, pressing) / 100,
-                supporters: Pick(cfg.MentalitySupporters, mentality),
-                holdMin: cfg.TicksOfMs(Pick(cfg.TempoHoldMsMin, tempo)),
-                holdMax: cfg.TicksOfMs(Pick(cfg.TempoHoldMsMax, tempo)),
-                forwardBias: Pick(cfg.TempoForwardBias, tempo),
-                shotAppetitePercent: appetite);
+                                * Percent(cfg.PressingStandOffPercent, pressing) / 100
+                                * shout.PressStandOffPercent / 100,
+                supporters: supporters,
+                holdMin: cfg.TicksOfMs(Pick(cfg.TempoHoldMsMin, tempo) * shout.HoldPercent / 100),
+                holdMax: cfg.TicksOfMs(Pick(cfg.TempoHoldMsMax, tempo) * shout.HoldPercent / 100),
+                forwardBias: forwardBias,
+                shotAppetitePercent: appetite,
+                shout: shout);
         }
 
         private static int Pick(int[] table, int index) =>

@@ -1167,6 +1167,9 @@ namespace Sim.Core.Config
         /// </summary>
         public MatchBrainVersion Brain { get; set; } = MatchBrainVersion.V10;
 
+        /// <summary>Touchline shouts: duration, cooldown and magnitudes (watchable-match spec R11).</summary>
+        public ShoutBalance Shouts { get; set; } = new ShoutBalance();
+
         // --- Time base ---
 
         /// <summary>

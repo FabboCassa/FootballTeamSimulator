@@ -55,6 +55,9 @@ namespace Sim.Core.Match.Movement
         private Lineup _away = null!;
         private MatchInputFeed? _feed;
 
+        /// <summary>How many of the feed's shouts are already on the report's timeline.</summary>
+        private int _shoutsWritten;
+
         private int _n;
         private int[] _px = System.Array.Empty<int>();
         private int[] _py = System.Array.Empty<int>();
@@ -442,8 +445,8 @@ namespace Sim.Core.Match.Movement
             _referee = new Referee(_ctx, _restarts, _offside, _skDefending);
             _outOfPlay = new OutOfPlay(_ctx, _restarts, _stepFromX, _stepFromY, _stepToX, _stepToY);
 
-            _tactics[0] = MovementTactics.From(tactics?.Home, _cfg);
-            _tactics[1] = MovementTactics.From(tactics?.Away, _cfg);
+            RefreshTactics(tactics);
+            if (_feed != null) _shoutsWritten = _feed.WriteShoutEvents(_report, 0);
 
             // On the centre spot before anybody takes up a position: the block is built around
             // the ball, and a ball still sitting at the origin drags all twenty-two men onto one
@@ -574,8 +577,7 @@ namespace Sim.Core.Match.Movement
             {
                 _home = _feed.Current.Home;
                 _away = _feed.Current.Away;
-                _tactics[0] = MovementTactics.From(_feed.Current.Tactics?.Home, _cfg);
-                _tactics[1] = MovementTactics.From(_feed.Current.Tactics?.Away, _cfg);
+                RefreshTactics(_feed.Current.Tactics);
 
                 for (int side = 0; side < SideCount; side++)
                 {
@@ -612,13 +614,30 @@ namespace Sim.Core.Match.Movement
                     }
                 }
             }
+            else if (_feed != null && _feed.ShoutsChanged)
+            {
+                RefreshTactics(_feed.Current.Tactics);
+            }
+
+            if (_feed != null && _feed.ShoutsChanged)
+                _shoutsWritten = _feed.WriteShoutEvents(_report, _shoutsWritten);
 
             for (int side = 0; side < SideCount; side++)
             {
                 Lineup lineup = side == 0 ? _home : _away;
                 for (int i = 0; i < _n; i++)
-                    BindSkills(side, i, lineup, FatiguePermille(minute, _stamina[side * _n + i]));
+                    BindSkills(side, i, lineup, FatiguePermille(side, minute, _stamina[side * _n + i]));
             }
+        }
+
+        /// <summary>
+        /// Each side's movement tactics: its instructions, and on top of them whatever touchline
+        /// shout it is playing to (the identity when there is none).
+        /// </summary>
+        private void RefreshTactics(MatchTactics? tactics)
+        {
+            _tactics[0] = MovementTactics.From(tactics?.Home, _cfg, _feed?.Effect(true) ?? ShoutEffect.None);
+            _tactics[1] = MovementTactics.From(tactics?.Away, _cfg, _feed?.Effect(false) ?? ShoutEffect.None);
         }
 
         /// <summary>
@@ -629,7 +648,7 @@ namespace Sim.Core.Match.Movement
         /// (<c>MatchEngine.FatigueFactor</c>), read one player at a time instead of one team at a
         /// time, which is the whole gain of the causality being on the pitch.
         /// </summary>
-        private int FatiguePermille(int minute, int stamina)
+        private int FatiguePermille(int side, int minute, int stamina)
         {
             if (!_applyMatchFatigue) return 1000;
 
@@ -639,6 +658,7 @@ namespace Sim.Core.Match.Movement
 
             int neutral = _condition.StaminaNeutral;
             int scaled = neutral > 0 ? permille * (2 * neutral - stamina) / neutral : permille;
+            scaled = scaled * _tactics[side].FatiguePercent / 100;
             if (scaled < 0) scaled = 0;
             if (scaled > 900) scaled = 900;
             return 1000 - scaled;
@@ -672,6 +692,13 @@ namespace Sim.Core.Match.Movement
                 int p = 1000 - 1000 * distance / _pressureU;
                 if (p > worst) worst = p;
             }
+
+            // A shout can calm him (Encourage) or steady the back (Concentrate); 100 is the identity.
+            MovementTactics t = _tactics[side];
+            worst = worst * t.PressureFeltPercent / 100;
+            if (t.OwnHalfPressureFeltPercent != 100
+                && MovementGeometry.Direction(side == 0) * (_px[k] - U.CenterXU) < 0)
+                worst = worst * t.OwnHalfPressureFeltPercent / 100;
 
             return worst;
         }
