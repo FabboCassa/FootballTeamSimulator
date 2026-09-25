@@ -203,8 +203,10 @@ public sealed class RankedLiveMatchService : IRankedLiveMatchService
 
         LiveSide side = live.HomeUserId == userId ? LiveSide.Home : LiveSide.Away;
 
-        if (request is null || (request.Lineup is null && request.Tactic is null))
-            return Fail("Un cambio deve portare una formazione e/o una tattica.", RankedError.InvalidLiveChange);
+        if (request is null || (request.Lineup is null && request.Tactic is null && request.Shout == TouchlineShout.None))
+            return Fail("Un cambio deve portare una formazione, una tattica e/o un grido.", RankedError.InvalidLiveChange);
+        if (!Enum.IsDefined(request.Shout))
+            return Fail("Grido dalla panchina sconosciuto.", RankedError.InvalidLiveChange);
         if (request.FromMinute < 1 || request.FromMinute > 90)
             return Fail("Il minuto del cambio deve essere fra 1 e 90.", RankedError.InvalidLiveChange);
 
@@ -236,7 +238,7 @@ public sealed class RankedLiveMatchService : IRankedLiveMatchService
                 return Fail("La formazione non è valida per la tua rosa attuale.", RankedError.InvalidLiveChange);
         }
 
-        changes.Add(new LiveChange(request.FromMinute, side, request.Lineup, request.Tactic));
+        changes.Add(new LiveChange(request.FromMinute, side, request.Lineup, request.Tactic, request.Shout));
 
         MatchResolver.ResolveResult r = MatchResolver.ResolveLive(
             sides.Value.Home, sides.Value.Away, sides.Value.HomeInputs, sides.Value.AwayInputs,

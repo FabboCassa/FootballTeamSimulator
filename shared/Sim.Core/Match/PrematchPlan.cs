@@ -8,8 +8,8 @@ namespace Sim.Core.Match
     /// <summary>
     /// A serializable conditional instruction (player ids and enums, not
     /// references): "from <see cref="FromMinute"/>, while the scoreline matches
-    /// <see cref="When"/>, optionally switch to these instructions and/or make this
-    /// substitution". Resolved against a club's current squad when the match runs,
+    /// <see cref="When"/>, optionally switch to these instructions, make this
+    /// substitution and/or call this shout". Resolved against a club's current squad when the match runs,
     /// mirroring how <see cref="LineupPlan"/>/<see cref="TacticPlan"/> persist a
     /// selection. The host (client/server) owns persistence; Sim.Core stays I/O-free.
     ///
@@ -38,6 +38,10 @@ namespace Sim.Core.Match
 
         /// <summary>Bench player to bring on; 0 = no substitution.</summary>
         public int SubInPlayerId { get; set; }
+
+        // --- Touchline shout (optional) ---
+        /// <summary>The shout to call when the rule fires; None (also what an older plan reads as) = no shout.</summary>
+        public TouchlineShout Shout { get; set; } = TouchlineShout.None;
     }
 
     /// <summary>
@@ -83,7 +87,7 @@ namespace Sim.Core.Match
                         sub = new Substitution(rule.SubOutPlayerId, incoming);
                 }
 
-                var action = new RuleAction(instructions, familiarity, sub);
+                var action = new RuleAction(instructions, familiarity, sub, rule.Shout);
                 if (action.IsEmpty)
                     continue;
 
