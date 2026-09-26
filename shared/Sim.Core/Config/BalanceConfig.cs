@@ -1374,6 +1374,9 @@ namespace Sim.Core.Config
         public int RestartMinPassDm { get; set; } = 40;
         public int ThrowInMaxDm { get; set; } = 350;
 
+        /// <summary>Touchline shouts: duration, cooldown and magnitudes (watchable-match spec R11).</summary>
+        public ShoutBalance Shouts { get; set; } = new ShoutBalance();
+
         // --- Time base ---
 
         /// <summary>

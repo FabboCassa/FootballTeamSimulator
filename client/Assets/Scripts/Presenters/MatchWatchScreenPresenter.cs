@@ -206,7 +206,7 @@ namespace Fts.Presenters
                 UpdateScore();
             }
 
-            _view.ShowToast(_loc.Tr(EventKey(e.Type), e.Minute, PlayerName(e.ClubId, e.PlayerId), ClubName(e.ClubId)));
+            _view.ShowToast(_loc.Tr(MatchEventKeys.For(e), e.Minute, PlayerName(e.ClubId, e.PlayerId), ClubName(e.ClubId)));
         }
 
         private void OnFinished()
@@ -589,16 +589,6 @@ namespace Fts.Presenters
             string home = ClubName(_context.Fixture.HomeClubId);
             string away = ClubName(_context.Fixture.AwayClubId);
             _view.SetScore(_loc.Tr("match.score", home, _homeGoals, _awayGoals, away));
-        }
-
-        private static string EventKey(MatchEventType type)
-        {
-            switch (type)
-            {
-                case MatchEventType.Goal: return "match.event.goal";
-                case MatchEventType.ChanceSaved: return "match.event.saved";
-                default: return "match.event.missed";
-            }
         }
 
         private static Lineup CloneLineup(Lineup src)

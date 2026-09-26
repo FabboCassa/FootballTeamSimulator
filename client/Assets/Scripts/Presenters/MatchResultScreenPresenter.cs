@@ -63,13 +63,7 @@ namespace Fts.Presenters
             var rows = new List<MatchEventRowVm>();
             foreach (MatchEvent e in outcome.Report.Events)
             {
-                string key;
-                switch (e.Type)
-                {
-                    case MatchEventType.Goal: key = "match.event.goal"; break;
-                    case MatchEventType.ChanceSaved: key = "match.event.saved"; break;
-                    default: key = "match.event.missed"; break;
-                }
+                string key = MatchEventKeys.For(e);
 
                 rows.Add(new MatchEventRowVm
                 {

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Sim.Core.Config;
 
 namespace Sim.Core.Match
 {
@@ -14,6 +15,10 @@ namespace Sim.Core.Match
     ///
     /// It consumes no randomness — a plan with no changes and no rules never moves a bit — which
     /// is what lets the fast path stay byte-identical to the engine that came before it.
+    ///
+    /// It also keeps the benches' touchline shouts (watchable-match spec R11): a shout arrives on
+    /// an input or a rule, is heard (or refused inside the cooldown), and expires by itself. The
+    /// bookkeeping is integers only, so a match nobody shouts in is untouched by it.
     /// </summary>
     public sealed class MatchInputFeed
     {
@@ -23,15 +28,26 @@ namespace Sim.Core.Match
         private readonly bool[]? _homeFired;
         private readonly bool[]? _awayFired;
         private readonly int _familiarityMax;
+        private readonly MatchBalance _match;
+        private readonly TouchlineShouts _shouts;
+        private readonly List<ShoutCall> _calls = new List<ShoutCall>();
         private int _index;
+        private int _minute;
 
         public MatchInput Current { get; private set; }
+
+        /// <summary>Every shout heard so far, in the order it was heard.</summary>
+        public IReadOnlyList<ShoutCall> Shouts => _calls;
+
+        /// <summary>Whether the last <see cref="Advance"/> heard a shout or let one expire.</summary>
+        public bool ShoutsChanged { get; private set; }
 
         public MatchInputFeed(
             MatchPlan plan,
             IReadOnlyList<MatchRule>? homeRules,
             IReadOnlyList<MatchRule>? awayRules,
-            int familiarityMax)
+            int familiarityMax,
+            MatchBalance? match = null)
         {
             Current = plan.Initial;
             _changes = plan.Changes;
@@ -40,6 +56,44 @@ namespace Sim.Core.Match
             _familiarityMax = familiarityMax;
             _homeFired = homeRules != null && homeRules.Count > 0 ? new bool[homeRules.Count] : null;
             _awayFired = awayRules != null && awayRules.Count > 0 ? new bool[awayRules.Count] : null;
+
+            _match = match ?? new MatchBalance();
+            ShoutBalance shouts = _match.Shouts ?? new ShoutBalance();
+            _shouts = new TouchlineShouts(shouts.DurationMinutes, shouts.CooldownMinutes);
+            HearInput(plan.Initial);
+        }
+
+        /// <summary>The shout the side is playing to as of the last <see cref="Advance"/>.</summary>
+        public TouchlineShout ActiveShout(bool home) => _shouts.Active(home, _minute);
+
+        /// <summary>What the side's active shout does to its movement tactics (the identity with none).</summary>
+        public ShoutEffect Effect(bool home)
+        {
+            TouchlineShout active = ActiveShout(home);
+            return active == TouchlineShout.None
+                ? ShoutEffect.None
+                : ShoutEffect.Of(active, _shouts.Repeats(home), _match);
+        }
+
+        /// <summary>
+        /// Writes the shouts heard from index <paramref name="from"/> on into the report's
+        /// timeline, and returns the new count. A shout at the kickoff is filed under minute 1.
+        /// </summary>
+        public int WriteShoutEvents(MatchReport report, int from)
+        {
+            for (int i = from; i < _calls.Count; i++)
+            {
+                ShoutCall call = _calls[i];
+                report.Events.Add(new MatchEvent
+                {
+                    Minute = call.Minute < 1 ? 1 : (call.Minute > 90 ? 90 : call.Minute),
+                    Type = MatchEventType.Shout,
+                    ClubId = call.Home ? report.HomeClubId : report.AwayClubId,
+                    Shout = call.Shout
+                });
+            }
+
+            return _calls.Count;
         }
 
         /// <summary>
@@ -51,10 +105,15 @@ namespace Sim.Core.Match
         public bool Advance(int minute, int homeGoals, int awayGoals)
         {
             bool changed = false;
+            TouchlineShout homeBefore = ActiveShout(true);
+            TouchlineShout awayBefore = ActiveShout(false);
+            int heardBefore = _calls.Count;
+            _minute = minute;
 
             while (_index < _changes.Count && _changes[_index].FromMinute <= minute)
             {
                 Current = _changes[_index].Input;
+                HearInput(Current);
                 _index++;
                 changed = true;
             }
@@ -70,7 +129,22 @@ namespace Sim.Core.Match
                 Current.Away.Validate();
             }
 
+            ShoutsChanged = _calls.Count != heardBefore
+                            || ActiveShout(true) != homeBefore
+                            || ActiveShout(false) != awayBefore;
             return changed;
+        }
+
+        private void HearInput(MatchInput input)
+        {
+            Hear(true, input.HomeShout);
+            Hear(false, input.AwayShout);
+        }
+
+        private void Hear(bool home, TouchlineShout shout)
+        {
+            if (shout == TouchlineShout.None) return;
+            if (_shouts.Call(home, shout, _minute)) _calls.Add(new ShoutCall(_minute, home, shout));
         }
 
         /// <summary>
@@ -94,6 +168,9 @@ namespace Sim.Core.Match
                 if (rule.Action.IsEmpty || !rule.ConditionMet(ownGoals, opponentGoals)) continue;
 
                 fired[i] = true; // spent once its gates open, applies cleanly or not
+
+                Hear(isHome, rule.Action.Shout);
+                if (!rule.Action.ChangesInput) continue;
 
                 MatchInput candidate = MatchRuleApplier.Apply(Current, rule, isHome, _familiarityMax);
                 try

@@ -36,16 +36,21 @@ public enum LiveMatchStatus
 }
 
 /// <summary>One accumulated pause-point input on the authoritative plan: from <see cref="FromMinute"/>
-/// the given side plays the new lineup and/or tactic. The shared Sim.Core plan types are stored verbatim
-/// so the server materialises them into the engine exactly as the client built them (a null lineup/tactic
-/// leaves that aspect unchanged for the side).</summary>
-public sealed record LiveChange(int FromMinute, LiveSide Side, LineupPlan? Lineup, TacticPlan? Tactic);
+/// the given side plays the new lineup and/or tactic, and/or calls a touchline <see cref="Shout"/>. The
+/// shared Sim.Core plan types are stored verbatim so the server materialises them into the engine exactly
+/// as the client built them (a null lineup/tactic leaves that aspect unchanged for the side). A change
+/// stored before shouts existed reads as <see cref="TouchlineShout.None"/>.</summary>
+public sealed record LiveChange(
+    int FromMinute, LiveSide Side, LineupPlan? Lineup, TacticPlan? Tactic,
+    TouchlineShout Shout = TouchlineShout.None);
 
 /// <summary>The caller submits a pause-point change for THEIR side (the server infers the side from the
-/// caller's club). At least one of <see cref="Lineup"/> (a substitution / reshaped XI) or
-/// <see cref="Tactic"/> (an instruction change) must be present. <see cref="FromMinute"/> is the client's
-/// current rendered minute (1..90) and must not move backwards past an already-applied change.</summary>
-public sealed record SubmitLiveChangeRequest(int FromMinute, LineupPlan? Lineup, TacticPlan? Tactic);
+/// caller's club). At least one of <see cref="Lineup"/> (a substitution / reshaped XI),
+/// <see cref="Tactic"/> (an instruction change) or <see cref="Shout"/> (a touchline shout) must be present.
+/// <see cref="FromMinute"/> is the client's current rendered minute (1..90) and must not move backwards
+/// past an already-applied change.</summary>
+public sealed record SubmitLiveChangeRequest(
+    int FromMinute, LineupPlan? Lineup, TacticPlan? Tactic, TouchlineShout Shout = TouchlineShout.None);
 
 /// <summary>A light description of an applied change for the opponent's UI timeline (who changed when) —
 /// the detailed lineup/tactic is already baked into the streamed report, so it need not be echoed.</summary>

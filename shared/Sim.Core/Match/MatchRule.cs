@@ -45,8 +45,9 @@ namespace Sim.Core.Match
 
     /// <summary>
     /// What a fired rule does to the side it belongs to: change tactical
-    /// instructions (formation is fixed in-match, 3.4 design note (b)) and/or make
-    /// a substitution. Either part is optional; an empty action is a no-op.
+    /// instructions (formation is fixed in-match, 3.4 design note (b)), make a
+    /// substitution and/or call a touchline shout. Every part is optional; an empty
+    /// action is a no-op.
     /// </summary>
     public sealed class RuleAction
     {
@@ -59,14 +60,23 @@ namespace Sim.Core.Match
         /// <summary>The substitution to make, or null for none.</summary>
         public Substitution? Sub { get; }
 
-        public RuleAction(TacticInstructions? instructions = null, int instructionFamiliarity = 0, Substitution? sub = null)
+        /// <summary>The touchline shout to call, or None.</summary>
+        public TouchlineShout Shout { get; }
+
+        public RuleAction(
+            TacticInstructions? instructions = null, int instructionFamiliarity = 0, Substitution? sub = null,
+            TouchlineShout shout = TouchlineShout.None)
         {
             Instructions = instructions;
             InstructionFamiliarity = instructionFamiliarity;
             Sub = sub;
+            Shout = shout;
         }
 
-        public bool IsEmpty => Instructions == null && Sub == null;
+        /// <summary>Whether the action changes the lineup or the tactics (a shout alone does not).</summary>
+        public bool ChangesInput => Instructions != null || Sub != null;
+
+        public bool IsEmpty => !ChangesInput && Shout == TouchlineShout.None;
     }
 
     /// <summary>

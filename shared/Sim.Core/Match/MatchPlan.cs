@@ -14,12 +14,30 @@ namespace Sim.Core.Match
         public Lineup Away { get; }
         public MatchTactics? Tactics { get; }
 
-        public MatchInput(Lineup home, Lineup away, MatchTactics? tactics = null)
+        /// <summary>
+        /// The touchline shout each bench calls as this input takes effect (watchable-match spec
+        /// R11). A one-shot call, not a state: the feed hears it once, when the input is applied,
+        /// and times it out itself — so an input built later without a shout does not cancel it.
+        /// </summary>
+        public TouchlineShout HomeShout { get; }
+        public TouchlineShout AwayShout { get; }
+
+        public MatchInput(
+            Lineup home, Lineup away, MatchTactics? tactics = null,
+            TouchlineShout homeShout = TouchlineShout.None, TouchlineShout awayShout = TouchlineShout.None)
         {
             Home = home;
             Away = away;
             Tactics = tactics;
+            HomeShout = homeShout;
+            AwayShout = awayShout;
         }
+
+        /// <summary>The same lineups and tactics, with one bench calling <paramref name="shout"/>.</summary>
+        public MatchInput WithShout(bool home, TouchlineShout shout) =>
+            home
+                ? new MatchInput(Home, Away, Tactics, shout, AwayShout)
+                : new MatchInput(Home, Away, Tactics, HomeShout, shout);
     }
 
     /// <summary>A change of inputs taking effect from the start of <see cref="FromMinute"/> (1..90).</summary>
@@ -37,7 +55,7 @@ namespace Sim.Core.Match
 
     /// <summary>
     /// A full match as a schedule of inputs: the kickoff input plus zero or more
-    /// changes injected at given minutes (substitutions, tactic changes). The
+    /// changes injected at given minutes (substitutions, tactic changes, shouts). The
     /// engine is a pure function of (plan, seed), so:
     ///   - re-running the same plan reproduces the report exactly (replay), and
     ///   - appending a change at minute M leaves minutes &lt; M byte-identical and

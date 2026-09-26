@@ -106,6 +106,29 @@ public class LiveMatchTests
         Assert.That(newPrefix, Is.EqualTo(basePrefix), "minutes before the change are unchanged (determinism)");
     }
 
+    /// <summary>Issue #36: a touchline shout alone is a valid pause-point input, and the re-simulated report
+    /// carries it as a Shout event for the caller's club at that minute.</summary>
+    [Test]
+    public async Task AShoutOnlyChange_IsAccepted_AndLandsOnTheTimeline()
+    {
+        var fx = await SetUpLiveFixture();
+        await OpenLive(fx.HomeAcc.Tok, fx.LeagueId, fx.FixtureId);
+        await JoinLive(fx.AwayAcc.Tok, fx.LeagueId, fx.FixtureId);
+
+        var after = await Change(fx.AwayAcc.Tok, fx.LeagueId, fx.FixtureId,
+            new SubmitLiveChangeRequest(35, null, null, TouchlineShout.PressHigh));
+
+        var shouts = EventsOf(after.ReportJson!).Where(e => e.Type == (int)MatchEventType.Shout).ToList();
+        Assert.Multiple(() =>
+        {
+            Assert.That(after.Changes, Has.Count.EqualTo(1));
+            Assert.That(after.Changes[0].Side, Is.EqualTo(LiveSide.Away));
+            Assert.That(shouts, Has.Count.EqualTo(1));
+            Assert.That(shouts[0].Minute, Is.EqualTo(35));
+            Assert.That(shouts[0].ClubId, Is.EqualTo(fx.AwayClubExternalId));
+        });
+    }
+
     // --- guards ------------------------------------------------------------------------------------
 
     [Test]
