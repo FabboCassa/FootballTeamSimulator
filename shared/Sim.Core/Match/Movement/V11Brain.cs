@@ -38,7 +38,8 @@ namespace Sim.Core.Match.Movement
         /// job for — his phase target spot, a run in behind, an overlap — and hands every other man
         /// (on the ball, chasing, pressing, supporting, covering, marking, placed for a restart) to
         /// v10's Move, so the golden master stays on v10 and v11's match is its own. Since task 7
-        /// (R3-R5) the man on the ball chooses on xT, pitch control and xG (see V11Brain.Act).
+        /// (R3-R5) the man on the ball chooses on xT, pitch control and xG (see V11Brain.Act), and
+        /// its set pieces are its own (<see cref="V11SetPieces"/>, R6): they come first in Act and Move.
         /// </summary>
         private sealed partial class V11Brain : IMatchBrain
         {
@@ -46,6 +47,7 @@ namespace Sim.Core.Match.Movement
             private readonly V10Brain _v10;
             private readonly TeamPhaseMachine _phases;
             private readonly V11Positioning _positioning;
+            private readonly V11SetPieces _setPieces;
             private readonly int[] _phaseTicks = new int[SideCount * TeamPhaseMachine.PhaseCount];
 
             // Who is running in behind for each side, until when, and to where (units).
@@ -77,6 +79,7 @@ namespace Sim.Core.Match.Movement
                 _phases = new TeamPhaseMachine(sim._cfg);
                 _positioning = new V11Positioning(sim._cfg);
                 _valuation = new V11ActionValuation(sim._cfg);
+                _setPieces = new V11SetPieces(sim);
             }
 
             public int PhaseTicks(int side, TeamPhase phase) =>
@@ -109,6 +112,7 @@ namespace Sim.Core.Match.Movement
                 }
 
                 _v10.Begin();
+                _setPieces.Begin();
             }
 
             public void UpdateTeams(int tick)

@@ -7,13 +7,20 @@ namespace Sim.Core.Match.Movement
         private sealed partial class V11Brain
         {
             /// <summary>
-            /// Where this man goes (R2). A man v10 has a job for is v10's; a supporter keeps v10's
-            /// supporting run unless he is a forward with a run in behind on. Everybody else goes to
+            /// Where this man goes (R2). A man placed for a V11 set piece (R6) is its own; a man v10
+            /// has a job for is v10's; a supporter keeps v10's supporting run unless he is a forward with a run in behind on. Everybody else goes to
             /// his phase target spot — held onside when his side has the ball — or, for a full-back
             /// whose side asks for it, on the overlap.
             /// </summary>
             public void Move(int tick, int side, int slot)
             {
+                if (_setPieces.Move(tick, side, slot))
+                {
+                    if (_runner[side] == slot) _runner[side] = -1;
+                    _spell[side * _sim._n + slot] = 0;
+                    return;
+                }
+
                 V10Job job = _v10.JobOf(tick, side, slot);
                 if (job != V10Job.None && job != V10Job.Support)
                 {

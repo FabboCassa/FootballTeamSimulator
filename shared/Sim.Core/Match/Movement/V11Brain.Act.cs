@@ -17,7 +17,7 @@ namespace Sim.Core.Match.Movement
             private int _openSince;
 
             /// <summary>
-            /// What this man does with the ball (R3-R5). A dead ball is v10's restart. On the ball he
+            /// What this man does with the ball (R3-R5). A dead ball V11's set pieces do not take (R6) is v10's restart. On the ball he
             /// reads the scene and <see cref="V11ActionValuation"/> chooses: while the tempo's hold
             /// runs he keeps it — unless the goal is open, which he goes at on the tick he sees it
             /// (R4) — and then he takes the dearest of pass, cross, carry, clearance and shot. The
@@ -27,6 +27,7 @@ namespace Sim.Core.Match.Movement
             {
                 int k = side * _sim._n + slot;
                 if (_sim._sentOff[k]) return;
+                if (_setPieces.Act(tick, side, slot)) return;
 
                 MatchBall ball = _sim._ball;
                 if (ball.Dead)

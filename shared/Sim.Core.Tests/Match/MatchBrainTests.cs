@@ -12,8 +12,7 @@ namespace Sim.Core.Tests.Match
     /// <summary>
     /// The brain seam (watchable-match spec, task 2). The decisions and the positioning of the
     /// watched match sit behind one selector in <see cref="MatchBalance.Brain"/>. V10 is the
-    /// default and is what the golden master pins; V11 plays any match, and since it positions
-    /// its own men (task 6) its match is its own.
+    /// default and is what the golden master pins; V11 plays any match with its own decisions.
     /// </summary>
     [TestFixture]
     public class MatchBrainTests
@@ -39,23 +38,33 @@ namespace Sim.Core.Tests.Match
             Assert.That(pushed.Match.Brain, Is.EqualTo(MatchBrainVersion.V11));
         }
 
+        /// <summary>
+        /// V11 positions its own men (task 6) and plays its own set pieces (task 8), so it is no longer the V10 match draw for draw.
+        /// What still proves the seam: a V11 match is a whole, valid, reproducible match, with a
+        /// score that is the goals on its own stream. V10 stays pinned by the golden master
+        /// (SimulationDeterminismTests, WorldEconomyDeterminismTests).
+        /// </summary>
         [TestCase(0, 5, 424242UL)]
         [TestCase(9, 10, 777UL)]
-        public void V11_PlaysAWholeMatch_OnItsOwnPositioning_AndTheV10PathIsUntouched(int home, int away, ulong seed)
+        public void V11_PlaysAWholeValidMatch_Reproducibly_AndTheV10PathIsUntouched(int home, int away, ulong seed)
         {
             MatchReport v10 = Play(MatchBrainVersion.V10, home, away, seed);
             MatchReport v11 = Play(MatchBrainVersion.V11, home, away, seed);
+            MatchReport again = Play(MatchBrainVersion.V11, home, away, seed);
 
             Assert.That(v11.Positions, Is.Not.Null, "A match on V11 must be played on the pitch.");
             Assert.That(v11.Positions!.LastTick, Is.EqualTo(v10.Positions!.LastTick), "the whole ninety minutes");
             Assert.That(v11.Positions.Actions, Is.Not.Empty);
-            Assert.That(MatchReportHasher.Hash(Play(MatchBrainVersion.V11, home, away, seed)),
-                Is.EqualTo(MatchReportHasher.Hash(v11)), "V11 is deterministic: same seed, same match");
+            int homeGoals = 0, awayGoals = 0;
+            foreach (BallAction a in v11.Positions.Actions)
+                if (a.Kind == BallActionKind.Goal) { if (a.Home) homeGoals++; else awayGoals++; }
+            Assert.That(v11.HomeGoals, Is.EqualTo(homeGoals));
+            Assert.That(v11.AwayGoals, Is.EqualTo(awayGoals));
+            Assert.That(MatchReportHasher.Hash(again), Is.EqualTo(MatchReportHasher.Hash(v11)),
+                "the same seed on V11 is the same match");
 
-            // Since task 6 V11 moves its own men (R2), so its match is no longer V10's: the seam
-            // really switches brain. V10 itself is pinned to the golden master elsewhere
-            // (WorldEconomyDeterminismTests, server SimulationDeterminismTests); here the default
-            // config must still be the V10 path.
+            // V11 moves its own men and plays its own set pieces, so its match is not V10's; the
+            // default config must still be the V10 path.
             Assert.That(MatchReportHasher.Hash(v11), Is.Not.EqualTo(MatchReportHasher.Hash(v10)));
             Assert.That(MatchReportHasher.Hash(PlayDefault(home, away, seed)), Is.EqualTo(MatchReportHasher.Hash(v10)));
         }
