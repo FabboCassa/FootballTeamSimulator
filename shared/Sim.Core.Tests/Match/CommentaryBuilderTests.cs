@@ -417,6 +417,67 @@ namespace Sim.Core.Tests.Match
             Assert.That(English(line), Is.EqualTo("7' Ulivara bench: “Concentrate!”"));
         }
 
+        // ------------------------------------------------------------------ substitutions and the minute stamp
+
+        private static readonly Dictionary<int, string> PlayersById = new Dictionary<int, string>
+        {
+            [101] = "Esposito", [102] = "Russo"
+        };
+
+        private static string PlayerOf(bool home, int id) => PlayersById.TryGetValue(id, out string? n) ? n : "?";
+
+        [Test]
+        public void EverySubstitution_GivesOneHighlightedLine_NamingWhoCameOnAndOff()
+        {
+            PositionStream s = Stream();
+            int f = At(63);
+            s.Changes.Add(new SlotChange(f, true, 9, onPlayerId: 101, offPlayerId: 102, onShirt: 18, offShirt: 9));
+
+            CommentaryLine line = Single(Report(s));
+
+            Assert.That(line.Frame, Is.EqualTo(f));
+            Assert.That(line.Minute, Is.EqualTo(63));
+            Assert.That(line.Icon, Is.EqualTo(CommentaryIcon.Substitution));
+            Assert.That(line.Highlight, Is.True);
+            Assert.That(CommentaryText.Format(line, Tr(En), NameOf, ClubOf, PlayerOf),
+                Is.EqualTo("63' Ulivara change: Esposito on for Russo"));
+            Assert.That(CommentaryText.Format(line, Tr(It), NameOf, ClubOf, PlayerOf),
+                Is.EqualTo("63' Cambio Ulivara: entra Esposito, esce Russo"));
+        }
+
+        [Test]
+        public void ASubstitution_WithoutAPlayerLookup_FallsBackToTheShirtNumbers()
+        {
+            PositionStream s = Stream();
+            s.Changes.Add(new SlotChange(At(70), false, 4, 201, 202, 14, 4));
+
+            CommentaryLine line = Single(Report(s));
+
+            Assert.That(English(line), Is.EqualTo("70' Borgo change: #14 on for #4"));
+        }
+
+        [Test]
+        public void TheStampAndTheSentence_AreTheTwoHalvesOfTheFormattedLine()
+        {
+            PositionStream s = Stream();
+            Add(s, At(12) + 6, BallActionKind.Shot, true, 9);
+            Add(s, At(12) + 7, BallActionKind.Goal, true, 9);
+            var timeline = new BroadcastTimeline(Fpm, Frames, At(46), Array.Empty<BroadcastSegment>(),
+                new[] { new CutSummary(At(23), At(28), PossessionSide.Home, CutZone.Middle, null) });
+
+            IReadOnlyList<CommentaryLine> lines = CommentaryBuilder.Build(Report(s), timeline);
+
+            Assert.That(lines.Select(l => CommentaryText.Stamp(l, Tr(It))), Is.EqualTo(new[] { "12'", "23'-27'" }));
+            Assert.That(lines.Select(l => CommentaryText.Sentence(l, Tr(En), NameOf, ClubOf)), Is.EqualTo(new[]
+            {
+                "Verdi shoots: Verdi scores!",
+                "Ulivara keep the ball in midfield"
+            }));
+            foreach (CommentaryLine line in lines)
+                Assert.That(CommentaryText.Format(line, Tr(En), NameOf, ClubOf),
+                    Is.EqualTo(CommentaryText.Stamp(line, Tr(En)) + " " + CommentaryText.Sentence(line, Tr(En), NameOf, ClubOf)));
+        }
+
         // ------------------------------------------------------------------ localisation
 
         [Test]

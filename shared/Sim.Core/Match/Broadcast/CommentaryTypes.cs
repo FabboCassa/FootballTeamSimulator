@@ -15,7 +15,8 @@ namespace Sim.Core.Match.Broadcast
         Penalty = 7,
         Counter = 8,
         Cut = 9,
-        Shout = 10
+        Shout = 10,
+        Substitution = 11
     }
 
     /// <summary>
@@ -52,7 +53,7 @@ namespace Sim.Core.Match.Broadcast
     public sealed class CommentaryLine
     {
         public CommentaryLine(int frame, int minute, int endMinute, CommentaryIcon icon, bool highlight,
-            IReadOnlyList<CommentaryClause> steps, CommentaryClause? outcome)
+            IReadOnlyList<CommentaryClause> steps, CommentaryClause? outcome, SlotChange? change = null)
         {
             Frame = frame;
             Minute = minute;
@@ -61,6 +62,7 @@ namespace Sim.Core.Match.Broadcast
             Highlight = highlight;
             Steps = steps;
             Outcome = outcome;
+            Change = change;
         }
 
         public int Frame { get; }
@@ -71,10 +73,16 @@ namespace Sim.Core.Match.Broadcast
 
         public CommentaryIcon Icon { get; }
 
-        /// <summary>Goals, cards and penalties stand out in the panel.</summary>
+        /// <summary>Goals, cards, penalties and substitutions stand out in the panel.</summary>
         public bool Highlight { get; }
 
         public IReadOnlyList<CommentaryClause> Steps { get; }
         public CommentaryClause? Outcome { get; }
+
+        /// <summary>
+        /// The substitution this line tells, or null. It names players by id, not by slot: the slot
+        /// changes hands at this very frame, so a slot lookup cannot name both men.
+        /// </summary>
+        public SlotChange? Change { get; }
     }
 }

@@ -1,5 +1,6 @@
 ﻿using System;
 using Sim.Core.Match;
+using Sim.Core.Match.Broadcast;
 
 namespace Fts.MatchView
 {
@@ -66,6 +67,26 @@ namespace Fts.MatchView
                 case BallActionKind.Block: return "match.action.block";
 
                 default: return "match.action.freekick";
+            }
+        }
+
+        /// <summary>The FtsTheme.uss class the commentary panel draws an icon with (spec R15).</summary>
+        public static string IconClass(CommentaryIcon icon)
+        {
+            switch (icon)
+            {
+                case CommentaryIcon.Goal: return "fts-commentary__icon--goal";
+                case CommentaryIcon.Save: return "fts-commentary__icon--save";
+                case CommentaryIcon.Block: return "fts-commentary__icon--block";
+                case CommentaryIcon.Foul: return "fts-commentary__icon--foul";
+                case CommentaryIcon.YellowCard: return "fts-commentary__icon--yellow";
+                case CommentaryIcon.RedCard: return "fts-commentary__icon--red";
+                case CommentaryIcon.Penalty: return "fts-commentary__icon--penalty";
+                case CommentaryIcon.Counter: return "fts-commentary__icon--counter";
+                case CommentaryIcon.Cut: return "fts-commentary__icon--cut";
+                case CommentaryIcon.Shout: return "fts-commentary__icon--shout";
+                case CommentaryIcon.Substitution: return "fts-commentary__icon--sub";
+                default: return "fts-commentary__icon--miss";
             }
         }
 

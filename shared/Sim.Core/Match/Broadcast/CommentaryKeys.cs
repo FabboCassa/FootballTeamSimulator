@@ -12,6 +12,12 @@ namespace Sim.Core.Match.Broadcast
         public const string Line = "match.commentary.line";
         /// <summary>{0} first minute, {1} last minute, {2} sentence.</summary>
         public const string Span = "match.commentary.span";
+        /// <summary>{0} minute: the stamp the panel shows beside a sentence.</summary>
+        public const string Minute = "match.commentary.minute";
+        /// <summary>{0} first minute, {1} last minute: the stamp of a cut summary.</summary>
+        public const string MinuteSpan = "match.commentary.minute.span";
+        /// <summary>The caption of the commentary panel.</summary>
+        public const string PanelTitle = "match.commentary.title";
         /// <summary>{0} the steps so far, {1} the next step.</summary>
         public const string Join = "match.commentary.join";
         /// <summary>{0} the steps, {1} how the chain ended.</summary>
@@ -67,16 +73,20 @@ namespace Sim.Core.Match.Broadcast
         public const string ShoutEncourage = "match.commentary.shout.encourage";
         public const string ShoutConcentrate = "match.commentary.shout.concentrate";
 
+        /// <summary>{0} who came on, {1} who came off, {2} their club.</summary>
+        public const string Substitution = "match.commentary.sub";
+
         public static IReadOnlyList<string> All { get; } = new[]
         {
-            Line, Span, Join, Result, Counter,
+            Line, Span, Minute, MinuteSpan, PanelTitle, Join, Result, Counter,
             Pass, PassOn, LongBall, LongBallOn, Cross, CrossOn, Dribble, DribbleOn,
             Shot, ShotOn, Header, HeaderOn, Recovery, Interception, FreeKick, Corner, Penalty,
             Foul, Booked, SentOff,
             Goal, Saved, Blocked, Missed, FreeKickGiven, PenaltyGiven,
             CutNobody, CutDefensive, CutMiddle, CutAttacking,
             StopHalfTime, StopFoul, StopOffside, StopCorner, StopFreeKick, StopGoalKick, StopThrowIn, StopKickoff,
-            ShoutPressHigh, ShoutKeepBall, ShoutAllForward, ShoutEncourage, ShoutConcentrate
+            ShoutPressHigh, ShoutKeepBall, ShoutAllForward, ShoutEncourage, ShoutConcentrate,
+            Substitution
         };
     }
 }

@@ -7,8 +7,8 @@ namespace Fts.Views
     /// <summary>
     /// Chrome for the watchable match (task 3.1): a top HUD (score + clock), a slot the
     /// presenter fills with the live figures, the pitch area (the renderer is inserted by the
-    /// presenter), an event toast overlay, and a bottom control bar (speed 1x/2x/4x, Skip,
-    /// Continue).
+    /// presenter) with the commentary panel beside it (spec R15; under it on a phone), an event
+    /// toast overlay, and a bottom control bar (speed 1x/2x/4x, Skip, Continue).
     ///
     /// The figures arrive as a whole strip rather than as numbers because the strip is painted in
     /// the two KIT colours, and the kits are the presenter's business — it is the one that resolves
@@ -36,12 +36,14 @@ namespace Fts.Views
         /// <summary>Row under the HUD the presenter drops the live-figures strip into.</summary>
         public VisualElement StatsSlot { get; }
 
+        /// <summary>The commentary side panel; the presenter fills its pooled rows.</summary>
+        public CommentaryPanel Commentary { get; }
+
         private Label _score;
         private Label _clock;
         private VisualElement _homeCrestSlot;
         private VisualElement _awayCrestSlot;
         private readonly Label _toast;
-        private readonly ActionFeed _feed = new ActionFeed();
         private Button _skip;
         private Button _pause;
         private Button _continue;
@@ -60,8 +62,15 @@ namespace Fts.Views
             StatsSlot = new VisualElement();
             Root.Add(StatsSlot);
 
+            // Pitch and commentary side by side; the phone sheet stacks them (.fts-matchbody).
+            var body = new VisualElement();
+            body.AddToClassList("fts-matchbody");
+            body.style.flexGrow = 1f; // takes the space between HUD and controls
+            if (!UiKit.StylesLoaded)
+                body.style.flexDirection = FlexDirection.Row;
+
             PitchContainer = new VisualElement();
-            PitchContainer.style.flexGrow = 1f; // takes the space between HUD and controls
+            PitchContainer.style.flexGrow = 1f;
 
             // Centered toast overlay: a full-width absolute row so the label
             // centres horizontally and draws on top of the renderer.
@@ -87,10 +96,12 @@ namespace Fts.Views
             toastRow.Add(_toast);
 
             PitchContainer.Add(toastRow);
-            PitchContainer.Add(_feed.Root);
-            _feed.Clear();
+            body.Add(PitchContainer);
 
-            Root.Add(PitchContainer);
+            Commentary = new CommentaryPanel(tr("match.commentary.title"));
+            body.Add(Commentary.Root);
+
+            Root.Add(body);
 
             _speedButtons = new Button[_speeds.Length];
             Root.Add(BuildControls(tr));
@@ -206,12 +217,6 @@ namespace Fts.Views
                 _speedButtons[i].style.color = Mathf.Approximately(_speeds[i], speed) ? UiKit.TextOnAccent : UiKit.TextPrimary;
             }
         }
-
-        /// <summary>Adds a line to the running commentary beside the pitch (task 13.1).</summary>
-        public void PushAction(string text) => _feed.Push(text);
-
-        /// <summary>Empties the commentary (a re-simulated remainder starts fresh).</summary>
-        public void ClearActions() => _feed.Clear();
 
         public void ShowToast(string text)
         {

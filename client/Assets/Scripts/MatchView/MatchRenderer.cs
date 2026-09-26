@@ -125,6 +125,12 @@ namespace Fts.MatchView
         /// <summary>Fired as playback crosses a ball action — the commentary feed (13.1).</summary>
         public event Action<BallAction> ActionReached;
 
+        /// <summary>
+        /// Fired on every pump, and on a seek or Skip, with the stream frame playback has reached —
+        /// what the commentary panel reveals its lines against.
+        /// </summary>
+        public event Action<int> FrameReached;
+
         /// <summary>Fired when the live figures move, so a panel can redraw without polling.</summary>
         public event Action<MatchLiveStats> StatsChanged;
 
@@ -139,6 +145,9 @@ namespace Fts.MatchView
 
         /// <summary>The figures of the match SO FAR — never of the whole match (see MatchLiveStats).</summary>
         public MatchLiveStats Stats => _stats;
+
+        /// <summary>The director's timeline (its cut summaries feed the commentary); null on the flat rate.</summary>
+        public BroadcastTimeline Timeline { get; private set; }
 
         public MatchRenderer(MatchReport report, Color homeColor, Color awayColor)
         {
@@ -198,6 +207,7 @@ namespace Fts.MatchView
             if (timeline.FrameCount == 0)
                 return; // nothing the director can read: the flat rate still plays the match
 
+            Timeline = timeline;
             _playback = new BroadcastPlayback(timeline, Mathf.FloorToInt(_tickPos));
             _playback.SetSpeed(PlaybackSpeed(_speed));
         }
@@ -246,6 +256,7 @@ namespace Fts.MatchView
             RecountStats();
             LayoutNumbers();
             MarkDirtyRepaint();
+            FrameReached?.Invoke(Mathf.FloorToInt(_tickPos));
         }
 
         /// <summary>1x / 2x / 4x.</summary>
@@ -269,6 +280,7 @@ namespace Fts.MatchView
             RecountStats();
             LayoutNumbers();
             MarkDirtyRepaint();
+            FrameReached?.Invoke(_lastTick);
             Finish();
         }
 
@@ -311,6 +323,7 @@ namespace Fts.MatchView
 
             if (statsMoved)
                 StatsChanged?.Invoke(_stats);
+            FrameReached?.Invoke(Mathf.FloorToInt(_tickPos));
 
             LayoutNumbers();
             MarkDirtyRepaint();

@@ -12,9 +12,30 @@ namespace Sim.Core.Match.Broadcast
         /// <param name="tr">The localisation lookup: key and format arguments to text.</param>
         /// <param name="nameOf">(home side, lineup slot) to a printable name.</param>
         /// <param name="clubOf">Home side or not to the club's name.</param>
+        /// <param name="playerOf">(home side, player id) to a printable name, for a substitution; the
+        /// shirt numbers stand in when it is missing or returns null.</param>
         public static string Format(CommentaryLine line, Func<string, object[], string> tr,
-            Func<bool, int, string> nameOf, Func<bool, string> clubOf)
+            Func<bool, int, string> nameOf, Func<bool, string> clubOf, Func<bool, int, string>? playerOf = null)
         {
+            string body = Sentence(line, tr, nameOf, clubOf, playerOf);
+            return line.EndMinute != line.Minute
+                ? tr(CommentaryKeys.Span, new object[] { line.Minute, line.EndMinute, body })
+                : tr(CommentaryKeys.Line, new object[] { line.Minute, body });
+        }
+
+        /// <summary>The minute a line is stamped with ("23'", or "23'-27'" for a cut summary).</summary>
+        public static string Stamp(CommentaryLine line, Func<string, object[], string> tr) =>
+            line.EndMinute != line.Minute
+                ? tr(CommentaryKeys.MinuteSpan, new object[] { line.Minute, line.EndMinute })
+                : tr(CommentaryKeys.Minute, new object[] { line.Minute });
+
+        /// <summary>The sentence of a line without its minute: what the panel prints beside the stamp.</summary>
+        public static string Sentence(CommentaryLine line, Func<string, object[], string> tr,
+            Func<bool, int, string> nameOf, Func<bool, string> clubOf, Func<bool, int, string>? playerOf = null)
+        {
+            if (line.Change.HasValue)
+                return Capitalised(Substitution(line.Change.Value, tr, clubOf, playerOf));
+
             string body = string.Empty;
             foreach (CommentaryClause step in line.Steps)
             {
@@ -28,10 +49,15 @@ namespace Sim.Core.Match.Broadcast
                 body = body.Length == 0 ? outcome : tr(CommentaryKeys.Result, new object[] { body, outcome });
             }
 
-            body = Capitalised(body);
-            return line.EndMinute != line.Minute
-                ? tr(CommentaryKeys.Span, new object[] { line.Minute, line.EndMinute, body })
-                : tr(CommentaryKeys.Line, new object[] { line.Minute, body });
+            return Capitalised(body);
+        }
+
+        private static string Substitution(SlotChange c, Func<string, object[], string> tr,
+            Func<bool, string> clubOf, Func<bool, int, string>? playerOf)
+        {
+            string on = playerOf?.Invoke(c.Home, c.OnPlayerId) ?? "#" + c.OnShirt;
+            string off = playerOf?.Invoke(c.Home, c.OffPlayerId) ?? "#" + c.OffShirt;
+            return tr(CommentaryKeys.Substitution, new object[] { on, off, clubOf(c.Home) });
         }
 
         private static string Clause(CommentaryClause c, Func<string, object[], string> tr,

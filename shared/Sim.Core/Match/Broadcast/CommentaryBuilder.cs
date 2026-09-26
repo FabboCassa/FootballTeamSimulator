@@ -5,7 +5,8 @@ namespace Sim.Core.Match.Broadcast
 {
     /// <summary>
     /// The commentary of a match (spec R14, R15): one sentence per event chain (pass, cross, header,
-    /// save), per foul, per cut summary of the director and per touchline shout, in match order.
+    /// save), per foul, per substitution, per cut summary of the director and per touchline shout,
+    /// in match order.
     /// Pure: it reads the report and the timeline and names nobody; <see cref="CommentaryText"/>
     /// writes a line out in the viewer's language.
     /// </summary>
@@ -19,7 +20,10 @@ namespace Sim.Core.Match.Broadcast
             var lines = new List<CommentaryLine>();
             PositionStream? s = report?.Positions?.Unpack();
             if (s != null && s.TicksPerMinute > 0)
+            {
                 ChainReader.Read(s, lines);
+                AddSubstitutions(s, lines);
+            }
 
             if (timeline != null)
                 foreach (CutSummary cut in timeline.Summaries)
@@ -67,6 +71,18 @@ namespace Sim.Core.Match.Broadcast
                 case BallActionKind.ThrowIn: return CommentaryKeys.StopThrowIn;
                 case BallActionKind.Kickoff: return CommentaryKeys.StopKickoff;
                 default: return null;
+            }
+        }
+
+        private static void AddSubstitutions(PositionStream s, List<CommentaryLine> lines)
+        {
+            if (s.Changes == null) return; // a replay stored before engine phase 7
+
+            foreach (SlotChange c in s.Changes)
+            {
+                int minute = MinuteOf(c.Frame, s.TicksPerMinute);
+                lines.Add(new CommentaryLine(c.Frame, minute, minute, CommentaryIcon.Substitution, true,
+                    Array.Empty<CommentaryClause>(), null, c));
             }
         }
 
