@@ -1335,6 +1335,12 @@ TextField {
 .fts-tac__seg { margin-bottom: 6px; }
 .fts-tac__module { min-height: 60px; }
 .fts-tac__famvalue { font-size: 18px; color: var(--fts-text-2); margin-bottom: 10px; }
+.fts-plan__rule { flex-direction: row; align-items: center; padding: 8px 10px; margin-bottom: 6px; border-radius: 10px; background-color: var(--fts-surface-alt); }
+.fts-plan__ruletext { flex-grow: 1; flex-shrink: 1; font-size: 17px; color: var(--fts-text-2); white-space: normal; }
+.fts-plan__empty { font-size: 16px; color: var(--fts-text-label); margin-bottom: 8px; white-space: normal; }
+.fts-plan__chips { flex-direction: row; flex-wrap: wrap; margin-bottom: 6px; }
+.fts-plan__chip { min-height: 48px; min-width: 88px; margin: 0 6px 6px 0; }
+.fts-plan__add { margin-top: 8px; }
 
 /* ---- Allenamento */
 .fts-train__chip { min-height: 60px; }
@@ -1420,6 +1426,11 @@ TextField {
 .fts--mobile .fts-tac__axis { font-size: 28px; margin-top: 18px; margin-bottom: 12px; }
 .fts--mobile .fts-tac__module { min-height: 110px; }
 .fts--mobile .fts-tac__famvalue { font-size: 30px; margin-bottom: 16px; }
+.fts--mobile .fts-plan__rule { padding: 14px 16px; margin-bottom: 10px; border-radius: 18px; }
+.fts--mobile .fts-plan__ruletext { font-size: 30px; }
+.fts--mobile .fts-plan__empty { font-size: 28px; margin-bottom: 14px; }
+.fts--mobile .fts-plan__chip { min-height: 96px; min-width: 150px; margin: 0 10px 10px 0; }
+.fts--mobile .fts-plan__add { margin-top: 14px; }
 
 .fts--mobile .fts-train__chip { min-height: 110px; }
 .fts--mobile .fts-train__hint { font-size: 30px; margin-top: 12px; }
@@ -1681,6 +1692,11 @@ TextField {
 .fts-commentary__icon--shout { background-color: var(--fts-text-2); border-radius: 2px; }
 .fts-commentary__icon--sub { background-color: var(--fts-accent-dark); border-radius: 2px; }
 
+/* ---- touchline shouts (in-match panel, issue #44) */
+.fts-shouts { flex-direction: row; flex-wrap: wrap; }
+.fts-shouts__chip { min-height: 48px; min-width: 104px; margin: 0 6px 6px 0; }
+.fts-shouts__status { font-size: 16px; color: var(--fts-text-2); margin-top: 2px; }
+
 /* ---- phone */
 .fts--mobile .fts-screentitle { font-size: 74px; margin-bottom: 24px; }
 .fts--mobile .fts-header { font-size: 56px; }
@@ -1732,6 +1748,8 @@ TextField {
 .fts--mobile .fts-commentary__icon--red { width: 18px; height: 26px; border-radius: 4px; margin-top: 5px; }
 .fts--mobile .fts-commentary__icon--shout,
 .fts--mobile .fts-commentary__icon--sub { border-radius: 4px; }
+.fts--mobile .fts-shouts__chip { min-height: 96px; min-width: 180px; margin: 0 10px 10px 0; }
+.fts--mobile .fts-shouts__status { font-size: 28px; margin-top: 4px; }
 
 /* ============================================================================
    TITLE HEAD (task 14.6) — the scaffold/online screens: Back and actions beside

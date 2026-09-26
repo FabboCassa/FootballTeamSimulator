@@ -87,6 +87,22 @@ namespace Sim.Core.Match
             return _shout[s];
         }
 
+        /// <summary>Minutes the side's active shout still has at <paramref name="minute"/>; 0 with none active.</summary>
+        public int MinutesLeft(bool home, int minute)
+        {
+            if (Active(home, minute) == TouchlineShout.None) return 0;
+            return _calledAt[home ? 0 : 1] + _duration - minute;
+        }
+
+        /// <summary>Minutes until the side is heard again; 0 means a <see cref="Call"/> at <paramref name="minute"/> is heard.</summary>
+        public int CooldownLeft(bool home, int minute)
+        {
+            int s = home ? 0 : 1;
+            if (!_called[s]) return 0;
+            int left = _calledAt[s] + _cooldown - minute;
+            return left > 0 ? left : 0;
+        }
+
         /// <summary>How many encouragements the side had heard before its latest one.</summary>
         public int Repeats(bool home) => _repeats[home ? 0 : 1];
     }

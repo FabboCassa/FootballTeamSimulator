@@ -20,8 +20,10 @@ namespace Fts.Views
     /// <summary>
     /// Pause overlay for the watched match (task 3.4): substitute on the left
     /// (tap a pitch player, then a bench player), tweak the four instruction
-    /// axes on the right, then Apply (re-sim the remainder) or Resume (no change).
-    /// Dumb view — the presenter owns the lineup/tactic state and the subs budget.
+    /// axes on the right, pick a touchline shout (issue #44), then Apply (re-sim
+    /// the remainder) or Resume (no change).
+    /// Dumb view — the presenter owns the lineup/tactic state, the subs budget and
+    /// the shout cooldown.
     /// </summary>
     public sealed class InMatchPanel
     {
@@ -35,6 +37,7 @@ namespace Fts.Views
         public event Action PressingCycleClicked;
         public event Action TempoCycleClicked;
         public event Action WidthCycleClicked;
+        public event Action<int> ShoutClicked;   // index into the labels given to SetShouts
         public event Action ApplyClicked;
         public event Action ResumeClicked;
 
@@ -49,6 +52,8 @@ namespace Fts.Views
         private readonly Button _pressing;
         private readonly Button _tempo;
         private readonly Button _width;
+        private readonly VisualElement _shoutRow;
+        private readonly Label _shoutStatus;
 
         public InMatchPanel(Func<string, string> tr)
         {
@@ -119,6 +124,22 @@ namespace Fts.Views
             instrRow.Add(_tempo);
             instrRow.Add(_width);
 
+            var shoutCaption = new Label(tr("inmatch.shouts"));
+            shoutCaption.style.color = new Color(1f, 1f, 1f, 0.7f);
+            shoutCaption.AddToClassList("fts-t-meta");
+            shoutCaption.style.marginTop = 6;
+            shoutCaption.style.marginBottom = 4;
+            card.Add(shoutCaption);
+
+            _shoutRow = new VisualElement();
+            _shoutRow.AddToClassList("fts-shouts");
+            card.Add(_shoutRow);
+
+            _shoutStatus = new Label(string.Empty);
+            _shoutStatus.AddToClassList("fts-shouts__status");
+            _shoutStatus.style.whiteSpace = WhiteSpace.Normal;
+            card.Add(_shoutStatus);
+
             var footer = new VisualElement();
             footer.style.flexDirection = FlexDirection.Row;
             footer.style.justifyContent = Justify.Center;
@@ -138,6 +159,27 @@ namespace Fts.Views
         public void SetPressing(string text) => _pressing.text = text;
         public void SetTempo(string text) => _tempo.text = text;
         public void SetWidth(string text) => _width.text = text;
+
+        /// <summary>
+        /// The shout buttons: <paramref name="picked"/> is lit (-1 for none); all of them are
+        /// locked while the bench's voice is resting (<paramref name="available"/> false).
+        /// </summary>
+        public void SetShouts(IReadOnlyList<string> labels, int picked, bool available)
+        {
+            _shoutRow.Clear();
+            for (int i = 0; i < labels.Count; i++)
+            {
+                int index = i;
+                Button chip = UiKit.SegChip(labels[i], null, () => ShoutClicked?.Invoke(index));
+                chip.AddToClassList("fts-shouts__chip");
+                chip.style.flexBasis = new Length(18, LengthUnit.Percent);
+                UiKit.SetSegChipState(chip, i == picked, locked: !available);
+                _shoutRow.Add(chip);
+            }
+        }
+
+        /// <summary>The cooldown indicator / remaining effect time under the shout buttons.</summary>
+        public void SetShoutStatus(string text) => _shoutStatus.text = text ?? string.Empty;
 
         public void SetPitch(IReadOnlyList<InMatchRowVm> rows) => Fill(_pitchList, rows, slot: true);
         public void SetBench(IReadOnlyList<InMatchRowVm> rows) => Fill(_benchList, rows, slot: false);

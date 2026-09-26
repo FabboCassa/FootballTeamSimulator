@@ -37,6 +37,7 @@ namespace Fts.Presenters
         private readonly ClubIdentityService _identity;
         private readonly MatchWatchView _view;
         private readonly InMatchPanel _panel;
+        private readonly ShoutPicker _shouts;
         private MatchStatsStrip _statsStrip;
         // Condition-aware + within-match fatigue, matching the headless advance (task 4.2);
         // the re-sim restores each player's kickoff condition (see ResimWithKickoffCondition)
@@ -47,6 +48,7 @@ namespace Fts.Presenters
         // and the opponent has none (identity), so the unchanged re-sim reproduces the result.
         private readonly MatchEngine _engine = new MatchEngine(applyCondition: true, applyMatchFatigue: true, applyPositioning: true);
         private readonly int _famMax = new BalanceConfig().Tactics.FamiliarityMax;
+        private readonly ShoutBalance _shoutTiming = new BalanceConfig().Match.Shouts;
 
         private MatchRenderer _renderer;
 
@@ -104,6 +106,7 @@ namespace Fts.Presenters
             _identity = identity;
             _view = new MatchWatchView(loc.Tr);
             _panel = new InMatchPanel(loc.Tr);
+            _shouts = new ShoutPicker(_panel, loc);
         }
 
         public void Enter()
@@ -231,6 +234,7 @@ namespace Fts.Presenters
 
         private void OnResume()
         {
+            _shouts.Clear();
             _panel.SetVisible(false);
             _renderer?.Play();
         }
@@ -238,7 +242,9 @@ namespace Fts.Presenters
         private void OnApply()
         {
             int from = Mathf.Clamp(_shownMinute + 1, 1, 90);
-            MatchInput input = BuildChangedInput();
+            // A picked shout rides the same input as the substitutions and instructions.
+            MatchInput input = BuildChangedInput().WithShout(_context.UserIsHome, _shouts.Pending);
+            _shouts.Clear();
             _plan = _plan.WithChange(from, input);
             // Re-sim with the user's conditional rules (3.5) layered under the manual
             // change so the prefix still matches what was committed/watched. With no
@@ -270,6 +276,8 @@ namespace Fts.Presenters
             _selectedSlot = -1;
             RefreshPanel();
         }
+
+        private void OnShout(int index) => _shouts.Toggle(index);
 
         private void OnMentality() { _mentality = (Mentality)(((int)_mentality + 1) % 3); RefreshPanel(); }
         private void OnPressing() { _pressing = (Pressing)(((int)_pressing + 1) % 3); RefreshPanel(); }
@@ -557,6 +565,7 @@ namespace Fts.Presenters
             _panel.PressingCycleClicked += OnPressing;
             _panel.TempoCycleClicked += OnTempo;
             _panel.WidthCycleClicked += OnWidth;
+            _panel.ShoutClicked += OnShout;
             _panel.ApplyClicked += OnApply;
             _panel.ResumeClicked += OnResume;
         }
@@ -569,6 +578,7 @@ namespace Fts.Presenters
             _panel.PressingCycleClicked -= OnPressing;
             _panel.TempoCycleClicked -= OnTempo;
             _panel.WidthCycleClicked -= OnWidth;
+            _panel.ShoutClicked -= OnShout;
             _panel.ApplyClicked -= OnApply;
             _panel.ResumeClicked -= OnResume;
         }
@@ -626,6 +636,9 @@ namespace Fts.Presenters
                 _loc.Tr("tactics.tempo." + _tempo.ToString().ToLowerInvariant())));
             _panel.SetWidth(_loc.Tr("tactics.label.width",
                 _loc.Tr("tactics.width." + _width.ToString().ToLowerInvariant())));
+
+            // Judged at the minute Apply would inject the shout, from what the engine has heard so far.
+            _shouts.Show(ShoutBoard.Read(_current, _career.UserClubId, Mathf.Clamp(_shownMinute + 1, 1, 90), _shoutTiming));
         }
 
         // ---------------------------------------------------------------- helpers
