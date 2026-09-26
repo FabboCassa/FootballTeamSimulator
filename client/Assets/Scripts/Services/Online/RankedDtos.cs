@@ -525,7 +525,7 @@ namespace Fts.Services.Online
     }
 
     /// <summary>Body for POST /ranked/live/{fixtureId}/change. The side is inferred server-side from the
-    /// caller's seat. At least one of <see cref="lineup"/>/<see cref="tactic"/> must be present, and
+    /// caller's seat. At least one of <see cref="lineup"/>/<see cref="tactic"/>/<see cref="shout"/> must be present, and
     /// <see cref="fromMinute"/> may neither move behind an applied change nor run ahead of the minute the
     /// clock says has been played.</summary>
     [Serializable]
@@ -534,6 +534,8 @@ namespace Fts.Services.Online
         public int fromMinute;
         public object lineup;
         public object tactic;
+        /// <summary>The Sim.Core TouchlineShout the bench calls from <see cref="fromMinute"/>; 0 = none.</summary>
+        public int shout;
     }
 
     public enum RankedApiError

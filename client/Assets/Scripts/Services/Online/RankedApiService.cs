@@ -314,14 +314,15 @@ namespace Fts.Services.Online
             return ParseLive(status, text, network);
         }
 
-        /// <summary>A pause-point change for your own side (a substitution and/or an instruction change). The
+        /// <summary>A pause-point change for your own side (a substitution, an instruction change and/or a shout). The
         /// server appends it to the authoritative plan, re-runs the 90' from the fixture seed and returns the
         /// new state, so the caller simply adopts what comes back.</summary>
         public async UniTask<RankedApiResult<RankedLiveStateDto>> SubmitLiveChangeAsync(
-            string fixtureId, int fromMinute, object lineup, object tactic)
+            string fixtureId, int fromMinute, object lineup, object tactic, int shout = 0)
         {
             if (!_api.IsSignedIn) return RankedApiResult<RankedLiveStateDto>.Fail(RankedApiError.NotSignedIn);
-            var body = new SubmitRankedLiveChangeBody { fromMinute = fromMinute, lineup = lineup, tactic = tactic };
+            var body = new SubmitRankedLiveChangeBody
+                { fromMinute = fromMinute, lineup = lineup, tactic = tactic, shout = shout };
             var (status, text, network) = await _api.SendAuthedAsync(
                 "POST", "/ranked/live/" + fixtureId + "/change", body);
             return ParseLive(status, text, network);
