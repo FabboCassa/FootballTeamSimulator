@@ -9,6 +9,7 @@ using Sim.Core.Career;
 using Sim.Core.Config;
 using Sim.Core.Domain;
 using Sim.Core.Match;
+using Sim.Core.Match.Broadcast;
 using Sim.Core.Tactics;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -48,6 +49,14 @@ namespace Fts.Presenters
         private readonly int _famMax = new BalanceConfig().Tactics.FamiliarityMax;
 
         private MatchRenderer _renderer;
+
+        // The commentary of what is being watched (spec R15), written out once per renderer so the
+        // panel only swaps pre-built strings during playback.
+        private CommentaryFeed _commentary;
+        private IReadOnlyList<CommentaryLine> _commentaryLines;
+        private string[] _commentaryStamps;
+        private string[] _commentarySentences;
+
         private UserMatchContext _context;
         private MatchReport _baseline;   // the committed (pre-intervention) result
         private MatchReport _current;    // what is being watched (re-sim after changes)
@@ -206,7 +215,7 @@ namespace Fts.Presenters
                 UpdateScore();
             }
 
-            _view.ShowToast(_loc.Tr(EventKey(e.Type), e.Minute, PlayerName(e.ClubId, e.PlayerId), ClubName(e.ClubId)));
+            _view.ShowToast(_loc.Tr(MatchEventKeys.For(e), e.Minute, PlayerName(e.ClubId, e.PlayerId), ClubName(e.ClubId)));
         }
 
         private void OnFinished()
@@ -412,10 +421,10 @@ namespace Fts.Presenters
             _renderer.MinuteChanged += OnMinuteChanged;
             _renderer.EventReached += OnEventReached;
             _renderer.Finished += OnFinished;
-            _renderer.ActionReached += OnActionReached;
+            _renderer.FrameReached += OnFrameReached;
             _renderer.StatsChanged += OnStatsChanged;
             _view.PitchContainer.Insert(0, _renderer); // behind the toast overlay
-            _view.ClearActions();
+            BuildCommentary(report);
 
             _renderer.SetSpeed(_speed);
             _view.SetFinished(false);
@@ -440,7 +449,7 @@ namespace Fts.Presenters
             _renderer.MinuteChanged -= OnMinuteChanged;
             _renderer.EventReached -= OnEventReached;
             _renderer.Finished -= OnFinished;
-            _renderer.ActionReached -= OnActionReached;
+            _renderer.FrameReached -= OnFrameReached;
             _renderer.StatsChanged -= OnStatsChanged;
             if (_renderer.parent != null)
                 _renderer.RemoveFromHierarchy();
@@ -448,15 +457,58 @@ namespace Fts.Presenters
         }
 
         /// <summary>
-        /// Running commentary (task 13.1). In the career the stream's player ids resolve to
-        /// real names off the squads; anyone it cannot find falls back to a shirt number.
+        /// The commentary panel's lines (spec R15), built from the report and the director's cut
+        /// summaries. The stream's player ids resolve to real names off the squads; anyone it cannot
+        /// find falls back to a shirt number. A re-simulated remainder rebuilds it from scratch and
+        /// the seek reveals the minutes already watched.
         /// </summary>
-        private void OnActionReached(BallAction action)
+        private void BuildCommentary(MatchReport report)
         {
-            if (_speed > 1f && !MatchCommentary.IsMajor(action.Kind))
-                return; // at 2x/4x a line per touch is a blur; keep the moments that matter
+            _commentaryLines = CommentaryBuilder.Build(report, _renderer.Timeline);
+            _commentaryStamps = new string[_commentaryLines.Count];
+            _commentarySentences = new string[_commentaryLines.Count];
+            for (int i = 0; i < _commentaryLines.Count; i++)
+            {
+                CommentaryLine line = _commentaryLines[i];
+                _commentaryStamps[i] = CommentaryText.Stamp(line, _loc.Tr);
+                _commentarySentences[i] = CommentaryText.Sentence(line, _loc.Tr, NameOfSlot, ClubOfSide, PlayerOfSide);
+            }
 
-            _view.PushAction(MatchCommentary.Describe(action, _loc.Tr, NameOfSlot));
+            _commentary = new CommentaryFeed(_commentaryLines, _view.Commentary.Capacity);
+            _view.Commentary.Clear();
+        }
+
+        /// <summary>Called every pump: draws only the lines playback has just reached, into pooled rows.</summary>
+        private void OnFrameReached(int frame)
+        {
+            if (_commentary == null)
+                return;
+
+            for (int i = _commentary.AdvanceTo(frame); i < _commentary.Shown; i++)
+            {
+                CommentaryLine line = _commentaryLines[i];
+                _view.Commentary.Show(_commentary.RowOf(i), _commentaryStamps[i],
+                    MatchCommentary.IconClass(line.Icon), _commentarySentences[i], line.Highlight);
+            }
+        }
+
+        private string ClubOfSide(bool home) =>
+            ClubName(home ? _context.Fixture.HomeClubId : _context.Fixture.AwayClubId);
+
+        /// <summary>A substitute's surname by player id; null lets the commentary fall back to his shirt.</summary>
+        private string PlayerOfSide(bool home, int playerId)
+        {
+            Club club = _career.FindClub(home ? _context.Fixture.HomeClubId : _context.Fixture.AwayClubId);
+            if (club == null)
+                return null;
+
+            foreach (Player p in club.Squad.Players)
+            {
+                if (p.Id == playerId)
+                    return p.LastName;
+            }
+
+            return null;
         }
 
         /// <summary>The figures of the match so far, straight onto the strip under the HUD.</summary>
@@ -583,16 +635,6 @@ namespace Fts.Presenters
             string home = ClubName(_context.Fixture.HomeClubId);
             string away = ClubName(_context.Fixture.AwayClubId);
             _view.SetScore(_loc.Tr("match.score", home, _homeGoals, _awayGoals, away));
-        }
-
-        private static string EventKey(MatchEventType type)
-        {
-            switch (type)
-            {
-                case MatchEventType.Goal: return "match.event.goal";
-                case MatchEventType.ChanceSaved: return "match.event.saved";
-                default: return "match.event.missed";
-            }
         }
 
         private static Lineup CloneLineup(Lineup src)

@@ -1656,6 +1656,31 @@ TextField {
 /* ---- match HUD */
 .fts-hud__score { font-size: 48px; letter-spacing: 2px; color: var(--fts-text); }
 
+/* ---- match commentary panel (spec watchable-match-engine R15): beside the pitch,
+   newest line on top; goals, cards and substitutions highlighted. The icon is a
+   drawn chip, so no glyph depends on a font: a dot for play, an upright card for
+   a booking, a hollow ring for a cut summary. */
+.fts-matchbody { flex-direction: row; }
+.fts-commentary { width: 420px; margin: 10px 10px 10px 0; padding: 16px 14px; }
+.fts-commentary__row { padding: 8px 8px; margin-bottom: 4px; border-radius: 10px; }
+.fts-commentary__row--highlight { background-color: var(--fts-accent-soft); }
+.fts-commentary__minute { font-size: 16px; color: var(--fts-text-label); min-width: 58px; -unity-font-style: bold; }
+.fts-commentary__text { font-size: 17px; color: var(--fts-text-2); }
+.fts-commentary__row--highlight .fts-commentary__text { color: var(--fts-text); -unity-font-style: bold; }
+.fts-commentary__icon { width: 12px; height: 12px; border-radius: 6px; margin: 5px 10px 0 0; flex-shrink: 0; background-color: var(--fts-text-dim); }
+.fts-commentary__icon--goal { background-color: var(--fts-accent); }
+.fts-commentary__icon--save { background-color: var(--fts-text-muted); }
+.fts-commentary__icon--block { background-color: var(--fts-tag-text); }
+.fts-commentary__icon--miss { background-color: var(--fts-text-dim); }
+.fts-commentary__icon--foul { background-color: var(--fts-amber); }
+.fts-commentary__icon--yellow { width: 10px; height: 14px; border-radius: 2px; margin-top: 3px; background-color: #F2C94C; }
+.fts-commentary__icon--red { width: 10px; height: 14px; border-radius: 2px; margin-top: 3px; background-color: var(--fts-danger); }
+.fts-commentary__icon--penalty { background-color: var(--fts-danger); }
+.fts-commentary__icon--counter { background-color: var(--fts-positive); }
+.fts-commentary__icon--cut { background-color: rgba(0, 0, 0, 0); border-width: 2px; border-color: var(--fts-text-label); }
+.fts-commentary__icon--shout { background-color: var(--fts-text-2); border-radius: 2px; }
+.fts-commentary__icon--sub { background-color: var(--fts-accent-dark); border-radius: 2px; }
+
 /* ---- phone */
 .fts--mobile .fts-screentitle { font-size: 74px; margin-bottom: 24px; }
 .fts--mobile .fts-header { font-size: 56px; }
@@ -1697,6 +1722,16 @@ TextField {
 .fts--mobile .fts-toast { font-size: 32px; }
 .fts--mobile .fts-empty__text { font-size: 30px; }
 .fts--mobile .fts-hud__score { font-size: 80px; }
+.fts--mobile .fts-matchbody { flex-direction: column; }
+.fts--mobile .fts-commentary { width: auto; height: 620px; flex-shrink: 0; margin: 16px; padding: 26px 24px; }
+.fts--mobile .fts-commentary__row { padding: 14px 14px; margin-bottom: 8px; border-radius: 18px; }
+.fts--mobile .fts-commentary__minute { font-size: 28px; min-width: 104px; }
+.fts--mobile .fts-commentary__text { font-size: 30px; }
+.fts--mobile .fts-commentary__icon { width: 22px; height: 22px; border-radius: 11px; margin: 8px 18px 0 0; }
+.fts--mobile .fts-commentary__icon--yellow,
+.fts--mobile .fts-commentary__icon--red { width: 18px; height: 26px; border-radius: 4px; margin-top: 5px; }
+.fts--mobile .fts-commentary__icon--shout,
+.fts--mobile .fts-commentary__icon--sub { border-radius: 4px; }
 
 /* ============================================================================
    TITLE HEAD (task 14.6) — the scaffold/online screens: Back and actions beside
