@@ -717,11 +717,16 @@ namespace Sim.Core.Match.Movement
         private void Carry(int tick, int side, int slot)
         {
             int k = side * _n + slot;
-            bool home = side == 0;
-            int dir = MovementGeometry.Direction(home);
-
             int touch = CarryTouchDm(k, PressurePermille(side, slot));
             CarryTarget(side, k, U.Units(touch), out int targetX, out int targetY);
+            CarryTo(tick, side, slot, targetX, targetY);
+        }
+
+        /// <summary>He knocks it to (<paramref name="targetX"/>, <paramref name="targetY"/>), in units, and runs onto it.</summary>
+        private void CarryTo(int tick, int side, int slot, int targetX, int targetY)
+        {
+            int k = side * _n + slot;
+            bool home = side == 0;
             int distance = U.Distance(_px[k], _py[k], targetX, targetY);
 
             // He knocks it ahead and runs onto it. The push has to be long enough that one

@@ -37,7 +37,8 @@ namespace Sim.Core.Match.Movement
         /// here once a tick, off the ball alone. Since task 6 (R2) it positions every man v10 has no
         /// job for — his phase target spot, a run in behind, an overlap — and hands every other man
         /// (on the ball, chasing, pressing, supporting, covering, marking, placed for a restart) to
-        /// v10's Move, so the golden master stays on v10 and v11's match is its own.
+        /// v10's Move, so the golden master stays on v10 and v11's match is its own. Since task 7
+        /// (R3-R5) the man on the ball chooses on xT, pitch control and xG (see V11Brain.Act).
         /// </summary>
         private sealed partial class V11Brain : IMatchBrain
         {
@@ -75,6 +76,7 @@ namespace Sim.Core.Match.Movement
                 _v10 = new V10Brain(sim);
                 _phases = new TeamPhaseMachine(sim._cfg);
                 _positioning = new V11Positioning(sim._cfg);
+                _valuation = new V11ActionValuation(sim._cfg);
             }
 
             public int PhaseTicks(int side, TeamPhase phase) =>
@@ -91,6 +93,7 @@ namespace Sim.Core.Match.Movement
             public void Begin()
             {
                 _phases.Reset();
+                _openCarrier = -1;
                 System.Array.Clear(_phaseTicks, 0, _phaseTicks.Length);
                 _spell = new int[_sim._n * SideCount];
                 _farTicks = new int[_sim._n * SideCount];
@@ -116,6 +119,7 @@ namespace Sim.Core.Match.Movement
                     _phaseTicks[side * TeamPhaseMachine.PhaseCount + (int)_phases.PhaseOf(side)]++;
 
                 _v10.UpdateTeams(tick);
+                EndOpenGoalSpell();
 
                 for (int side = 0; side < SideCount; side++)
                 {
@@ -132,8 +136,6 @@ namespace Sim.Core.Match.Movement
                 else e -= 1000 / cfg.V11ShapeCollapseTicks;
                 _expansion[side] = MovementGeometry.Clamp(e, 0, 1000);
             }
-
-            public void Act(int tick, int side, int slot) => _v10.Act(tick, side, slot);
 
             private void ReadOpponents(int side)
             {

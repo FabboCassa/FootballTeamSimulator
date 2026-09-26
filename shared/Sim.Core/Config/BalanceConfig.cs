@@ -1282,6 +1282,54 @@ namespace Sim.Core.Config
         /// <summary>The ball must be at least this far off the centre, on his flank, for a full-back to overlap.</summary>
         public int V11OverlapFlankMinDm { get; set; } = 60;
 
+        // --- V11 action selection (R3-R5). Read only by the V11 brain. Every option is priced in
+        // ten-thousandths of a goal: xT for moving the ball, xG for the shot (ActionModels). ---
+
+        /// <summary>R4's open goal: inside this distance of the goal centre with no outfield defender in the ball-to-posts triangle, he shoots.</summary>
+        public int V11OpenGoalRangeDm { get; set; } = 200;
+
+        /// <summary>Inside this distance an open goal is shot at on sight; beyond it he takes one touch in first.</summary>
+        public int V11OpenGoalShootNowDm { get; set; } = 120;
+
+        /// <summary>The touch in toward the goal centre before the shot at an open goal from the edge of range.</summary>
+        public int V11OpenGoalDriveDm { get; set; } = 50;
+
+        /// <summary>In a 1v1, a keeper in the triangle this close to the ball is dribbled round rather than shot at.</summary>
+        public int V11RoundKeeperDm { get; set; } = 25;
+
+        /// <summary>How far to the side of the keeper the dribble round him goes.</summary>
+        public int V11RoundKeeperSideDm { get; set; } = 30;
+
+        /// <summary>Beyond this distance from the goal centre a shot is not an option.</summary>
+        public int V11ShotRangeDm { get; set; } = 300;
+
+        /// <summary>Average ball speed of a ground pass, for pitch control's lane test.</summary>
+        public int V11PassBallSpeedDmPerSecond { get; set; } = 160;
+
+        /// <summary>How far ahead of a team-mate, toward goal, a ball into his path is played.</summary>
+        public int V11PassLeadDm { get; set; } = 50;
+
+        /// <summary>
+        /// Tempo: the weight on the xT a move gains (slow · normal · fast). A quick side takes the
+        /// forward ball a patient one would pass up for a safe one.
+        /// </summary>
+        public int[] V11TempoGainPercent { get; set; } = { 80, 100, 125 };
+
+        /// <summary>
+        /// Directness, by Tempo (the "directness vs control" axis): the extra weight on the gain of
+        /// a long forward ball (over LongBallFromDm), on top of the tempo weight.
+        /// </summary>
+        public int[] V11DirectnessPercent { get; set; } = { 75, 100, 135 };
+
+        /// <summary>
+        /// Risk, by Mentality (defensive · balanced · attacking): the weight on what the other side
+        /// is given when the ball is lost. A defensive side takes no chances; an attacking one does.
+        /// </summary>
+        public int[] V11MentalityRiskPercent { get; set; } = { 130, 100, 75 };
+
+        /// <summary>Cross appetite, by Width (narrow · normal · wide): the weight on a cross's gain.</summary>
+        public int[] V11WidthCrossPercent { get; set; } = { 75, 100, 130 };
+
         // --- Time base ---
 
         /// <summary>
@@ -1917,6 +1965,9 @@ namespace Sim.Core.Config
         public int ShotQualityAngleDm { get; set; } = 260;
         public int ShotQualityPressurePercent { get; set; } = 45;
         public int ShotQualityFinishingPercent { get; set; } = 60;
+
+        /// <summary>xT grid, xG and pitch-control tunables (watchable-match-engine R3).</summary>
+        public ActionModelBalance ActionModels { get; set; } = new ActionModelBalance();
 
         /// <summary>
         /// Placement, as a share of the way from the middle of the goal to the post: where a
