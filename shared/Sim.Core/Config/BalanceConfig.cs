@@ -1167,6 +1167,18 @@ namespace Sim.Core.Config
         /// </summary>
         public MatchBrainVersion Brain { get; set; } = MatchBrainVersion.V10;
 
+        // --- V11 team phases (R1). Read only by the V11 brain; V10 never looks at them. ---
+
+        /// <summary>Where the attacking side's build-up ends, in 1/1000 of the length from its own goal line.</summary>
+        public int PhaseBuildUpEndPermille { get; set; } = 350;
+
+        /// <summary>Where the attacking side's final third starts, in 1/1000 of the length from its own goal line.</summary>
+        public int PhaseFinalThirdStartPermille { get; set; } = 667;
+
+        /// <summary>How long after winning the ball back live a side is in transition (and its opponent too).</summary>
+        public int PhaseTransitionMs { get; set; } = 5000;
+        public int PhaseTransitionTicks => TicksOfMs(PhaseTransitionMs);
+
         // --- Time base ---
 
         /// <summary>
