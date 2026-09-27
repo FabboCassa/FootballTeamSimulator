@@ -508,18 +508,21 @@ namespace Fts.Services.Online
         public int awayGoals;
         public List<LiveChangeRowDto> changes = new List<LiveChangeRowDto>();
         public string reportJson;
+        public int engineVersion; // the match engine the report is simulated with (R16)
     }
 
     /// <summary>Body for POST /leagues/{id}/live/{fixtureId}/change. The side is inferred server-side from
     /// the caller's club. <see cref="lineup"/>/<see cref="tactic"/> are the Sim.Core LineupPlan/TacticPlan
     /// the presenter builds (serialized by Newtonsoft; the server binds them case-insensitively) — at least
-    /// one must be present.</summary>
+    /// one of them or a <see cref="shout"/> must be present.</summary>
     [Serializable]
     public sealed class SubmitLiveChangeBody
     {
         public int fromMinute;
         public object lineup;
         public object tactic;
+        /// <summary>The Sim.Core TouchlineShout the bench calls from <see cref="fromMinute"/>; 0 = none.</summary>
+        public int shout;
     }
 
     // --- Dev tooling (dev-only seeding, gated by DevFlags) --------------------------------------
@@ -617,6 +620,7 @@ namespace Fts.Services.Online
         IntegrityBlocked,  // 409 integrity_blocked (9.5 band — a gift or a bribe)
         Server,        // 5xx / unexpected
         ReplayTooOld,  // 13.1 — recorded by an older match engine, no longer renderable
+        EngineVersionMismatch, // 409 engine_version_mismatch (R16 — live match on another engine)
     }
 
     /// <summary>Result of a league call: the value on success, or an error the presenter maps to loc.</summary>

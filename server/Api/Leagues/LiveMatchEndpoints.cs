@@ -17,21 +17,24 @@ public static class LiveMatchEndpoints
     {
         var group = app.MapGroup("/leagues/{id:guid}/live/{fixtureId:guid}").RequireAuthorization();
 
-        // Open (or return) the live session for a fixture — marks the caller present.
+        // Open (or return) the live session for a fixture — marks the caller present. ?engineVersion= is the
+        // client's match engine; another one (or none) is refused, since it would show another moment.
         group.MapPost("/open", async (
-            Guid id, Guid fixtureId, ClaimsPrincipal user, ILiveMatchService live, CancellationToken ct) =>
+            Guid id, Guid fixtureId, int? engineVersion, ClaimsPrincipal user, ILiveMatchService live,
+            CancellationToken ct) =>
         {
             if (!LeagueEndpoints.TryGetUserIdShared(user, out var userId)) return Results.Unauthorized();
-            var result = await live.OpenAsync(userId, id, fixtureId, ct);
+            var result = await live.OpenAsync(userId, id, fixtureId, engineVersion, ct);
             return result.Success ? Results.Ok(result.Value) : LeagueEndpoints.MapError(result.Error, result.Message);
         });
 
         // Join — mark present; both present ⇒ the match kicks off (Live).
         group.MapPost("/join", async (
-            Guid id, Guid fixtureId, ClaimsPrincipal user, ILiveMatchService live, CancellationToken ct) =>
+            Guid id, Guid fixtureId, int? engineVersion, ClaimsPrincipal user, ILiveMatchService live,
+            CancellationToken ct) =>
         {
             if (!LeagueEndpoints.TryGetUserIdShared(user, out var userId)) return Results.Unauthorized();
-            var result = await live.JoinAsync(userId, id, fixtureId, ct);
+            var result = await live.JoinAsync(userId, id, fixtureId, engineVersion, ct);
             return result.Success ? Results.Ok(result.Value) : LeagueEndpoints.MapError(result.Error, result.Message);
         });
 

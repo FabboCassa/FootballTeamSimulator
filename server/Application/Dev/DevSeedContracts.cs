@@ -108,3 +108,12 @@ public sealed record DevRankedLiveRequest(bool Sub = false, int Minute = 45, boo
 /// </summary>
 public sealed record DevRankedLiveResult(
     string Status, bool OpponentJoined, bool SubMade, int Minute, bool Finished, string? Note = null);
+
+/// <summary>
+/// What the live fast-forward did (watchable-match-engine R16 dev tooling). A live match now plays the
+/// broadcast director's timeline at 1x — about ten real minutes — so a solo tester jumps ahead by moving the
+/// session's shared kickoff instant back: every screen, and the server's change guard, then show
+/// <paramref name="Minute"/>. <paramref name="Status"/> is "ok" or why nothing moved (no live session, not
+/// kicked off yet, or the clock is already past that minute — it never runs backwards).
+/// </summary>
+public sealed record DevLiveFastForwardResult(string Status, int Minute, DateTime? KickoffUtc);

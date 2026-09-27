@@ -139,22 +139,17 @@ public sealed class RankedOptions
 
     /// <summary>
     /// How long after kickoff the calendar will WAIT for a live match before resolving the matchday headless
-    /// (default 10 min). A live 90' runs at <see cref="LiveSecondsPerMatchMinute"/>, i.e. three real minutes,
-    /// so this is generous — it exists so a stalled client can never hold a whole group's matchday hostage.
+    /// (default 15 min). A live 90' plays the broadcast director's timeline at 1x, about ten real minutes
+    /// (watchable-match-engine R12/R16), so this leaves room — it exists so a stalled client can never hold a
+    /// whole group's matchday hostage.
     /// The wait only happens when a session for that round actually exists and is unfinished: a matchday
     /// nobody turned up for resolves at its kickoff exactly as it did before 12.3.
     /// </summary>
-    public int LiveGraceSeconds { get; set; } = 600;
-
-    /// <summary>Real seconds per match minute during a live match (default 2 ⇒ a 90' takes three minutes).
-    /// The SERVER owns this number now: the client renders on it AND the server uses it to check that a
-    /// pause-point change is not being made in the match's future (see
-    /// <see cref="LiveChangeMinuteTolerance"/>).</summary>
-    public int LiveSecondsPerMatchMinute { get; set; } = 2;
+    public int LiveGraceSeconds { get; set; } = 900;
 
     /// <summary>
-    /// How many match minutes of slack the server allows a pause-point change beyond the minute the wall
-    /// clock says has been played (default 5). Without a check the whole 90' is in the pushed report, so a
+    /// How many match minutes of slack the server allows a pause-point change beyond the minute the shared
+    /// live clock says has been played (default 5). Without a check the whole 90' is in the pushed report, so a
     /// doctored client could read the ending and then "substitute" at minute 10 with hindsight — a private
     /// league is a lobby of friends, the ladder is ranked. The tolerance absorbs latency and clock skew;
     /// 0 disables the check.

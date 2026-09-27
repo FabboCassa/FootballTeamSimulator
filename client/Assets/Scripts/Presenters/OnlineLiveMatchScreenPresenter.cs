@@ -9,8 +9,10 @@ using Fts.Services.Navigation;
 using Fts.Services.Online;
 using Fts.Views;
 using Newtonsoft.Json;
+using Sim.Core.Config;
 using Sim.Core.Domain;
 using Sim.Core.Match;
+using Sim.Core.Match.Broadcast;
 using Sim.Core.Tactics;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -20,8 +22,9 @@ namespace Fts.Presenters
     /// <summary>
     /// Live match control screen (task 8.6b). Both members open the same current-round fixture; when both
     /// are present the server kicks it off and the client renders the match with the existing
-    /// <see cref="MatchRenderer"/>, synced to the shared kickoff time. A ~1s REST poll (WebGL-safe, like the
-    /// 8.5b auctions) picks up the opponent's changes — when a new report arrives the renderer rebuilds from
+    /// <see cref="MatchRenderer"/> on the broadcast director's timeline, played from the shared kickoff
+    /// instant (<see cref="LiveBroadcastClock"/>), so both clients show the same moment. A ~1s REST poll
+    /// (WebGL-safe, like the 8.5b auctions) picks up the opponent's changes — when a new report arrives the renderer rebuilds from
     /// the current live minute, so a sub by the opponent shows in the remainder. "Modifica" opens the
     /// sub/instruction panel (reusing the SP <see cref="InMatchPanel"/>): the change is posted to /change,
     /// the server re-simulates deterministically from the fixture seed and returns the new state. Leaving
@@ -32,9 +35,6 @@ namespace Fts.Presenters
     {
         private const int PollMillis = 1000;
         private const int MaxSubstitutions = 5;
-        // 90' play over MatchRenderer.BaseSecondsAt1x (180s) at 1x → 2 real seconds per sim-minute; both
-        // clients derive the same live minute from the shared kickoff, so change minutes stay monotonic.
-        private const float LiveSecondsPerMinute = 2f;
 
         private static readonly Color HomeColor = PitchGraphics.KitHome; // not the UI accent (task 14.7)
         private static readonly Color AwayColor = PitchGraphics.KitAway; // not the danger token (task 14.7)
@@ -46,6 +46,8 @@ namespace Fts.Presenters
         private readonly SeasonReplayTarget _target;
         private readonly LiveMatchView _view;
         private readonly InMatchPanel _panel;
+        private readonly ShoutPicker _shouts;
+        private readonly ShoutBalance _shoutTiming = new BalanceConfig().Match.Shouts;
 
         private string _leagueId;
         private string _fixtureId;
@@ -57,7 +59,11 @@ namespace Fts.Presenters
         private string _lastReportJson;
         private DateTime? _kickoff;
 
+        /// <summary>The shared moment of the current report's timeline; null until a report and a kickoff exist.</summary>
+        private LiveBroadcastClock _clock;
+
         private MatchRenderer _renderer;
+        private MatchReport _report; // what the renderer plays: the shouts the server's engine heard
         private int _homeClubId;
         private int _homeGoals;
         private int _awayGoals;
@@ -91,6 +97,7 @@ namespace Fts.Presenters
             _target = target;
             _view = new LiveMatchView(loc.Tr);
             _panel = new InMatchPanel(loc.Tr);
+            _shouts = new ShoutPicker(_panel, loc);
         }
 
         public void Enter()
@@ -100,6 +107,7 @@ namespace Fts.Presenters
             _view.BackClicked += OnBack;
             _view.BotJoinClicked += OnBotJoin;
             _view.BotSubClicked += OnBotSub;
+            _view.FastForwardClicked += OnFastForward;
             _view.Root.Add(_panel.Root);
             _panel.SetVisible(false);
             WirePanel();
@@ -132,6 +140,7 @@ namespace Fts.Presenters
             _view.BackClicked -= OnBack;
             _view.BotJoinClicked -= OnBotJoin;
             _view.BotSubClicked -= OnBotSub;
+            _view.FastForwardClicked -= OnFastForward;
             UnwirePanel();
         }
 
@@ -208,27 +217,46 @@ namespace Fts.Presenters
             var status = (LiveMatchStatus)state.status;
             _view.SetBanner(BannerFor(state, status));
 
+            // Another engine builds another timeline, so this client would show another moment.
+            if (state.engineVersion != MatchEngine.Version)
+            {
+                _view.ShowStatus(_loc.Tr(LeagueErrorFormat.Key(LeagueApiError.EngineVersionMismatch)));
+                _view.SetModifyEnabled(false);
+                _view.SetFinishEnabled(false);
+                return;
+            }
+
             bool iControl = _mySide.HasValue && status == LiveMatchStatus.Live;
             _view.SetModifyEnabled(iControl && !_busy);
             // "End match" appears once the shared clock reaches full time (avoids finishing early).
             _view.SetFinishEnabled(iControl && LiveMinute() >= 90);
 
             bool reportChanged = state.reportJson != _lastReportJson;
-            if (rebuild && status != LiveMatchStatus.Pending && !string.IsNullOrEmpty(state.reportJson) && reportChanged)
+            // A moved kickoff (the dev fast-forward) is a new shared clock for the same report.
+            bool kickoffMoved = _clock != null && _kickoff.HasValue && _clock.KickoffUtc != _kickoff.Value;
+            if (rebuild && status != LiveMatchStatus.Pending && !string.IsNullOrEmpty(state.reportJson)
+                && (reportChanged || kickoffMoved))
             {
                 _lastReportJson = state.reportJson;
                 MatchReport report = TryParseReport(state.reportJson);
-                if (report != null) BuildRenderer(report, LiveMinute());
+                if (report != null) BuildRenderer(report);
             }
         }
 
         // --- rendering -----------------------------------------------------------------------------
 
-        private void BuildRenderer(MatchReport report, int seekMinute)
+        /// <summary>Builds the renderer on the report's director timeline and hands it the shared clock, seeked
+        /// to the moment that clock shows now so the minutes already played are not replayed.</summary>
+        private void BuildRenderer(MatchReport report)
         {
             DetachRenderer();
 
+            _report = report;
             _renderer = new MatchRenderer(report, HomeColor, AwayColor);
+            _clock = _kickoff.HasValue ? new LiveBroadcastClock(_renderer.Timeline, _kickoff.Value) : null;
+            if (_clock != null) _renderer.FollowClock(SharedFrame);
+            int seekMinute = LiveMinute();
+
             _renderer.MinuteChanged += OnMinuteChanged;
             _renderer.EventReached += OnEventReached;
             _renderer.Finished += OnFinished;
@@ -283,6 +311,7 @@ namespace Fts.Presenters
 
         private void OnEventReached(MatchEvent e)
         {
+            if (e.Type == MatchEventType.Shout) PushShout(e);
             if (e.Type == MatchEventType.Goal)
             {
                 if (e.ClubId == _homeClubId) _homeGoals++; else _awayGoals++;
@@ -290,6 +319,13 @@ namespace Fts.Presenters
                 string club = e.ClubId == _homeClubId ? HomeName() : AwayName();
                 _view.ShowToast(_loc.Tr("replay.goal", e.Minute, club));
             }
+        }
+
+        /// <summary>A shout either bench called goes into the running commentary, like the watched match's panel.</summary>
+        private void PushShout(MatchEvent e)
+        {
+            string club = e.ClubId == _homeClubId ? HomeName() : AwayName();
+            _view.PushAction(_loc.Tr(MatchEventKeys.For(e), e.Minute, string.Empty, club));
         }
 
         private void OnFinished() => _view.SetClock(_loc.Tr("match.clock", 90));
@@ -321,12 +357,13 @@ namespace Fts.Presenters
         {
             _panelOpen = false;
             _panel.SetVisible(false);
+            _shouts.Clear();
             // Re-anchor to the current live minute (the opponent may have changed the report meanwhile).
             if (_state != null && !string.IsNullOrEmpty(_state.reportJson))
             {
                 _lastReportJson = _state.reportJson;
                 MatchReport report = TryParseReport(_state.reportJson);
-                if (report != null) BuildRenderer(report, LiveMinute());
+                if (report != null) BuildRenderer(report);
             }
         }
 
@@ -344,10 +381,12 @@ namespace Fts.Presenters
                 fromMinute = from,
                 lineup = BuildLineupPlan(),
                 tactic = BuildTacticPlan(),
+                shout = (int)_shouts.Pending, // the same input path as the tactic change
             };
 
             var result = await _leagues.SubmitLiveChangeAsync(_leagueId, _fixtureId, body);
             _busy = false;
+            _shouts.Clear();
             _panelOpen = false;
             _panel.SetVisible(false);
 
@@ -357,7 +396,7 @@ namespace Fts.Presenters
                 _lastReportJson = result.Value.reportJson;
                 Apply(result.Value, rebuild: false);
                 MatchReport report = TryParseReport(result.Value.reportJson);
-                if (report != null) BuildRenderer(report, LiveMinute());
+                if (report != null) BuildRenderer(report);
             }
             else
             {
@@ -381,6 +420,8 @@ namespace Fts.Presenters
             _selectedSlot = -1;
             RefreshPanel();
         }
+
+        private void OnShout(int index) => _shouts.Toggle(index);
 
         private void OnMentality() { _mentality = (Mentality)(((int)_mentality + 1) % 3); RefreshPanel(); }
         private void OnPressing() { _pressing = (Pressing)(((int)_pressing + 1) % 3); RefreshPanel(); }
@@ -430,6 +471,9 @@ namespace Fts.Presenters
                 _loc.Tr("tactics.tempo." + _tempo.ToString().ToLowerInvariant())));
             _panel.SetWidth(_loc.Tr("tactics.label.width",
                 _loc.Tr("tactics.width." + _width.ToString().ToLowerInvariant())));
+
+            // Judged at the minute the change would be sent with, from what the server's engine heard so far.
+            _shouts.Show(ShoutBoard.Read(_report, _myClubExternalId, Mathf.Clamp(LiveMinute(), 1, 90), _shoutTiming));
         }
 
         private LineupPlan BuildLineupPlan()
@@ -484,6 +528,22 @@ namespace Fts.Presenters
             if (refreshed.Success) Apply(refreshed.Value, rebuild: !_panelOpen);
         }
 
+        // Jump the shared clock 15' ahead: a live match lasts the director timeline (~10 real minutes).
+        private void OnFastForward() => FastForwardAsync().Forget();
+
+        private async UniTaskVoid FastForwardAsync()
+        {
+            if (_busy || string.IsNullOrEmpty(_leagueId) || string.IsNullOrEmpty(_fixtureId)) return;
+            _busy = true;
+
+            bool ok = await _leagues.FastForwardLiveDevAsync(_leagueId, _fixtureId, Math.Min(90, LiveMinute() + 15));
+            _busy = false;
+
+            _view.ShowStatus(ok ? string.Empty : _loc.Tr("leagues.error.server"));
+            var refreshed = await _leagues.GetLiveAsync(_leagueId, _fixtureId);
+            if (refreshed.Success) Apply(refreshed.Value, rebuild: !_panelOpen);
+        }
+
         // --- panel glue ----------------------------------------------------------------------------
 
         private void WirePanel()
@@ -494,6 +554,7 @@ namespace Fts.Presenters
             _panel.PressingCycleClicked += OnPressing;
             _panel.TempoCycleClicked += OnTempo;
             _panel.WidthCycleClicked += OnWidth;
+            _panel.ShoutClicked += OnShout;
             _panel.ApplyClicked += OnApply;
             _panel.ResumeClicked += OnResume;
         }
@@ -506,20 +567,18 @@ namespace Fts.Presenters
             _panel.PressingCycleClicked -= OnPressing;
             _panel.TempoCycleClicked -= OnTempo;
             _panel.WidthCycleClicked -= OnWidth;
+            _panel.ShoutClicked -= OnShout;
             _panel.ApplyClicked -= OnApply;
             _panel.ResumeClicked -= OnResume;
         }
 
         // --- helpers -------------------------------------------------------------------------------
 
-        /// <summary>The shared match minute, derived from the kickoff time so both clients agree.</summary>
-        private int LiveMinute()
-        {
-            if (_kickoff == null) return 0;
-            double secs = (DateTime.UtcNow - _kickoff.Value).TotalSeconds;
-            int m = (int)(secs / LiveSecondsPerMinute);
-            return m < 0 ? 0 : (m > 90 ? 90 : m);
-        }
+        /// <summary>The shared match minute: the director timeline played from the kickoff instant, so both
+        /// clients agree whenever each of them opened the screen (spec R16).</summary>
+        private int LiveMinute() => _clock?.MinuteAt(DateTime.UtcNow) ?? 0;
+
+        private double SharedFrame() => _clock.PositionAt(DateTime.UtcNow);
 
         private string BannerFor(LiveMatchStateDto state, LiveMatchStatus status)
         {

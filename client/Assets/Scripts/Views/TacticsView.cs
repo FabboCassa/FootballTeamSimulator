@@ -13,7 +13,8 @@ namespace Fts.Views
     /// once and one tap picks it:
     ///   • left  — a large pitch with the shape of your best eleven in the picked module;
     ///   • right — the six modules as a chip grid, the four instructions as three-way segmented
-    ///             rows, a familiarity meter, and the Save CTA.
+    ///             rows, a familiarity meter, the Save CTA, and the match plan: conditional rules
+    ///             that call a touchline shout during the match (issue #44).
     /// A phone stacks the two columns (pitch first). Every size lives in FtsTheme.uss (.fts-tac*).
     ///
     /// Dumb view: labels come from the loc tables through <c>tr</c>, the presenter tells it which
@@ -31,6 +32,11 @@ namespace Fts.Views
         /// <summary>An instruction was picked: axis 0 mentality · 1 pressing · 2 tempo · 3 width; value 0..2.</summary>
         public event Action<int, int> InstructionSelected;
         public event Action SaveClicked;
+        /// <summary>A chip of the new-rule form was picked: part 0 minute · 1 score · 2 shout; value = option index.</summary>
+        public event Action<int, int> PlanOptionSelected;
+        public event Action PlanAddClicked;
+        /// <summary>A rule's remove button was pressed (index into the list given to <see cref="SetPlanRules"/>).</summary>
+        public event Action<int> PlanRemoveClicked;
         public event Action BackClicked;
 
         public VisualElement Root { get; }
@@ -58,6 +64,10 @@ namespace Fts.Views
         private readonly Label _familiarityValue;
         private readonly MeterBar _familiarity;
         private readonly Label _status;
+        private readonly VisualElement _planRules;
+        private readonly VisualElement[] _planChipRows = new VisualElement[3];
+        private readonly List<Button>[] _planChips = { new List<Button>(), new List<Button>(), new List<Button>() };
+        private readonly Button _planAdd;
 
         public TacticsView(Func<string, string> tr)
         {
@@ -142,6 +152,25 @@ namespace Fts.Views
             famCard.Add(_familiarity.Root);
             _colSettings.Add(famCard);
 
+            VisualElement planCard = UiKit.OptionCard();
+            planCard.Add(UiKit.BlockHead(tr("tactics.plan_caption")));
+            _planRules = new VisualElement();
+            planCard.Add(_planRules);
+            string[] partCaptions = { "tactics.plan.from", "tactics.plan.if", "tactics.plan.shout" };
+            for (int part = 0; part < 3; part++)
+            {
+                Label caption = UiKit.Caption(tr(partCaptions[part]));
+                caption.AddToClassList("fts-tac__axis");
+                planCard.Add(caption);
+                _planChipRows[part] = new VisualElement();
+                _planChipRows[part].AddToClassList("fts-plan__chips");
+                planCard.Add(_planChipRows[part]);
+            }
+            _planAdd = UiKit.PrimaryButton(tr("tactics.plan.add"), () => PlanAddClicked?.Invoke());
+            _planAdd.AddToClassList("fts-plan__add");
+            planCard.Add(_planAdd);
+            _colSettings.Add(planCard);
+
             Root.RegisterCallback<AttachToPanelEvent>(_ =>
             {
                 Responsive.Changed += Layout;
@@ -207,6 +236,61 @@ namespace Fts.Views
         public void SetPressing(string text) { }
         public void SetTempo(string text) { }
         public void SetWidth(string text) { }
+
+        /// <summary>The options of the new-rule form: minutes, score situations and shouts, as labels.</summary>
+        public void SetPlanOptions(IReadOnlyList<string> minutes, IReadOnlyList<string> situations, IReadOnlyList<string> shouts)
+        {
+            IReadOnlyList<string>[] parts = { minutes, situations, shouts };
+            for (int part = 0; part < 3; part++)
+            {
+                _planChipRows[part].Clear();
+                _planChips[part].Clear();
+                for (int i = 0; i < parts[part].Count; i++)
+                {
+                    int p = part, value = i;
+                    Button chip = UiKit.SegChip(parts[part][i], null, () => PlanOptionSelected?.Invoke(p, value));
+                    chip.AddToClassList("fts-plan__chip");
+                    chip.style.flexBasis = new Length(part == 0 ? 15 : 30, LengthUnit.Percent);
+                    _planChipRows[part].Add(chip);
+                    _planChips[part].Add(chip);
+                }
+            }
+        }
+
+        /// <summary>Lights the picked option of each part of the new-rule form; Add is off when the rule cannot be added.</summary>
+        public void SetPlanDraft(int minute, int situation, int shout, bool canAdd)
+        {
+            int[] picked = { minute, situation, shout };
+            for (int part = 0; part < 3; part++)
+                for (int i = 0; i < _planChips[part].Count; i++)
+                    UiKit.SetSegChipState(_planChips[part][i], i == picked[part]);
+            _planAdd.SetEnabled(canAdd);
+        }
+
+        /// <summary>The plan's rules, one line each with a remove button; <paramref name="emptyText"/> when there are none.</summary>
+        public void SetPlanRules(IReadOnlyList<string> rules, string removeText, string emptyText)
+        {
+            _planRules.Clear();
+            if (rules.Count == 0)
+            {
+                var empty = new Label(emptyText ?? string.Empty);
+                empty.AddToClassList("fts-plan__empty");
+                _planRules.Add(empty);
+                return;
+            }
+
+            for (int i = 0; i < rules.Count; i++)
+            {
+                int index = i;
+                var row = new VisualElement();
+                row.AddToClassList("fts-plan__rule");
+                var text = new Label(rules[i]);
+                text.AddToClassList("fts-plan__ruletext");
+                row.Add(text);
+                row.Add(UiKit.SmallButton(removeText, () => PlanRemoveClicked?.Invoke(index)));
+                _planRules.Add(row);
+            }
+        }
 
         /// <summary>Updates the live shape preview with the user's XI in the chosen formation.</summary>
         public void SetShape(IReadOnlyList<PitchTokenVm> tokens) => _shapePitch.SetTokens(tokens);

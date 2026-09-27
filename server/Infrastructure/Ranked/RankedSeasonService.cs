@@ -1279,7 +1279,6 @@ public sealed class RankedSeasonService : IRankedSeasonService
             WorldTimeZoneId: worldZoneId,
             LiveOpensBeforeSeconds: Math.Max(0, _opt.LiveOpensBeforeSeconds),
             LiveGraceSeconds: Math.Max(0, _opt.LiveGraceSeconds),
-            LiveSecondsPerMatchMinute: Math.Max(1, _opt.LiveSecondsPerMatchMinute),
             LiveEnabled: _opt.LiveMatchesEnabled);
 
         return new RankedSeasonDto(true, state, fixtureDtos, standings);

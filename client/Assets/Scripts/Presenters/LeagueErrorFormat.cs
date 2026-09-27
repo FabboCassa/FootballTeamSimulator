@@ -43,6 +43,7 @@ namespace Fts.Presenters
             LeagueApiError.SquadFull => "leagues.error.squad_full",
             LeagueApiError.IntegrityBlocked => "leagues.error.integrity_blocked",
             LeagueApiError.ReplayTooOld => "leagues.error.replay_too_old",
+            LeagueApiError.EngineVersionMismatch => "leagues.error.engine_version_mismatch",
             _ => "leagues.error.server",
         };
     }

@@ -18,6 +18,11 @@ namespace Fts.Presenters
     /// opponent. Works on a copy of the saved tactic; Save persists it (the sim
     /// uses it from the next match day). Changing the formation re-picks the XI
     /// for the new shape, so the Squad screen and the in-match shape stay in sync.
+    ///
+    /// The match plan card (issue #44) edits the user's <see cref="PrematchPlan"/>: a rule
+    /// "from minute M, if the score is S, shout X". Adding or removing a rule saves at once — it
+    /// is kept apart from the tactic's Save so editing the plan never commits a tactic the coach
+    /// did not pick.
     /// </summary>
     public sealed class TacticsScreenPresenter : IScreenPresenter
     {
@@ -30,8 +35,18 @@ namespace Fts.Presenters
         private readonly TacticsView _view;
         private readonly TacticsBalance _tacticsConfig = new BalanceConfig().Tactics;
 
+        private static readonly int[] PlanMinutes = { 30, 45, 60, 70, 80 };
+        private static readonly ScoreSituation[] PlanSituations =
+        {
+            ScoreSituation.Always, ScoreSituation.Losing, ScoreSituation.Drawing,
+            ScoreSituation.Winning, ScoreSituation.NotWinning, ScoreSituation.NotLosing
+        };
+
         private Club _club;
         private TacticPlan _working;
+        private int _draftMinute = 2;    // index into PlanMinutes: 60'
+        private int _draftSituation = 1; // losing
+        private int _draftShout = 2;     // all forward
 
         public VisualElement View => _view.Root;
 
@@ -63,17 +78,22 @@ namespace Fts.Presenters
             _view.InstructionSelected += OnInstructionSelected;
             _view.SaveClicked += OnSave;
             _view.BackClicked += OnBack;
+            _view.PlanOptionSelected += OnPlanOption;
+            _view.PlanAddClicked += OnPlanAdd;
+            _view.PlanRemoveClicked += OnPlanRemove;
 
             var formationLabels = new List<string>(Formations.All.Length);
             for (int i = 0; i < Formations.All.Length; i++)
                 formationLabels.Add(FormationName((Formation)i));
             _view.SetFormationOptions(formationLabels);
+            SetPlanOptions();
 
             _club = _career.GetUserClub();
             _working = Clone(_career.UserTactic) ?? TacticPlan.Neutral();
             _view.SetHeader(_loc.Tr("tactics.header", _club.Name));
             _view.SetStatus(string.Empty);
             Refresh();
+            RefreshPlan();
         }
 
         public void Exit()
@@ -87,6 +107,9 @@ namespace Fts.Presenters
             _view.InstructionSelected -= OnInstructionSelected;
             _view.SaveClicked -= OnSave;
             _view.BackClicked -= OnBack;
+            _view.PlanOptionSelected -= OnPlanOption;
+            _view.PlanAddClicked -= OnPlanAdd;
+            _view.PlanRemoveClicked -= OnPlanRemove;
         }
 
         private void OnFormationSelected(int index)
@@ -162,6 +185,99 @@ namespace Fts.Presenters
         }
 
         private void OnBack() => _navigator.Pop();
+
+        // ---------------------------------------------------------------- match plan
+
+        private void OnPlanOption(int part, int index)
+        {
+            switch (part)
+            {
+                case 0 when index >= 0 && index < PlanMinutes.Length: _draftMinute = index; break;
+                case 1 when index >= 0 && index < PlanSituations.Length: _draftSituation = index; break;
+                case 2 when index >= 0 && index < ShoutBoard.Choices.Count: _draftShout = index; break;
+                default: return;
+            }
+            RefreshPlan();
+        }
+
+        private void OnPlanAdd()
+        {
+            PrematchPlan plan = _career.UserPlan ?? PrematchPlan.Empty();
+            PrematchRule rule = DraftRule();
+            if (!plan.CanAdd(rule))
+            {
+                _view.SetStatus(_loc.Tr("tactics.plan.full", PrematchPlan.MaxRules));
+                return;
+            }
+
+            SavePlan(plan.WithRule(rule));
+        }
+
+        private void OnPlanRemove(int index)
+        {
+            if (_career.UserPlan == null) return;
+            SavePlan(_career.UserPlan.WithoutRule(index));
+        }
+
+        private void SavePlan(PrematchPlan plan)
+        {
+            _career.UserPlan = plan;
+            _saveRepository.Save(_career);
+            _view.SetStatus(string.Empty);
+            Dialogs.Toast(_overlay, _loc, "common.saved");
+            RefreshPlan();
+        }
+
+        private PrematchRule DraftRule() =>
+            PrematchRule.ForShout(PlanMinutes[_draftMinute], PlanSituations[_draftSituation], ShoutBoard.Choices[_draftShout]);
+
+        private void SetPlanOptions()
+        {
+            var minutes = new List<string>(PlanMinutes.Length);
+            foreach (int m in PlanMinutes) minutes.Add(_loc.Tr("tactics.plan.minute", m));
+            var situations = new List<string>(PlanSituations.Length);
+            foreach (ScoreSituation w in PlanSituations) situations.Add(_loc.Tr(SituationKey(w)));
+            var shouts = new List<string>(ShoutBoard.Choices.Count);
+            foreach (TouchlineShout sh in ShoutBoard.Choices) shouts.Add(_loc.Tr(ShoutPicker.NameKey(sh)));
+            _view.SetPlanOptions(minutes, situations, shouts);
+        }
+
+        private void RefreshPlan()
+        {
+            PrematchPlan plan = _career.UserPlan ?? PrematchPlan.Empty();
+            var lines = new List<string>(plan.Rules.Count);
+            foreach (PrematchRule rule in plan.Rules)
+                lines.Add(_loc.Tr("tactics.plan.rule", rule.FromMinute, _loc.Tr(SituationKey(rule.When)), ActionText(rule)));
+            _view.SetPlanRules(lines, _loc.Tr("tactics.plan.remove"), _loc.Tr("tactics.plan.empty"));
+            _view.SetPlanDraft(_draftMinute, _draftSituation, _draftShout, plan.CanAdd(DraftRule()));
+        }
+
+        /// <summary>What a rule does, in words: its shout, and any instruction change or substitution it carries.</summary>
+        private string ActionText(PrematchRule rule)
+        {
+            var parts = new List<string>(3);
+            if (rule.Shout != TouchlineShout.None)
+                parts.Add(_loc.Tr("tactics.plan.action.shout", _loc.Tr(ShoutPicker.NameKey(rule.Shout))));
+            if (rule.ChangeInstructions) parts.Add(_loc.Tr("tactics.plan.action.tactic"));
+            if (rule.SubOutPlayerId != 0 && rule.SubInPlayerId != 0) parts.Add(_loc.Tr("tactics.plan.action.sub"));
+
+            string text = parts.Count > 0 ? parts[0] : string.Empty;
+            for (int i = 1; i < parts.Count; i++) text = _loc.Tr("tactics.plan.action.join", text, parts[i]);
+            return text;
+        }
+
+        private static string SituationKey(ScoreSituation when)
+        {
+            switch (when)
+            {
+                case ScoreSituation.Losing: return "tactics.plan.when.losing";
+                case ScoreSituation.Drawing: return "tactics.plan.when.drawing";
+                case ScoreSituation.Winning: return "tactics.plan.when.winning";
+                case ScoreSituation.NotWinning: return "tactics.plan.when.not_winning";
+                case ScoreSituation.NotLosing: return "tactics.plan.when.not_losing";
+                default: return "tactics.plan.when.always";
+            }
+        }
 
         private void Refresh()
         {

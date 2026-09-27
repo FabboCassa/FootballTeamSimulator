@@ -27,6 +27,11 @@ public interface IDevSeedService
     Task<DevBotLiveResult> BotLiveAsync(
         Guid leagueId, Guid fixtureId, DevBotLiveRequest request, CancellationToken ct = default);
 
+    /// <summary>Live-match fast-forward (R16 dev tooling): move a Live private-league session's shared kickoff
+    /// back so both screens show <paramref name="minute"/> now.</summary>
+    Task<DevLiveFastForwardResult> FastForwardLiveAsync(
+        Guid leagueId, Guid fixtureId, int minute, CancellationToken ct = default);
+
     /// <summary>Cleanup: log in the deterministic bots and leave every league they are in (disbanding a
     /// league when the last member leaves), so repeated dev runs don't pile up worlds.</summary>
     Task<DevResetResult> ResetAsync(int bots, CancellationToken ct = default);
@@ -48,6 +53,11 @@ public interface IDevSeedService
     /// nothing, because that side is already playing its stored orders.</summary>
     Task<DevRankedLiveResult> RankedBotLiveAsync(
         Guid fixtureId, DevRankedLiveRequest request, CancellationToken ct = default);
+
+    /// <summary>Ranked live fast-forward (R16 dev tooling): move a Live ranked session's shared kickoff back
+    /// so the screens and the server's future-minute guard all read <paramref name="minute"/> now.</summary>
+    Task<DevLiveFastForwardResult> RankedFastForwardLiveAsync(
+        Guid fixtureId, int minute, CancellationToken ct = default);
 
     /// <summary>Ranked market autopilot (Phase 9.2b dev tooling): the bot coaches in the group outbid on the
     /// open auction lots and answer the pending offers sent to them, so a solo human can see the market

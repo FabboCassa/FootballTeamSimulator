@@ -196,6 +196,10 @@ public enum RankedError
     /// <summary>The live match has already finished (task 12.3) — its report is what the matchday will
     /// consume, and no further change can reach it.</summary>
     LiveAlreadyFinished,
+    /// <summary>The client builds live timelines with another match engine, or does not say which
+    /// (watchable-match-engine R16): it would show a different moment than the server judges changes by and
+    /// the other coach sees, so it must update first.</summary>
+    EngineVersionMismatch,
 }
 
 /// <summary>Result wrapper so the service never throws for expected failures — mirrors

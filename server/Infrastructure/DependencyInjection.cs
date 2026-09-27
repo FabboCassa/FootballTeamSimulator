@@ -245,8 +245,6 @@ public static class DependencyInjection
                 o.LiveOpensBeforeSeconds = liveOpens;
             if (int.TryParse(ranked["LiveGraceSeconds"], out var liveGrace) && liveGrace >= 0)
                 o.LiveGraceSeconds = liveGrace;
-            if (int.TryParse(ranked["LiveSecondsPerMatchMinute"], out var livePace) && livePace > 0)
-                o.LiveSecondsPerMatchMinute = livePace;
             // 0 is meaningful here: it switches the "no changes in the match's future" check off, which is
             // what a test that submits a 90th-minute change one second after kickoff needs.
             if (int.TryParse(ranked["LiveChangeMinuteTolerance"], out var liveTol) && liveTol >= 0)

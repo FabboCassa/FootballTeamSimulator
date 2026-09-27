@@ -1,5 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
+using Fts.Application.Dev;
 using Fts.Application.Leagues;
 using Fts.Application.Ranked;
 using Fts.Infrastructure.Leagues;
@@ -9,6 +11,7 @@ using Sim.Core.Config;
 using Sim.Core.Domain;
 using Sim.Core.Generation;
 using Sim.Core.Match;
+using Sim.Core.Match.Broadcast;
 using Sim.Core.Random;
 using Sim.Core.Tactics;
 
@@ -216,7 +219,6 @@ public abstract class RankedLiveTestBase : RankedSeasonTestBase
         settings["Ranked:LiveMatchesEnabled"] = "true";
         settings["Ranked:LiveOpensBeforeSeconds"] = "7200";
         settings["Ranked:LiveGraceSeconds"] = "600";
-        settings["Ranked:LiveSecondsPerMatchMinute"] = "2";
         settings["Ranked:LiveChangeMinuteTolerance"] = ChangeMinuteTolerance.ToString();
         // No between-seasons pause: a fixture that has to reach a DIVISION should not sit out a week for it.
         settings["Ranked:SeasonBreakSeconds"] = "0";
@@ -224,10 +226,13 @@ public abstract class RankedLiveTestBase : RankedSeasonTestBase
 
     // --- the live surface ---------------------------------------------------------------------------
 
+    /// <summary>Opens as a client on <paramref name="engineVersion"/> (this build's engine by default); null is
+    /// an old build that does not say which engine it would build the director timeline with.</summary>
     protected async Task<(HttpStatusCode Code, RankedLiveStateDto? State, string Body)> OpenLive(
-        string token, Guid fixtureId)
+        string token, Guid fixtureId, int? engineVersion = MatchEngine.Version)
     {
-        using var req = Authed(HttpMethod.Post, $"/ranked/live/{fixtureId}/open", token);
+        string version = engineVersion.HasValue ? $"?engineVersion={engineVersion.Value}" : string.Empty;
+        using var req = Authed(HttpMethod.Post, $"/ranked/live/{fixtureId}/open{version}", token);
         var resp = await Client.SendAsync(req);
         string body = await resp.Content.ReadAsStringAsync();
         return resp.StatusCode != HttpStatusCode.OK
@@ -491,8 +496,6 @@ public class RankedLiveMatchTests : RankedLiveTestBase
             Assert.That(row.LiveOpen, Is.True, "his own next match, at its kick-off, is attendable");
             Assert.That(row.LiveStatus, Is.Null, "nobody has opened a session yet");
             Assert.That(season.State!.LiveEnabled, Is.True);
-            Assert.That(season.State.LiveSecondsPerMatchMinute, Is.EqualTo(2),
-                "the client renders on the server's playback rate, not on a constant of its own");
             Assert.That(season.State.ServerUtc, Is.Not.EqualTo(default(DateTime)),
                 "a countdown needs the server's clock, not the device's");
             Assert.That(season.Fixtures.Where(f => !f.IsYours).All(f => !f.LiveOpen), Is.True,
@@ -540,6 +543,103 @@ public class RankedLiveGuardTests : RankedLiveTestBase
         var (nowOk, _, nowBody) = await ChangeLive(
             tokens[0], match.Id, 1, new TacticPlan { Mentality = Mentality.Attacking });
         Assert.That(nowOk, Is.EqualTo(HttpStatusCode.OK), nowBody);
+    }
+
+    /// <summary>
+    /// The guard reads the SHARED clock (spec watchable-match-engine R16): the director timeline of the stored
+    /// report played from kickoff, the minute both screens show. The dev fast-forward moves that kickoff back
+    /// along the timeline, and the guard follows it — a minute is open exactly when the screens reach it.
+    /// </summary>
+    [Test]
+    public async Task TheFutureGuard_FollowsTheDirectorTimeline_AndTheDevFastForwardMovesIt()
+    {
+        var tokens = await EnrolCohort();
+        await Tick();
+        RankedFixtureDto match = await AdvanceToTheirMatch(tokens[0], tokens[1]);
+
+        var (code, opened, body) = await OpenLive(tokens[0], match.Id);
+        Assert.That(code, Is.EqualTo(HttpStatusCode.OK), body);
+        Assert.That(opened!.Status, Is.EqualTo(LiveMatchStatus.Live));
+
+        var (early, _, earlyBody) = await ChangeLive(tokens[0], match.Id, 30, new TacticPlan { Mentality = Mentality.Attacking });
+        Assert.That(early, Is.EqualTo(HttpStatusCode.BadRequest), "minute 30 is not on anybody's screen yet");
+        Assert.That(earlyBody, Does.Contain("invalid_live_change"));
+
+        var ff = await FastForwardLive(match.Id, 30);
+        var (_, moved, _) = await GetLive(tokens[0], match.Id);
+        var clock = new LiveBroadcastClock(
+            new BroadcastDirector().Build(ReplayStore.Read(moved!.ReportJson!)!), moved.KickoffUtc);
+        double elapsed = (moved.ServerUtc - moved.KickoffUtc).TotalSeconds;
+        Assert.Multiple(() =>
+        {
+            Assert.That(ff.Status, Is.EqualTo("ok"));
+            Assert.That(ff.Minute, Is.GreaterThanOrEqualTo(30));
+            Assert.That(moved.KickoffUtc, Is.LessThan(opened.KickoffUtc), "the shared kickoff moved back");
+            Assert.That(elapsed, Is.EqualTo(clock.SecondsToReach(30)).Within(5.0),
+                "by the director timeline's playback time to minute 30");
+            Assert.That(clock.MinuteAt(moved.ServerUtc), Is.GreaterThanOrEqualTo(30), "the screens show minute 30");
+        });
+
+        var (atThirty, changed, atThirtyBody) = await ChangeLive(
+            tokens[0], match.Id, 30, new TacticPlan { Mentality = Mentality.Attacking });
+        Assert.That(atThirty, Is.EqualTo(HttpStatusCode.OK), atThirtyBody);
+
+        var (ahead, _, aheadBody) = await ChangeLive(
+            tokens[0], match.Id, 60, new TacticPlan { Mentality = Mentality.Defensive });
+        Assert.That(ahead, Is.EqualTo(HttpStatusCode.BadRequest),
+            "minute 60 is still ahead on the timeline, whatever a flat pace would say");
+        Assert.That(aheadBody, Does.Contain("invalid_live_change"));
+
+        await FastForwardLive(match.Id, 90);
+        var (atEnd, _, atEndBody) = await ChangeLive(
+            tokens[0], match.Id, 90, new TacticPlan { Mentality = Mentality.Defensive });
+        Assert.That(atEnd, Is.EqualTo(HttpStatusCode.OK), atEndBody);
+
+        TestContext.Out.WriteLine(
+            $"[ranked-live-clock] minute 30 at {clock.SecondsToReach(30):F1} s, full time at " +
+            $"{clock.SecondsToReach(90):F1} s after kickoff · score after the change {changed!.HomeGoals}-{changed.AwayGoals}");
+    }
+
+    /// <summary>Every client derives the shown moment from the report's director timeline, so a build on
+    /// another engine would show another minute than the server judges by: it is refused, told why, and
+    /// nothing happens.</summary>
+    [Test]
+    public async Task AClientOnAnotherEngine_IsRefusedWithAClearMessage()
+    {
+        var tokens = await EnrolCohort();
+        await Tick();
+        RankedFixtureDto match = await AdvanceToTheirMatch(tokens[0], tokens[1]);
+
+        var (older, _, olderBody) = await OpenLive(tokens[0], match.Id, MatchEngine.Version - 1);
+        var (unsaid, _, unsaidBody) = await OpenLive(tokens[0], match.Id, engineVersion: null);
+
+        using var doc = JsonDocument.Parse(olderBody);
+        string message = doc.RootElement.GetProperty("message").GetString()!;
+        Assert.Multiple(() =>
+        {
+            Assert.That(older, Is.EqualTo(HttpStatusCode.Conflict));
+            Assert.That(doc.RootElement.GetProperty("error").GetString(), Is.EqualTo("engine_version_mismatch"));
+            Assert.That(message, Does.Contain($"v{MatchEngine.Version - 1}"), "names the client's engine");
+            Assert.That(message, Does.Contain($"v{MatchEngine.Version}"), "names the match's engine");
+            Assert.That(message, Does.Contain("Aggiorna"), "says what to do");
+            Assert.That(unsaid, Is.EqualTo(HttpStatusCode.Conflict), "an old build does not say its engine");
+            Assert.That(unsaidBody, Does.Contain("engine_version_mismatch"));
+        });
+
+        var (none, _, noneBody) = await GetLive(tokens[0], match.Id);
+        Assert.That(none, Is.EqualTo(HttpStatusCode.NotFound), "a refused client opened no session: " + noneBody);
+
+        var (ok, state, okBody) = await OpenLive(tokens[0], match.Id);
+        Assert.That(ok, Is.EqualTo(HttpStatusCode.OK), okBody);
+        Assert.That(state!.EngineVersion, Is.EqualTo(MatchEngine.Version), "the state names the report's engine");
+    }
+
+    private async Task<DevLiveFastForwardResult> FastForwardLive(Guid fixtureId, int minute)
+    {
+        var resp = await Client.PostAsync(
+            $"/internal/dev/ranked/live/{fixtureId}/fast-forward?minute={minute}", content: null);
+        Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK), "the live fast-forward is dev-mapped under Testing");
+        return (await resp.Content.ReadFromJsonAsync<DevLiveFastForwardResult>())!;
     }
 
     [Test]

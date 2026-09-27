@@ -100,9 +100,6 @@ public sealed record RankedSeasonStateDto(
     // How long after kickoff the calendar waits for a live match before resolving the matchday
     // headless (task 12.3).
     int LiveGraceSeconds = 0,
-    // Real seconds per match minute during a live match (task 12.3) — the client renders on this
-    // number because the server judges pause-point changes by it.
-    int LiveSecondsPerMatchMinute = 0,
     // Whether attending a ranked match is switched on in this environment (task 12.3).
     bool LiveEnabled = false);
 

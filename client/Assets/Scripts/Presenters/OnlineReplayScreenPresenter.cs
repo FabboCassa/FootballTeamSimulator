@@ -96,11 +96,6 @@ namespace Fts.Presenters
             UpdateScore();
 
             _renderer = new MatchRenderer(report, HomeColor, AwayColor);
-
-            // A stored replay is watched alone and follows no shared clock, so it gets the
-            // broadcast director (MatchRenderer.UseBroadcastDirector).
-            _renderer.UseBroadcastDirector();
-
             _renderer.MinuteChanged += OnMinuteChanged;
             _renderer.EventReached += OnEventReached;
             _renderer.Finished += OnFinished;
