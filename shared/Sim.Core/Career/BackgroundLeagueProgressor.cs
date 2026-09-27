@@ -1,5 +1,7 @@
+using System.Collections.Generic;
 using Sim.Core.Config;
 using Sim.Core.Domain;
+using Sim.Core.Tactics;
 
 namespace Sim.Core.Career
 {
@@ -25,8 +27,10 @@ namespace Sim.Core.Career
         /// <summary>
         /// Resolves every unplayed background fixture due on or before <paramref name="day"/>.
         /// Idempotent: calling it twice for the same day is a no-op. Returns how many were played.
+        /// <paramref name="instructions"/> holds a club's instruction set by club id; a club without
+        /// one plays neutral, the identity.
         /// </summary>
-        public int AdvanceTo(World world, int day, ulong worldSeed)
+        public int AdvanceTo(World world, int day, ulong worldSeed, IReadOnlyDictionary<int, TacticInstructions>? instructions = null)
         {
             Season season = world.BackgroundSeason;
             if (season.Fixtures.Count == 0)
@@ -47,13 +51,17 @@ namespace Sim.Core.Career
                 if (home == null || away == null)
                     continue;
 
-                QuickResultResolver.Resolve(fixture, StrengthOf(home), StrengthOf(away), worldSeed, _config);
+                QuickResultResolver.Resolve(fixture, StrengthOf(home), StrengthOf(away), worldSeed, _config,
+                    InstructionsOf(instructions, home.Id), InstructionsOf(instructions, away.Id));
                 resolved++;
             }
 
             season.CurrentDay = day;
             return resolved;
         }
+
+        private static TacticInstructions? InstructionsOf(IReadOnlyDictionary<int, TacticInstructions>? instructions, int clubId) =>
+            instructions != null && instructions.TryGetValue(clubId, out TacticInstructions set) ? set : (TacticInstructions?)null;
 
         /// <summary>
         /// The last day any background league plays on. Bigger divisions play more rounds than the

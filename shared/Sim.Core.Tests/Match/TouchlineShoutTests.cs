@@ -104,6 +104,33 @@ namespace Sim.Core.Tests.Match
         }
 
         [Test]
+        public void OnV11_Composure_IsWonDuels_AndEncouragementWeakensWhenRepeated()
+        {
+            var cfg = new BalanceConfig().Match;
+            int first = ShoutEffect.Of(TouchlineShout.Encourage, 0, cfg).DuelLossPercent;
+            int second = ShoutEffect.Of(TouchlineShout.Encourage, 1, cfg).DuelLossPercent;
+
+            Assert.That(first, Is.LessThan(100), "encouraged, he is harder to take the ball off");
+            Assert.That(second, Is.GreaterThan(first).And.LessThan(100), "less so the second time");
+            Assert.That(ShoutEffect.Of(TouchlineShout.KeepBall, 0, cfg).DuelLossPercent, Is.LessThan(100), "told to keep it, he shields it");
+            Assert.That(ShoutEffect.Of(TouchlineShout.Concentrate, 0, cfg).OwnHalfDuelLossPercent, Is.LessThan(100),
+                "concentrating, the back loses fewer balls");
+            Assert.That(ShoutEffect.Of(TouchlineShout.Concentrate, 0, cfg).DuelLossPercent, Is.EqualTo(100), "only at the back");
+        }
+
+        [Test]
+        public void OnV11_Encouragement_IsBolder_WhichIsItsCost()
+        {
+            var cfg = new BalanceConfig().Match;
+            Assert.That(ShoutEffect.Of(TouchlineShout.Encourage, 0, cfg).RiskPercent, Is.LessThan(100),
+                "an encouraged man weighs the ball he may lose less");
+
+            cfg.Shouts.EncourageRiskPercent = 83;
+            Assert.That(ShoutEffect.Of(TouchlineShout.Encourage, 2, cfg).RiskPercent, Is.EqualTo(83),
+                "the config's, and not worn down by repeats");
+        }
+
+        [Test]
         public void NoShout_IsTheIdentity()
         {
             ShoutEffect none = ShoutEffect.Of(TouchlineShout.None, 0, new BalanceConfig().Match);
@@ -126,6 +153,10 @@ namespace Sim.Core.Tests.Match
                     Assert.That(e.FatiguePercent, Is.EqualTo(100));
                     Assert.That(e.PressureFeltPercent, Is.EqualTo(100));
                     Assert.That(e.OwnHalfPressureFeltPercent, Is.EqualTo(100));
+                    Assert.That(e.RiskPercent, Is.EqualTo(100));
+                    Assert.That(e.GainPercent, Is.EqualTo(100));
+                    Assert.That(e.DuelLossPercent, Is.EqualTo(100));
+                    Assert.That(e.OwnHalfDuelLossPercent, Is.EqualTo(100));
                 });
             }
         }
@@ -150,11 +181,29 @@ namespace Sim.Core.Tests.Match
                 Assert.That(forward.Supporters, Is.GreaterThan(0));
                 Assert.That(focus.OwnHalfPressureFeltPercent, Is.LessThan(100), "concentrate: fewer errors at the back");
                 Assert.That(focus.ShotAppetitePercent, Is.LessThan(100), "concentrate: slightly more cautious");
+                Assert.That(keep.RiskPercent, Is.GreaterThan(100), "keep the ball: V11 weighs a ball that can be lost more");
+                Assert.That(keep.GainPercent, Is.LessThan(100), "keep the ball: V11 weighs the threat gained less");
+                Assert.That(focus.RiskPercent, Is.GreaterThan(100), "concentrate: V11 is more careful with it");
             });
 
             cfg.Shouts.AllForwardLinePushDm = 37;
             Assert.That(ShoutEffect.Of(TouchlineShout.AllForward, 0, cfg).LinePushDm, Is.EqualTo(37),
                 "the magnitude is the config's");
+        }
+
+        [Test]
+        public void PressHigh_Fatigue_IsV10sOnV10_AndV11sOwnOnV11()
+        {
+            // V10 live matches are re-simulated from their changes: its PressHigh cost must not move.
+            var v10 = new BalanceConfig().Match;
+            var v11 = new BalanceConfig().Match;
+            v11.Brain = MatchBrainVersion.V11;
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(ShoutEffect.Of(TouchlineShout.PressHigh, 0, v10).FatiguePercent, Is.EqualTo(140));
+                Assert.That(ShoutEffect.Of(TouchlineShout.PressHigh, 0, v11).FatiguePercent, Is.EqualTo(150));
+            });
         }
 
         // ------------------------------------------------------------------ the feed

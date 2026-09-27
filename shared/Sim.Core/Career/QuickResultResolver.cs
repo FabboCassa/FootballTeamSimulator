@@ -1,6 +1,8 @@
 using Sim.Core.Config;
 using Sim.Core.Domain;
+using Sim.Core.Match.Movement;
 using Sim.Core.Random;
+using Sim.Core.Tactics;
 
 namespace Sim.Core.Career
 {
@@ -40,23 +42,58 @@ namespace Sim.Core.Career
         /// Plays the fixture and writes the score onto it. <paramref name="homeStrength"/> and
         /// <paramref name="awayStrength"/> are the clubs' generated baselines
         /// (<see cref="Club.Strength"/>), i.e. roughly the overall of an average first-teamer.
+        /// Missing instructions are the neutral set, which is the identity.
         /// </summary>
-        public static void Resolve(Fixture fixture, int homeStrength, int awayStrength, ulong worldSeed, BalanceConfig? config = null)
+        public static void Resolve(
+            Fixture fixture, int homeStrength, int awayStrength, ulong worldSeed, BalanceConfig? config = null,
+            TacticInstructions? homeInstructions = null, TacticInstructions? awayInstructions = null)
         {
             BalanceConfig cfg = config ?? new BalanceConfig();
             Pcg32 rng = FixtureRng(worldSeed, fixture.Id);
 
-            double home = homeStrength * (100.0 + cfg.Match.HomeAdvantagePercent) / 100.0
-                          + cfg.World.QuickHomeAdvantageStrength;
-            double difference = home - awayStrength;
+            ExpectedGoals(homeStrength, awayStrength, cfg,
+                homeInstructions ?? TacticInstructions.Neutral, awayInstructions ?? TacticInstructions.Neutral,
+                out double homeExpected, out double awayExpected);
 
-            double homeExpected = Clamp(cfg.World.QuickBaseGoals * (1.0 + difference * cfg.World.QuickStrengthFactor), cfg.World);
-            double awayExpected = Clamp(cfg.World.QuickBaseGoals * (1.0 - difference * cfg.World.QuickStrengthFactor), cfg.World);
-
-            fixture.HomeGoals = DrawGoals(homeExpected, cfg.World.QuickGoalTrials, rng);
-            fixture.AwayGoals = DrawGoals(awayExpected, cfg.World.QuickGoalTrials, rng);
+            int trials = cfg.Match.Brain == MatchBrainVersion.V11 ? cfg.World.QuickV11GoalTrials : cfg.World.QuickGoalTrials;
+            fixture.HomeGoals = DrawGoals(homeExpected, trials, rng);
+            fixture.AwayGoals = DrawGoals(awayExpected, trials, rng);
             fixture.Played = true;
         }
+
+        /// <summary>
+        /// The two clamped expected-goal figures the score is drawn from: strengths through the
+        /// calibration of the configured brain, then each side's instruction percentages (its own
+        /// GoalsFor plus the opponent's GoalsAgainst).
+        /// </summary>
+        public static void ExpectedGoals(
+            int homeStrength, int awayStrength, BalanceConfig cfg, TacticInstructions home, TacticInstructions away,
+            out double homeExpected, out double awayExpected)
+        {
+            WorldBalance w = cfg.World;
+            bool v11 = cfg.Match.Brain == MatchBrainVersion.V11;
+            double baseGoals = v11 ? w.QuickV11BaseGoals : w.QuickBaseGoals;
+            double factor = v11 ? w.QuickV11StrengthFactor : w.QuickStrengthFactor;
+            int homeBonus = v11 ? w.QuickV11HomeAdvantageStrength : w.QuickHomeAdvantageStrength;
+
+            double homeStrengthNow = homeStrength * (100.0 + cfg.Match.HomeAdvantagePercent) / 100.0 + homeBonus;
+            double difference = homeStrengthNow - awayStrength;
+
+            // percent / 100.0 is exactly 1.0 for neutral sides, so the V10 world stays bit-identical.
+            homeExpected = Clamp(baseGoals * (1.0 + difference * factor) * (InstructionPercent(home, away, w) / 100.0), w);
+            awayExpected = Clamp(baseGoals * (1.0 - difference * factor) * (InstructionPercent(away, home, w) / 100.0), w);
+        }
+
+        private static int InstructionPercent(TacticInstructions own, TacticInstructions opponent, WorldBalance w) =>
+            100
+            + MovementTactics.Pick(w.QuickMentalityGoalsForPercent, (int)own.Mentality)
+            + MovementTactics.Pick(w.QuickPressingGoalsForPercent, (int)own.Pressing)
+            + MovementTactics.Pick(w.QuickTempoGoalsForPercent, (int)own.Tempo)
+            + MovementTactics.Pick(w.QuickWidthGoalsForPercent, (int)own.Width)
+            + MovementTactics.Pick(w.QuickMentalityGoalsAgainstPercent, (int)opponent.Mentality)
+            + MovementTactics.Pick(w.QuickPressingGoalsAgainstPercent, (int)opponent.Pressing)
+            + MovementTactics.Pick(w.QuickTempoGoalsAgainstPercent, (int)opponent.Tempo)
+            + MovementTactics.Pick(w.QuickWidthGoalsAgainstPercent, (int)opponent.Width);
 
         private static double Clamp(double expected, WorldBalance cfg)
         {

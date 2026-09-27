@@ -92,30 +92,34 @@ namespace Sim.Core.Match.Analysis
         /// </summary>
         private void FindKeepers(PositionStream stream, int ticks)
         {
-            for (int side = 0; side < 2; side++)
+            _keeperSlot[0] = InferKeeperSlot(stream, ticks, home: true);
+            _keeperSlot[1] = InferKeeperSlot(stream, ticks, home: false);
+        }
+
+        /// <summary>The slot that stays nearest its own goal line over the match; ties break on the lower slot.</summary>
+        internal static int InferKeeperSlot(PositionStream stream, int ticks, bool home)
+        {
+            int[] xy = home ? stream.HomeXY : stream.AwayXY;
+            int best = 0;
+            long bestDepth = long.MaxValue;
+
+            for (int slot = 0; slot < stream.PlayerCount; slot++)
             {
-                int[] xy = side == 0 ? stream.HomeXY : stream.AwayXY;
-                int best = 0;
-                long bestDepth = long.MaxValue;
-
-                for (int slot = 0; slot < _n; slot++)
+                long sum = 0;
+                for (int t = 0; t < ticks; t++)
                 {
-                    long sum = 0;
-                    for (int t = 0; t < ticks; t++)
-                    {
-                        int x = stream.PlayerX(xy, t, slot);
-                        sum += side == 0 ? x : Pitch.LengthDm - x;
-                    }
-
-                    if (sum < bestDepth)
-                    {
-                        bestDepth = sum;
-                        best = slot;
-                    }
+                    int x = stream.PlayerX(xy, t, slot);
+                    sum += home ? x : Pitch.LengthDm - x;
                 }
 
-                _keeperSlot[side] = best;
+                if (sum < bestDepth)
+                {
+                    bestDepth = sum;
+                    best = slot;
+                }
             }
+
+            return best;
         }
 
         /// <summary>Which slot each side keeps in goal, as inferred by the last <see cref="Measure"/>.</summary>

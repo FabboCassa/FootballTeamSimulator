@@ -26,10 +26,24 @@ namespace Sim.Core.Config
         /// <summary>Percent applied to the match fatigue a side accumulates while the shout lasts.</summary>
         public int PressHighFatiguePercent { get; set; } = 140;
 
+        /// <summary>V11's own PressHigh fatigue: V10 keeps its value, since live V10 matches are re-simulated.</summary>
+        public int V11PressHighFatiguePercent { get; set; } = 150;
+
         // --- "Calm, keep the ball": tempo down, risk down ---
         public int KeepBallHoldPercent { get; set; } = 140;
         public int KeepBallForwardBias { get; set; } = -4;
         public int KeepBallShotAppetitePercent { get; set; } = 98;
+
+        /// <summary>
+        /// V11 reads "risk down" off these: the weight on a ball that can be lost, and on the
+        /// threat a move gains, in percent. V11 reads the hold at its tempo spread
+        /// (MatchBalance.V11TempoSpreadPercent), so on V11 the risk is most of the shout.
+        /// </summary>
+        public int KeepBallRiskPercent { get; set; } = 250;
+        public int KeepBallGainPercent { get; set; } = 40;
+
+        /// <summary>V11: percent on the odds a challenger takes it off a man told to keep it (he shields it).</summary>
+        public int KeepBallDuelLossPercent { get; set; } = 75;
 
         // --- "All forward!": mentality up, defensive exposure up ---
         public int AllForwardLinePushDm { get; set; } = 90;
@@ -42,6 +56,16 @@ namespace Sim.Core.Config
         /// <summary>Percent of the pressure a man on the ball feels (lower = calmer).</summary>
         public int EncouragePressureFeltPercent { get; set; } = 80;
 
+        /// <summary>V11: percent on the odds a challenger takes the ball off an encouraged man.</summary>
+        public int EncourageDuelLossPercent { get; set; } = 70;
+
+        /// <summary>
+        /// V11: the weight an encouraged man puts on a ball that can be lost, in percent. Below 100
+        /// he is bolder with it: the belief that wins him duels also has him try the ball he would
+        /// not, which costs a side that has something to protect.
+        /// </summary>
+        public int EncourageRiskPercent { get; set; } = 70;
+
         /// <summary>What each repeat keeps of the previous encouragement's gain, in percent.</summary>
         public int EncourageRepeatPercent { get; set; } = 50;
 
@@ -51,5 +75,11 @@ namespace Sim.Core.Config
         public int ConcentrateOwnHalfPressureFeltPercent { get; set; } = 75;
         public int ConcentrateShotAppetitePercent { get; set; } = 99;
         public int ConcentrateForwardBias { get; set; } = -2;
+
+        /// <summary>V11: the weight on a ball that can be lost, in percent — the more careful side.</summary>
+        public int ConcentrateRiskPercent { get; set; } = 250;
+
+        /// <summary>V11: percent on the odds a challenger takes the ball off a man in his own half.</summary>
+        public int ConcentrateOwnHalfDuelLossPercent { get; set; } = 70;
     }
 }

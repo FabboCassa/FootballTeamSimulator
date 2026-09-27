@@ -35,6 +35,25 @@ namespace Sim.Core.Match.Movement
         /// <summary>X of the goal line a side defends.</summary>
         public static int OwnGoalX(bool home) => home ? 0 : Pitch.LengthDm;
 
+        /// <summary>
+        /// How much of the goal mouth the point at (<paramref name="x"/>, <paramref name="y"/>)
+        /// sees: the sine of the angle between its lines to the two posts, in permille, and 1000
+        /// once that angle reaches 90 degrees (on top of the goal line). Near the corner flag it
+        /// falls toward zero whatever the distance, which is what a shooting angle is.
+        /// </summary>
+        public static int GoalMouthSinePermille(int x, int y, int goalX)
+        {
+            long dx = goalX > x ? goalX - x : x - goalX;
+            long toLow = Pitch.CenterY - GoalHalfWidthDm - y;
+            long toHigh = Pitch.CenterY + GoalHalfWidthDm - y;
+            if (dx * dx + toLow * toHigh <= 0) return 1000;
+
+            long lowPost = Distance(x, y, goalX, Pitch.CenterY - GoalHalfWidthDm);
+            long highPost = Distance(x, y, goalX, Pitch.CenterY + GoalHalfWidthDm);
+            if (lowPost == 0 || highPost == 0) return 0;
+            return (int)(dx * 2 * GoalHalfWidthDm * 1000 / (lowPost * highPost));
+        }
+
         /// <summary>True when the point sits inside the penalty area a side defends.</summary>
         public static bool InOwnBox(bool home, int x, int y)
         {

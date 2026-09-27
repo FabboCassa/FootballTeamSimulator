@@ -39,6 +39,9 @@ namespace Sim.Core.Match
         /// <summary>Every shout heard so far, in the order it was heard.</summary>
         public IReadOnlyList<ShoutCall> Shouts => _calls;
 
+        /// <summary>The top of the familiarity scale the tactics' familiarity is read against.</summary>
+        public int FamiliarityMax => _familiarityMax;
+
         /// <summary>Whether the last <see cref="Advance"/> heard a shout or let one expire.</summary>
         public bool ShoutsChanged { get; private set; }
 
