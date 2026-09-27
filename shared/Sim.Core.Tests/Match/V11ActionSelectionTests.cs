@@ -113,6 +113,66 @@ namespace Sim.Core.Tests.Match
         }
 
         [Test]
+        public void AnEmptySliverByTheByline_IsNoOpenGoal_TheMouthMustBeInView()
+        {
+            // 18 m from the goal centre, but two metres off the byline: the posts are almost in line.
+            V11Scene byline = Scene(GoalX - 20, Mid + 180);
+            Assert.That(_valuation.IsOpenGoal(byline), Is.False);
+
+            V11Scene inFront = Scene(GoalX - 180, Mid + 20);
+            Assert.That(_valuation.IsOpenGoal(inFront), Is.True, "the same distance with the goal in view is open");
+        }
+
+        [Test]
+        public void ADefenderAStrideFromTheLane_OrOnTheBall_ClosesTheOpenGoal()
+        {
+            // From 16 m straight on, 6 m in front of goal the lane is (37 * 6 / 16) = 14 dm either side.
+            int margin = _cfg.V11OpenGoalLaneMarginDm;
+            V11Scene beside = Scene(GoalX - 160, Mid);
+            beside.AddFoe(At(GoalX - 60, Mid + 14 + margin / 2), keeper: false);
+            Assert.That(_valuation.IsOpenGoal(beside), Is.False, "a man a stride from the line of the shot blocks it");
+
+            V11Scene wide = Scene(GoalX - 160, Mid);
+            wide.AddFoe(At(GoalX - 60, Mid + 14 + margin * 2), keeper: false);
+            Assert.That(_valuation.IsOpenGoal(wide), Is.True, "a man well wide of it does not");
+
+            V11Scene onHim = Scene(GoalX - 160, Mid);
+            onHim.AddFoe(At(GoalX - 160 - _cfg.V11OpenGoalFreeRadiusDm * 3 / 4, Mid + 5), keeper: false);
+            Assert.That(_valuation.IsOpenGoal(onHim), Is.False, "a man on the ball closes it");
+        }
+
+        [Test]
+        public void ABodyInTheWay_CutsTheShot_ButTheManOnHimIsOnlyPressure()
+        {
+            int Shot(int? foeX)
+            {
+                V11Scene s = Scene(GoalX - 160, Mid);
+                if (foeX.HasValue) s.AddFoe(At(foeX.Value, Mid), keeper: false);
+                return _valuation.ShotValue(s);
+            }
+
+            int clear = Shot(null);
+            Assert.That(Shot(GoalX - 60), Is.EqualTo(clear * _cfg.V11ShotBlockerPercent / 100), "a blocker 10 m ahead");
+            Assert.That(Shot(GoalX - 160 + _cfg.PressureRadiusDm / 2), Is.EqualTo(clear),
+                "the man on him is the pressure the xG reads, not a second discount");
+        }
+
+        [Test]
+        public void TheLossWeight_PricesTheBallThatCanBeLost()
+        {
+            int Risky(int lossWeight)
+            {
+                _cfg.V11LossWeightPercent = lossWeight;
+                V11Scene s = Scene(300, Mid);
+                s.AddMate(At(520, Mid), keeper: false);
+                s.AddFoe(At(420, Mid + 40), keeper: false);
+                return new V11ActionValuation(_cfg).PassValue(s, out _);
+            }
+
+            Assert.That(Risky(300), Is.LessThan(Risky(100)));
+        }
+
+        [Test]
         public void AKeeperOnTheBall_NeverShoots_AtTheOtherGoal()
         {
             V11Scene s = Scene(GoalX - 150, Mid);
@@ -368,6 +428,37 @@ namespace Sim.Core.Tests.Match
 
             Assert.That(Risky(Mentality.Attacking), Is.GreaterThan(Risky(Mentality.Balanced)));
             Assert.That(Risky(Mentality.Balanced), Is.GreaterThan(Risky(Mentality.Defensive)));
+        }
+
+        [Test]
+        public void AShout_WeighsTheRisk_AndTheGain()
+        {
+            int Risky(int riskPercent, int gainPercent)
+            {
+                V11Scene s = Scene(300, Mid);
+                s.AddMate(At(520, Mid), keeper: false);
+                s.AddFoe(At(420, Mid + 40), keeper: false);
+                s.RiskPercent = riskPercent;
+                s.GainPercent = gainPercent;
+                return _valuation.PassValue(s, out _);
+            }
+
+            Assert.That(Risky(150, 100), Is.LessThan(Risky(100, 100)), "a ball that can be lost is dearer");
+            Assert.That(Risky(100, 75), Is.LessThan(Risky(100, 100)), "the threat it gains is worth less");
+        }
+
+        [Test]
+        public void AtTheEndOfHisRun_HeDoesNotStandOnTheBall()
+        {
+            // The carry in the last stretch goes to a point 11 m out in front of goal; from that
+            // point a carry would take him nowhere, and choosing it again and again stood a man on
+            // the ball there for the rest of the half.
+            V11Scene s = Scene(GoalX - _cfg.CarryGoalStandOffDm, Mid);
+            s.AddFoe(At(GoalX - 55, Mid - 25), keeper: false);
+            s.AddFoe(At(GoalX - 50, Mid + 25), keeper: false);
+
+            Assert.That(_valuation.CarryValue(s, out _, out _), Is.EqualTo(V11ActionValuation.NoOption));
+            Assert.That(_valuation.Choose(s, holding: false).Kind, Is.Not.EqualTo(V11ActionKind.Carry));
         }
 
         [Test]

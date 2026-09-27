@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Sim.Core.Config;
 using Sim.Core.Match.Movement;
 
 namespace Sim.Core.Match.Analysis
@@ -10,9 +11,12 @@ namespace Sim.Core.Match.Analysis
     /// draws nothing from any RNG and touches nothing, so it can never move a result.
     ///
     /// Definitions (docs/specs/watchable-match-engine.md):
-    ///   * R4 open goal — a carrier within 20 m of the centre of the goal he attacks, with no
-    ///     outfield defender inside the triangle ball-to-posts. One chance per unbroken spell of
-    ///     the same carrier in that state (a loose frame while he runs with the ball does not break
+    ///   * R4 open goal — a carrier within 20 m of the centre of the goal he attacks, who sees
+    ///     the goal mouth at an angle whose sine is at least 0.25 (the brain's
+    ///     V11OpenGoalMinMouthSinePermille), with no outfield defender inside the triangle
+    ///     ball-to-posts, within V11OpenGoalLaneMarginDm of either side of it or within
+    ///     V11OpenGoalFreeRadiusDm of the ball — the brain's own geometry, <see cref="OpenGoalLane"/>.
+    ///     One chance per unbroken spell of the same carrier in that state (a loose frame while he runs with the ball does not break
     ///     it); it is taken when he shoots within 1.5 s of it opening.
     ///   * R5 possession — an unbroken spell of one side holding the ball; loose frames between
     ///     two of its touches do not break it, the other side touching it or any restart does.
@@ -28,12 +32,19 @@ namespace Sim.Core.Match.Analysis
     public sealed class RealismAnalyzer
     {
         private const int MsPerMinute = 60_000;
-        private const int OpenGoalRangeDm = 200;
         private const int OpenGoalWindowMs = 1_500;
         private const int SterileMinMs = 20_000;
         private const int SterileProgressDm = 100;
 
         private readonly OffTargetMeter _offTarget = new OffTargetMeter();
+        private readonly MatchBalance _cfg;
+
+        /// <param name="cfg">Whose R4 geometry to read (the brain's V11OpenGoal* values); the shipped one when null.</param>
+        public RealismAnalyzer(MatchBalance? cfg = null)
+        {
+            _cfg = cfg ?? new MatchBalance();
+        }
+
         private readonly int[] _keeper = new int[2];
         private int[] _sentOffFrom = Array.Empty<int>();
 
@@ -107,22 +118,18 @@ namespace Sim.Core.Match.Analysis
         private bool LaneIsOpen(PositionStream s, int t, int code)
         {
             s.TryOwner(code, out bool home, out int _);
-            long bx = s.BallXY[t * 2], by = s.BallXY[t * 2 + 1];
-            long goalX = MovementGeometry.AttackedGoalX(home);
-            long dx = goalX - bx, dy = Pitch.CenterY - by;
-            if (dx * dx + dy * dy > (long)OpenGoalRangeDm * OpenGoalRangeDm) return false;
+            int bx = s.BallXY[t * 2], by = s.BallXY[t * 2 + 1];
+            int goalX = MovementGeometry.AttackedGoalX(home);
+            if (!OpenGoalLane.InRange(bx, by, goalX, _cfg.V11OpenGoalRangeDm, _cfg.V11OpenGoalMinMouthSinePermille)) return false;
 
             int n = s.PlayerCount;
             int foe = home ? 1 : 0;
             int[] xy = home ? s.AwayXY : s.HomeXY;
-            long lowPost = Pitch.CenterY - MovementGeometry.GoalHalfWidthDm;
-            long highPost = Pitch.CenterY + MovementGeometry.GoalHalfWidthDm;
-
             for (int slot = 0; slot < n; slot++)
             {
                 if (slot == _keeper[foe] || t >= _sentOffFrom[foe * n + slot]) continue;
-                if (InTriangle(s.PlayerX(xy, t, slot), s.PlayerY(xy, t, slot),
-                        bx, by, goalX, lowPost, goalX, highPost))
+                if (OpenGoalLane.Closes(s.PlayerX(xy, t, slot), s.PlayerY(xy, t, slot), bx, by, goalX,
+                        _cfg.V11OpenGoalLaneMarginDm, _cfg.V11OpenGoalFreeRadiusDm))
                     return false;
             }
 
@@ -140,20 +147,6 @@ namespace Sim.Core.Match.Analysis
 
             return false;
         }
-
-        /// <summary>Inclusive of the edges: a defender standing on the line to a post blocks it.</summary>
-        private static bool InTriangle(long px, long py, long ax, long ay, long bx, long by, long cx, long cy)
-        {
-            long d1 = Cross(px, py, ax, ay, bx, by);
-            long d2 = Cross(px, py, bx, by, cx, cy);
-            long d3 = Cross(px, py, cx, cy, ax, ay);
-            bool negative = d1 < 0 || d2 < 0 || d3 < 0;
-            bool positive = d1 > 0 || d2 > 0 || d3 > 0;
-            return !(negative && positive);
-        }
-
-        private static long Cross(long px, long py, long ax, long ay, long bx, long by) =>
-            (bx - ax) * (py - ay) - (by - ay) * (px - ax);
 
         // ------------------------------------------------------------------ R5 / R7: possessions
 

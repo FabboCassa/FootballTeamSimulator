@@ -41,10 +41,28 @@ namespace Sim.Core.Match.Movement
                 bool holding = _sim._hold[k] > 0;
                 if (holding) _sim._hold[k]--;
 
+                // While the hold runs only an open goal can move him, and that reads the ball and
+                // the other side alone: the whole scene is read once there is a choice to make.
+                if (holding)
+                {
+                    ReadGoalward(side, slot);
+                    TrackOpenGoal(tick, k);
+                    if (_scene.CarrierIsKeeper || !_valuation.IsOpenGoal(_scene)) return;
+                }
+
+                // He chooses on the pressure as it is and executes on the pressure he feels: a shout
+                // that calms him makes him surer on the ball, not bolder with it.
                 int pressure = _sim.PressurePermille(side, slot);
-                Read(side, slot, pressure);
+                Read(side, slot, _sim.RawPressurePermille(side, slot));
                 TrackOpenGoal(tick, k);
                 V11Choice choice = _valuation.Choose(_scene, holding);
+                if (choice.Kind != V11ActionKind.Hold)
+                {
+                    bool runsWithIt = choice.Kind == V11ActionKind.Carry
+                                      || choice.Kind == V11ActionKind.Drive
+                                      || choice.Kind == V11ActionKind.RoundKeeper;
+                    _sim._v11Carrier = runsWithIt ? k : -1;
+                }
 
                 switch (choice.Kind)
                 {
@@ -122,8 +140,11 @@ namespace Sim.Core.Match.Movement
                 }, pressure);
             }
 
-            /// <summary>The scene as the man on the ball sees it, in decimetres.</summary>
-            private void Read(int side, int slot, int pressure)
+            /// <summary>
+            /// The part of the scene an open goal is read off: where the ball is, which way he is
+            /// going, whether he is a keeper, and the other side. The mates are left empty.
+            /// </summary>
+            private void ReadGoalward(int side, int slot)
             {
                 MatchSimulator sim = _sim;
                 int n = sim._n;
@@ -136,11 +157,30 @@ namespace Sim.Core.Match.Movement
 
                 V11Scene s = _scene;
                 s.Reset();
-                bool home = side == 0;
-                s.AttacksHighX = home;
+                s.AttacksHighX = side == 0;
                 s.BallXDm = U.Dm(sim._ball.X);
                 s.BallYDm = U.Dm(sim._ball.Y);
                 s.CarrierIsKeeper = sim._keeper[k];
+
+                int opponent = 1 - side;
+                for (int j = 0; j < n; j++)
+                {
+                    int ok = opponent * n + j;
+                    if (sim._sentOff[ok]) continue;
+                    s.AddFoe(Actor(ok), sim._keeper[ok]);
+                }
+            }
+
+            /// <summary>The scene as the man on the ball sees it, in decimetres.</summary>
+            private void Read(int side, int slot, int pressure)
+            {
+                MatchSimulator sim = _sim;
+                int n = sim._n;
+                int k = side * n + slot;
+                ReadGoalward(side, slot);
+
+                V11Scene s = _scene;
+                bool home = side == 0;
                 s.Shooting = sim._skShooting[k];
                 s.Technique = sim._skTechnique[k];
                 s.Passing = sim._skPassing[k];
@@ -155,20 +195,14 @@ namespace Sim.Core.Match.Movement
                 s.MaxPassDm = U.Dm(sim._maxPassRange);
                 s.Instructions = sim._tactics[side].Instructions;
                 s.ShotAppetitePercent = sim._tactics[side].ShotAppetitePercent;
+                s.RiskPercent = sim._tactics[side].RiskPercent;
+                s.GainPercent = sim._tactics[side].GainPercent;
 
                 for (int j = 0; j < n; j++)
                 {
                     int mk = side * n + j;
                     if (j == slot || sim._sentOff[mk]) continue;
                     _mateSlot[s.AddMate(Actor(mk), sim._keeper[mk])] = j;
-                }
-
-                int opponent = 1 - side;
-                for (int j = 0; j < n; j++)
-                {
-                    int ok = opponent * n + j;
-                    if (sim._sentOff[ok]) continue;
-                    s.AddFoe(Actor(ok), sim._keeper[ok]);
                 }
             }
 

@@ -73,26 +73,30 @@ namespace Sim.Core.Match.Movement
 
             int line = _cfg.BackLineMinDepthDm
                        + (ballDepth - _cfg.BackLineBallLagDm) * _cfg.BackLineBallFollowPercent / 100
-                       + MovementTactics.Pick(_cfg.MentalityLinePushDm, mentality);
+                       + InstructionTable.Pick(_cfg.MentalityLinePushDm, mentality, _cfg.V11MentalitySpreadPercent);
             line += inPossession
                 ? MovementTactics.Pick(_cfg.V11LineShiftInPossessionDm, (int)phase)
                 : MovementTactics.Pick(_cfg.V11LineShiftOutOfPossessionDm, (int)phase)
                   + MovementTactics.Pick(_cfg.V11PressingLinePushDm, (int)instructions.Pressing);
             line = MovementGeometry.Clamp(line, _cfg.BackLineMinDepthDm, _cfg.BackLineMaxDepthDm);
 
+            // A shape spans the same depth whatever the number of its lines: a three-line 4-4-2
+            // spaces them wider rather than leaving its strikers a line short of a 4-3-3's.
+            int lines = man.LineCount;
             int spacing = _cfg.LineSpacingDm
                           * (inPossession ? _cfg.V11AttackLineSpacingPercent : _cfg.V11DefendLineSpacingPercent) / 100;
+            if (lines > 1 && _cfg.V11ShapeSpanLines > 1)
+                spacing = spacing * (_cfg.V11ShapeSpanLines - 1) / (lines - 1);
 
             // The front line stands no nearer the goal than mentality allows; the shape compresses.
             int reach = Pitch.LengthDm
-                        - _cfg.FrontLineGoalGapDm * MovementTactics.Percent(_cfg.MentalityFrontLineGapPercent, mentality) / 100;
-            int lines = man.LineCount;
+                        - _cfg.FrontLineGoalGapDm * InstructionTable.Percent(_cfg.MentalityFrontLineGapPercent, mentality, _cfg.V11MentalitySpreadPercent) / 100;
             if (lines > 1 && line + (lines - 1) * spacing > reach)
                 spacing = reach > line ? (reach - line) / (lines - 1) : 0;
 
             int depth = line + man.LineRank * spacing + man.OffsetXDm;
 
-            int widthPercent = MovementTactics.Percent(_cfg.WidthSpreadPercent, (int)instructions.Width)
+            int widthPercent = InstructionTable.Percent(_cfg.WidthSpreadPercent, (int)instructions.Width, _cfg.V11WidthSpreadPercent)
                                * (inPossession ? _cfg.V11AttackWidthPercent : _cfg.V11DefendWidthPercent) / 100;
             int shift = MovementGeometry.Clamp(
                 ballYDm - Pitch.CenterY, -_cfg.BlockLateralShiftMaxDm, _cfg.BlockLateralShiftMaxDm);

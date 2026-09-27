@@ -19,7 +19,8 @@ namespace Sim.Core.Tests.Match
     /// The tactics harness of the watchable-match spec (R8–R11), in the style of
     /// <see cref="InstructionsTests"/> and <see cref="RealismHarnessTests"/>: watched matches played
     /// with the shipped flags, equal squads on both sides (the same club, rotating across the league),
-    /// and readings PRINTED for the user to judge. A REPORT, not a gate — no band is asserted yet.
+    /// and readings PRINTED for the user to judge. On V10 a report; on V11 (tuned in task 11) it is
+    /// also the gate of R8-R11, asserted at the full sample (a smaller one only reads).
     ///
     /// The brain is the test-case parameter. Explicit, because each run is thousands of watched
     /// matches. Run one brain with:
@@ -41,6 +42,14 @@ namespace Sim.Core.Tests.Match
         private const int SubMinute = 60;
         private const int TiredSubs = 3;
         private const int FreshIdOffset = 10_000_000;
+
+        // The R8-R11 gates V11 is held to (V10 is only read).
+        private const double MaxPointsShare = 0.55;
+        private const double MaxWorstMatchupShare = 0.45;
+        private const double MinFamiliarityGd = 0.25;
+        private const double MinRoleFitGd = 0.25;
+        private const double MinSubsGd = 0.10;
+        private const double MinPressHighChangePercent = 15;
         private static readonly int[] ShoutMinutes = { 20, 40, 60, 80 };   // 20' apart: past the 15' cooldown
 
         private static readonly TouchlineShout[] Shouts =
@@ -94,6 +103,15 @@ namespace Sim.Core.Tests.Match
 
             for (int p = 0; p < presets.Count; p++)
                 Assert.That(table.Games(p), Is.EqualTo((presets.Count - 1) * perPairing), presets[p].Name);
+
+            // R8 is V11's gate at the full sample; V10, and a quick look at fewer matches, only read.
+            if (brain != MatchBrainVersion.V11 || perPairing < MatchesPerPairing) return;
+            for (int p = 0; p < presets.Count; p++)
+            {
+                Assert.That(table.PointsShare(p), Is.LessThanOrEqualTo(MaxPointsShare), $"{presets[p].Name}: points share");
+                Assert.That(table.ShareAgainst(p, table.WorstOpponent(p)), Is.LessThan(MaxWorstMatchupShare),
+                    $"{presets[p].Name}: its worst matchup");
+            }
         }
 
         [Explicit(Reason), Category("TacticHarness")]
@@ -108,8 +126,11 @@ namespace Sim.Core.Tests.Match
 
             Parallel.For(0, samples.Length, i => samples[i] = Measure(cfg, clubs[i % clubs.Count], i));
 
-            TestContext.Out.WriteLine(Report(brain, samples, cfg, clock.Elapsed.TotalSeconds));
+            var misses = new List<string>();
+            TestContext.Out.WriteLine(Report(brain, samples, cfg, clock.Elapsed.TotalSeconds, misses));
             Assert.That(samples.All(s => s != null), Is.True, "every fixture must be measured");
+            if (brain == MatchBrainVersion.V11 && samples.Length >= EffectMatches)
+                Assert.That(misses, Is.Empty, "R9-R11 on V11");
         }
 
         // ------------------------------------------------------------------ one fixture, every treatment
@@ -177,7 +198,9 @@ namespace Sim.Core.Tests.Match
 
         // ------------------------------------------------------------------ the report
 
-        private static string Report(MatchBrainVersion brain, EffectSample[] samples, BalanceConfig cfg, double seconds)
+        /// <summary>The printable report; every R9-R11 reading short of its gate is added to <paramref name="misses"/>.</summary>
+        private static string Report(MatchBrainVersion brain, EffectSample[] samples, BalanceConfig cfg, double seconds,
+            List<string> misses)
         {
             CultureInfo inv = CultureInfo.InvariantCulture;
             var fam = new PairedEffect();
@@ -197,6 +220,9 @@ namespace Sim.Core.Tests.Match
             sb.AppendLine(Line(inv, "familiarity 100 vs 0 (GD/match)", fam, "R9 reads >= +0.25"));
             sb.AppendLine(Line(inv, $"natural vs out of role (GD/match, {samples[0].OutOfRoleSlots} men off role)", role, "R9 reads >= +0.25"));
             sb.AppendLine(Line(inv, $"{TiredSubs} fresh subs at {SubMinute}' vs none (GD {SubMinute}-90)", subs, "R10 reads >= +0.10"));
+            if (fam.Delta < MinFamiliarityGd) misses.Add($"familiarity {fam.Delta:+0.000;-0.000}");
+            if (role.Delta < MinRoleFitGd) misses.Add($"role fit {role.Delta:+0.000;-0.000}");
+            if (subs.Delta < MinSubsGd) misses.Add($"subs {subs.Delta:+0.000;-0.000}");
             sb.AppendLine(string.Format(inv,
                 "  shouts: called at {0}', heard {1}' each | GD per window by score state (shout - none), n windows",
                 string.Join("', ", ShoutMinutes), cfg.Match.Shouts.DurationMinutes));
@@ -216,6 +242,11 @@ namespace Sim.Core.Tests.Match
                     "  {0,-12} {1,-24} none {2,7:F3}  shout {3,7:F3}  ({4:+0.0;-0.0}%)  |  {5}",
                     Shouts[k], ShoutTargets.Describe(ShoutTargets.MetricOf(Shouts[k])),
                     metric.BaselineMean, metric.TreatmentMean, metric.ChangePercent, States(inv, states, baseStates)));
+
+                double moved = ShoutTargets.ExpectedSign(ShoutTargets.MetricOf(Shouts[k])) * metric.ChangePercent;
+                double needed = Shouts[k] == TouchlineShout.PressHigh ? MinPressHighChangePercent : 0;
+                if (moved <= 0 || moved < needed) misses.Add($"{Shouts[k]} moves its metric {metric.ChangePercent:+0.0;-0.0}%");
+                if (PositiveEverywhere(states, baseStates)) misses.Add($"{Shouts[k]} is net-positive in every score state");
             }
 
             return sb.ToString();
@@ -225,19 +256,22 @@ namespace Sim.Core.Tests.Match
             string.Format(inv, "  {0,-58} {1:+0.000;-0.000}   ({2:+0.000;-0.000} vs {3:+0.000;-0.000})   {4}",
                 name, e.Delta, e.TreatmentMean, e.BaselineMean, target);
 
+        private static readonly ScoreState[] States3 = { ScoreState.Leading, ScoreState.Level, ScoreState.Trailing };
+
         private static string States(CultureInfo inv, StateTally shout, StateTally none)
         {
             var parts = new List<string>();
-            bool positiveEverywhere = true;
-            foreach (ScoreState st in new[] { ScoreState.Leading, ScoreState.Level, ScoreState.Trailing })
+            foreach (ScoreState st in States3)
             {
                 double delta = shout.Mean(st) - none.Mean(st);
-                positiveEverywhere &= delta > 0;
                 parts.Add(string.Format(inv, "{0} {1:+0.000;-0.000} (n {2})", st.ToString().ToLowerInvariant(), delta, shout.Count(st)));
             }
 
-            return string.Join("  ", parts) + (positiveEverywhere ? "  NET-POSITIVE IN EVERY STATE" : "");
+            return string.Join("  ", parts) + (PositiveEverywhere(shout, none) ? "  NET-POSITIVE IN EVERY STATE" : "");
         }
+
+        private static bool PositiveEverywhere(StateTally shout, StateTally none) =>
+            States3.All(st => shout.Mean(st) - none.Mean(st) > 0);
 
         // ------------------------------------------------------------------ the bench
 

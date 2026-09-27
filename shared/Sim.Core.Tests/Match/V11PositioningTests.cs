@@ -67,6 +67,26 @@ namespace Sim.Core.Tests.Match
         }
 
         [Test]
+        public void Spot_ShapeSpansTheSameDepth_WhateverTheNumberOfLines()
+        {
+            // 4-3-3 has four outfield lines (back, DM, CM, front), 4-4-2 three (back, CM, front).
+            PositionRole[] threeLines = Formations.Roles(Formation.F442);
+            foreach (bool inPossession in new[] { true, false })
+            {
+                var backOf433 = Spot(CentreBack, TeamPhase.Progression, inPossession, With());
+                var frontOf433 = Spot(Striker, TeamPhase.Progression, inPossession, With());
+                _positioning.PhaseSpot(V11Slot.InFormation(threeLines, 1, _cfg), true, TeamPhase.Progression,
+                    inPossession, With(), Pitch.CenterX, Pitch.CenterY, out int backOf442, out int _);
+                _positioning.PhaseSpot(V11Slot.InFormation(threeLines, 10, _cfg), true, TeamPhase.Progression,
+                    inPossession, With(), Pitch.CenterX, Pitch.CenterY, out int frontOf442, out int _);
+
+                Assert.That(backOf442, Is.EqualTo(backOf433.X), $"the back line holds the same height (in possession {inPossession})");
+                Assert.That(frontOf442, Is.EqualTo(frontOf433.X).Within(2),
+                    $"the strikers of a three-line shape stand as high as those of a four-line one (in possession {inPossession})");
+            }
+        }
+
+        [Test]
         public void Spot_ForTheAwaySide_IsTheHomeSpotMirrored()
         {
             for (int slot = 1; slot < Shape.Length; slot++)

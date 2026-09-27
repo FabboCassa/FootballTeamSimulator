@@ -7,10 +7,11 @@ namespace Sim.Core.Match.Movement
         private sealed partial class V11Brain
         {
             /// <summary>
-            /// Where this man goes (R2). A man placed for a V11 set piece (R6) is its own; a man v10
-            /// has a job for is v10's; a supporter keeps v10's supporting run unless he is a forward with a run in behind on. Everybody else goes to
-            /// his phase target spot — held onside when his side has the ball — or, for a full-back
-            /// whose side asks for it, on the overlap.
+            /// Where this man goes (R2). A man placed for a V11 set piece (R6) is its own; the presser
+            /// closes the man on the ball down goal-side of him; any other man v10 has a job for is
+            /// v10's; a supporter keeps v10's supporting run unless he is a forward with a run in
+            /// behind on. Everybody else goes to his phase target spot — held onside when his side
+            /// has the ball — or, for a full-back whose side asks for it, on the overlap.
             /// </summary>
             public void Move(int tick, int side, int slot)
             {
@@ -26,7 +27,8 @@ namespace Sim.Core.Match.Movement
                 {
                     if (_runner[side] == slot) _runner[side] = -1;
                     _spell[side * _sim._n + slot] = 0;
-                    _v10.Move(tick, side, slot);
+                    if (job == V10Job.Press && _sim._cfg.V11PressStandOffPercent > 0) PressGoalSide(side, slot);
+                    else _v10.Move(tick, side, slot);
                     return;
                 }
 
@@ -40,6 +42,8 @@ namespace Sim.Core.Match.Movement
 
                 _positioning.PhaseSpot(man, home, phase, _expansion[side], instructions,
                     U.Dm(ball.X), U.Dm(ball.Y), out int sx, out int sy);
+                if (man.Role != Domain.PositionRole.Goalkeeper)
+                    sx = Pitch.ClampX(sx + MovementGeometry.Direction(home) * _sim._tactics[side].ShoutLinePushDm);
                 if (inPossession) sx = _positioning.Onside(home, sx, _lineX[side]);
                 int spotX = U.ClampX(U.Units(sx));
                 int spotY = _sim._ctx.Inside(U.Units(sy));
@@ -86,6 +90,22 @@ namespace Sim.Core.Match.Movement
                 Lineup lineup = side == 0 ? _sim._home : _sim._away;
                 return new V11Slot(lineup.Slots[slot].Role, _sim._lineRank[k], _sim._lineCount[side],
                     _sim._baseY[k], _sim._offsetXDm[k]);
+            }
+
+            /// <summary>
+            /// The presser closes the man on the ball down from the GOAL side, a stand-off short of
+            /// him on the line from the ball to the centre of his own goal, rather than from wherever
+            /// he happens to be: a carrier running at goal runs into him and has to beat him in a
+            /// duel, instead of leaving a presser chasing his shadow from the side.
+            /// </summary>
+            private void PressGoalSide(int side, int slot)
+            {
+                int k = side * _sim._n + slot;
+                MatchBall ball = _sim._ball;
+                int goalX = U.Units(MovementGeometry.OwnGoalX(side == 0));
+                int standOff = _sim._tactics[side].PressStandOffU * _sim._cfg.V11PressStandOffPercent / 100;
+                U.Scaled(goalX - ball.X, U.CenterYU - ball.Y, standOff, out int dx, out int dy);
+                _sim.Steer(k, U.ClampX(ball.X + dx), _sim._ctx.Inside(ball.Y + dy), sprint: true);
             }
 
             /// <summary>Pulls a target back to within <paramref name="leash"/> of the spot.</summary>

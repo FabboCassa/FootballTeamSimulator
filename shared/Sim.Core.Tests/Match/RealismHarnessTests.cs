@@ -13,8 +13,8 @@ namespace Sim.Core.Tests.Match
     /// <summary>
     /// The realism harness of the watchable-match spec (R2, R4, R5, R7, R19): 1,000 watched
     /// matches between two equal-strength sides per brain, measured and printed against the bands
-    /// in <see cref="RealismBands"/>. It is a REPORT, not a gate — V11 is expected to sit outside
-    /// the bands until it is tuned (task 11), and the user judges the output.
+    /// in <see cref="RealismBands"/>. On V10 a report; V11, tuned in task 11, is gated on the R7
+    /// bands and R19's time, and the user judges the output before the task closes.
     ///
     /// Explicit, because 2,000 matches with the position stream on cost minutes, not the
     /// milliseconds the score-model harnesses in <see cref="MatchEngineTests"/> cost (about 13 min in
@@ -42,6 +42,15 @@ namespace Sim.Core.Tests.Match
 
             Assert.That(v10.Matches, Is.EqualTo(Matches), "Every match must come back with a stream.");
             Assert.That(v11.Matches, Is.EqualTo(Matches), "Every match must come back with a stream.");
+
+            string[] gated =
+            {
+                RealismBands.Goals.Name, RealismBands.Shots.Name, RealismBands.OnTargetPercent.Name,
+                RealismBands.Corners.Name, RealismBands.Fouls.Name, RealismBands.BoxEntriesPerSide.Name,
+                RealismBands.TimeVsV10.Name
+            };
+            foreach (RealismRow row in v11.Rows(v10.MsPerMatch).Where(row => gated.Contains(row.Band.Name)))
+                Assert.That(row.InBand, Is.True, $"V11 {row.Band.Name} {row.Value:F3} outside {row.Band.Describe()}");
         }
 
         private static RealismTally Run(MatchBrainVersion brain, Club a, Club b)

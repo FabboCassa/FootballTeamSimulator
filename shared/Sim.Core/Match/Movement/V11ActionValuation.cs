@@ -112,7 +112,7 @@ namespace Sim.Core.Match.Movement
                 };
             }
 
-            int pass = PassValue(s, out V11Choice bestPass);
+            int pass = PassValue(s, best.ValuePer10k, out V11Choice bestPass);
             if (pass > NoOption && pass >= best.ValuePer10k) best = bestPass;
 
             int shot = ShotValue(s);
@@ -125,19 +125,23 @@ namespace Sim.Core.Match.Movement
         // ------------------------------------------------------------------ R4
 
         /// <summary>
-        /// Inside the open-goal range of the goal centre, and no outfield defender inside (or on the
-        /// edge of) the triangle from the ball to the posts. The keeper does not close it.
+        /// Inside the open-goal range of the goal centre with the goal mouth in view, and no
+        /// outfield defender closing the lane to the posts (<see cref="OpenGoalLane"/>: in it, a
+        /// stride from it, or on the ball). The keeper does not close it.
         /// </summary>
         public bool IsOpenGoal(V11Scene s)
         {
             int goalX = GoalX(s);
-            int range = _cfg.V11OpenGoalRangeDm;
-            if (DistanceSq(s.BallXDm, s.BallYDm, goalX, Pitch.CenterY) > (long)range * range) return false;
+            if (!OpenGoalLane.InRange(s.BallXDm, s.BallYDm, goalX, _cfg.V11OpenGoalRangeDm, _cfg.V11OpenGoalMinMouthSinePermille))
+                return false;
 
             for (int i = 0; i < s.FoeCount; i++)
             {
                 if (i == s.FoeKeeper) continue;
-                if (InShootingTriangle(s, goalX, s.Foes[i].XDm, s.Foes[i].YDm)) return false;
+                PitchActor foe = s.Foes[i];
+                if (OpenGoalLane.Closes(foe.XDm, foe.YDm, s.BallXDm, s.BallYDm, goalX,
+                        _cfg.V11OpenGoalLaneMarginDm, _cfg.V11OpenGoalFreeRadiusDm))
+                    return false;
             }
 
             return true;
@@ -202,16 +206,9 @@ namespace Sim.Core.Match.Movement
         private static bool InShootingTriangle(V11Scene s, int goalX, int px, int py)
         {
             int half = MovementGeometry.GoalHalfWidthDm;
-            long d1 = Cross(px, py, s.BallXDm, s.BallYDm, goalX, Pitch.CenterY - half);
-            long d2 = Cross(px, py, goalX, Pitch.CenterY - half, goalX, Pitch.CenterY + half);
-            long d3 = Cross(px, py, goalX, Pitch.CenterY + half, s.BallXDm, s.BallYDm);
-            bool negative = d1 < 0 || d2 < 0 || d3 < 0;
-            bool positive = d1 > 0 || d2 > 0 || d3 > 0;
-            return !(negative && positive);
+            return OpenGoalLane.InTriangle(px, py, s.BallXDm, s.BallYDm,
+                goalX, Pitch.CenterY - half, goalX, Pitch.CenterY + half);
         }
-
-        private static long Cross(long px, long py, long ax, long ay, long bx, long by) =>
-            (bx - ax) * (py - ay) - (by - ay) * (px - ax);
 
         // ------------------------------------------------------------------ the options
 
@@ -225,7 +222,21 @@ namespace Sim.Core.Match.Movement
 
             int xg = ExpectedGoals.Permille(
                 s.BallXDm, s.BallYDm, s.AttacksHighX, s.PressurePermille, s.Shooting, s.Technique, _models);
-            return xg * 10 * Math.Max(0, s.ShotAppetitePercent) / 100;
+            int value = xg * 10 * Math.Max(0, s.ShotAppetitePercent) / 100 * _cfg.V11ShotValuePercent / 100;
+
+            // Every body in the way is a shot that may never reach the keeper. The man on him is
+            // not counted again: he is the pressure the xG has already read.
+            long onHim = (long)_cfg.PressureRadiusDm * _cfg.PressureRadiusDm;
+            for (int i = 0; i < s.FoeCount; i++)
+            {
+                if (i == s.FoeKeeper) continue;
+                PitchActor foe = s.Foes[i];
+                if (DistanceSq(foe.XDm, foe.YDm, s.BallXDm, s.BallYDm) < onHim) continue;
+                if (OpenGoalLane.Closes(foe.XDm, foe.YDm, s.BallXDm, s.BallYDm, goalX, _cfg.V11ShotBlockerMarginDm, 0))
+                    value = value * _cfg.V11ShotBlockerPercent / 100;
+            }
+
+            return value;
         }
 
         /// <summary>
@@ -265,6 +276,13 @@ namespace Sim.Core.Match.Movement
 
             // A keeper runs with it only when there is nothing else to do with it.
             if (s.CarrierIsKeeper) return NoOption;
+
+            // In the last stretch the carry goes to a point in front of goal: once he is on it, or
+            // past it, running with it would take him nowhere or away from goal, and choosing
+            // that again and again stood him on the ball there until somebody came for it.
+            if (DistanceSq(s.BallXDm, s.BallYDm, x, y) < (long)_cfg.V11CarryMinDm * _cfg.V11CarryMinDm
+                || DistanceSq(x, y, goalX, Pitch.CenterY) > DistanceSq(s.BallXDm, s.BallYDm, goalX, Pitch.CenterY))
+                return NoOption;
             return MoveValue(s, x, y, s.CarryKeepPermille, s.BallXDm, s.BallYDm, GainPercent(s, false, false));
         }
 
@@ -281,7 +299,16 @@ namespace Sim.Core.Match.Movement
         /// channel of the final stretch a ball to a man in the box is a cross. The odds are the
         /// lane's and the receiver's under pitch control, times the passer's execution.
         /// </summary>
-        public int PassValue(V11Scene s, out V11Choice best)
+        public int PassValue(V11Scene s, out V11Choice best) => PassValue(s, NoOption, out best);
+
+        /// <summary>
+        /// <see cref="PassValue(V11Scene, out V11Choice)"/> for a man who already has an option worth
+        /// <paramref name="floor"/>: a ball that could not reach it even if nobody could touch it is
+        /// not priced. The value only rises with the odds, so the odds without the lane, and
+        /// without the lane and the receiver, bound it from above, and the dear pitch-control lane
+        /// is read only for a ball that could still win. The choice is the same as pricing them all.
+        /// </summary>
+        private int PassValue(V11Scene s, int floor, out V11Choice best)
         {
             best = new V11Choice { Kind = V11ActionKind.Pass, Mate = -1, ValuePer10k = NoOption };
             int dir = s.AttacksHighX ? 1 : -1;
@@ -306,12 +333,18 @@ namespace Sim.Core.Match.Movement
                     bool cross = wide && !s.MateIsKeeper[m] && InAttackedBox(s, tx, ty);
                     bool longForward = distance > _cfg.LongBallFromDm && dir * (tx - s.BallXDm) > 0;
 
+                    MoveTerms(s, tx, ty, tx, ty, GainPercent(s, longForward, cross), out int keep, out int lost);
+                    int execution = Execution(s, distance);
+                    if (CannotWin(keep, lost, execution, best.ValuePer10k, floor)) continue;
+
+                    int receiver = PitchControl.ReceiverSafetyPermille(mate, foes, tx, ty, _models);
+                    if (CannotWin(keep, lost, receiver * execution / 1000, best.ValuePer10k, floor)) continue;
+
                     int lane = PitchControl.LaneSafetyPermille(
                         s.BallXDm, s.BallYDm, tx, ty, _cfg.V11PassBallSpeedDmPerSecond, foes, _models);
-                    int receiver = PitchControl.ReceiverSafetyPermille(mate, foes, tx, ty, _models);
-                    int safety = lane * receiver / 1000 * Execution(s, distance) / 1000;
+                    int safety = lane * receiver / 1000 * execution / 1000;
 
-                    int value = MoveValue(s, tx, ty, safety, tx, ty, GainPercent(s, longForward, cross));
+                    int value = Worth(keep, lost, safety);
                     if (value > best.ValuePer10k)
                     {
                         best = new V11Choice
@@ -336,16 +369,40 @@ namespace Sim.Core.Match.Movement
         /// </summary>
         private int MoveValue(V11Scene s, int x, int y, int safety, int lostX, int lostY, int gainPercent)
         {
+            MoveTerms(s, x, y, lostX, lostY, gainPercent, out int keep, out int lost);
+            return Worth(keep, lost, safety);
+        }
+
+        /// <summary>What he has if the move comes off (<paramref name="keep"/>) and what he gives away if it does not.</summary>
+        private void MoveTerms(V11Scene s, int x, int y, int lostX, int lostY, int gainPercent, out int keep, out int lost)
+        {
             int here = ExpectedThreat.ValuePer10k(s.BallXDm, s.BallYDm, s.AttacksHighX, _models);
             int gain = ExpectedThreat.ValuePer10k(x, y, s.AttacksHighX, _models) - here;
             if (gain > 0) gain = gain * gainPercent / 100;
+            keep = here + gain;
 
             int theirs = ExpectedThreat.ValuePer10k(lostX, lostY, !s.AttacksHighX, _models);
-            int risk = MovementTactics.Percent(_cfg.V11MentalityRiskPercent, (int)s.Instructions.Mentality);
-            int lost = theirs * risk / 100 * BallSkill.Clamp(s.VisionPercent, 0, 100) / 100;
+            int risk = MovementTactics.Percent(_cfg.V11MentalityRiskPercent, (int)s.Instructions.Mentality)
+                       * _cfg.V11LossWeightPercent / 100 * s.RiskPercent / 100;
+            lost = theirs * risk / 100 * BallSkill.Clamp(s.VisionPercent, 0, 100) / 100;
+        }
 
+        private static int Worth(int keep, int lost, int safety)
+        {
             int p = BallSkill.Clamp(safety, 0, 1000);
-            return ((here + gain) * p - lost * (1000 - p)) / 1000;
+            return (keep * p - lost * (1000 - p)) / 1000;
+        }
+
+        /// <summary>
+        /// True when a ball whose odds are at most <paramref name="oddsBound"/> can neither beat the
+        /// best pass so far (strictly) nor reach <paramref name="floor"/>. Only a bound when the
+        /// value rises with the odds, which it does whenever keep + lost is not negative.
+        /// </summary>
+        private static bool CannotWin(int keep, int lost, int oddsBound, int best, int floor)
+        {
+            if (keep + lost < 0) return false;
+            int most = Worth(keep, lost, oddsBound);
+            return most <= best || most < floor;
         }
 
         private int GainPercent(V11Scene s, bool longForward, bool cross)
@@ -354,7 +411,7 @@ namespace Sim.Core.Match.Movement
             int percent = MovementTactics.Percent(_cfg.V11TempoGainPercent, (int)i.Tempo);
             if (longForward) percent = percent * MovementTactics.Percent(_cfg.V11DirectnessPercent, (int)i.Tempo) / 100;
             if (cross) percent = percent * MovementTactics.Percent(_cfg.V11WidthCrossPercent, (int)i.Width) / 100;
-            return percent;
+            return percent * s.GainPercent / 100;
         }
 
         /// <summary>The odds his own foot puts it where he means to, in permille: the pass error the simulator will draw.</summary>

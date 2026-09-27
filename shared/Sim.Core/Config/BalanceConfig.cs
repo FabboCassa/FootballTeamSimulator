@@ -1189,8 +1189,15 @@ namespace Sim.Core.Config
         /// <summary>Back-line shift per phase for the side WITHOUT the ball: squeeze a build-up, drop in transition.</summary>
         public int[] V11LineShiftOutOfPossessionDm { get; set; } = { 40, 0, -30, 0, -60, 0 };
 
+        /// <summary>
+        /// What pressing costs the legs, by Pressing (low · medium · high): percent on the match
+        /// fatigue a side carries. A side that hunts the ball all match has less left in the last
+        /// half hour than one that sits.
+        /// </summary>
+        public int[] V11PressingFatiguePercent { get; set; } = { 85, 100, 150 };
+
         /// <summary>Line height out of possession, by Pressing (low · medium · high), in dm.</summary>
-        public int[] V11PressingLinePushDm { get; set; } = { -60, 0, 60 };
+        public int[] V11PressingLinePushDm { get; set; } = { -15, 0, 15 };
 
         /// <summary>
         /// R2's "off target": a man further than this from his phase target spot (25 m), while he is
@@ -1212,9 +1219,29 @@ namespace Sim.Core.Config
         /// apart they are the longer the front men are stranded off target (R2).
         /// </summary>
         public int V11AttackLineSpacingPercent { get; set; } = 100;
-        public int V11DefendLineSpacingPercent { get; set; } = 70;
+        public int V11DefendLineSpacingPercent { get; set; } = 100;
         public int V11AttackWidthPercent { get; set; } = 110;
         public int V11DefendWidthPercent { get; set; } = 80;
+
+        /// <summary>
+        /// How many lines at that spacing the V11 shape spans, back line to front line. A shape
+        /// with fewer lines spaces them wider, so its front men stand as high as a 4-3-3's; with
+        /// the spacing fixed per line a 4-4-2's strikers stood a line deeper and shot a third as often.
+        /// </summary>
+        public int V11ShapeSpanLines { get; set; } = 4;
+
+        /// <summary>
+        /// R8: how far from neutral V11 reads V10's instruction tables, per axis, in percent of
+        /// the distance of each extreme from the middle entry (<see cref="Sim.Core.Match.Movement.InstructionTable"/>).
+        /// The tables were tuned for V10's brain; read in full by V11 a high line or a quick
+        /// release swung a match between equal sides by more than a goal, and a wide side stood
+        /// its block so far apart that it took a third of the points. The middle entry is the
+        /// identity at any spread.
+        /// </summary>
+        public int V11MentalitySpreadPercent { get; set; } = 25;
+        public int V11PressingSpreadPercent { get; set; } = 15;
+        public int V11TempoSpreadPercent { get; set; } = 12;
+        public int V11WidthSpreadPercent { get; set; } = 30;
 
         /// <summary>How long a side takes to open from its block into its attacking shape.</summary>
         public int V11ShapeExpandMs { get; set; } = 4000;
@@ -1223,6 +1250,48 @@ namespace Sim.Core.Config
         /// <summary>How long a side takes to drop from its attacking shape into its block.</summary>
         public int V11ShapeCollapseMs { get; set; } = 5000;
         public int V11ShapeCollapseTicks => TicksOfMs(V11ShapeCollapseMs);
+
+        /// <summary>Top speed of a man running with the ball, in percent of his own (see MatchSimulator.CarrierTop).</summary>
+        public int V11CarrierSpeedPercent { get; set; } = 72;
+
+        /// <summary>
+        /// How far off the man on the ball the presser stands, goal-side of him, in percent of
+        /// the Pressing instruction's stand-off: further off he jockeys and makes the carrier beat
+        /// him, touch-tight he dives in (a duel, and now and then a foul, every tick).
+        /// </summary>
+        public int V11PressStandOffPercent { get; set; } = 280;
+
+        /// <summary>
+        /// How wide a V11 strike can go, in percent of ShotSpreadDm. V10's spread was sized for the
+        /// close-range shots V10 takes; V11 shoots at the open goal from the edge of the box too,
+        /// and from there V10's spread put three strikes in four off target.
+        /// </summary>
+        public int V11ShotSpreadPercent { get; set; } = 56;
+
+        /// <summary>
+        /// R9 on V11: what a side's skills lose at zero familiarity with its tactic, in permille,
+        /// shrinking in a straight line to nothing at full familiarity (see MatchSimulator.ReadFamiliarity).
+        /// </summary>
+        public int V11UnfamiliarPenaltyPermille { get; set; } = 150;
+
+        /// <summary>
+        /// R9 on V11: what a man out of his natural role loses, per step between his role and the
+        /// slot's along the pitch (centre-back to striker is six), and at most; a keeper out of
+        /// goal or an outfielder in it loses the most.
+        /// </summary>
+        public int V11OffRolePermillePerStep { get; set; } = 120;
+        public int V11OffRoleMaxPermille { get; set; } = 450;
+
+        /// <summary>
+        /// R10 on V11: how tired a man is after ninety minutes ON the pitch, before his Stamina
+        /// scales it, and what the break gives back to a man who played the first half. His own
+        /// clock rather than the match's, so a substitute comes on fresh.
+        /// </summary>
+        public int V11MatchFatigueAt90Permille { get; set; } = 850;
+        public int V11HalfTimeRecoveryPermille { get; set; } = 40;
+
+        /// <summary>The foul odds of a won challenge on V11, in percent of V10's (see Referee).</summary>
+        public int V11FoulPercent { get; set; } = 55;
 
         /// <summary>A man further than this from where he is going sprints there, with or without the ball.</summary>
         public int V11CatchUpSprintDm { get; set; } = 100;
@@ -1288,6 +1357,26 @@ namespace Sim.Core.Config
         /// <summary>R4's open goal: inside this distance of the goal centre with no outfield defender in the ball-to-posts triangle, he shoots.</summary>
         public int V11OpenGoalRangeDm { get; set; } = 200;
 
+        /// <summary>
+        /// ...and with the goal mouth in view: the sine of the angle between the lines to the two
+        /// posts, in permille (250 is about 14.5 degrees, a 20 m shot 45 degrees off the axis).
+        /// Without it every carrier by the byline with nobody in his sliver of a triangle had an
+        /// "open goal" and was made to shoot from where nobody scores. The realism harness reads
+        /// the same number (<see cref="Sim.Core.Match.Analysis.RealismAnalyzer"/>).
+        /// </summary>
+        public int V11OpenGoalMinMouthSinePermille { get; set; } = 250;
+
+        /// <summary>
+        /// ...and nobody on him or a stride from the line of the shot: no outfield defender this
+        /// close to the ball (level with it or goal-side: a man chasing from behind leaves him a
+        /// 1v1), nor this close to either side of the ball-to-posts triangle. A man
+        /// just outside that sliver of a triangle is still the man who blocks the shot; with the
+        /// bare triangle a carrier had an "open goal" ninety times a match with defenders
+        /// goal-side of him. The realism harness reads the same numbers.
+        /// </summary>
+        public int V11OpenGoalFreeRadiusDm { get; set; } = 50;
+        public int V11OpenGoalLaneMarginDm { get; set; } = 60;
+
         /// <summary>Inside this distance an open goal is shot at on sight; beyond it he takes one touch in first.</summary>
         public int V11OpenGoalShootNowDm { get; set; } = 120;
 
@@ -1299,6 +1388,42 @@ namespace Sim.Core.Config
 
         /// <summary>How far to the side of the keeper the dribble round him goes.</summary>
         public int V11RoundKeeperSideDm { get; set; } = 30;
+
+        /// <summary>
+        /// How much of a chance's xG the man on the ball credits a shot with, in percent. The xG
+        /// table stays a real-scale model; the simulator's keeper and blocks turn a real-scale
+        /// chance into a goal less often than that, and at the full xG every touch in the box
+        /// was a strike.
+        /// </summary>
+        public int V11ShotValuePercent { get; set; } = 10;
+
+        /// <summary>
+        /// What each outfield defender in the way of a shot leaves of its value, in percent: in the
+        /// ball-to-posts triangle or within V11ShotBlockerMarginDm of it, where he blocks it. The
+        /// man on the shooter is not counted: he is the pressure the xG already reads.
+        /// </summary>
+        public int V11ShotBlockerPercent { get; set; } = 20;
+        public int V11ShotBlockerMarginDm { get; set; } = 80;
+
+        /// <summary>
+        /// The keeper on V11, in percent of V10's: how far he dives, the odds he stops a shot on
+        /// target he reaches, that he holds one he stops rather than parrying it, and that a
+        /// parry goes behind (a corner). V10's were sized for V10's chances, most of them from
+        /// inside six yards.
+        /// </summary>
+        public int V11KeeperDivePercent { get; set; } = 130;
+        public int V11KeeperStopPercent { get; set; } = 125;
+        public int V11KeeperHoldPercent { get; set; } = 90;
+        public int V11KeeperParryBehindPercent { get; set; } = 180;
+
+        /// <summary>
+        /// The odds a ball a defender gets to comes off him rather than being controlled, on V11,
+        /// in percent of V10's DeflectPercent: where loose balls, throw-ins and corners come from.
+        /// </summary>
+        public int V11DeflectPercent { get; set; } = 140;
+
+        /// <summary>A carry shorter than this, or one that ends further from the goal centre than it starts, is not an option.</summary>
+        public int V11CarryMinDm { get; set; } = 20;
 
         /// <summary>Beyond this distance from the goal centre a shot is not an option.</summary>
         public int V11ShotRangeDm { get; set; } = 300;
@@ -1326,6 +1451,14 @@ namespace Sim.Core.Config
         /// is given when the ball is lost. A defensive side takes no chances; an attacking one does.
         /// </summary>
         public int[] V11MentalityRiskPercent { get; set; } = { 130, 100, 75 };
+
+        /// <summary>
+        /// The weight on what the other side is given when the ball is lost, in percent, before
+        /// Mentality's. The threat grid prices a ball lost by where it is lost, so this costs a
+        /// gamble in his own half far more than one in the final third; at 100 every forward ball
+        /// in midfield was worth its gamble and the match turned over six hundred times.
+        /// </summary>
+        public int V11LossWeightPercent { get; set; } = 200;
 
         /// <summary>Cross appetite, by Width (narrow · normal · wide): the weight on a cross's gain.</summary>
         public int[] V11WidthCrossPercent { get; set; } = { 75, 100, 130 };

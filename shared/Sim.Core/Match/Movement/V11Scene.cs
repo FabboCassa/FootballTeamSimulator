@@ -61,6 +61,12 @@ namespace Sim.Core.Match.Movement
         /// <summary>What a goal is worth to his side, in percent (Mentality times Tempo).</summary>
         public int ShotAppetitePercent { get; set; } = 100;
 
+        /// <summary>A shout's weight on the ball that can be lost, in percent (KeepBall, Concentrate).</summary>
+        public int RiskPercent { get; set; } = 100;
+
+        /// <summary>A shout's weight on the threat a move gains, in percent (KeepBall).</summary>
+        public int GainPercent { get; set; } = 100;
+
         public PitchActor[] Mates { get; }
         public bool[] MateIsKeeper { get; }
         public int MateCount { get; private set; }

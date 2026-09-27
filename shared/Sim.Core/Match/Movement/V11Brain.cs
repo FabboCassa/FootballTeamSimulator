@@ -97,6 +97,7 @@ namespace Sim.Core.Match.Movement
             {
                 _phases.Reset();
                 _openCarrier = -1;
+                _sim._v11Carrier = -1;
                 System.Array.Clear(_phaseTicks, 0, _phaseTicks.Length);
                 _spell = new int[_sim._n * SideCount];
                 _farTicks = new int[_sim._n * SideCount];
