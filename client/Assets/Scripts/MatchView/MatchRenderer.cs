@@ -120,6 +120,12 @@ namespace Fts.MatchView
         /// <summary>Fired as playback crosses a ball action — the commentary feed (13.1).</summary>
         public event Action<BallAction> ActionReached;
 
+        /// <summary>
+        /// Fired on every pump, and on a seek or Skip, with the stream frame playback has reached —
+        /// what the commentary panel reveals its lines against.
+        /// </summary>
+        public event Action<int> FrameReached;
+
         /// <summary>Fired when the live figures move, so a panel can redraw without polling.</summary>
         public event Action<MatchLiveStats> StatsChanged;
 
@@ -176,7 +182,10 @@ namespace Fts.MatchView
         /// <summary>True when there is something to play (a stripped report has nothing).</summary>
         public bool HasStream => _lastTick > 0 && _players > 0;
 
-        /// <summary>The director's timeline of this report, so a shared clock can be built on the same one.</summary>
+        /// <summary>
+        /// The director's timeline of this report: its cut summaries feed the commentary, and a
+        /// shared clock is built on the same one.
+        /// </summary>
         public BroadcastTimeline Timeline { get; }
 
         // ------------------------------------------------------------- pacing
@@ -233,6 +242,7 @@ namespace Fts.MatchView
             RecountStats();
             LayoutNumbers();
             MarkDirtyRepaint();
+            FrameReached?.Invoke(Mathf.FloorToInt(_tickPos));
         }
 
         /// <summary>1x / 2x / 4x.</summary>
@@ -256,6 +266,7 @@ namespace Fts.MatchView
             RecountStats();
             LayoutNumbers();
             MarkDirtyRepaint();
+            FrameReached?.Invoke(_lastTick);
             Finish();
         }
 
@@ -296,6 +307,7 @@ namespace Fts.MatchView
 
             if (statsMoved)
                 StatsChanged?.Invoke(_stats);
+            FrameReached?.Invoke(Mathf.FloorToInt(_tickPos));
 
             LayoutNumbers();
             MarkDirtyRepaint();

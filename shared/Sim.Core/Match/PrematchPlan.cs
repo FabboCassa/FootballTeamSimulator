@@ -8,8 +8,8 @@ namespace Sim.Core.Match
     /// <summary>
     /// A serializable conditional instruction (player ids and enums, not
     /// references): "from <see cref="FromMinute"/>, while the scoreline matches
-    /// <see cref="When"/>, optionally switch to these instructions and/or make this
-    /// substitution". Resolved against a club's current squad when the match runs,
+    /// <see cref="When"/>, optionally switch to these instructions, make this
+    /// substitution and/or call this shout". Resolved against a club's current squad when the match runs,
     /// mirroring how <see cref="LineupPlan"/>/<see cref="TacticPlan"/> persist a
     /// selection. The host (client/server) owns persistence; Sim.Core stays I/O-free.
     ///
@@ -38,6 +38,29 @@ namespace Sim.Core.Match
 
         /// <summary>Bench player to bring on; 0 = no substitution.</summary>
         public int SubInPlayerId { get; set; }
+
+        // --- Touchline shout (optional) ---
+        /// <summary>The shout to call when the rule fires; None (also what an older plan reads as) = no shout.</summary>
+        public TouchlineShout Shout { get; set; } = TouchlineShout.None;
+
+        /// <summary>A rule whose only action is to call <paramref name="shout"/> (the rule editor's shout action).</summary>
+        public static PrematchRule ForShout(int fromMinute, ScoreSituation when, TouchlineShout shout) =>
+            new PrematchRule { FromMinute = fromMinute, When = when, Shout = shout };
+
+        /// <summary>
+        /// Whether the engine can act on the rule as written: a minute inside the match, known
+        /// enums, a positive margin, and an action — a tactic change, a complete substitution
+        /// and/or a shout. A method rather than a property so it never lands in a save.
+        /// </summary>
+        public bool IsValid()
+        {
+            if (FromMinute < 1 || FromMinute > 90 || Margin < 1) return false;
+            if (!Enum.IsDefined(typeof(ScoreSituation), When) || !Enum.IsDefined(typeof(TouchlineShout), Shout)) return false;
+            if ((SubOutPlayerId == 0) != (SubInPlayerId == 0)) return false;
+            return ChangeInstructions || SubOutPlayerId != 0 || Shout != TouchlineShout.None;
+        }
+
+        public PrematchRule Copy() => (PrematchRule)MemberwiseClone();
     }
 
     /// <summary>
@@ -50,7 +73,42 @@ namespace Sim.Core.Match
     {
         public List<PrematchRule> Rules { get; set; } = new List<PrematchRule>();
 
+        /// <summary>How many rules the plan editor lets a coach keep.</summary>
+        public const int MaxRules = 6;
+
         public static PrematchPlan Empty() => new PrematchPlan();
+
+        /// <summary>Whether <see cref="WithRule"/> would take <paramref name="rule"/>.</summary>
+        public bool CanAdd(PrematchRule? rule) => rule != null && rule.IsValid() && Rules.Count < MaxRules;
+
+        /// <summary>A new plan with a copy of <paramref name="rule"/> appended; this plan is unchanged.</summary>
+        public PrematchPlan WithRule(PrematchRule rule)
+        {
+            if (!CanAdd(rule))
+                throw new ArgumentException("The rule is not valid or the plan is full.", nameof(rule));
+
+            PrematchPlan next = Copy();
+            next.Rules.Add(rule.Copy());
+            return next;
+        }
+
+        /// <summary>A new plan without the rule at <paramref name="index"/> (out of range removes nothing).</summary>
+        public PrematchPlan WithoutRule(int index)
+        {
+            PrematchPlan next = Copy();
+            if (index >= 0 && index < next.Rules.Count)
+                next.Rules.RemoveAt(index);
+            return next;
+        }
+
+        /// <summary>A deep copy: the rules are copied too, so editing it never touches this plan.</summary>
+        public PrematchPlan Copy()
+        {
+            var copy = new PrematchPlan();
+            foreach (PrematchRule rule in Rules)
+                copy.Rules.Add(rule.Copy());
+            return copy;
+        }
 
         /// <summary>
         /// Resolves the plan against <paramref name="club"/>'s squad.
@@ -83,7 +141,7 @@ namespace Sim.Core.Match
                         sub = new Substitution(rule.SubOutPlayerId, incoming);
                 }
 
-                var action = new RuleAction(instructions, familiarity, sub);
+                var action = new RuleAction(instructions, familiarity, sub, rule.Shout);
                 if (action.IsEmpty)
                     continue;
 

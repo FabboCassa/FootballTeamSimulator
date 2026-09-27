@@ -1159,6 +1159,17 @@ namespace Sim.Core.Config
         // Change TicksPerSecond and every duration below keeps its meaning. Distances stay in
         // decimetres, which is the pitch's own unit.
 
+        // --- Brain (watchable-match spec) ---
+
+        /// <summary>
+        /// Which decision layer plays a watched match. V10 is the engine the golden master pins;
+        /// V11 is the new brain, and until it grows decisions of its own it plays exactly as V10.
+        /// </summary>
+        public MatchBrainVersion Brain { get; set; } = MatchBrainVersion.V10;
+
+        /// <summary>Touchline shouts: duration, cooldown and magnitudes (watchable-match spec R11).</summary>
+        public ShoutBalance Shouts { get; set; } = new ShoutBalance();
+
         // --- Time base ---
 
         /// <summary>

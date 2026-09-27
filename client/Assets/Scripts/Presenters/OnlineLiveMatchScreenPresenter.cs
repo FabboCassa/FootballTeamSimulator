@@ -9,6 +9,7 @@ using Fts.Services.Navigation;
 using Fts.Services.Online;
 using Fts.Views;
 using Newtonsoft.Json;
+using Sim.Core.Config;
 using Sim.Core.Domain;
 using Sim.Core.Match;
 using Sim.Core.Match.Broadcast;
@@ -45,6 +46,8 @@ namespace Fts.Presenters
         private readonly SeasonReplayTarget _target;
         private readonly LiveMatchView _view;
         private readonly InMatchPanel _panel;
+        private readonly ShoutPicker _shouts;
+        private readonly ShoutBalance _shoutTiming = new BalanceConfig().Match.Shouts;
 
         private string _leagueId;
         private string _fixtureId;
@@ -60,6 +63,7 @@ namespace Fts.Presenters
         private LiveBroadcastClock _clock;
 
         private MatchRenderer _renderer;
+        private MatchReport _report; // what the renderer plays: the shouts the server's engine heard
         private int _homeClubId;
         private int _homeGoals;
         private int _awayGoals;
@@ -93,6 +97,7 @@ namespace Fts.Presenters
             _target = target;
             _view = new LiveMatchView(loc.Tr);
             _panel = new InMatchPanel(loc.Tr);
+            _shouts = new ShoutPicker(_panel, loc);
         }
 
         public void Enter()
@@ -246,6 +251,7 @@ namespace Fts.Presenters
         {
             DetachRenderer();
 
+            _report = report;
             _renderer = new MatchRenderer(report, HomeColor, AwayColor);
             _clock = _kickoff.HasValue ? new LiveBroadcastClock(_renderer.Timeline, _kickoff.Value) : null;
             if (_clock != null) _renderer.FollowClock(SharedFrame);
@@ -305,6 +311,7 @@ namespace Fts.Presenters
 
         private void OnEventReached(MatchEvent e)
         {
+            if (e.Type == MatchEventType.Shout) PushShout(e);
             if (e.Type == MatchEventType.Goal)
             {
                 if (e.ClubId == _homeClubId) _homeGoals++; else _awayGoals++;
@@ -312,6 +319,13 @@ namespace Fts.Presenters
                 string club = e.ClubId == _homeClubId ? HomeName() : AwayName();
                 _view.ShowToast(_loc.Tr("replay.goal", e.Minute, club));
             }
+        }
+
+        /// <summary>A shout either bench called goes into the running commentary, like the watched match's panel.</summary>
+        private void PushShout(MatchEvent e)
+        {
+            string club = e.ClubId == _homeClubId ? HomeName() : AwayName();
+            _view.PushAction(_loc.Tr(MatchEventKeys.For(e), e.Minute, string.Empty, club));
         }
 
         private void OnFinished() => _view.SetClock(_loc.Tr("match.clock", 90));
@@ -343,6 +357,7 @@ namespace Fts.Presenters
         {
             _panelOpen = false;
             _panel.SetVisible(false);
+            _shouts.Clear();
             // Re-anchor to the current live minute (the opponent may have changed the report meanwhile).
             if (_state != null && !string.IsNullOrEmpty(_state.reportJson))
             {
@@ -366,10 +381,12 @@ namespace Fts.Presenters
                 fromMinute = from,
                 lineup = BuildLineupPlan(),
                 tactic = BuildTacticPlan(),
+                shout = (int)_shouts.Pending, // the same input path as the tactic change
             };
 
             var result = await _leagues.SubmitLiveChangeAsync(_leagueId, _fixtureId, body);
             _busy = false;
+            _shouts.Clear();
             _panelOpen = false;
             _panel.SetVisible(false);
 
@@ -403,6 +420,8 @@ namespace Fts.Presenters
             _selectedSlot = -1;
             RefreshPanel();
         }
+
+        private void OnShout(int index) => _shouts.Toggle(index);
 
         private void OnMentality() { _mentality = (Mentality)(((int)_mentality + 1) % 3); RefreshPanel(); }
         private void OnPressing() { _pressing = (Pressing)(((int)_pressing + 1) % 3); RefreshPanel(); }
@@ -452,6 +471,9 @@ namespace Fts.Presenters
                 _loc.Tr("tactics.tempo." + _tempo.ToString().ToLowerInvariant())));
             _panel.SetWidth(_loc.Tr("tactics.label.width",
                 _loc.Tr("tactics.width." + _width.ToString().ToLowerInvariant())));
+
+            // Judged at the minute the change would be sent with, from what the server's engine heard so far.
+            _shouts.Show(ShoutBoard.Read(_report, _myClubExternalId, Mathf.Clamp(LiveMinute(), 1, 90), _shoutTiming));
         }
 
         private LineupPlan BuildLineupPlan()
@@ -532,6 +554,7 @@ namespace Fts.Presenters
             _panel.PressingCycleClicked += OnPressing;
             _panel.TempoCycleClicked += OnTempo;
             _panel.WidthCycleClicked += OnWidth;
+            _panel.ShoutClicked += OnShout;
             _panel.ApplyClicked += OnApply;
             _panel.ResumeClicked += OnResume;
         }
@@ -544,6 +567,7 @@ namespace Fts.Presenters
             _panel.PressingCycleClicked -= OnPressing;
             _panel.TempoCycleClicked -= OnTempo;
             _panel.WidthCycleClicked -= OnWidth;
+            _panel.ShoutClicked -= OnShout;
             _panel.ApplyClicked -= OnApply;
             _panel.ResumeClicked -= OnResume;
         }
