@@ -84,6 +84,34 @@ namespace Sim.Core.Config
         /// Fourteen trials matches the engine's draw rate and costs 28 draws a match.
         /// </summary>
         public int QuickGoalTrials { get; set; } = 14;
+
+        // --- Quick resolver, V11 calibration (watchable-match R17) ---
+        /// <summary>
+        /// The same four numbers fitted against the V11 brain instead (FastModelHarnessTests, 1,000
+        /// full-engine matches of a generated league). Read when <see cref="MatchBalance.Brain"/> is
+        /// V11; the V10 set above stays what the pinned world hashes were built on. V11 gives 2.76
+        /// goals, 40.6 / 23.9 / 35.5 and 0.078 goal difference per strength point; the home bonus is
+        /// negative because V11's home edge is smaller than HomeAdvantagePercent alone gives here.
+        /// </summary>
+        public double QuickV11BaseGoals { get; set; } = 1.38;
+        public double QuickV11StrengthFactor { get; set; } = 0.028;
+        public int QuickV11HomeAdvantageStrength { get; set; } = -4;
+        public int QuickV11GoalTrials { get; set; } = 14;
+
+        // --- Quick resolver instructions (R17) ---
+        // Percent points added to a side's expected goals (GoalsFor) or to its OPPONENT's
+        // (GoalsAgainst) by each instruction axis, indexed like the enums (low · neutral · high).
+        // The middle entry is the identity. Each extreme is the V11 engine's own shift against a
+        // neutral side of the same club (1,000 matches a setting, FastModelHarnessTests) as a
+        // share of a side's ~1.38 goals: e.g. press high concedes +0.28 a match, +20%.
+        public int[] QuickMentalityGoalsForPercent { get; set; } = { -4, 0, 7 };
+        public int[] QuickMentalityGoalsAgainstPercent { get; set; } = { -11, 0, 3 };
+        public int[] QuickPressingGoalsForPercent { get; set; } = { -1, 0, -6 };
+        public int[] QuickPressingGoalsAgainstPercent { get; set; } = { 6, 0, 20 };
+        public int[] QuickTempoGoalsForPercent { get; set; } = { -2, 0, 4 };
+        public int[] QuickTempoGoalsAgainstPercent { get; set; } = { 0, 0, -1 };
+        public int[] QuickWidthGoalsForPercent { get; set; } = { 8, 0, -5 };
+        public int[] QuickWidthGoalsAgainstPercent { get; set; } = { -6, 0, 9 };
     }
 
     /// <summary>
@@ -1178,6 +1206,337 @@ namespace Sim.Core.Config
         /// <summary>How long after winning the ball back live a side is in transition (and its opponent too).</summary>
         public int PhaseTransitionMs { get; set; } = 5000;
         public int PhaseTransitionTicks => TicksOfMs(PhaseTransitionMs);
+
+        // --- V11 positioning, runs and overlaps (R2). Read only by the V11 brain. ---
+        // The back line is placed as V10's is (BackLineMinDepthDm, BallLag, BallFollow, MaxDepth,
+        // MentalityLinePushDm), then shifted by the phase; per-phase tables are indexed by TeamPhase.
+
+        /// <summary>Back-line shift per phase for the side WITH the ball, in dm toward the goal it attacks.</summary>
+        public int[] V11LineShiftInPossessionDm { get; set; } = { 0, 40, 80, 60, 0, 0 };
+
+        /// <summary>Back-line shift per phase for the side WITHOUT the ball: squeeze a build-up, drop in transition.</summary>
+        public int[] V11LineShiftOutOfPossessionDm { get; set; } = { 40, 0, -30, 0, -60, 0 };
+
+        /// <summary>
+        /// What pressing costs the legs, by Pressing (low · medium · high): percent on the match
+        /// fatigue a side carries. A side that hunts the ball all match has less left in the last
+        /// half hour than one that sits.
+        /// </summary>
+        public int[] V11PressingFatiguePercent { get; set; } = { 85, 100, 150 };
+
+        /// <summary>Line height out of possession, by Pressing (low · medium · high), in dm.</summary>
+        public int[] V11PressingLinePushDm { get; set; } = { -15, 0, 15 };
+
+        /// <summary>
+        /// R2's "off target": a man further than this from his phase target spot (25 m), while he is
+        /// not on the ball, chasing, pressing, covering or marking, is far from it for that tick.
+        /// </summary>
+        public int V11OffTargetDm { get; set; } = 250;
+
+        /// <summary>
+        /// R2's "for more than 5 s": the first this-many ms of an unbroken spell further than
+        /// V11OffTargetDm are the run back into position, and only the rest counts as off target.
+        /// </summary>
+        public int V11OffTargetGraceMs { get; set; } = 5000;
+        public int V11OffTargetGraceTicks => TicksOfMs(V11OffTargetGraceMs);
+
+        /// <summary>
+        /// Line spacing and width of the V11 shape with and without the ball, in percent of
+        /// LineSpacingDm and of the width instruction. Closer together than V10's 120/55 and
+        /// 118/60: every turnover moves the whole shape from one to the other, and the further
+        /// apart they are the longer the front men are stranded off target (R2).
+        /// </summary>
+        public int V11AttackLineSpacingPercent { get; set; } = 100;
+        public int V11DefendLineSpacingPercent { get; set; } = 100;
+        public int V11AttackWidthPercent { get; set; } = 110;
+        public int V11DefendWidthPercent { get; set; } = 80;
+
+        /// <summary>
+        /// How many lines at that spacing the V11 shape spans, back line to front line. A shape
+        /// with fewer lines spaces them wider, so its front men stand as high as a 4-3-3's; with
+        /// the spacing fixed per line a 4-4-2's strikers stood a line deeper and shot a third as often.
+        /// </summary>
+        public int V11ShapeSpanLines { get; set; } = 4;
+
+        /// <summary>
+        /// R8: how far from neutral V11 reads V10's instruction tables, per axis, in percent of
+        /// the distance of each extreme from the middle entry (<see cref="Sim.Core.Match.Movement.InstructionTable"/>).
+        /// The tables were tuned for V10's brain; read in full by V11 a high line or a quick
+        /// release swung a match between equal sides by more than a goal, and a wide side stood
+        /// its block so far apart that it took a third of the points. The middle entry is the
+        /// identity at any spread.
+        /// </summary>
+        public int V11MentalitySpreadPercent { get; set; } = 25;
+        public int V11PressingSpreadPercent { get; set; } = 15;
+        public int V11TempoSpreadPercent { get; set; } = 12;
+        public int V11WidthSpreadPercent { get; set; } = 30;
+
+        /// <summary>How long a side takes to open from its block into its attacking shape.</summary>
+        public int V11ShapeExpandMs { get; set; } = 4000;
+        public int V11ShapeExpandTicks => TicksOfMs(V11ShapeExpandMs);
+
+        /// <summary>How long a side takes to drop from its attacking shape into its block.</summary>
+        public int V11ShapeCollapseMs { get; set; } = 5000;
+        public int V11ShapeCollapseTicks => TicksOfMs(V11ShapeCollapseMs);
+
+        /// <summary>Top speed of a man running with the ball, in percent of his own (see MatchSimulator.CarrierTop).</summary>
+        public int V11CarrierSpeedPercent { get; set; } = 72;
+
+        /// <summary>
+        /// How far off the man on the ball the presser stands, goal-side of him, in percent of
+        /// the Pressing instruction's stand-off: further off he jockeys and makes the carrier beat
+        /// him, touch-tight he dives in (a duel, and now and then a foul, every tick).
+        /// </summary>
+        public int V11PressStandOffPercent { get; set; } = 280;
+
+        /// <summary>
+        /// How wide a V11 strike can go, in percent of ShotSpreadDm. V10's spread was sized for the
+        /// close-range shots V10 takes; V11 shoots at the open goal from the edge of the box too,
+        /// and from there V10's spread put three strikes in four off target.
+        /// </summary>
+        public int V11ShotSpreadPercent { get; set; } = 56;
+
+        /// <summary>
+        /// R9 on V11: what a side's skills lose at zero familiarity with its tactic, in permille,
+        /// shrinking in a straight line to nothing at full familiarity (see MatchSimulator.ReadFamiliarity).
+        /// </summary>
+        public int V11UnfamiliarPenaltyPermille { get; set; } = 150;
+
+        /// <summary>
+        /// R9 on V11: what a man out of his natural role loses, per step between his role and the
+        /// slot's along the pitch (centre-back to striker is six), and at most; a keeper out of
+        /// goal or an outfielder in it loses the most.
+        /// </summary>
+        public int V11OffRolePermillePerStep { get; set; } = 120;
+        public int V11OffRoleMaxPermille { get; set; } = 450;
+
+        /// <summary>
+        /// R10 on V11: how tired a man is after ninety minutes ON the pitch, before his Stamina
+        /// scales it, and what the break gives back to a man who played the first half. His own
+        /// clock rather than the match's, so a substitute comes on fresh.
+        /// </summary>
+        public int V11MatchFatigueAt90Permille { get; set; } = 850;
+        public int V11HalfTimeRecoveryPermille { get; set; } = 40;
+
+        /// <summary>The foul odds of a won challenge on V11, in percent of V10's (see Referee).</summary>
+        public int V11FoulPercent { get; set; } = 55;
+
+        /// <summary>A man further than this from where he is going sprints there, with or without the ball.</summary>
+        public int V11CatchUpSprintDm { get; set; } = 100;
+
+        /// <summary>A supporting run or an overlap goes no further than this from the man's phase target spot.</summary>
+        public int V11SupportLeashDm { get; set; } = 200;
+
+        /// <summary>How far short of the offside line a man in possession holds when he is not running.</summary>
+        public int V11OnsideHoldDm { get; set; } = 15;
+
+        /// <summary>How far beyond the offside line a run in behind is aimed.</summary>
+        public int V11RunDepthDm { get; set; } = 120;
+
+        /// <summary>A run in behind stops this far short of the goal line.</summary>
+        public int V11RunGoalGapDm { get; set; } = 80;
+
+        /// <summary>The least room between the line and the run's end for there to be space behind at all.</summary>
+        public int V11RunMinSpaceDm { get; set; } = 60;
+
+        /// <summary>No opponent may stand this close to the run's end, or the space is covered.</summary>
+        public int V11RunSpaceRadiusDm { get; set; } = 70;
+
+        /// <summary>No opponent may stand this close to the line from the ball to the run's end.</summary>
+        public int V11RunLaneHalfWidthDm { get; set; } = 25;
+
+        /// <summary>The longest pass a run in behind is made for.</summary>
+        public int V11RunPassMaxDm { get; set; } = 350;
+
+        /// <summary>A forward further than this behind the line is too deep to time a run against it.</summary>
+        public int V11RunStartBandDm { get; set; } = 150;
+
+        /// <summary>A run in behind is aimed no wider than this from the centre of the pitch.</summary>
+        public int V11RunChannelDm { get; set; } = 220;
+
+        /// <summary>How long a run in behind lasts if the ball is not played into it.</summary>
+        public int V11RunMs { get; set; } = 3000;
+        public int V11RunTicks => TicksOfMs(V11RunMs);
+
+        /// <summary>Overlap appetite by Width (narrow · normal · wide); added to the Mentality one.</summary>
+        public int[] V11OverlapWidthScore { get; set; } = { 0, 1, 2 };
+
+        /// <summary>Overlap appetite by Mentality (defensive · balanced · attacking).</summary>
+        public int[] V11OverlapMentalityScore { get; set; } = { 0, 1, 2 };
+
+        /// <summary>A full-back overlaps when his side's width plus mentality appetite reaches this.</summary>
+        public int V11OverlapThreshold { get; set; } = 2;
+
+        /// <summary>A full-back overlaps a man on the ball no further than this ahead of his own spot.</summary>
+        public int V11OverlapReachDm { get; set; } = 150;
+
+        /// <summary>How far past the man on the ball the overlapping full-back runs.</summary>
+        public int V11OverlapAheadDm { get; set; } = 100;
+
+        /// <summary>How far inside the touchline the overlap runs.</summary>
+        public int V11OverlapTouchlineGapDm { get; set; } = 40;
+
+        /// <summary>The ball must be at least this far off the centre, on his flank, for a full-back to overlap.</summary>
+        public int V11OverlapFlankMinDm { get; set; } = 60;
+
+        // --- V11 action selection (R3-R5). Read only by the V11 brain. Every option is priced in
+        // ten-thousandths of a goal: xT for moving the ball, xG for the shot (ActionModels). ---
+
+        /// <summary>R4's open goal: inside this distance of the goal centre with no outfield defender in the ball-to-posts triangle, he shoots.</summary>
+        public int V11OpenGoalRangeDm { get; set; } = 200;
+
+        /// <summary>
+        /// ...and with the goal mouth in view: the sine of the angle between the lines to the two
+        /// posts, in permille (250 is about 14.5 degrees, a 20 m shot 45 degrees off the axis).
+        /// Without it every carrier by the byline with nobody in his sliver of a triangle had an
+        /// "open goal" and was made to shoot from where nobody scores. The realism harness reads
+        /// the same number (<see cref="Sim.Core.Match.Analysis.RealismAnalyzer"/>).
+        /// </summary>
+        public int V11OpenGoalMinMouthSinePermille { get; set; } = 250;
+
+        /// <summary>
+        /// ...and nobody on him or a stride from the line of the shot: no outfield defender this
+        /// close to the ball (level with it or goal-side: a man chasing from behind leaves him a
+        /// 1v1), nor this close to either side of the ball-to-posts triangle. A man
+        /// just outside that sliver of a triangle is still the man who blocks the shot; with the
+        /// bare triangle a carrier had an "open goal" ninety times a match with defenders
+        /// goal-side of him. The realism harness reads the same numbers.
+        /// </summary>
+        public int V11OpenGoalFreeRadiusDm { get; set; } = 50;
+        public int V11OpenGoalLaneMarginDm { get; set; } = 60;
+
+        /// <summary>Inside this distance an open goal is shot at on sight; beyond it he takes one touch in first.</summary>
+        public int V11OpenGoalShootNowDm { get; set; } = 120;
+
+        /// <summary>The touch in toward the goal centre before the shot at an open goal from the edge of range.</summary>
+        public int V11OpenGoalDriveDm { get; set; } = 50;
+
+        /// <summary>In a 1v1, a keeper in the triangle this close to the ball is dribbled round rather than shot at.</summary>
+        public int V11RoundKeeperDm { get; set; } = 25;
+
+        /// <summary>How far to the side of the keeper the dribble round him goes.</summary>
+        public int V11RoundKeeperSideDm { get; set; } = 30;
+
+        /// <summary>
+        /// How much of a chance's xG the man on the ball credits a shot with, in percent. The xG
+        /// table stays a real-scale model; the simulator's keeper and blocks turn a real-scale
+        /// chance into a goal less often than that, and at the full xG every touch in the box
+        /// was a strike.
+        /// </summary>
+        public int V11ShotValuePercent { get; set; } = 10;
+
+        /// <summary>
+        /// What each outfield defender in the way of a shot leaves of its value, in percent: in the
+        /// ball-to-posts triangle or within V11ShotBlockerMarginDm of it, where he blocks it. The
+        /// man on the shooter is not counted: he is the pressure the xG already reads.
+        /// </summary>
+        public int V11ShotBlockerPercent { get; set; } = 20;
+        public int V11ShotBlockerMarginDm { get; set; } = 80;
+
+        /// <summary>
+        /// The keeper on V11, in percent of V10's: how far he dives, the odds he stops a shot on
+        /// target he reaches, that he holds one he stops rather than parrying it, and that a
+        /// parry goes behind (a corner). V10's were sized for V10's chances, most of them from
+        /// inside six yards.
+        /// </summary>
+        public int V11KeeperDivePercent { get; set; } = 130;
+        public int V11KeeperStopPercent { get; set; } = 125;
+        public int V11KeeperHoldPercent { get; set; } = 90;
+        public int V11KeeperParryBehindPercent { get; set; } = 180;
+
+        /// <summary>
+        /// The odds a ball a defender gets to comes off him rather than being controlled, on V11,
+        /// in percent of V10's DeflectPercent: where loose balls, throw-ins and corners come from.
+        /// </summary>
+        public int V11DeflectPercent { get; set; } = 140;
+
+        /// <summary>A carry shorter than this, or one that ends further from the goal centre than it starts, is not an option.</summary>
+        public int V11CarryMinDm { get; set; } = 20;
+
+        /// <summary>Beyond this distance from the goal centre a shot is not an option.</summary>
+        public int V11ShotRangeDm { get; set; } = 300;
+
+        /// <summary>Average ball speed of a ground pass, for pitch control's lane test.</summary>
+        public int V11PassBallSpeedDmPerSecond { get; set; } = 160;
+
+        /// <summary>How far ahead of a team-mate, toward goal, a ball into his path is played.</summary>
+        public int V11PassLeadDm { get; set; } = 50;
+
+        /// <summary>
+        /// Tempo: the weight on the xT a move gains (slow · normal · fast). A quick side takes the
+        /// forward ball a patient one would pass up for a safe one.
+        /// </summary>
+        public int[] V11TempoGainPercent { get; set; } = { 80, 100, 125 };
+
+        /// <summary>
+        /// Directness, by Tempo (the "directness vs control" axis): the extra weight on the gain of
+        /// a long forward ball (over LongBallFromDm), on top of the tempo weight.
+        /// </summary>
+        public int[] V11DirectnessPercent { get; set; } = { 75, 100, 135 };
+
+        /// <summary>
+        /// Risk, by Mentality (defensive · balanced · attacking): the weight on what the other side
+        /// is given when the ball is lost. A defensive side takes no chances; an attacking one does.
+        /// </summary>
+        public int[] V11MentalityRiskPercent { get; set; } = { 130, 100, 75 };
+
+        /// <summary>
+        /// The weight on what the other side is given when the ball is lost, in percent, before
+        /// Mentality's. The threat grid prices a ball lost by where it is lost, so this costs a
+        /// gamble in his own half far more than one in the final third; at 100 every forward ball
+        /// in midfield was worth its gamble and the match turned over six hundred times.
+        /// </summary>
+        public int V11LossWeightPercent { get; set; } = 200;
+
+        /// <summary>Cross appetite, by Width (narrow · normal · wide): the weight on a cross's gain.</summary>
+        public int[] V11WidthCrossPercent { get; set; } = { 75, 100, 130 };
+
+        // --- V11 set pieces (R6). Read only by the V11 brain; V10 never looks at them. ---
+
+        /// <summary>A free kick this close to the goal it attacks gets a wall and is shot or crossed.</summary>
+        public int SetPieceRangeDm { get; set; } = 350;
+
+        /// <summary>
+        /// What a free kick swung into the box is worth, as the goal odds (permille) the taker
+        /// weighs a direct shot's odds against. Above it he shoots; below it he crosses.
+        /// </summary>
+        public int FreeKickCrossOddsPermille { get; set; } = 80;
+
+        /// <summary>Of the corners, how many are aimed at the near-post man; the rest go to the far post.</summary>
+        public int CornerNearPostPermille { get; set; } = 400;
+
+        /// <summary>Where the corner roles stand, in decimetres out from the goal line.</summary>
+        public int CornerNearPostDepthDm { get; set; } = 55;
+        public int CornerFarPostDepthDm { get; set; } = 65;
+        public int CornerEdgeDepthDm { get; set; } = 185;
+
+        /// <summary>How far across from the middle of the goal the near-post and far-post men stand.</summary>
+        public int CornerPostOffsetDm { get; set; } = 40;
+
+        /// <summary>How long a set piece waits, past the usual pause, for its men to be in place.</summary>
+        public int SetPieceWaitMs { get; set; } = 8000;
+        public int SetPieceWaitTicks => TicksOfMs(SetPieceWaitMs);
+
+        /// <summary>How long everybody has to be in place before the set piece is taken, so the eye sees it.</summary>
+        public int SetPieceSettleMs { get; set; } = 1000;
+        public int SetPieceSettleTicks => TicksOfMs(SetPieceSettleMs);
+
+        /// <summary>How far behind the spot the penalty taker starts his run-up.</summary>
+        public int PenaltyRunUpDm { get; set; } = 70;
+
+        /// <summary>
+        /// Whether a goal kick / a throw-in is played long (1) or short (0), by Tempo
+        /// Slow/Normal/Fast — the build-up instruction.
+        /// </summary>
+        public int[] GoalKickLongByTempo { get; set; } = { 0, 1, 1 };
+        public int[] ThrowInLongByTempo { get; set; } = { 0, 0, 1 };
+
+        /// <summary>The nearest a restart is played to a man, and the furthest a thrown ball goes.</summary>
+        public int RestartMinPassDm { get; set; } = 40;
+        public int ThrowInMaxDm { get; set; } = 350;
+
+        /// <summary>Touchline shouts: duration, cooldown and magnitudes (watchable-match spec R11).</summary>
+        public ShoutBalance Shouts { get; set; } = new ShoutBalance();
 
         // --- Time base ---
 

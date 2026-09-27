@@ -186,8 +186,10 @@ public sealed class LiveMatchService : ILiveMatchService
 
         LiveSide side = live.HomeUserId == userId ? LiveSide.Home : LiveSide.Away;
 
-        if (request is null || (request.Lineup is null && request.Tactic is null))
-            return Fail("A change must carry a lineup and/or a tactic.", LeagueError.InvalidLiveChange);
+        if (request is null || (request.Lineup is null && request.Tactic is null && request.Shout == TouchlineShout.None))
+            return Fail("A change must carry a lineup, a tactic and/or a shout.", LeagueError.InvalidLiveChange);
+        if (!Enum.IsDefined(request.Shout))
+            return Fail("Unknown touchline shout.", LeagueError.InvalidLiveChange);
         if (request.FromMinute < 1 || request.FromMinute > 90)
             return Fail("The change minute must be between 1 and 90.", LeagueError.InvalidLiveChange);
 
@@ -208,7 +210,7 @@ public sealed class LiveMatchService : ILiveMatchService
                 return Fail("The lineup is not valid for your current squad.", LeagueError.InvalidLiveChange);
         }
 
-        changes.Add(new LiveChange(request.FromMinute, side, request.Lineup, request.Tactic));
+        changes.Add(new LiveChange(request.FromMinute, side, request.Lineup, request.Tactic, request.Shout));
 
         MatchResolver.ResolveResult r = MatchResolver.ResolveLive(
             sides.Value.Home, sides.Value.Away, sides.Value.HomeInputs, sides.Value.AwayInputs,

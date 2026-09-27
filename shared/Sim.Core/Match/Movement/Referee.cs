@@ -42,6 +42,10 @@ namespace Sim.Core.Match.Movement
             // impossible, and it is a real thing defenders do rather than a knob invented to keep
             // the count down.
             if (inOwnBox) odds = odds * _ctx.Cfg.FoulInBoxPermille / 1000;
+
+            // V11's presser stands goal-side and makes the carrier beat him, so it wins far more
+            // challenges than V10's; each of them is a cleaner one.
+            if (_ctx.Cfg.Brain == Config.MatchBrainVersion.V11) odds = odds * _ctx.Cfg.V11FoulPercent / 100;
             if (_ctx.Rng.NextInt(0, 1000) >= odds) return false;
 
             int victimSide = 1 - side;

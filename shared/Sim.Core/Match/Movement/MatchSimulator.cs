@@ -55,6 +55,9 @@ namespace Sim.Core.Match.Movement
         private Lineup _away = null!;
         private MatchInputFeed? _feed;
 
+        /// <summary>How many of the feed's shouts are already on the report's timeline.</summary>
+        private int _shoutsWritten;
+
         private int _n;
         private int[] _px = System.Array.Empty<int>();
         private int[] _py = System.Array.Empty<int>();
@@ -387,6 +390,7 @@ namespace Sim.Core.Match.Movement
             _vision = new int[total];
             _scalePermille = new int[total];
             _stamina = new int[total];
+            _onSince = new int[total];
 
             _arrivalU = U.Units(_cfg.PlayerArrivalRadiusDm);
             _approachU = U.Units(_cfg.PlayerApproachDm);
@@ -438,12 +442,13 @@ namespace Sim.Core.Match.Movement
                 _skShooting, _skTechnique, _receiver, _lastTouch);
             _offside = new Offside(_ctx, _skPositioning);
             _freeKickWall = new FreeKickWall(_ctx);
-            _restarts = new Restarts(_ctx, _offside, _freeKickWall);
+            _restarts = new Restarts(_ctx, _offside, _freeKickWall, WallRangeDm);
             _referee = new Referee(_ctx, _restarts, _offside, _skDefending);
             _outOfPlay = new OutOfPlay(_ctx, _restarts, _stepFromX, _stepFromY, _stepToX, _stepToY);
 
-            _tactics[0] = MovementTactics.From(tactics?.Home, _cfg);
-            _tactics[1] = MovementTactics.From(tactics?.Away, _cfg);
+            RefreshTactics(tactics);
+            SetTempo(tactics);
+            if (_feed != null) _shoutsWritten = _feed.WriteShoutEvents(_report, 0);
 
             // On the centre spot before anybody takes up a position: the block is built around
             // the ball, and a ball still sitting at the origin drags all twenty-two men onto one
@@ -534,7 +539,8 @@ namespace Sim.Core.Match.Movement
                 _scalePermille[k] = fixedScale < 1 ? 1 : fixedScale;
             }
 
-            int scale = _scalePermille[k] * fatiguePermille / 1000;
+            int scale = _scalePermille[k] * fatiguePermille / 1000
+                        * _familiarityPermille[side] / 1000 * RoleFitPermille(lineup.Slots[i]) / 1000;
 
             _skPassing[k] = Rate(attributes.Passing, scale);
             _skTechnique[k] = Rate(attributes.Technique, scale);
@@ -574,8 +580,8 @@ namespace Sim.Core.Match.Movement
             {
                 _home = _feed.Current.Home;
                 _away = _feed.Current.Away;
-                _tactics[0] = MovementTactics.From(_feed.Current.Tactics?.Home, _cfg);
-                _tactics[1] = MovementTactics.From(_feed.Current.Tactics?.Away, _cfg);
+                RefreshTactics(_feed.Current.Tactics);
+                SetTempo(_feed.Current.Tactics);
 
                 for (int side = 0; side < SideCount; side++)
                 {
@@ -604,6 +610,7 @@ namespace Sim.Core.Match.Movement
                                 lineup.Slots[i].Player.Id, ids[i], shirts[i], sideShirts[i]));
 
                             _scalePermille[k] = 0;
+                            _onSince[k] = minute;
                             ids[i] = lineup.Slots[i].Player.Id;
                             sideShirts[i] = shirts[i];
                         }
@@ -612,13 +619,31 @@ namespace Sim.Core.Match.Movement
                     }
                 }
             }
+            else if (_feed != null && _feed.ShoutsChanged)
+            {
+                RefreshTactics(_feed.Current.Tactics);
+            }
+
+            if (_feed != null && _feed.ShoutsChanged)
+                _shoutsWritten = _feed.WriteShoutEvents(_report, _shoutsWritten);
 
             for (int side = 0; side < SideCount; side++)
             {
                 Lineup lineup = side == 0 ? _home : _away;
                 for (int i = 0; i < _n; i++)
-                    BindSkills(side, i, lineup, FatiguePermille(minute, _stamina[side * _n + i]));
+                    BindSkills(side, i, lineup, FatiguePermille(side, i, minute, _stamina[side * _n + i]));
             }
+        }
+
+        /// <summary>
+        /// Each side's movement tactics: its instructions, and on top of them whatever touchline
+        /// shout it is playing to (the identity when there is none).
+        /// </summary>
+        private void RefreshTactics(MatchTactics? tactics)
+        {
+            _tactics[0] = MovementTactics.From(tactics?.Home, _cfg, _feed?.Effect(true) ?? ShoutEffect.None);
+            _tactics[1] = MovementTactics.From(tactics?.Away, _cfg, _feed?.Effect(false) ?? ShoutEffect.None);
+            ReadFamiliarity(tactics);
         }
 
         /// <summary>
@@ -627,18 +652,28 @@ namespace Sim.Core.Match.Movement
         /// break, and is scaled by his own Stamina — so a low-stamina man fades and a high-stamina
         /// one barely does. It is the result model's own curve
         /// (<c>MatchEngine.FatigueFactor</c>), read one player at a time instead of one team at a
-        /// time, which is the whole gain of the causality being on the pitch.
+        /// time, which is the whole gain of the causality being on the pitch. On V11 it is his own
+        /// clock rather than the match's (<see cref="V11TirednessPermille"/>).
         /// </summary>
-        private int FatiguePermille(int minute, int stamina)
+        private int FatiguePermille(int side, int slot, int minute, int stamina)
         {
             if (!_applyMatchFatigue) return 1000;
 
-            int permille = _condition.MatchFatigueAt90Permille * minute / 90;
-            if (minute > 45) permille -= _condition.HalfTimeRecoveryPermille;
-            if (permille < 0) permille = 0;
+            int permille;
+            if (IsV11)
+            {
+                permille = V11TirednessPermille(side * _n + slot, minute);
+            }
+            else
+            {
+                permille = _condition.MatchFatigueAt90Permille * minute / 90;
+                if (minute > 45) permille -= _condition.HalfTimeRecoveryPermille;
+                if (permille < 0) permille = 0;
+            }
 
             int neutral = _condition.StaminaNeutral;
             int scaled = neutral > 0 ? permille * (2 * neutral - stamina) / neutral : permille;
+            scaled = scaled * _tactics[side].FatiguePercent / 100;
             if (scaled < 0) scaled = 0;
             if (scaled > 900) scaled = 900;
             return 1000 - scaled;
@@ -659,6 +694,22 @@ namespace Sim.Core.Match.Movement
         /// the touch he takes and is what turns a comfortable ball into a hurried one.
         /// </summary>
         private int PressurePermille(int side, int slot)
+        {
+            int worst = RawPressurePermille(side, slot);
+            int k = side * _n + slot;
+
+            // A shout can calm him (Encourage) or steady the back (Concentrate); 100 is the identity.
+            MovementTactics t = _tactics[side];
+            worst = worst * t.PressureFeltPercent / 100;
+            if (t.OwnHalfPressureFeltPercent != 100
+                && MovementGeometry.Direction(side == 0) * (_px[k] - U.CenterXU) < 0)
+                worst = worst * t.OwnHalfPressureFeltPercent / 100;
+
+            return worst;
+        }
+
+        /// <summary>The pressure as it is, before a shout calms him: what the V11 brain decides on.</summary>
+        private int RawPressurePermille(int side, int slot)
         {
             int k = side * _n + slot;
             int opponent = 1 - side;
@@ -717,11 +768,16 @@ namespace Sim.Core.Match.Movement
         private void Carry(int tick, int side, int slot)
         {
             int k = side * _n + slot;
-            bool home = side == 0;
-            int dir = MovementGeometry.Direction(home);
-
             int touch = CarryTouchDm(k, PressurePermille(side, slot));
             CarryTarget(side, k, U.Units(touch), out int targetX, out int targetY);
+            CarryTo(tick, side, slot, targetX, targetY);
+        }
+
+        /// <summary>He knocks it to (<paramref name="targetX"/>, <paramref name="targetY"/>), in units, and runs onto it.</summary>
+        private void CarryTo(int tick, int side, int slot, int targetX, int targetY)
+        {
+            int k = side * _n + slot;
+            bool home = side == 0;
             int distance = U.Distance(_px[k], _py[k], targetX, targetY);
 
             // He knocks it ahead and runs onto it. The push has to be long enough that one
@@ -866,11 +922,7 @@ namespace Sim.Core.Match.Movement
 
         private void TakeRestart(int tick, int side, int slot)
         {
-            _ball.Dead = false;
-            Collect(side, slot);
-            _hold[side * _n + slot] = 1;
-            _ctx.RestartGrace = tick + _cfg.RestartGraceTicks;
-            _ctx.RestartTaker = side * _n + slot;
+            BeginRestart(tick, side, slot);
 
             // A penalty is STRUCK, from the spot (Law 14).
             if (_ctx.DeadKind == BallActionKind.Penalty)
@@ -891,6 +943,16 @@ namespace Sim.Core.Match.Movement
                     _ball.ForceForTicks(distance, _cfg.TicksOfMs(1200), _maxPassForce));
                 _sheet.Record(tick, BallActionKind.Cross, home, slot, -1);
             }
+        }
+
+        /// <summary>The ball is back in play, at the taker's feet.</summary>
+        private void BeginRestart(int tick, int side, int slot)
+        {
+            _ball.Dead = false;
+            Collect(side, slot);
+            _hold[side * _n + slot] = 1;
+            _ctx.RestartGrace = tick + _cfg.RestartGraceTicks;
+            _ctx.RestartTaker = side * _n + slot;
         }
 
         /// <summary>
@@ -917,6 +979,7 @@ namespace Sim.Core.Match.Movement
             int aimY = U.CenterYU + (_rng.NextInt(0, 2) == 0 ? -placed : placed);
 
             int spread = U.Units(_cfg.ShotSpreadDm) * (1000 - _shotQuality) / 1000;
+            if (_cfg.Brain == MatchBrainVersion.V11) spread = spread * _cfg.V11ShotSpreadPercent / 100;
             aimY = U.ClampY(aimY + BallSkill.Spread(_rng, spread));
 
             int offCentre = aimY > U.CenterYU ? aimY - U.CenterYU : U.CenterYU - aimY;
@@ -1125,7 +1188,7 @@ namespace Sim.Core.Match.Movement
         {
             // Flat out only when the ball is the reason; otherwise a jog. A match where every
             // man ran at eight metres a second for ninety minutes would cover forty kilometres.
-            int top = sprint ? _maxSpeed[k] : _cruise[k];
+            int top = CarrierTop(k, sprint ? _maxSpeed[k] : _cruise[k]);
             if (top < 1) top = 1;
 
             // Within one step of the target the vector IS the step, so no root is needed: this
@@ -1327,7 +1390,7 @@ namespace Sim.Core.Match.Movement
                 if (taker >= 0 && tick >= _tackleLock)
                 {
                     int challenger = takerSide * _n + taker;
-                    int odds = DuelWinPermille(owner, challenger);
+                    int odds = V11DuelOdds(DuelWinPermille(owner, challenger), owner);
 
                     if (_rng.NextInt(0, 1000) < odds)
                     {
@@ -1411,7 +1474,7 @@ namespace Sim.Core.Match.Movement
                     // of the save: phase 5 had saves only because the timeline had already
                     // decided there would be one.
                     if (_ctx.ShotLive && _keeper[k] && side == keeperOnly)
-                        reach += U.Units(BallSkill.KeeperDiveDm(_skGoalkeeping[k], _shotQuality, _cfg));
+                        reach += U.Units(V11Scaled(BallSkill.KeeperDiveDm(_skGoalkeeping[k], _shotQuality, _cfg), _cfg.V11KeeperDivePercent));
 
                     // The man it was played to reaches further for it than anyone else, because
                     // he is facing it and running onto it while the man behind him is turning
@@ -1449,11 +1512,11 @@ namespace Sim.Core.Match.Movement
             // out. If his Goalkeeping is not equal to the strike he never touches it, the ball
             // carries on, and — since it was on target to be his ball at all — it is a goal.
             if (wasShot && bestSide != (_ctx.ShotHome ? 0 : 1) && _keeper[gkSlot]
-                && _rng.NextInt(0, 100) >= BallSkill.KeeperStopPercent(_skGoalkeeping[gkSlot], _shotQuality, _cfg))
+                && _rng.NextInt(0, 100) >= V11Scaled(BallSkill.KeeperStopPercent(_skGoalkeeping[gkSlot], _shotQuality, _cfg), _cfg.V11KeeperStopPercent))
                 return;
 
             if (wasShot && bestSide != (_ctx.ShotHome ? 0 : 1) && _keeper[gkSlot]
-                && _rng.NextInt(0, 100) >= BallSkill.KeeperHoldPercent(_skGoalkeeping[gkSlot], _shotQuality, _cfg))
+                && _rng.NextInt(0, 100) >= V11Scaled(BallSkill.KeeperHoldPercent(_skGoalkeeping[gkSlot], _shotQuality, _cfg), _cfg.V11KeeperHoldPercent))
             {
                 _ctx.ShotLive = false;
                 _receiver[0] = -1;
@@ -1464,7 +1527,7 @@ namespace Sim.Core.Match.Movement
                 // back into play, and that is a corner — one of the two big sources of football's
                 // ten a match that this engine had no way of producing (engine phase 5).
                 int outX, outY;
-                if (_rng.NextInt(0, 100) < _cfg.KeeperParryBehindPercent)
+                if (_rng.NextInt(0, 100) < V11Scaled(_cfg.KeeperParryBehindPercent, _cfg.V11KeeperParryBehindPercent))
                 {
                     // BEHIND THE POST, not merely backwards (engine phase 6). This used to push
                     // the ball six metres back and six metres sideways, which from a central
@@ -1538,7 +1601,7 @@ namespace Sim.Core.Match.Movement
             // line, scattered sideways and sometimes turned back off him, at the share of its own
             // speed the config allows. Where it ends up is then the referee's business like any
             // other loose ball, which is exactly the point.
-            if (_rng.NextInt(0, 100) < _cfg.DeflectPercent)
+            if (_rng.NextInt(0, 100) < V11Scaled(_cfg.DeflectPercent, _cfg.V11DeflectPercent))
             {
                 Deflect(tick, bestSide, bestSlot, inVx, inVy);
                 return;

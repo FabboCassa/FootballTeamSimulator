@@ -60,6 +60,9 @@ namespace Sim.Core.Match.Movement
 
         public TeamPhase PhaseOf(int side) => _phase[side];
 
+        /// <summary>Whether this side has the ball: a loose one is its last owner's, a dead one the restart's.</summary>
+        public bool InPossession(int side) => _possession == side;
+
         /// <param name="ballXDm">Ball along the length; home attacks toward <see cref="Pitch.LengthDm"/>.</param>
         /// <param name="ownerSide">The side with the ball at its feet, or -1 if it is loose.</param>
         /// <param name="restartSide">While the ball is dead, the side that takes the restart.</param>
