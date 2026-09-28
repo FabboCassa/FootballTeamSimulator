@@ -319,12 +319,7 @@ namespace Sim.Core.Tests.Career
             return (clubs[home], clubs[away]);
         }
 
-        private static BalanceConfig V11()
-        {
-            var cfg = new BalanceConfig();
-            cfg.Match.Brain = MatchBrainVersion.V11;
-            return cfg;
-        }
+        private static BalanceConfig V11() => new BalanceConfig();
 
         /// <summary>The flags the shipped client plays a watched match with (SeasonProgressor's); nothing reads the stats.</summary>
         private static MatchEngine Engine(BalanceConfig cfg) =>

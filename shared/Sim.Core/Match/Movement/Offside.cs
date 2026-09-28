@@ -9,17 +9,15 @@ namespace Sim.Core.Match.Movement
     internal sealed class Offside
     {
         private readonly MatchContext _ctx;
-        private readonly int[] _skPositioning;
         private readonly bool[] _flagged;
         private readonly int[] _flaggedX;
         private readonly int[] _flaggedY;
         private bool _anyFlag;
 
-        public Offside(MatchContext ctx, int[] skPositioning)
+        public Offside(MatchContext ctx)
         {
             _ctx = ctx;
-            _skPositioning = skPositioning;
-            int total = skPositioning.Length;
+            int total = ctx.N * 2;
             _flagged = new bool[total];
             _flaggedX = new int[total];
             _flaggedY = new int[total];
@@ -68,23 +66,6 @@ namespace Sim.Core.Match.Movement
             int halfway = dir * U.CenterXU;
             if (halfway > second) second = halfway;
             return second;
-        }
-
-        /// <summary>
-        /// Where THIS player thinks the line is. The whole model of why offsides happen: the man
-        /// on the ball plays what he believes is on, the referee judges what actually was, and
-        /// the gap between the two is the flag. A poor reader of the game (Positioning) is out by
-        /// several metres either way; a good one is barely out at all — which is why an offside
-        /// is a mistake by the passer and his runner rather than a dice roll.
-        /// </summary>
-        public int PerceivedOffsideLine(int k, int trueDepth)
-        {
-            int span = _ctx.Cfg.OffsideJudgementDm - _ctx.Cfg.OffsideJudgementFloorDm;
-            if (span < 0) span = 0;
-            int judgement = _ctx.Cfg.OffsideJudgementFloorDm
-                            + span * (100 - BallSkill.Clamp(_skPositioning[k], 1, 100)) / 100;
-            int error = (_ctx.Rng.NextInt(-judgement, judgement + 1) + _ctx.Rng.NextInt(-judgement, judgement + 1)) / 2;
-            return trueDepth + U.Units(error);
         }
 
         /// <summary>Raises the flag on every man of the passing side who was beyond the line.</summary>

@@ -71,7 +71,11 @@ namespace Sim.Core.Match
         // the phase 7 match, draw for draw — so what moves the master here is the one cosmetic
         // thing phase 6 left written down: the goal ball now rests where it crossed the line
         // instead of in the middle of the net, and those frames are in the stream the hash covers.
-        public const int Version = 10;
+        // v11: the watchable-match brain (docs/specs/watchable-match-engine.md) is the only one —
+        // team phases, off-ball runs, xT / pitch-control / xG decisions, its own set pieces, the
+        // player's own fatigue clock, familiarity and role fit, shouts — and the v10 decisions are
+        // gone. Every watched match moves; the fast model reads its V11 calibration.
+        public const int Version = 11;
 
         private const int MatchMinutes = 90;
 

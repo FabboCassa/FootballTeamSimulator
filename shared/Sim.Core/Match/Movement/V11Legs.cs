@@ -12,13 +12,10 @@ namespace Sim.Core.Match.Movement
         private int[] _onSince = System.Array.Empty<int>();
 
         /// <summary>
-        /// Each side's skills as its familiarity with its tactic leaves them, in permille. V11
-        /// only (watchable-match spec R9); on V10 it stays 1000, which BindSkills spends as an
-        /// exact identity.
+        /// Each side's skills as its familiarity with its tactic leaves them, in permille
+        /// (watchable-match spec R9); 1000 with no tactic, which BindSkills spends as an exact identity.
         /// </summary>
         private readonly int[] _familiarityPermille = { 1000, 1000 };
-
-        private bool IsV11 => _cfg.Brain == MatchBrainVersion.V11;
 
         /// <summary>
         /// V11 (R9): a side that does not know its tactic plays below itself. At zero familiarity
@@ -30,7 +27,7 @@ namespace Sim.Core.Match.Movement
             for (int side = 0; side < SideCount; side++)
             {
                 _familiarityPermille[side] = 1000;
-                if (!IsV11 || tactics == null) continue;
+                if (tactics == null) continue;
 
                 int max = _feed != null ? _feed.FamiliarityMax : DefaultFamiliarityMax;
                 if (max <= 0) continue;
@@ -43,11 +40,10 @@ namespace Sim.Core.Match.Movement
         /// V11 (R9): a man out of his natural role plays below himself, by
         /// <see cref="MatchBalance.V11OffRolePermillePerStep"/> for each step between his role and
         /// the slot's along the pitch, up to <see cref="MatchBalance.V11OffRoleMaxPermille"/>; a
-        /// keeper out of goal, or an outfielder in it, loses the most. 1000 on V10.
+        /// keeper out of goal, or an outfielder in it, loses the most.
         /// </summary>
         private int RoleFitPermille(LineupSlot slot)
         {
-            if (!IsV11) return 1000;
             PositionRole natural = slot.Player.Role;
             if (natural == slot.Role) return 1000;
             if (natural == PositionRole.Goalkeeper || slot.Role == PositionRole.Goalkeeper)

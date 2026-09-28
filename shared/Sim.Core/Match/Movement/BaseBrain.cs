@@ -5,27 +5,19 @@ namespace Sim.Core.Match.Movement
     public sealed partial class MatchSimulator
     {
         /// <summary>
-        /// The engine v10 brain — the decisions and the positioning of engine phases 1 to 8, moved
-        /// out of the simulator unchanged, draw for draw, so the golden master still pins it.
+        /// The layer the V11 brain stands on: the block and its shape, who chases, presses,
+        /// supports, covers and marks, how each of those men moves, and the restarts V11's set
+        /// pieces do not take. It is what is left of the engine v10 brain (engine phases 1 to 8)
+        /// once V11 took over the ball and the men with no job.
         ///
         /// It is nested so that it reads the simulator's pitch without the rest of the assembly
         /// seeing it. The per-player arrays and the derived units are the simulator's own, bound
         /// by reference at <see cref="Begin"/>, when a match has built them; what only the brain
         /// writes — the shape, the duties, the supporting run — lives here.
         /// </summary>
-        private sealed partial class V10Brain : IMatchBrain
+        private sealed partial class BaseBrain
         {
             private const int MaxSupporters = 3;
-
-            /// <summary>
-            /// "He cannot do this at all". Every option a man weighs answers with what it is worth in
-            /// decimetres of forward progress, and one that is not open to him has to answer with
-            /// something no real option can beat — but the comparison then has to EXCLUDE it, or a man
-            /// with nothing open does the first thing on the list. That is not hypothetical: it put a
-            /// goalkeeper who had just won the ball in his own six-yard box through
-            /// <see cref="TakeShot"/>, and the scoresheet counted his hoof upfield as a shot.
-            /// </summary>
-            private const int NoOption = int.MinValue / 4;
 
             // One duty per man per brain tick, for the side without the ball (engine phase 3).
             // Going to the ball is decided every tick and is not stored here; these are the three
@@ -78,17 +70,12 @@ namespace Sim.Core.Match.Movement
             // The simulator's, for one match: bound at Begin.
             private MatchBall _ball = null!;
             private MatchContext _ctx = null!;
-            private Offside _offside = null!;
             private FreeKickWall _freeKickWall = null!;
             private int _n;
             private int[] _px = System.Array.Empty<int>();
             private int[] _py = System.Array.Empty<int>();
             private bool[] _keeper = System.Array.Empty<bool>();
             private bool[] _sentOff = System.Array.Empty<bool>();
-            private int[] _hold = System.Array.Empty<int>();
-            private int[] _vision = System.Array.Empty<int>();
-            private int[] _skPassing = System.Array.Empty<int>();
-            private int[] _skTechnique = System.Array.Empty<int>();
             private int[] _maxSpeed = System.Array.Empty<int>();
             private int[] _lineRank = System.Array.Empty<int>();
             private int[] _offsetXDm = System.Array.Empty<int>();
@@ -97,10 +84,10 @@ namespace Sim.Core.Match.Movement
             private int[] _stepFromX = System.Array.Empty<int>();
             private int[] _stepToX = System.Array.Empty<int>();
             private int[] _stepToY = System.Array.Empty<int>();
-            private int _kickU, _controlU, _interceptU, _approachU, _recoveryU, _pressureU;
-            private int _maxPassForce, _maxShootForce, _maxPassRange, _shootRangeU, _arrivalStepU;
+            private int _kickU, _interceptU, _recoveryU;
+            private int _maxPassForce, _maxShootForce, _shootRangeU;
 
-            public V10Brain(MatchSimulator sim)
+            public BaseBrain(MatchSimulator sim)
             {
                 _sim = sim;
                 _cfg = sim._cfg;
@@ -152,17 +139,12 @@ namespace Sim.Core.Match.Movement
                 MatchSimulator s = _sim;
                 _ball = s._ball;
                 _ctx = s._ctx;
-                _offside = s._offside;
                 _freeKickWall = s._freeKickWall;
                 _n = s._n;
                 _px = s._px;
                 _py = s._py;
                 _keeper = s._keeper;
                 _sentOff = s._sentOff;
-                _hold = s._hold;
-                _vision = s._vision;
-                _skPassing = s._skPassing;
-                _skTechnique = s._skTechnique;
                 _maxSpeed = s._maxSpeed;
                 _lineRank = s._lineRank;
                 _offsetXDm = s._offsetXDm;
@@ -172,16 +154,11 @@ namespace Sim.Core.Match.Movement
                 _stepToX = s._stepToX;
                 _stepToY = s._stepToY;
                 _kickU = s._kickU;
-                _controlU = s._controlU;
                 _interceptU = s._interceptU;
-                _approachU = s._approachU;
                 _recoveryU = s._recoveryU;
-                _pressureU = s._pressureU;
                 _maxPassForce = s._maxPassForce;
                 _maxShootForce = s._maxShootForce;
-                _maxPassRange = s._maxPassRange;
                 _shootRangeU = s._shootRangeU;
-                _arrivalStepU = s._arrivalStepU;
             }
         }
     }

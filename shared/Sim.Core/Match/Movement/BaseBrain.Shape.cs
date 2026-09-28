@@ -2,7 +2,7 @@ namespace Sim.Core.Match.Movement
 {
     public sealed partial class MatchSimulator
     {
-        private sealed partial class V10Brain
+        private sealed partial class BaseBrain
         {
             /// <summary>
             /// The block, for one side, for both phases — worked out once a tick (engine phase 2).

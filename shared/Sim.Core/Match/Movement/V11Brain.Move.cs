@@ -8,8 +8,8 @@ namespace Sim.Core.Match.Movement
         {
             /// <summary>
             /// Where this man goes (R2). A man placed for a V11 set piece (R6) is its own; the presser
-            /// closes the man on the ball down goal-side of him; any other man v10 has a job for is
-            /// v10's; a supporter keeps v10's supporting run unless he is a forward with a run in
+            /// closes the man on the ball down goal-side of him; any other man the base brain has a
+            /// job for is its; a supporter keeps its supporting run unless he is a forward with a run in
             /// behind on. Everybody else goes to his phase target spot — held onside when his side
             /// has the ball — or, for a full-back whose side asks for it, on the overlap.
             /// </summary>
@@ -22,13 +22,13 @@ namespace Sim.Core.Match.Movement
                     return;
                 }
 
-                V10Job job = _v10.JobOf(tick, side, slot);
-                if (job != V10Job.None && job != V10Job.Support)
+                BaseJob job = _base.JobOf(tick, side, slot);
+                if (job != BaseJob.None && job != BaseJob.Support)
                 {
                     if (_runner[side] == slot) _runner[side] = -1;
                     _spell[side * _sim._n + slot] = 0;
-                    if (job == V10Job.Press && _sim._cfg.V11PressStandOffPercent > 0) PressGoalSide(side, slot);
-                    else _v10.Move(tick, side, slot);
+                    if (job == BaseJob.Press && _sim._cfg.V11PressStandOffPercent > 0) PressGoalSide(side, slot);
+                    else _base.Move(side, slot, job);
                     return;
                 }
 
@@ -56,11 +56,11 @@ namespace Sim.Core.Match.Movement
                     ty = ry;
                     sprint = true;
                 }
-                else if (job == V10Job.Support)
+                else if (job == BaseJob.Support)
                 {
-                    // He offers the angle v10 found, on a leash from his own spot: a supporting
+                    // He offers the angle the base brain found, on a leash from his own spot: a supporting
                     // run across the whole pitch leaves his place in the shape empty.
-                    _v10.SupportSpot(side, out tx, out ty);
+                    _base.SupportSpot(side, out tx, out ty);
                     Leash(spotX, spotY, U.Units(_sim._cfg.V11SupportLeashDm), ref tx, ref ty);
                     sprint = U.DistanceSq(_sim._px[k], _sim._py[k], tx, ty) > (long)_sim._approachU * _sim._approachU;
                 }

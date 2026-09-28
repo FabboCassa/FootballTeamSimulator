@@ -14,7 +14,7 @@ using Sim.Core.Tactics;
 namespace Sim.Core.Tests.Match
 {
     /// <summary>
-    /// R6 on the pitch: with Brain = V11 the set pieces are read off the POSITION STREAM, the
+    /// R6 on the pitch: the set pieces are read off the POSITION STREAM, the
     /// same picture the viewer gets — a penalty has a run-up, a free kick in range has a wall, a
     /// corner has men on the near post, the far post and the edge of the box, and throw-ins and
     /// goal kicks go short or long as the Tempo instruction says.
@@ -34,7 +34,7 @@ namespace Sim.Core.Tests.Match
 
         /// <summary>
         /// The taker stands back and RUNS at the ball: in the frames before the strike he is
-        /// visibly coming in from a distance, getting closer every frame. On V10 he stands on the
+        /// visibly coming in from a distance, getting closer every frame. On engine v10 he stood on the
         /// ball until the kick, so this is the V11 behaviour and not a coincidence of steering.
         /// Penalties are made common here (every foul in the box stands) so a few matches carry
         /// several of them.
@@ -101,13 +101,13 @@ namespace Sim.Core.Tests.Match
         /// <summary>
         /// Every free kick within 35 m of the goal it is aimed at is taken with a wall in front
         /// of it: at least <see cref="MatchBalance.WallMen"/> defenders nine-odd metres from the
-        /// ball on the frame before it is kicked. V10 walls only inside its 32 m shooting range.
+        /// ball on the frame before it is kicked, beyond the 32 m open-play shooting range too.
         /// </summary>
         [Test]
         public void FreeKickWithin35m_IsTakenWithAWall()
         {
             MatchBalance cfg = V11();
-            int inRange = 0, beyondV10Range = 0, walled = 0;
+            int inRange = 0, beyondShootRange = 0, walled = 0;
 
             foreach (PositionStream s in PlayMany(cfg, 16, 36_000, null))
             {
@@ -125,7 +125,7 @@ namespace Sim.Core.Tests.Match
                     if (range >= cfg.SetPieceRangeDm) continue;
 
                     inRange++;
-                    if (range >= cfg.MaxShootRangeDm) beyondV10Range++;
+                    if (range >= cfg.MaxShootRangeDm) beyondShootRange++;
 
                     int before = Math.Max(spot, a[next].Tick - 1);
                     int wall = 0;
@@ -141,7 +141,7 @@ namespace Sim.Core.Tests.Match
             }
 
             TestContext.Out.WriteLine(
-                $"[v11-wall] {walled}/{inRange} free kicks within 35 m walled ({beyondV10Range} of them 32-35 m)");
+                $"[v11-wall] {walled}/{inRange} free kicks within 35 m walled ({beyondShootRange} of them 32-35 m)");
             Assert.That(inRange, Is.GreaterThan(10), "the sample needs free kicks in range");
             Assert.That(walled, Is.EqualTo(inRange), "every free kick within 35 m faces a wall");
         }
@@ -285,12 +285,7 @@ namespace Sim.Core.Tests.Match
 
         // ------------------------------------------------------------ helpers
 
-        private static MatchBalance V11()
-        {
-            MatchBalance cfg = new BalanceConfig().Match;
-            cfg.Brain = MatchBrainVersion.V11;
-            return cfg;
-        }
+        private static MatchBalance V11() => new BalanceConfig().Match;
 
         /// <summary>The first action after the restart at <paramref name="i"/>: the kick that puts it in play.</summary>
         private static int NextKick(List<BallAction> a, int i)

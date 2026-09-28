@@ -57,8 +57,8 @@ namespace Sim.Core.Match.Analysis
             _totalMs += simulateMs;
         }
 
-        /// <summary>Every reading against its band. <paramref name="baselineMsPerMatch"/> is V10's time in the same run.</summary>
-        public IReadOnlyList<RealismRow> Rows(double baselineMsPerMatch)
+        /// <summary>Every reading against its band.</summary>
+        public IReadOnlyList<RealismRow> Rows()
         {
             double m = Matches == 0 ? 1 : Matches;
             return new[]
@@ -71,20 +71,19 @@ namespace Sim.Core.Match.Analysis
                 new RealismRow(RealismBands.BoxEntriesPerSide, _boxEntries / (2 * m)),
                 new RealismRow(RealismBands.OpenGoalShotRate, _chances == 0 ? 1.0 : (double)_chanceShots / _chances),
                 new RealismRow(RealismBands.SterilePossessionShare, _possessions == 0 ? 0 : (double)_sterile / _possessions),
-                new RealismRow(RealismBands.MedianOffTargetSeconds, Median(_offTargetMedians)),
-                new RealismRow(RealismBands.TimeVsV10, baselineMsPerMatch <= 0 ? 0 : MsPerMatch / baselineMsPerMatch)
+                new RealismRow(RealismBands.MedianOffTargetSeconds, Median(_offTargetMedians))
             };
         }
 
         /// <summary>The printable block: one line per band, marked IN or OUT, plus the raw counts behind the rates.</summary>
-        public string Format(string label, double baselineMsPerMatch)
+        public string Format(string label)
         {
             CultureInfo inv = CultureInfo.InvariantCulture;
             var sb = new StringBuilder();
             sb.AppendLine($"=== realism: {label} ({Matches} matches, {MsPerMatch.ToString("F1", inv)} ms/match) ===");
 
             int inside = 0;
-            IReadOnlyList<RealismRow> rows = Rows(baselineMsPerMatch);
+            IReadOnlyList<RealismRow> rows = Rows();
             foreach (RealismRow row in rows)
             {
                 if (row.InBand) inside++;

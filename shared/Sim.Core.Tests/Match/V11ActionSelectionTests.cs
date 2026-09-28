@@ -361,7 +361,6 @@ namespace Sim.Core.Tests.Match
         {
             League league = new LeagueGenerator().Generate(new Pcg32(20260611));
             var cfg = new BalanceConfig();
-            cfg.Match.Brain = MatchBrainVersion.V11;
             var engine = new MatchEngine(cfg, applyCondition: true, applyMatchFatigue: true,
                 applyPositioning: true, generatePositions: true);
 

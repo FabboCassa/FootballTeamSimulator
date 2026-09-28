@@ -11,7 +11,7 @@ namespace Sim.Core.Match.Movement
         private readonly Offside _offside;
         private readonly FreeKickWall _wall;
 
-        /// <summary>How close to goal a free kick gets a wall: v10's shooting range, v11's set-piece range.</summary>
+        /// <summary>How close to goal a free kick gets a wall (the set-piece range).</summary>
         private readonly int _wallRangeU;
 
         public Restarts(MatchContext ctx, Offside offside, FreeKickWall wall, int wallRangeDm)

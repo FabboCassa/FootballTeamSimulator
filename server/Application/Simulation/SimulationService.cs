@@ -13,11 +13,11 @@ namespace Fts.Application.Simulation;
 public sealed class SimulationService : ISimulationService
 {
     /// <summary>Combined hash of the default <see cref="DeterminismCheck.Run()"/> — the value the
-    /// client logs (golden master 0x5EF1EDDAFA52BAFA, engine v10 / engine rework phase 8 - the
-    /// instructions count). The run is on NEUTRAL tactics, and every instruction table reads its
+    /// client logs (golden master 0x6BBB306F6C224B06, engine v11 - the watchable-match brain is
+    /// the only one). The run is on NEUTRAL tactics, and every instruction table reads its
     /// middle entry as the identity, so retuning an instruction cannot move this number.
     /// Pinned by <c>SimulationDeterminismTests</c>.</summary>
-    public ulong GoldenCombinedHash => 0x5EF1EDDAFA52BAFAUL;
+    public ulong GoldenCombinedHash => 0x6BBB306F6C224B06UL;
 
     public SimulateMatchResponse SimulateMatch(SimulateMatchRequest request)
     {

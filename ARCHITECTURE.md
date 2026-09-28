@@ -169,9 +169,10 @@ Rules that the rest of the game leans on:
   computing them tier by tier while clubs are already swapping relegates the newly-demoted clubs
   twice in one rollover.
 
-### 4.3 Match engine (v1 — simple, top-down)
+### 4.3 Match engine (engine v11 — top-down)
 
-- **Tick-based discrete simulation**, ~2–4 ticks/sim-second, 90' compressed to ~3–5 real minutes when watched (instant when skipped).
+- **Tick-based discrete simulation** at 10 ticks/sim-second, generated whole before it is shown (instant when skipped). A watched match is played back through the **broadcast director** (`Sim.Core.Match.Broadcast.BroadcastDirector`, run by the client), which builds a deterministic timeline from the `MatchReport` alone: final-third play, counters, attacking set pieces, shots, goals and cards at 1x (real time), other build-up at 2x, sterile spells and distant dead balls cut with a one-line summary — about 10 real minutes at 1x; 2x / 4x scale the whole timeline and Skip jumps to full time. Nothing plays slower than real time. Online live screens derive the same timeline from the shared kickoff instant.
+- **One decision layer, the V11 brain** (`V11Brain` on top of `BaseBrain`, watchable-match spec): team phases drive each man's target spot, forwards run in behind and full-backs overlap, the man on the ball chooses on expected threat, pitch control and xG, and set pieces are structured (wall, corner roles, penalty run-up). Touchline shouts are inputs at a minute, like tactic changes. The engine-v10 decisions are gone; the brain's knobs keep their `V11` prefix in `BalanceConfig`.
 - Players = circles with position, velocity, simple steering toward role-based target zones; ball = circle with owner or trajectory. **No physics engine** — pure math in Sim.Core.
 - Outcome model: zone-based action resolution (build-up → chance creation → shot) where probabilities derive from: player attributes, form, fitness, morale, tactic fit, tactic-vs-tactic matrix, tactic familiarity, home advantage, randomness (seeded).
 - Output = `MatchReport`: final score, event timeline (goals, cards, key chances), stats, **and a replayable position stream** the client renders top-down. Because the sim is deterministic, online clients only need `(seed, lineups, tactics, events)` to re-render the match identically — tiny payloads.

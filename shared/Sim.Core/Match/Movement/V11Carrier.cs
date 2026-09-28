@@ -4,7 +4,6 @@ namespace Sim.Core.Match.Movement
     {
         /// <summary>
         /// The man (side * n + slot) the V11 brain last sent running with the ball, -1 for nobody.
-        /// Only the V11 brain sets it, so on V10 every man keeps his full speed.
         /// </summary>
         private int _v11Carrier = -1;
 

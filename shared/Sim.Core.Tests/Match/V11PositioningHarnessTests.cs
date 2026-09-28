@@ -12,7 +12,7 @@ using Sim.Core.Random;
 namespace Sim.Core.Tests.Match
 {
     /// <summary>
-    /// R2 on the pitch: with Brain = V11, over 1,000 watched matches, the median outfield player
+    /// R2 on the pitch: over 1,000 watched matches, the median outfield player
     /// has 5 s or less of off-target time per match. R2's rule is "a man never sits over 25 m from
     /// his phase target for more than 5 s unless he is chasing or marking", so off-target time is
     /// the part of each unbroken spell further than <see cref="MatchBalance.V11OffTargetDm"/>
@@ -45,7 +45,6 @@ namespace Sim.Core.Tests.Match
         public void Harness_V11_MedianOffTargetSecondsPerPlayer_IsAtMost5()
         {
             var cfg = new BalanceConfig().Match;
-            cfg.Brain = MatchBrainVersion.V11;
             double tickSeconds = 1.0 / cfg.TicksPerSecond;
 
             var perPlayer = new double[Matches][];

@@ -56,24 +56,24 @@ namespace Sim.Core.Config
         /// <summary>Of the foreign players, the percent drawn from the same continent.</summary>
         public int SameContinentForeignPercent { get; set; } = 60;
 
-        // --- Quick resolver (background leagues) ---
+        // --- Quick resolver (background leagues), fitted to the V11 engine (watchable-match R17) ---
         /// <summary>
-        /// Expected goals for an evenly-matched side. The four numbers below were fitted against the
-        /// real engine over a full two-division season (760 matches): the engine gives 2.54 goals a
-        /// game and a 45.7 / 21.7 / 32.6 home-draw-away split, this resolver gives 2.57 and
-        /// 45.7 / 23.7 / 30.7 — close enough that a background league's table looks like a league.
+        /// Expected goals for an evenly-matched side, fitted against the full engine
+        /// (FastModelHarnessTests, 1,000 matches of a generated league): V11 gives 2.76 goals,
+        /// 40.6 / 23.9 / 35.5 home-draw-away and 0.078 goal difference per strength point. The
+        /// names keep their V11 prefix so that a stored balance document's older, engine-v10
+        /// Quick* figures are ignored on load instead of read into this model.
         /// </summary>
-        public double QuickBaseGoals { get; set; } = 1.29;
+        public double QuickV11BaseGoals { get; set; } = 1.38;
 
         /// <summary>Expected goals gained per point of strength advantage (as a fraction of the base).</summary>
-        public double QuickStrengthFactor { get; set; } = 0.022;
+        public double QuickV11StrengthFactor { get; set; } = 0.028;
 
         /// <summary>
         /// Flat strength points added to the home side, ON TOP of MatchBalance.HomeAdvantagePercent.
-        /// The percentage alone under-produces home wins here because the cheap model has no shots,
-        /// no momentum and no fatigue to compound it.
+        /// Negative because V11's home edge is smaller than HomeAdvantagePercent alone gives here.
         /// </summary>
-        public int QuickHomeAdvantageStrength { get; set; } = 2;
+        public int QuickV11HomeAdvantageStrength { get; set; } = -4;
 
         public double QuickMinExpectedGoals { get; set; } = 0.20;
         public double QuickMaxExpectedGoals { get; set; } = 4.0;
@@ -81,21 +81,8 @@ namespace Sim.Core.Config
         /// <summary>
         /// Bernoulli trials the goal count is drawn from (a binomial standing in for a Poisson).
         /// Deterministic, integer-friendly and free of Math.Exp, which the determinism rules forbid.
-        /// Fourteen trials matches the engine's draw rate and costs 28 draws a match.
+        /// Costs two draws per trial per side.
         /// </summary>
-        public int QuickGoalTrials { get; set; } = 14;
-
-        // --- Quick resolver, V11 calibration (watchable-match R17) ---
-        /// <summary>
-        /// The same four numbers fitted against the V11 brain instead (FastModelHarnessTests, 1,000
-        /// full-engine matches of a generated league). Read when <see cref="MatchBalance.Brain"/> is
-        /// V11; the V10 set above stays what the pinned world hashes were built on. V11 gives 2.76
-        /// goals, 40.6 / 23.9 / 35.5 and 0.078 goal difference per strength point; the home bonus is
-        /// negative because V11's home edge is smaller than HomeAdvantagePercent alone gives here.
-        /// </summary>
-        public double QuickV11BaseGoals { get; set; } = 1.38;
-        public double QuickV11StrengthFactor { get; set; } = 0.028;
-        public int QuickV11HomeAdvantageStrength { get; set; } = -4;
         public int QuickV11GoalTrials { get; set; } = 14;
 
         // --- Quick resolver instructions (R17) ---
@@ -1187,15 +1174,7 @@ namespace Sim.Core.Config
         // Change TicksPerSecond and every duration below keeps its meaning. Distances stay in
         // decimetres, which is the pitch's own unit.
 
-        // --- Brain (watchable-match spec) ---
-
-        /// <summary>
-        /// Which decision layer plays a watched match. V10 is the engine the golden master pins;
-        /// V11 is the new brain, and until it grows decisions of its own it plays exactly as V10.
-        /// </summary>
-        public MatchBrainVersion Brain { get; set; } = MatchBrainVersion.V10;
-
-        // --- V11 team phases (R1). Read only by the V11 brain; V10 never looks at them. ---
+        // --- V11 team phases (R1) ---
 
         /// <summary>Where the attacking side's build-up ends, in 1/1000 of the length from its own goal line.</summary>
         public int PhaseBuildUpEndPermille { get; set; } = 350;
@@ -1207,8 +1186,8 @@ namespace Sim.Core.Config
         public int PhaseTransitionMs { get; set; } = 5000;
         public int PhaseTransitionTicks => TicksOfMs(PhaseTransitionMs);
 
-        // --- V11 positioning, runs and overlaps (R2). Read only by the V11 brain. ---
-        // The back line is placed as V10's is (BackLineMinDepthDm, BallLag, BallFollow, MaxDepth,
+        // --- V11 positioning, runs and overlaps (R2) ---
+        // The back line is placed by the block (BackLineMinDepthDm, BallLag, BallFollow, MaxDepth,
         // MentalityLinePushDm), then shifted by the phase; per-phase tables are indexed by TeamPhase.
 
         /// <summary>Back-line shift per phase for the side WITH the ball, in dm toward the goal it attacks.</summary>
@@ -1242,7 +1221,7 @@ namespace Sim.Core.Config
 
         /// <summary>
         /// Line spacing and width of the V11 shape with and without the ball, in percent of
-        /// LineSpacingDm and of the width instruction. Closer together than V10's 120/55 and
+        /// LineSpacingDm and of the width instruction. Closer together than engine v10's 120/55 and
         /// 118/60: every turnover moves the whole shape from one to the other, and the further
         /// apart they are the longer the front men are stranded off target (R2).
         /// </summary>
@@ -1259,9 +1238,9 @@ namespace Sim.Core.Config
         public int V11ShapeSpanLines { get; set; } = 4;
 
         /// <summary>
-        /// R8: how far from neutral V11 reads V10's instruction tables, per axis, in percent of
+        /// R8: how far from neutral V11 reads the instruction tables, per axis, in percent of
         /// the distance of each extreme from the middle entry (<see cref="Sim.Core.Match.Movement.InstructionTable"/>).
-        /// The tables were tuned for V10's brain; read in full by V11 a high line or a quick
+        /// The tables were tuned for engine v10's brain; read in full by V11 a high line or a quick
         /// release swung a match between equal sides by more than a goal, and a wide side stood
         /// its block so far apart that it took a third of the points. The middle entry is the
         /// identity at any spread.
@@ -1290,9 +1269,9 @@ namespace Sim.Core.Config
         public int V11PressStandOffPercent { get; set; } = 280;
 
         /// <summary>
-        /// How wide a V11 strike can go, in percent of ShotSpreadDm. V10's spread was sized for the
-        /// close-range shots V10 takes; V11 shoots at the open goal from the edge of the box too,
-        /// and from there V10's spread put three strikes in four off target.
+        /// How wide a V11 strike can go, in percent of ShotSpreadDm. That spread was sized for the
+        /// close-range shots engine v10 took; V11 shoots at the open goal from the edge of the box
+        /// too, and from there the full spread put three strikes in four off target.
         /// </summary>
         public int V11ShotSpreadPercent { get; set; } = 56;
 
@@ -1318,7 +1297,7 @@ namespace Sim.Core.Config
         public int V11MatchFatigueAt90Permille { get; set; } = 850;
         public int V11HalfTimeRecoveryPermille { get; set; } = 40;
 
-        /// <summary>The foul odds of a won challenge on V11, in percent of V10's (see Referee).</summary>
+        /// <summary>The foul odds of a won challenge, in percent of the FoulPermille figures (see Referee).</summary>
         public int V11FoulPercent { get; set; } = 55;
 
         /// <summary>A man further than this from where he is going sprints there, with or without the ball.</summary>
@@ -1434,10 +1413,10 @@ namespace Sim.Core.Config
         public int V11ShotBlockerMarginDm { get; set; } = 80;
 
         /// <summary>
-        /// The keeper on V11, in percent of V10's: how far he dives, the odds he stops a shot on
-        /// target he reaches, that he holds one he stops rather than parrying it, and that a
-        /// parry goes behind (a corner). V10's were sized for V10's chances, most of them from
-        /// inside six yards.
+        /// The keeper on V11, in percent of the base Keeper* figures: how far he dives, the odds he
+        /// stops a shot on target he reaches, that he holds one he stops rather than parrying it,
+        /// and that a parry goes behind (a corner). The base figures were sized for engine v10's
+        /// chances, most of them from inside six yards.
         /// </summary>
         public int V11KeeperDivePercent { get; set; } = 130;
         public int V11KeeperStopPercent { get; set; } = 125;
@@ -1446,7 +1425,7 @@ namespace Sim.Core.Config
 
         /// <summary>
         /// The odds a ball a defender gets to comes off him rather than being controlled, on V11,
-        /// in percent of V10's DeflectPercent: where loose balls, throw-ins and corners come from.
+        /// in percent of DeflectPercent: where loose balls, throw-ins and corners come from.
         /// </summary>
         public int V11DeflectPercent { get; set; } = 140;
 
@@ -1491,7 +1470,7 @@ namespace Sim.Core.Config
         /// <summary>Cross appetite, by Width (narrow · normal · wide): the weight on a cross's gain.</summary>
         public int[] V11WidthCrossPercent { get; set; } = { 75, 100, 130 };
 
-        // --- V11 set pieces (R6). Read only by the V11 brain; V10 never looks at them. ---
+        // --- V11 set pieces (R6) ---
 
         /// <summary>A free kick this close to the goal it attacks gets a wall and is shot or crossed.</summary>
         public int SetPieceRangeDm { get; set; } = 350;
@@ -1746,9 +1725,8 @@ namespace Sim.Core.Config
         public int ShotResolveMs { get; set; } = 2500;
         public int ShotResolveTicks => TicksOfMs(ShotResolveMs);
 
-        /// <summary>Shortest pass worth playing, how far ahead of a runner it is played, and when it counts as a long ball.</summary>
+        /// <summary>Shortest pass worth playing, and when it counts as a long ball.</summary>
         public int MinPassDm { get; set; } = 70;
-        public int PassLeadDm { get; set; } = 60;
         public int LongBallFromDm { get; set; } = 300;
 
         /// <summary>How long a carrier's knock ahead of himself takes to settle.</summary>
@@ -1986,31 +1964,6 @@ namespace Sim.Core.Config
         // --- Decisions with the ball (engine phase 4) ---
 
         /// <summary>
-        /// What a turnover costs, in decimetres of forward progress, by the third of the pitch
-        /// it happens in (own third, middle, final third). Losing it on the edge of your own box
-        /// is a chance conceded; losing it on the byline is a goal kick. Every option a player
-        /// weighs is priced in the same currency — expected metres gained, minus the price of
-        /// giving it away here — which is what lets a pass, a run and a clearance be COMPARED
-        /// instead of tried in a fixed order.
-        /// </summary>
-        public int[] TurnoverCostDm { get; set; } = { 900, 480, 240 };
-
-        /// <summary>
-        /// The completion a pass must promise before it is worth playing at all. Below it the
-        /// option is not considered — except a ball to the man whose chance it is, which a team
-        /// plays whatever the odds.
-        /// </summary>
-        public int MinPassCompletionPermille { get; set; } = 300;
-
-        /// <summary>
-        /// How much room the receiver needs before the pass counts as safely received. Inside
-        /// this the nearest opponent is contesting it, and the odds fall off linearly to
-        /// <see cref="ContestedReceptionFloorPermille"/> when he is standing on him.
-        /// </summary>
-        public int ReceiverFreeSpaceDm { get; set; } = 90;
-        public int ContestedReceptionFloorPermille { get; set; } = 280;
-
-        /// <summary>
         /// A lane an opponent reaches before the ball does is not automatically a lost ball —
         /// he has to control it — but it is close to one. A lane he reaches late is close to
         /// certain. Between the two the odds run linearly over this many ticks of margin.
@@ -2066,17 +2019,6 @@ namespace Sim.Core.Config
         /// </summary>
         public int VisionRiskFloorPercent { get; set; } = 45;
 
-        /// <summary>
-        /// What simply keeping the ball is worth, in decimetres of forward progress. Without it
-        /// the only pass with a positive value is a forward one and a side never builds: a square
-        /// ball to a free man gains no ground, and it is still the right pass.
-        /// </summary>
-        public int PossessionValueDm { get; set; } = 55;
-
-        /// <summary>What a ball played back to the keeper costs, and what a runner showing for it is worth.</summary>
-        public int BackToKeeperCostDm { get; set; } = 130;
-        public int SupportingRunBonusDm { get; set; } = 70;
-
         /// <summary>How far a clearance is hit, and how often the side that hit it gets it back.</summary>
         public int ClearanceDistanceDm { get; set; } = 400;
         public int ClearanceRetentionPermille { get; set; } = 260;
@@ -2116,9 +2058,6 @@ namespace Sim.Core.Config
 
         /// <summary>How far off the middle of his own goal a defender slices it when he puts it behind.</summary>
         public int ClearBehindOffCentreDm { get; set; } = 230;
-
-        /// <summary>Appetite for running with it rather than playing it, as a percentage of its value.</summary>
-        public int CarryValuePercent { get; set; } = 45;
 
         // --- The duel (engine phase 4) ---
 
@@ -2227,16 +2166,8 @@ namespace Sim.Core.Config
         // Until this phase every knob under here was a super-power the director switched on for
         // forty-five ticks so the ball would reach the man the timeline had already elected to
         // score: press radius times 2.6, tackle odds times 2.6, an extra stride to every loose
-        // ball. They are gone with the director. What replaces them is one number the shot is
-        // WORTH, and one that says how much of a chance's quality actually goes in.
-
-        /// <summary>
-        /// What a goal is worth to the man deciding, in the decimetres of forward progress every
-        /// other option is quoted in. It is the price of the shot ATTEMPT: raise it and men shoot
-        /// from further out, lower it and they keep working the ball. This is the knob the
-        /// harness tunes against "20-30 shots a match".
-        /// </summary>
-        public int GoalValueDm { get; set; } = 626;
+        // ball. They are gone with the director. What replaces them is one number that says how
+        // much of a chance's quality actually goes in.
 
         /// <summary>
         /// How much of a chance's quality he expects to convert, as a percentage — his own
@@ -2333,16 +2264,6 @@ namespace Sim.Core.Config
         /// few centimetres would turn every ball played into the channel into an offside.
         /// </summary>
         public int OffsideMarginDm { get; set; } = 16;
-
-        /// <summary>
-        /// How badly a passer reads the line, in decimetres, at Positioning 1 and at Positioning
-        /// 100. This is the whole model of WHY offsides happen: the man on the ball plays what he
-        /// believes is on, the referee judges what actually was, and the gap between the two is
-        /// the flag. A passer who read the line perfectly would never play anybody offside and
-        /// the reading would stay at zero, which is what it was before this phase.
-        /// </summary>
-        public int OffsideJudgementDm { get; set; } = 13;
-        public int OffsideJudgementFloorDm { get; set; } = 6;
 
         // --- Fouls, cards and free kicks (Laws 12, 13, 14) ---
 
@@ -2473,14 +2394,14 @@ namespace Sim.Core.Config
         public int[] MentalityFrontLineGapPercent { get; set; } = { 135, 100, 72 };
 
         /// <summary>
-        /// How much more (or less) a goal is worth to the man deciding, as a percentage of
-        /// <see cref="GoalValueDm"/>. An attacking side has a go; a defensive one keeps working
-        /// the ball. Multiplied by <see cref="TempoShotAppetitePercent"/>.
+        /// How much more (or less) a shot is worth to the man deciding, in percent. An attacking
+        /// side has a go; a defensive one keeps working the ball. Multiplied by
+        /// <see cref="TempoShotAppetitePercent"/>, and read at <see cref="V11MentalitySpreadPercent"/>.
         ///
         /// NARROW ON PURPOSE, AND MEASURED. Phase 8 first shipped 82/100/122 here and 83/100/122
         /// on Tempo, and the harness said what that really was: 0.1 shots a match at the patient
         /// end, 13.1 at neutral, 46.4 at the eager one. A hundredfold swing off ±32/+48 points,
-        /// because the shoot-or-pass comparison in ShootValue/OptionValue is a THRESHOLD and this
+        /// because engine v10's shoot-or-pass comparison was a THRESHOLD and that
         /// engine's chances sit tightly clustered just under it — so a few per cent either way
         /// flips nearly every decision at once. Measured slopes on ln(shots): about +0.026 per
         /// point above 100, and nearer 0.15 below, the low side being the cliff. 96/100/106 on
@@ -2491,23 +2412,6 @@ namespace Sim.Core.Config
 
         /// <summary>Percent applied to each player's distance from the centre line.</summary>
         public int[] WidthSpreadPercent { get; set; } = { 74, 100, 130 };
-
-        /// <summary>
-        /// What a team-mate standing in a WIDE channel is worth, in the decimetres of forward
-        /// progress every option a man on the ball has is quoted in. A wide side looks for the
-        /// man on the touchline and a narrow one would rather play through the middle — and a
-        /// cross, in this engine, IS a pass from a wide position near the goal, so this is the
-        /// lever behind "wide → more crosses". Zero at neutral: the pass is priced exactly as
-        /// phase 4 priced it.
-        ///
-        /// HALVED AFTER MEASURING. At -110/+130 the harness read 20.2 / 29.3 / 43.8 crosses —
-        /// and 1.80 / 1.97 / 0.80 goals with 16.0 / 11.3 / 7.0 shots, i.e. asking for width cost
-        /// a side half its goals, because every decimetre of bias that pulls the ball into the
-        /// channel pulls it out of the box. The check this lever has to satisfy wants a span of
-        /// 1.0 cross and had 23.6, so there was room to give most of it back: -55/+65 should keep
-        /// a span of a dozen crosses while the box stops emptying.
-        /// </summary>
-        public int[] WidthWidePassBiasDm { get; set; } = { -55, 0, 65 };
 
         /// <summary>
         /// How far from his position a player will go to press the ball. Phase 8 widens the
@@ -2537,9 +2441,6 @@ namespace Sim.Core.Config
         /// <summary>How long a player keeps the ball before he looks to release it, in milliseconds.</summary>
         public int[] TempoHoldMsMin { get; set; } = { 2600, 1480, 700 };
         public int[] TempoHoldMsMax { get; set; } = { 4400, 2620, 1350 };
-
-        /// <summary>How strongly the forward option is preferred when passing.</summary>
-        public int[] TempoForwardBias { get; set; } = { 3, 10, 22 };
 
         /// <summary>
         /// The other half of the shot appetite, from the Tempo axis (see

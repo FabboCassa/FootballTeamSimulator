@@ -23,10 +23,10 @@ namespace Sim.Core.Tests.Match
         public void Fresh() => _cfg = new BalanceConfig().Match;
 
         [Test]
-        public void Tunables_DefaultTo35mAndLeaveV10sShootingRangeAlone()
+        public void Tunables_DefaultTo35m_BeyondTheOpenPlayShootingRange()
         {
             Assert.That(_cfg.SetPieceRangeDm, Is.EqualTo(350));
-            Assert.That(_cfg.MaxShootRangeDm, Is.EqualTo(320), "V10's wall range is its shooting range");
+            Assert.That(_cfg.MaxShootRangeDm, Is.EqualTo(320), "the open-play shooting range is not the wall's");
             Assert.That(_cfg.FreeKickCrossOddsPermille, Is.InRange(1, 999));
             Assert.That(_cfg.PenaltyRunUpDm, Is.GreaterThan(_cfg.KickRangeDm * 2),
                 "a run-up shorter than two kicking reaches is not visible");

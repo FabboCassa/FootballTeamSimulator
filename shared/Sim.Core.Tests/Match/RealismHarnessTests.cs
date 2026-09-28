@@ -11,15 +11,14 @@ using Sim.Core.Random;
 namespace Sim.Core.Tests.Match
 {
     /// <summary>
-    /// The realism harness of the watchable-match spec (R2, R4, R5, R7, R19): 1,000 watched
-    /// matches between two equal-strength sides per brain, measured and printed against the bands
-    /// in <see cref="RealismBands"/>. On V10 a report; V11, tuned in task 11, is gated on the R7
-    /// bands and R19's time, and the user judges the output before the task closes.
+    /// The realism harness of the watchable-match spec (R2, R4, R5, R7): 1,000 watched matches
+    /// between two equal-strength sides, measured and printed against the bands in
+    /// <see cref="RealismBands"/>, and gated on the R7 bands; the user judges the output. The
+    /// header prints ms/match, which is R19's timing line.
     ///
-    /// Explicit, because 2,000 matches with the position stream on cost minutes, not the
-    /// milliseconds the score-model harnesses in <see cref="MatchEngineTests"/> cost (about 13 min in
-    /// Release, 34 in Debug). Run it with:
-    ///   dotnet test shared/Sim.Core.Tests/Sim.Core.Tests.csproj -c Release --filter "Name=Harness_RealismBands_V10AndV11"
+    /// Explicit, because 1,000 matches with the position stream on cost minutes, not the
+    /// milliseconds the score-model harnesses in <see cref="MatchEngineTests"/> cost. Run it with:
+    ///   dotnet test shared/Sim.Core.Tests/Sim.Core.Tests.csproj -c Release --filter "Name=Harness_RealismBands"
     ///     --logger "console;verbosity=detailed"
     /// </summary>
     [TestFixture]
@@ -28,35 +27,30 @@ namespace Sim.Core.Tests.Match
         private const int Matches = 1000;
         private const ulong FirstSeed = 30_000;
 
-        [Test, Explicit("Report-only harness: 2,000 watched matches."), Category("RealismHarness")]
-        public void Harness_RealismBands_V10AndV11()
+        [Test, Explicit("Report-only harness: 1,000 watched matches."), Category("RealismHarness")]
+        public void Harness_RealismBands()
         {
             League league = new LeagueGenerator().Generate(new Pcg32(20260611));
             Club a = league.Clubs[9], b = league.Clubs[10];   // mid-table neighbours: equal strength
 
-            RealismTally v10 = Run(MatchBrainVersion.V10, a, b);
-            RealismTally v11 = Run(MatchBrainVersion.V11, a, b);
+            RealismTally v11 = Run(a, b);
 
-            TestContext.Out.WriteLine(v10.Format("V10", v10.MsPerMatch));
-            TestContext.Out.WriteLine(v11.Format("V11", v10.MsPerMatch));
+            TestContext.Out.WriteLine(v11.Format("V11"));
 
-            Assert.That(v10.Matches, Is.EqualTo(Matches), "Every match must come back with a stream.");
             Assert.That(v11.Matches, Is.EqualTo(Matches), "Every match must come back with a stream.");
 
             string[] gated =
             {
                 RealismBands.Goals.Name, RealismBands.Shots.Name, RealismBands.OnTargetPercent.Name,
-                RealismBands.Corners.Name, RealismBands.Fouls.Name, RealismBands.BoxEntriesPerSide.Name,
-                RealismBands.TimeVsV10.Name
+                RealismBands.Corners.Name, RealismBands.Fouls.Name, RealismBands.BoxEntriesPerSide.Name
             };
-            foreach (RealismRow row in v11.Rows(v10.MsPerMatch).Where(row => gated.Contains(row.Band.Name)))
+            foreach (RealismRow row in v11.Rows().Where(row => gated.Contains(row.Band.Name)))
                 Assert.That(row.InBand, Is.True, $"V11 {row.Band.Name} {row.Value:F3} outside {row.Band.Describe()}");
         }
 
-        private static RealismTally Run(MatchBrainVersion brain, Club a, Club b)
+        private static RealismTally Run(Club a, Club b)
         {
             var cfg = new BalanceConfig();
-            cfg.Match.Brain = brain;
 
             // The flags the shipped client plays a watched match with (SeasonProgressor's).
             var engine = new MatchEngine(cfg, applyCondition: true, applyMatchFatigue: true,
@@ -106,7 +100,7 @@ namespace Sim.Core.Tests.Match
             };
             tally.Add(m, r, 120);
 
-            var rows = tally.Rows(baselineMsPerMatch: 100).ToDictionary(row => row.Band.Name);
+            var rows = tally.Rows().ToDictionary(row => row.Band.Name);
 
             AssertRow(rows[RealismBands.Goals.Name], 3.0, true);
             AssertRow(rows[RealismBands.Shots.Name], 24.0, true);
@@ -117,10 +111,9 @@ namespace Sim.Core.Tests.Match
             AssertRow(rows[RealismBands.OpenGoalShotRate.Name], 0.9, true);
             AssertRow(rows[RealismBands.SterilePossessionShare.Name], 0.2, false);
             AssertRow(rows[RealismBands.MedianOffTargetSeconds.Name], 4.0, true);
-            AssertRow(rows[RealismBands.TimeVsV10.Name], 1.2, true);
             Assert.That(tally.MsPerMatch, Is.EqualTo(120.0));
 
-            string text = tally.Format("V11", 100);
+            string text = tally.Format("V11");
             Assert.That(text, Does.Contain("V11"));
             Assert.That(text, Does.Contain("OUT"));
             Assert.That(text, Does.Contain("IN"));

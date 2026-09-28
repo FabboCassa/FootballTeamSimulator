@@ -11,7 +11,7 @@ using Sim.Core.Random;
 namespace Sim.Core.Tests.Match
 {
     /// <summary>
-    /// R6 harness: with Brain = V11, free kicks within 35 m are shot directly AND crossed, both
+    /// R6 harness: free kicks within 35 m are shot directly AND crossed, both
     /// more than zero times, counted off the position stream (the kick that follows the
     /// FreeKick restart). The counts, corners, penalties and the goals that came straight from a
     /// direct free kick are printed for the eye.
@@ -39,7 +39,6 @@ namespace Sim.Core.Tests.Match
         public void Harness_V11_FreeKicksAreShotDirectlyAndCrossed()
         {
             MatchBalance cfg = new BalanceConfig().Match;
-            cfg.Brain = MatchBrainVersion.V11;
 
             // Per match: in range, direct, direct goals, crossed, corners, penalties.
             var counts = new int[Matches, 6];
