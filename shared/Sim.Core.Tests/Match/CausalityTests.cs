@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using NUnit.Framework;
 using Sim.Core.Config;
 using Sim.Core.Domain;
@@ -228,21 +229,22 @@ namespace Sim.Core.Tests.Match
         [Test]
         public void HomeAdvantage_IsPlayedOut()
         {
-            int homeWins = 0, awayWins = 0;
+            // Sixty matches flipped with every tuning change; the edge is a few points, so it needs hundreds.
+            const int Matches = 600;
+            var margin = new int[Matches];
 
-            for (int i = 0; i < 60; i++)
+            Parallel.For(0, Matches, i =>
             {
                 // The SAME club at both ends, so nothing but the end of the pitch differs.
                 Club club = _league.Clubs[i % _league.Clubs.Count];
                 Lineup eleven = LineupSelector.BestEleven(club);
                 MatchReport r = new MatchEngine(Cfg, applyCondition: true, applyMatchFatigue: true)
                     .Simulate(eleven, LineupSelector.BestEleven(club), new Pcg32(77_000UL + (ulong)i));
+                margin[i] = Math.Sign(r.HomeGoals - r.AwayGoals);
+            });
 
-                if (r.HomeGoals > r.AwayGoals) homeWins++;
-                else if (r.AwayGoals > r.HomeGoals) awayWins++;
-            }
-
-            TestContext.Out.WriteLine($"[causality-home] a club against itself, 60 times: {homeWins} home wins, {awayWins} away wins");
+            int homeWins = margin.Count(m => m > 0), awayWins = margin.Count(m => m < 0);
+            TestContext.Out.WriteLine($"[causality-home] a club against itself, {Matches} times: {homeWins} home wins, {awayWins} away wins");
             Assert.That(homeWins, Is.GreaterThan(awayWins), "the same side, at home, must do better than away");
         }
 

@@ -57,6 +57,14 @@ namespace Sim.Core.Match.Movement
         public static int Distance(int ax, int ay, int bx, int by) => Length(ax - bx, ay - by);
 
         /// <summary>
+        /// A distance in whole decimetres between two spots as the position stream shows them,
+        /// each coordinate cut to its decimetre. A set piece's range is judged on this: judged on
+        /// the exact spot, a free kick 35.07 m out got no wall while the viewer saw it at 34.98 m.
+        /// </summary>
+        public static int StreamDistanceDm(int ax, int ay, int bx, int by) =>
+            Length(Dm(ax) - Dm(bx), Dm(ay) - Dm(by));
+
+        /// <summary>
         /// The SQUARE of a distance. Anything that only wants to know which of two things is
         /// nearer, or whether something is inside a radius, compares these and never takes a
         /// root — which at 10 Hz is the difference between a match that costs tens of

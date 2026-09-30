@@ -12,14 +12,14 @@ namespace Sim.Core.Match.Movement
         private readonly FreeKickWall _wall;
 
         /// <summary>How close to goal a free kick gets a wall (the set-piece range).</summary>
-        private readonly int _wallRangeU;
+        private readonly int _wallRangeDm;
 
         public Restarts(MatchContext ctx, Offside offside, FreeKickWall wall, int wallRangeDm)
         {
             _ctx = ctx;
             _offside = offside;
             _wall = wall;
-            _wallRangeU = U.Units(wallRangeDm);
+            _wallRangeDm = wallRangeDm;
         }
 
         /// <summary>
@@ -104,7 +104,7 @@ namespace Sim.Core.Match.Movement
             int defending = 1 - side;
             int defendedGoalX = U.Units(MovementGeometry.OwnGoalX(defending == 0));
             bool walled = kind == BallActionKind.FreeKick
-                && U.Distance(_ctx.Ball.X, _ctx.Ball.Y, defendedGoalX, U.CenterYU) < _wallRangeU;
+                && U.StreamDistanceDm(_ctx.Ball.X, _ctx.Ball.Y, defendedGoalX, U.CenterYU) < _wallRangeDm;
             _wall.FormWall(walled ? defending : -1);
 
             _ctx.Sheet.Record(tick, kind, side == 0, _ctx.DeadTaker, -1);

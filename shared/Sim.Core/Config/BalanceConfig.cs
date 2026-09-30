@@ -59,8 +59,8 @@ namespace Sim.Core.Config
         // --- Quick resolver (background leagues), fitted to the V11 engine (watchable-match R17) ---
         /// <summary>
         /// Expected goals for an evenly-matched side, fitted against the full engine
-        /// (FastModelHarnessTests, 1,000 matches of a generated league): V11 gives 2.76 goals,
-        /// 40.6 / 23.9 / 35.5 home-draw-away and 0.078 goal difference per strength point. The
+        /// (FastModelHarnessTests, 1,000 matches of a generated league): V11 gives 2.81 goals,
+        /// 42.6 / 22.6 / 34.8 home-draw-away and 0.100 goal difference per strength point. The
         /// names keep their V11 prefix so that a stored balance document's older, engine-v10
         /// Quick* figures are ignored on load instead of read into this model.
         /// </summary>
@@ -73,7 +73,7 @@ namespace Sim.Core.Config
         /// Flat strength points added to the home side, ON TOP of MatchBalance.HomeAdvantagePercent.
         /// Negative because V11's home edge is smaller than HomeAdvantagePercent alone gives here.
         /// </summary>
-        public int QuickV11HomeAdvantageStrength { get; set; } = -4;
+        public int QuickV11HomeAdvantageStrength { get; set; } = -3;
 
         public double QuickMinExpectedGoals { get; set; } = 0.20;
         public double QuickMaxExpectedGoals { get; set; } = 4.0;
@@ -1223,12 +1223,13 @@ namespace Sim.Core.Config
         /// Line spacing and width of the V11 shape with and without the ball, in percent of
         /// LineSpacingDm and of the width instruction. Closer together than engine v10's 120/55 and
         /// 118/60: every turnover moves the whole shape from one to the other, and the further
-        /// apart they are the longer the front men are stranded off target (R2).
+        /// apart they are the longer the front men are stranded off target (R2). The block's 60
+        /// stands it about 40 m wide, inside real football's 28-42 m; at 80 it stood 46 m wide.
         /// </summary>
         public int V11AttackLineSpacingPercent { get; set; } = 100;
         public int V11DefendLineSpacingPercent { get; set; } = 100;
         public int V11AttackWidthPercent { get; set; } = 110;
-        public int V11DefendWidthPercent { get; set; } = 80;
+        public int V11DefendWidthPercent { get; set; } = 60;
 
         /// <summary>
         /// How many lines at that spacing the V11 shape spans, back line to front line. A shape
@@ -1307,7 +1308,16 @@ namespace Sim.Core.Config
         public int V11SupportLeashDm { get; set; } = 200;
 
         /// <summary>How far short of the offside line a man in possession holds when he is not running.</summary>
-        public int V11OnsideHoldDm { get; set; } = 15;
+        public int V11OnsideHoldDm { get; set; } = 16;
+
+        /// <summary>
+        /// How far beyond the flag a team-mate can stand and still look onside to the man on the
+        /// ball, in decimetres. The passer reads the line by eye, from behind it and on the move,
+        /// so a runner who has just crossed it still gets the ball now and then — which is where
+        /// football's offsides come from. At zero the passer never misjudges and a match saw
+        /// fewer than one; runners cross the line so often that 10 cm gives about three.
+        /// </summary>
+        public int V11OffsideMisreadDm { get; set; } = 1;
 
         /// <summary>How far beyond the offside line a run in behind is aimed.</summary>
         public int V11RunDepthDm { get; set; } = 120;

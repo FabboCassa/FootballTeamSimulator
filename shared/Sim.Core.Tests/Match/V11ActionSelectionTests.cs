@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using NUnit.Framework;
 using Sim.Core.Config;
 using Sim.Core.Domain;
@@ -352,7 +353,7 @@ namespace Sim.Core.Tests.Match
         // ---------------------------------------------------------------- in a match
 
         /// <summary>
-        /// The scripted rule, on the pitch: over a few whole V11 matches, measured off the position
+        /// The scripted rule, on the pitch: over forty whole V11 matches, measured off the position
         /// stream by the harness's own <see cref="RealismAnalyzer"/>, the open goals are shot at
         /// within 1.5 s. The 1,000-match reading is <see cref="V11ActionHarnessTests"/>.
         /// </summary>
@@ -361,15 +362,22 @@ namespace Sim.Core.Tests.Match
         {
             League league = new LeagueGenerator().Generate(new Pcg32(20260611));
             var cfg = new BalanceConfig();
-            var engine = new MatchEngine(cfg, applyCondition: true, applyMatchFatigue: true,
-                applyPositioning: true, generatePositions: true);
+            // Four matches (~24 chances) flipped with every tuning change; this gives a couple of hundred.
+            const int Matches = 40;
+            var metrics = new RealismMetrics[Matches];
+
+            Parallel.For(0, Matches, i =>
+            {
+                var engine = new MatchEngine(cfg, applyCondition: true, applyMatchFatigue: true,
+                    applyPositioning: true, generatePositions: true);
+                MatchReport r = engine.Simulate(LineupSelector.BestEleven(league.Clubs[9]),
+                    LineupSelector.BestEleven(league.Clubs[10]), new Pcg32(3400UL + (ulong)i));
+                metrics[i] = RealismAnalyzer.Analyze(r)!;
+            });
 
             int chances = 0, shots = 0;
-            for (ulong seed = 3400; seed < 3404; seed++)
+            foreach (RealismMetrics m in metrics)
             {
-                MatchReport r = engine.Simulate(LineupSelector.BestEleven(league.Clubs[9]),
-                    LineupSelector.BestEleven(league.Clubs[10]), new Pcg32(seed));
-                RealismMetrics m = RealismAnalyzer.Analyze(r)!;
                 chances += m.OpenGoalChances;
                 shots += m.OpenGoalShots;
             }

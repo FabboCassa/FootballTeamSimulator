@@ -67,8 +67,12 @@ namespace Sim.Core.Config
 
         // --- "Concentrate": fewer defensive errors, attack slightly more cautious ---
 
-        /// <summary>Percent of the pressure felt by a man on the ball in his own half.</summary>
-        public int ConcentrateOwnHalfPressureFeltPercent { get; set; } = 75;
+        /// <summary>
+        /// Percent of the pressure felt by a man on the ball in his own half. Not lower: the engine
+        /// has no score-state behaviour, so a shout with no cost reads net-positive in every state
+        /// (R11), and at 75 Concentrate did on most retunes of issue #65.
+        /// </summary>
+        public int ConcentrateOwnHalfPressureFeltPercent { get; set; } = 80;
         public int ConcentrateShotAppetitePercent { get; set; } = 99;
 
         /// <summary>V11: the weight on a ball that can be lost, in percent — the more careful side.</summary>
