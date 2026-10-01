@@ -8,10 +8,9 @@ using Sim.Core.Tactics;
 namespace Sim.Core.Tests.Match
 {
     /// <summary>
-    /// R8 on V11: the instruction tables V10 was tuned with are read by V11 at a spread of their
-    /// own — the distance of each extreme from the neutral middle entry scaled per axis — so that
-    /// no instruction dominates the tactic tournament. The middle entry stays the identity, and V10
-    /// reads the tables as they are.
+    /// R8 on V11: the instruction tables engine v10 was tuned with are read by V11 at a spread of
+    /// their own — the distance of each extreme from the neutral middle entry scaled per axis — so
+    /// that no instruction dominates the tactic tournament. The middle entry stays the identity.
     /// </summary>
     [TestFixture]
     public class V11InstructionSpreadTests

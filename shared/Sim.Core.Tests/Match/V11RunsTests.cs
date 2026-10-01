@@ -161,7 +161,6 @@ namespace Sim.Core.Tests.Match
         private static MatchSimulator PlayV11(TacticInstructions instructions, ulong seed)
         {
             var cfg = new BalanceConfig();
-            cfg.Match.Brain = MatchBrainVersion.V11;
             var side = new TacticContext(new Tactic(Formation.F433, instructions), cfg.Tactics.FamiliarityMax);
             var sim = new MatchSimulator(cfg.Match);
             sim.Generate(LineupSelector.BestEleven(_league.Clubs[9]), LineupSelector.BestEleven(_league.Clubs[10]),

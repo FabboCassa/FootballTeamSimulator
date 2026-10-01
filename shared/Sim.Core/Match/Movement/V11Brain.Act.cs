@@ -17,11 +17,11 @@ namespace Sim.Core.Match.Movement
             private int _openSince;
 
             /// <summary>
-            /// What this man does with the ball (R3-R5). A dead ball V11's set pieces do not take (R6) is v10's restart. On the ball he
+            /// What this man does with the ball (R3-R5). A dead ball V11's set pieces do not take (R6) is the base brain's restart. On the ball he
             /// reads the scene and <see cref="V11ActionValuation"/> chooses: while the tempo's hold
             /// runs he keeps it — unless the goal is open, which he goes at on the tick he sees it
             /// (R4) — and then he takes the dearest of pass, cross, carry, clearance and shot. The
-            /// execution, and every draw in it, is the simulator's, the same as v10's.
+            /// execution, and every draw in it, is the simulator's.
             /// </summary>
             public void Act(int tick, int side, int slot)
             {
@@ -32,7 +32,7 @@ namespace Sim.Core.Match.Movement
                 MatchBall ball = _sim._ball;
                 if (ball.Dead)
                 {
-                    _v10.Act(tick, side, slot);
+                    _base.Restart(tick, side, slot);
                     return;
                 }
 
@@ -215,7 +215,7 @@ namespace Sim.Core.Match.Movement
                     _sim._maxSpeed[k] * perSecond / U.Scale);
             }
 
-            /// <summary>The odds he keeps it through one touch past the nearest man, as v10 reads the duel.</summary>
+            /// <summary>The odds he keeps it through one touch past the nearest man, as the simulator reads the duel.</summary>
             private int CarryKeep(int side, int k)
             {
                 MatchSimulator sim = _sim;

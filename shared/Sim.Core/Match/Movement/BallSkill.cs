@@ -105,31 +105,6 @@ namespace Sim.Core.Match.Movement
                 cfg.CutOutCompletionPermille, cfg.ClearLaneCompletionPermille);
         }
 
-        /// <summary>
-        /// And the odds he keeps it once it gets there. A man with an opponent standing on him
-        /// can still be passed to — he shields it — but calling that a completed pass is how the
-        /// engine ended up playing every ball into a marker's feet and calling it safe.
-        /// </summary>
-        public static int ReceptionPermille(int spaceDm, MatchBalance cfg)
-            => Lerp(spaceDm, cfg.ReceiverFreeSpaceDm, cfg.ContestedReceptionFloorPermille, 1000);
-
-        /// <summary>
-        /// What a player thinks an option is worth, in decimetres of forward progress: what he
-        /// gains when it comes off, less what a turnover costs where he is standing. The one
-        /// currency a pass, a run and a clearance can all be quoted in — which is what turns a
-        /// fixed ladder of "pass, else clear, else run" into a decision.
-        ///
-        /// <paramref name="visionPercent"/> is how much of the risk he actually sees: a poor
-        /// reader of the game plays the ball that LOOKS best.
-        /// </summary>
-        public static int OptionValue(int completionPermille, int gainDm, int turnoverCostDm, int visionPercent)
-        {
-            int completion = Clamp(completionPermille, 0, 1000);
-            int reward = gainDm * completion / 1000;
-            int risk = turnoverCostDm * (1000 - completion) / 1000;
-            return reward - risk * Clamp(visionPercent, 0, 100) / 100;
-        }
-
         /// <summary>How much of the risk a player sees, from Positioning (his reading of the game).</summary>
         public static int VisionPercent(int positioning, MatchBalance cfg)
             => Lerp(Clamp(positioning, 1, 100), 100, cfg.VisionRiskFloorPercent, 100);

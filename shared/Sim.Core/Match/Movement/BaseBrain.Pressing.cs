@@ -2,7 +2,7 @@ namespace Sim.Core.Match.Movement
 {
     public sealed partial class MatchSimulator
     {
-        private sealed partial class V10Brain
+        private sealed partial class BaseBrain
         {
             /// <summary>
             /// Is this man going to the ball? Hands back his defensive home spot either way, because

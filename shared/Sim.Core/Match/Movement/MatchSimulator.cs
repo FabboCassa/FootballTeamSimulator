@@ -40,10 +40,10 @@ namespace Sim.Core.Match.Movement
         private readonly MatchBalance _cfg;
 
         /// <summary>
-        /// What each man decides and where he goes. <see cref="MatchBalance.Brain"/> picks it once;
-        /// the ball, the laws and the executions below serve whichever brain plays.
+        /// What each man decides and where he goes. The ball, the laws and the executions below
+        /// are the simulator's; the brain draws from the match's one seeded source only through them.
         /// </summary>
-        private readonly IMatchBrain _brain;
+        private readonly V11Brain _brain;
 
         private IRandomSource _rng = null!;
         private MatchBall _ball = null!;
@@ -202,13 +202,7 @@ namespace Sim.Core.Match.Movement
             _condition = condition;
             _applyCondition = applyCondition;
             _applyMatchFatigue = applyMatchFatigue;
-            _brain = cfg.Brain switch
-            {
-                MatchBrainVersion.V10 => new V10Brain(this),
-                MatchBrainVersion.V11 => new V11Brain(this),
-                _ => throw new System.ArgumentOutOfRangeException(
-                    nameof(cfg), cfg.Brain, "Unknown match brain.")
-            };
+            _brain = new V11Brain(this);
         }
 
         // ------------------------------------------------------------------ entry point
@@ -440,7 +434,7 @@ namespace Sim.Core.Match.Movement
             _ctx = new MatchContext(
                 _cfg, _rng, _ball, _sheet, _n, _px, _py, _keeper, _sentOff,
                 _skShooting, _skTechnique, _receiver, _lastTouch);
-            _offside = new Offside(_ctx, _skPositioning);
+            _offside = new Offside(_ctx);
             _freeKickWall = new FreeKickWall(_ctx);
             _restarts = new Restarts(_ctx, _offside, _freeKickWall, WallRangeDm);
             _referee = new Referee(_ctx, _restarts, _offside, _skDefending);
@@ -647,29 +641,15 @@ namespace Sim.Core.Match.Movement
         }
 
         /// <summary>
-        /// How much of himself he still has, in permille. Tiredness builds toward
-        /// <see cref="ConditionBalance.MatchFatigueAt90Permille"/> by full time, steps back at the
-        /// break, and is scaled by his own Stamina — so a low-stamina man fades and a high-stamina
-        /// one barely does. It is the result model's own curve
-        /// (<c>MatchEngine.FatigueFactor</c>), read one player at a time instead of one team at a
-        /// time, which is the whole gain of the causality being on the pitch. On V11 it is his own
-        /// clock rather than the match's (<see cref="V11TirednessPermille"/>).
+        /// How much of himself he still has, in permille. Tiredness builds with the minutes he has
+        /// been on the pitch (<see cref="V11TirednessPermille"/>), steps back at the break, and is
+        /// scaled by his own Stamina — so a low-stamina man fades and a high-stamina one barely does.
         /// </summary>
         private int FatiguePermille(int side, int slot, int minute, int stamina)
         {
             if (!_applyMatchFatigue) return 1000;
 
-            int permille;
-            if (IsV11)
-            {
-                permille = V11TirednessPermille(side * _n + slot, minute);
-            }
-            else
-            {
-                permille = _condition.MatchFatigueAt90Permille * minute / 90;
-                if (minute > 45) permille -= _condition.HalfTimeRecoveryPermille;
-                if (permille < 0) permille = 0;
-            }
+            int permille = V11TirednessPermille(side * _n + slot, minute);
 
             int neutral = _condition.StaminaNeutral;
             int scaled = neutral > 0 ? permille * (2 * neutral - stamina) / neutral : permille;
@@ -979,7 +959,7 @@ namespace Sim.Core.Match.Movement
             int aimY = U.CenterYU + (_rng.NextInt(0, 2) == 0 ? -placed : placed);
 
             int spread = U.Units(_cfg.ShotSpreadDm) * (1000 - _shotQuality) / 1000;
-            if (_cfg.Brain == MatchBrainVersion.V11) spread = spread * _cfg.V11ShotSpreadPercent / 100;
+            spread = spread * _cfg.V11ShotSpreadPercent / 100;
             aimY = U.ClampY(aimY + BallSkill.Spread(_rng, spread));
 
             int offCentre = aimY > U.CenterYU ? aimY - U.CenterYU : U.CenterYU - aimY;

@@ -47,12 +47,6 @@ namespace Sim.Core.Match.Movement
         /// <summary>Percent applied to each player's distance from the centre line.</summary>
         public readonly int WidthPercent;
 
-        /// <summary>
-        /// What a team-mate in a wide channel is worth to the man on the ball, in decimetres of
-        /// forward progress. Negative under a narrow instruction: he would rather go through.
-        /// </summary>
-        public readonly int WidePassBiasDm;
-
         /// <summary>How far from his position a player will go to press the ball, in units.</summary>
         public readonly int PressReachU;
 
@@ -79,12 +73,9 @@ namespace Sim.Core.Match.Movement
         public readonly int HoldTicksMin;
         public readonly int HoldTicksMax;
 
-        /// <summary>How strongly a forward option is preferred over a safe one when passing.</summary>
-        public readonly int ForwardBias;
-
         /// <summary>
-        /// What a goal is worth to the man deciding, as a percentage of
-        /// <see cref="MatchBalance.GoalValueDm"/>: Mentality and Tempo multiplied together.
+        /// How keen he is to shoot, in percent (V11 weighs the shot's value by it): Mentality and
+        /// Tempo multiplied together, and a shout on top.
         /// </summary>
         public readonly int ShotAppetitePercent;
 
@@ -109,16 +100,15 @@ namespace Sim.Core.Match.Movement
         public readonly int ShoutLinePushDm;
 
         private MovementTactics(
-            int linePushDm, int frontLineGapDm, int widthPercent, int widePassBiasDm,
+            int linePushDm, int frontLineGapDm, int widthPercent,
             int pressReachU, int pressTriggerDepthDm, int secondPressDepthDm, int pressStandOffU,
-            int supporters, int holdMin, int holdMax, int forwardBias, int shotAppetitePercent,
+            int supporters, int holdMin, int holdMax, int shotAppetitePercent,
             TacticInstructions instructions,
             ShoutEffect shout, int fatiguePercent)
         {
             LinePushDm = linePushDm;
             FrontLineGapDm = frontLineGapDm;
             WidthPercent = widthPercent;
-            WidePassBiasDm = widePassBiasDm;
             PressReachU = pressReachU;
             PressTriggerDepthDm = pressTriggerDepthDm;
             SecondPressDepthDm = secondPressDepthDm;
@@ -126,7 +116,6 @@ namespace Sim.Core.Match.Movement
             Supporters = supporters;
             HoldTicksMin = holdMin;
             HoldTicksMax = holdMax;
-            ForwardBias = forwardBias;
             ShotAppetitePercent = shotAppetitePercent;
             Instructions = instructions;
             FatiguePercent = fatiguePercent;
@@ -150,25 +139,21 @@ namespace Sim.Core.Match.Movement
             int tempo = (int)i.Tempo;           // 0 slow · 1 normal · 2 fast
             int width = (int)i.Width;           // 0 narrow · 1 normal · 2 wide
 
-            // V11 reads the same tables at a spread of its own per axis (R8); V10 at full spread.
-            bool v11 = cfg.Brain == MatchBrainVersion.V11;
-            int ms = v11 ? cfg.V11MentalitySpreadPercent : 100;
-            int ps = v11 ? cfg.V11PressingSpreadPercent : 100;
-            int ts = v11 ? cfg.V11TempoSpreadPercent : 100;
-            int ws = v11 ? cfg.V11WidthSpreadPercent : 100;
+            // The tables are read at a spread of their own per axis (R8).
+            int ms = cfg.V11MentalitySpreadPercent;
+            int ps = cfg.V11PressingSpreadPercent;
+            int ts = cfg.V11TempoSpreadPercent;
+            int ws = cfg.V11WidthSpreadPercent;
 
             // Neutral reads 100 * 100 / 100 = 100, and the site that spends it divides by 100
-            // again — so a neutral side prices a goal at exactly GoalValueDm, as phase 6 left it.
+            // again — so a neutral side's shot is valued exactly as the xG model prices it.
             int appetite =
                 InstructionTable.Percent(cfg.MentalityShotAppetitePercent, mentality, ms)
                 * InstructionTable.Percent(cfg.TempoShotAppetitePercent, tempo, ts) / 100
                 * shout.ShotAppetitePercent / 100;
 
-            int forwardBias = InstructionTable.Pick(cfg.TempoForwardBias, tempo, ts) + shout.ForwardBias;
-            if (shout.ForwardBias != 0 && forwardBias < 0) forwardBias = 0;
-
-            // A shout's hold is a tempo too, and V11 reads it at the same spread.
-            int hold = v11 ? 100 + (shout.HoldPercent - 100) * ts / 100 : shout.HoldPercent;
+            // A shout's hold is a tempo too, and is read at the same spread.
+            int hold = 100 + (shout.HoldPercent - 100) * ts / 100;
 
             int supporters = InstructionTable.Pick(cfg.MentalitySupporters, mentality, ms) + shout.Supporters;
             if (shout.Supporters != 0 && supporters < 0) supporters = 0;
@@ -179,7 +164,6 @@ namespace Sim.Core.Match.Movement
                                 * InstructionTable.Percent(cfg.MentalityFrontLineGapPercent, mentality, ms) / 100
                                 * shout.FrontLineGapPercent / 100,
                 widthPercent: InstructionTable.Percent(cfg.WidthSpreadPercent, width, ws),
-                widePassBiasDm: InstructionTable.Pick(cfg.WidthWidePassBiasDm, width, ws),
                 pressReachU: U.Units(InstructionTable.Pick(cfg.PressReachDm, pressing, ps)) * shout.PressReachPercent / 100,
                 pressTriggerDepthDm: InstructionTable.Pick(cfg.PressTriggerDepthDm, pressing, ps) + shout.PressTriggerDepthDm,
                 secondPressDepthDm: cfg.SecondPressDepthDm
@@ -191,13 +175,10 @@ namespace Sim.Core.Match.Movement
                 supporters: supporters,
                 holdMin: cfg.TicksOfMs(InstructionTable.Pick(cfg.TempoHoldMsMin, tempo, ts) * hold / 100),
                 holdMax: cfg.TicksOfMs(InstructionTable.Pick(cfg.TempoHoldMsMax, tempo, ts) * hold / 100),
-                forwardBias: forwardBias,
                 shotAppetitePercent: appetite,
                 instructions: i,
                 shout: shout,
-                fatiguePercent: v11
-                    ? shout.FatiguePercent * Percent(cfg.V11PressingFatiguePercent, pressing) / 100
-                    : shout.FatiguePercent);
+                fatiguePercent: shout.FatiguePercent * Percent(cfg.V11PressingFatiguePercent, pressing) / 100);
         }
 
         internal static int Pick(int[] table, int index) =>

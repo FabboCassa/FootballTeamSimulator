@@ -4,7 +4,7 @@ namespace Sim.Core.Match.Movement
     /// An instruction table (defensive · balanced · attacking, and so on) read at a spread: the
     /// distance of the chosen entry from the middle one, in percent. 100 is the table as it is;
     /// the middle entry is returned exactly at any spread, so a neutral side never moves (the
-    /// invariant of <see cref="MovementTactics"/>). V11 reads V10's tables this way (R8).
+    /// invariant of <see cref="MovementTactics"/>). V11 reads every table this way (R8).
     /// </summary>
     public static class InstructionTable
     {

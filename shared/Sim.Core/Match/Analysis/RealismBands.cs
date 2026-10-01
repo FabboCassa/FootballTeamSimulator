@@ -30,7 +30,7 @@ namespace Sim.Core.Match.Analysis
     /// <summary>
     /// The realism bands of the watchable-match spec (docs/specs/watchable-match-engine.md), in
     /// one place. R7: equal-strength neutral sides over 1,000 matches. R4, R5, R2: the open-goal,
-    /// circling and off-target readings. R19: the new brain's time against V10's in the same run.
+    /// circling and off-target readings.
     /// </summary>
     public static class RealismBands
     {
@@ -53,9 +53,5 @@ namespace Sim.Core.Match.Analysis
         /// <summary>Median over matches of each match's median off-target seconds per outfielder.</summary>
         public static readonly RealismBand MedianOffTargetSeconds =
             new RealismBand("off-target s/player (median)", double.NegativeInfinity, 5);
-
-        /// <summary>Milliseconds per match as a multiple of V10's in the same run.</summary>
-        public static readonly RealismBand TimeVsV10 =
-            new RealismBand("time vs V10", double.NegativeInfinity, 1.25);
     }
 }

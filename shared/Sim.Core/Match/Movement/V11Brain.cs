@@ -6,45 +6,41 @@ namespace Sim.Core.Match.Movement
     {
         /// <summary>
         /// Ticks the given side spent in <paramref name="phase"/> in the last match played — the
-        /// harness's view of R1. Only the V11 brain runs the phase machine; on V10 it is zero.
+        /// harness's view of R1.
         /// </summary>
-        public int PhaseTicks(int side, TeamPhase phase) =>
-            _brain is V11Brain v11 ? v11.PhaseTicks(side, phase) : 0;
+        public int PhaseTicks(int side, TeamPhase phase) => _brain.PhaseTicks(side, phase);
 
         /// <summary>
         /// R2's off-target ticks for this man in the last match played: ticks spent further than
         /// <see cref="MatchBalance.V11OffTargetDm"/> (25 m) from his phase target spot, with no job
         /// (not on the ball, chasing, pressing, covering, marking, keeping goal or placed for a
         /// restart), beyond the first <see cref="MatchBalance.V11OffTargetGraceMs"/> (5 s) of each
-        /// unbroken spell. V11 only; on V10 it is zero.
+        /// unbroken spell.
         /// </summary>
-        public int OffTargetTicks(int side, int slot) =>
-            _brain is V11Brain v11 ? v11.OffTargetTicks(side * _n + slot) : 0;
+        public int OffTargetTicks(int side, int slot) => _brain.OffTargetTicks(side * _n + slot);
 
         /// <summary>As <see cref="OffTargetTicks"/> but with no grace: every tick of every spell.</summary>
-        public int FarFromTargetTicks(int side, int slot) =>
-            _brain is V11Brain v11 ? v11.FarTicks(side * _n + slot) : 0;
+        public int FarFromTargetTicks(int side, int slot) => _brain.FarTicks(side * _n + slot);
 
-        /// <summary>Runs in behind the given side started in the last match played (V11 only).</summary>
-        public int RunsInBehind(int side) => _brain is V11Brain v11 ? v11.Runs(side) : 0;
+        /// <summary>Runs in behind the given side started in the last match played.</summary>
+        public int RunsInBehind(int side) => _brain.Runs(side);
 
-        /// <summary>Player-ticks the given side's full-backs spent on the overlap in the last match (V11 only).</summary>
-        public int OverlapTicks(int side) => _brain is V11Brain v11 ? v11.Overlaps(side) : 0;
+        /// <summary>Player-ticks the given side's full-backs spent on the overlap in the last match.</summary>
+        public int OverlapTicks(int side) => _brain.Overlaps(side);
 
         /// <summary>
-        /// The engine v11 brain (watchable-match spec). It takes over one decision at a time in the
-        /// tasks that follow; until a decision is its own it is v10's. The team phase (R1) is read
-        /// here once a tick, off the ball alone. Since task 6 (R2) it positions every man v10 has no
-        /// job for — his phase target spot, a run in behind, an overlap — and hands every other man
-        /// (on the ball, chasing, pressing, supporting, covering, marking, placed for a restart) to
-        /// v10's Move, so the golden master stays on v10 and v11's match is its own. Since task 7
-        /// (R3-R5) the man on the ball chooses on xT, pitch control and xG (see V11Brain.Act), and
-        /// its set pieces are its own (<see cref="V11SetPieces"/>, R6): they come first in Act and Move.
+        /// The engine v11 brain (watchable-match spec), the only one. The team phase (R1) is read
+        /// here once a tick, off the ball alone. It positions every man the base brain has no job
+        /// for — his phase target spot, a run in behind, an overlap — and hands every other man
+        /// (on the ball, chasing, pressing, covering, marking, placed for a restart) to the base
+        /// brain's Move (<see cref="BaseBrain"/>). The man on the ball chooses on xT, pitch control
+        /// and xG (see V11Brain.Act), and its set pieces are its own (<see cref="V11SetPieces"/>,
+        /// R6): they come first in Act and Move.
         /// </summary>
-        private sealed partial class V11Brain : IMatchBrain
+        private sealed partial class V11Brain
         {
             private readonly MatchSimulator _sim;
-            private readonly V10Brain _v10;
+            private readonly BaseBrain _base;
             private readonly TeamPhaseMachine _phases;
             private readonly V11Positioning _positioning;
             private readonly V11SetPieces _setPieces;
@@ -75,7 +71,7 @@ namespace Sim.Core.Match.Movement
             public V11Brain(MatchSimulator sim)
             {
                 _sim = sim;
-                _v10 = new V10Brain(sim);
+                _base = new BaseBrain(sim);
                 _phases = new TeamPhaseMachine(sim._cfg);
                 _positioning = new V11Positioning(sim._cfg);
                 _valuation = new V11ActionValuation(sim._cfg);
@@ -112,7 +108,7 @@ namespace Sim.Core.Match.Movement
                     _foeY[side] = new int[_sim._n];
                 }
 
-                _v10.Begin();
+                _base.Begin();
                 _setPieces.Begin();
             }
 
@@ -123,7 +119,7 @@ namespace Sim.Core.Match.Movement
                 for (int side = 0; side < SideCount; side++)
                     _phaseTicks[side * TeamPhaseMachine.PhaseCount + (int)_phases.PhaseOf(side)]++;
 
-                _v10.UpdateTeams(tick);
+                _base.UpdateTeams(tick);
                 EndOpenGoalSpell();
 
                 for (int side = 0; side < SideCount; side++)

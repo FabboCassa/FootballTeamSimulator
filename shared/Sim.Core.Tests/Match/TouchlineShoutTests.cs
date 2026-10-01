@@ -148,7 +148,6 @@ namespace Sim.Core.Tests.Match
                     Assert.That(e.SecondPressPercent, Is.EqualTo(100));
                     Assert.That(e.PressStandOffPercent, Is.EqualTo(100));
                     Assert.That(e.HoldPercent, Is.EqualTo(100));
-                    Assert.That(e.ForwardBias, Is.EqualTo(0));
                     Assert.That(e.ShotAppetitePercent, Is.EqualTo(100));
                     Assert.That(e.FatiguePercent, Is.EqualTo(100));
                     Assert.That(e.PressureFeltPercent, Is.EqualTo(100));
@@ -192,17 +191,16 @@ namespace Sim.Core.Tests.Match
         }
 
         [Test]
-        public void PressHigh_Fatigue_IsV10sOnV10_AndV11sOwnOnV11()
+        public void PressHigh_Fatigue_IsV11s_AndAnOlderDocumentsEngineV10FigureIsIgnored()
         {
-            // V10 live matches are re-simulated from their changes: its PressHigh cost must not move.
-            var v10 = new BalanceConfig().Match;
-            var v11 = new BalanceConfig().Match;
-            v11.Brain = MatchBrainVersion.V11;
+            var cfg = new BalanceConfig().Match;
+            MatchBalance older = JsonSerializer.Deserialize<BalanceConfig>(
+                "{\"Match\":{\"Shouts\":{\"PressHighFatiguePercent\":140}}}")!.Match;
 
             Assert.Multiple(() =>
             {
-                Assert.That(ShoutEffect.Of(TouchlineShout.PressHigh, 0, v10).FatiguePercent, Is.EqualTo(140));
-                Assert.That(ShoutEffect.Of(TouchlineShout.PressHigh, 0, v11).FatiguePercent, Is.EqualTo(150));
+                Assert.That(ShoutEffect.Of(TouchlineShout.PressHigh, 0, cfg).FatiguePercent, Is.EqualTo(150));
+                Assert.That(ShoutEffect.Of(TouchlineShout.PressHigh, 0, older).FatiguePercent, Is.EqualTo(150));
             });
         }
 
@@ -282,12 +280,10 @@ namespace Sim.Core.Tests.Match
 
         // ------------------------------------------------------------------ on the pitch
 
-        [TestCase(MatchBrainVersion.V10)]
-        [TestCase(MatchBrainVersion.V11)]
-        public void AShout_IsAnEvent_AndMovesThePitchOnlyFromItsMinute(MatchBrainVersion brain)
+        [Test]
+        public void AShout_IsAnEvent_AndMovesThePitchOnlyFromItsMinute()
         {
             var cfg = new BalanceConfig();
-            cfg.Match.Brain = brain;
             const int minute = 40;
 
             MatchReport baseline = new MatchEngine(cfg).Simulate(new MatchPlan(Kickoff()), new Pcg32(4242));

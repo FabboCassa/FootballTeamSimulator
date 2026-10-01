@@ -12,7 +12,7 @@ using Sim.Core.Random;
 namespace Sim.Core.Tests.Match
 {
     /// <summary>
-    /// R1 on the pitch: with Brain = V11, over 1,000 watched matches, every side spends some time
+    /// R1 on the pitch: over 1,000 watched matches, every side spends some time
     /// in every phase of every match, and the time share per phase is printed for the eye.
     ///
     /// Statistically sensitive: a phase that is rare in one match (a side that never wins the ball
@@ -42,7 +42,6 @@ namespace Sim.Core.Tests.Match
             var share = new double[Matches, 2, phases];
             var ticks = new int[Matches, 2];
             var cfg = new BalanceConfig().Match;
-            cfg.Brain = MatchBrainVersion.V11;
 
             Parallel.For(0, Matches, i =>
             {
@@ -83,15 +82,21 @@ namespace Sim.Core.Tests.Match
         }
 
         [Test]
-        public void V10_CountsNoPhases()
+        public void EachSide_IsInExactlyOnePhase_EveryTick()
         {
             var sim = new MatchSimulator(new BalanceConfig().Match);
             sim.Generate(LineupSelector.BestEleven(_league.Clubs[0]), LineupSelector.BestEleven(_league.Clubs[1]),
                 new MatchReport(), new Pcg32(7), null);
 
+            int home = 0, away = 0;
             foreach (TeamPhase p in Enum.GetValues(typeof(TeamPhase)))
-                Assert.That(sim.PhaseTicks(0, p) + sim.PhaseTicks(1, p), Is.Zero,
-                    "the phase machine is V11's; V10 does not run it");
+            {
+                home += sim.PhaseTicks(0, p);
+                away += sim.PhaseTicks(1, p);
+            }
+
+            Assert.That(home, Is.GreaterThan(0), "the phase machine runs");
+            Assert.That(away, Is.EqualTo(home), "both sides are read on the same ticks");
         }
     }
 }

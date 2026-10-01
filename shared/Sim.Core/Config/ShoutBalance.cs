@@ -24,14 +24,10 @@ namespace Sim.Core.Config
         public int PressHighStandOffPercent { get; set; } = 85;
 
         /// <summary>Percent applied to the match fatigue a side accumulates while the shout lasts.</summary>
-        public int PressHighFatiguePercent { get; set; } = 140;
-
-        /// <summary>V11's own PressHigh fatigue: V10 keeps its value, since live V10 matches are re-simulated.</summary>
         public int V11PressHighFatiguePercent { get; set; } = 150;
 
         // --- "Calm, keep the ball": tempo down, risk down ---
         public int KeepBallHoldPercent { get; set; } = 140;
-        public int KeepBallForwardBias { get; set; } = -4;
         public int KeepBallShotAppetitePercent { get; set; } = 98;
 
         /// <summary>
@@ -74,7 +70,6 @@ namespace Sim.Core.Config
         /// <summary>Percent of the pressure felt by a man on the ball in his own half.</summary>
         public int ConcentrateOwnHalfPressureFeltPercent { get; set; } = 75;
         public int ConcentrateShotAppetitePercent { get; set; } = 99;
-        public int ConcentrateForwardBias { get; set; } = -2;
 
         /// <summary>V11: the weight on a ball that can be lost, in percent — the more careful side.</summary>
         public int ConcentrateRiskPercent { get; set; } = 250;

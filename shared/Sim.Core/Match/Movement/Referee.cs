@@ -44,8 +44,8 @@ namespace Sim.Core.Match.Movement
             if (inOwnBox) odds = odds * _ctx.Cfg.FoulInBoxPermille / 1000;
 
             // V11's presser stands goal-side and makes the carrier beat him, so it wins far more
-            // challenges than V10's; each of them is a cleaner one.
-            if (_ctx.Cfg.Brain == Config.MatchBrainVersion.V11) odds = odds * _ctx.Cfg.V11FoulPercent / 100;
+            // challenges than engine v10's did; each of them is a cleaner one.
+            odds = odds * _ctx.Cfg.V11FoulPercent / 100;
             if (_ctx.Rng.NextInt(0, 1000) >= odds) return false;
 
             int victimSide = 1 - side;

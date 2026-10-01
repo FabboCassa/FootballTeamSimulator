@@ -35,7 +35,6 @@ namespace Sim.Core.Tests.Match
             Lineup a = LineupSelector.BestEleven(league.Clubs[9]);
             Lineup b = LineupSelector.BestEleven(league.Clubs[10]);
             var cfg = new BalanceConfig();
-            cfg.Match.Brain = MatchBrainVersion.V11;
 
             var metrics = new MatchMetrics?[Matches];
             var realism = new RealismMetrics?[Matches];
@@ -63,11 +62,11 @@ namespace Sim.Core.Tests.Match
                 tally.Add(metrics[i]!, realism[i]!, ms[i]);
             }
 
-            TestContext.Out.WriteLine(tally.Format("V11", tally.MsPerMatch));
+            TestContext.Out.WriteLine(tally.Format("V11"));
             TestContext.Out.WriteLine($"wall clock {wall.Elapsed.TotalSeconds:F1} s (parallel)");
 
             double openGoal = 0, sterile = 0;
-            foreach (RealismRow row in tally.Rows(tally.MsPerMatch))
+            foreach (RealismRow row in tally.Rows())
             {
                 if (row.Band.Name == RealismBands.OpenGoalShotRate.Name) openGoal = row.Value;
                 if (row.Band.Name == RealismBands.SterilePossessionShare.Name) sterile = row.Value;

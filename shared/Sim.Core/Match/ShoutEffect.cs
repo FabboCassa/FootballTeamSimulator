@@ -18,31 +18,30 @@ namespace Sim.Core.Match
         public readonly int SecondPressPercent;
         public readonly int PressStandOffPercent;
         public readonly int HoldPercent;
-        public readonly int ForwardBias;
         public readonly int ShotAppetitePercent;
         public readonly int FatiguePercent;
         public readonly int PressureFeltPercent;
         public readonly int OwnHalfPressureFeltPercent;
 
-        /// <summary>V11 only: percent on the weight the man on the ball puts on losing it.</summary>
+        /// <summary>Percent on the weight the man on the ball puts on losing it.</summary>
         public readonly int RiskPercent;
 
-        /// <summary>V11 only: percent on the weight he puts on the threat a move gains.</summary>
+        /// <summary>Percent on the weight he puts on the threat a move gains.</summary>
         public readonly int GainPercent;
 
         /// <summary>
-        /// V11 only: percent on the odds a challenger takes the ball off one of this side's men,
+        /// Percent on the odds a challenger takes the ball off one of this side's men,
         /// anywhere and in his own half.
         /// </summary>
         public readonly int DuelLossPercent;
         public readonly int OwnHalfDuelLossPercent;
 
-        public static ShoutEffect None => new ShoutEffect(0, 100, 0, 100, 0, 100, 100, 100, 0, 100, 100, 100, 100);
+        public static ShoutEffect None => new ShoutEffect(0, 100, 0, 100, 0, 100, 100, 100, 100, 100, 100, 100);
 
         private ShoutEffect(
             int linePushDm, int frontLineGapPercent, int supporters, int pressReachPercent,
             int pressTriggerDepthDm, int secondPressPercent, int pressStandOffPercent, int holdPercent,
-            int forwardBias, int shotAppetitePercent, int fatiguePercent, int pressureFeltPercent,
+            int shotAppetitePercent, int fatiguePercent, int pressureFeltPercent,
             int ownHalfPressureFeltPercent, int riskPercent = 100, int gainPercent = 100,
             int duelLossPercent = 100, int ownHalfDuelLossPercent = 100)
         {
@@ -54,7 +53,6 @@ namespace Sim.Core.Match
             SecondPressPercent = secondPressPercent;
             PressStandOffPercent = pressStandOffPercent;
             HoldPercent = holdPercent;
-            ForwardBias = forwardBias;
             ShotAppetitePercent = shotAppetitePercent;
             FatiguePercent = fatiguePercent;
             PressureFeltPercent = pressureFeltPercent;
@@ -76,23 +74,23 @@ namespace Sim.Core.Match
             {
                 case TouchlineShout.PressHigh:
                     return new ShoutEffect(0, 100, 0, s.PressHighReachPercent, s.PressHighTriggerDepthDm,
-                        s.PressHighSecondPressPercent, s.PressHighStandOffPercent, 100, 0, 100,
-                        cfg.Brain == MatchBrainVersion.V11 ? s.V11PressHighFatiguePercent : s.PressHighFatiguePercent,
+                        s.PressHighSecondPressPercent, s.PressHighStandOffPercent, 100, 100,
+                        s.V11PressHighFatiguePercent,
                         100, 100);
                 case TouchlineShout.KeepBall:
                     return new ShoutEffect(0, 100, 0, 100, 0, 100, 100, s.KeepBallHoldPercent,
-                        s.KeepBallForwardBias, s.KeepBallShotAppetitePercent, 100, 100, 100,
+                        s.KeepBallShotAppetitePercent, 100, 100, 100,
                         s.KeepBallRiskPercent, s.KeepBallGainPercent, duelLossPercent: s.KeepBallDuelLossPercent);
                 case TouchlineShout.AllForward:
                     return new ShoutEffect(s.AllForwardLinePushDm, s.AllForwardFrontLineGapPercent,
-                        s.AllForwardSupporters, 100, 0, 100, 100, 100, 0, s.AllForwardShotAppetitePercent,
+                        s.AllForwardSupporters, 100, 0, 100, 100, 100, s.AllForwardShotAppetitePercent,
                         100, 100, 100);
                 case TouchlineShout.Encourage:
-                    return new ShoutEffect(0, 100, 0, 100, 0, 100, 100, 100, 0, 100, 100,
+                    return new ShoutEffect(0, 100, 0, 100, 0, 100, 100, 100, 100, 100,
                         EncourageFelt(s, repeats), 100, s.EncourageRiskPercent,
                         duelLossPercent: EncourageDuelLoss(s, repeats));
                 case TouchlineShout.Concentrate:
-                    return new ShoutEffect(0, 100, 0, 100, 0, 100, 100, 100, s.ConcentrateForwardBias,
+                    return new ShoutEffect(0, 100, 0, 100, 0, 100, 100, 100,
                         s.ConcentrateShotAppetitePercent, 100, 100, s.ConcentrateOwnHalfPressureFeltPercent,
                         s.ConcentrateRiskPercent, ownHalfDuelLossPercent: s.ConcentrateOwnHalfDuelLossPercent);
                 default:

@@ -2,7 +2,7 @@ namespace Sim.Core.Match.Movement
 {
     public sealed partial class MatchSimulator
     {
-        private sealed partial class V10Brain
+        private sealed partial class BaseBrain
         {
             /// <summary>
             /// Reading the game. Split in two on purpose (engine phase 1): who is nearest the ball

@@ -2,9 +2,13 @@ namespace Sim.Core.Match.Movement
 {
     public sealed partial class MatchSimulator
     {
-        private sealed partial class V10Brain
+        private sealed partial class BaseBrain
         {
-            public void Move(int tick, int side, int slot)
+            /// <summary>
+            /// Where a man with a job goes (<see cref="JobOf"/>, which the V11 brain has just asked):
+            /// every man with none, or on a supporting run, is the V11 brain's own.
+            /// </summary>
+            public void Move(int side, int slot, BaseJob job)
             {
                 int k = side * _n + slot;
                 bool home = side == 0;
@@ -17,7 +21,7 @@ namespace Sim.Core.Match.Movement
                 // no further part: every loop that reads the pitch skips him, so his side genuinely
                 // plays the rest of the match with ten men. The duties are shared out among ten, the
                 // offside line is drawn off ten, and there are ten men to pass to.
-                if (_sentOff[k])
+                if (job == BaseJob.SentOff)
                 {
                     // Aimed just OUTSIDE the touchline so the pitch's own clamp puts him exactly on it:
                     // steering at the line itself leaves him a couple of metres short, inside the field
@@ -25,10 +29,6 @@ namespace Sim.Core.Match.Movement
                     _sim.Steer(k, U.CenterXU, home ? -U.Units(40) : U.WidthU + U.Units(40), sprint: false);
                     return;
                 }
-
-                // Filled by the press test below whenever this side is defending; the compiler
-                // cannot see that the branch which reads them is the same branch that sets them.
-                int pressHomeX = 0, pressHomeY = 0;
 
                 if (_ball.Dead && _ctx.DeadSide == side && _ctx.DeadTaker == slot)
                 {
@@ -71,7 +71,7 @@ namespace Sim.Core.Match.Movement
                     _sim.WalkTo(k, retreatX, retreatY);
                     return;
                 }
-                else if (_ball.OwnerSide == side && _ball.OwnerSlot == slot)
+                else if (job == BaseJob.Ball)
                 {
                     // On the ball he goes FORWARD, drifting off the touchline toward the middle,
                     // and once he is inside the last quarter he stops running at the byline and
@@ -81,11 +81,11 @@ namespace Sim.Core.Match.Movement
                     _sim.CarryTarget(side, k, U.Units(160), out tx, out ty);
                     sprint = true;
                 }
-                else if (_keeper[k])
+                else if (job == BaseJob.Keeper)
                 {
                     KeeperSpot(side, out tx, out ty);
                 }
-                else if (_ball.Free && !_ball.Dead && _receiver[side] == slot)
+                else if (job == BaseJob.Chase)
                 {
                     // He runs to MEET it, not to the spot it was aimed at (engine phase 4). Steering
                     // to a fixed point leaves him standing two or three metres off the line while
@@ -95,44 +95,18 @@ namespace Sim.Core.Match.Movement
                     InterceptSpot(k, out tx, out ty);
                     sprint = true;
                 }
-                else if (_ball.Free && !_ball.Dead && _chaser[side] == slot)
-                {
-                    InterceptSpot(k, out tx, out ty);
-                    sprint = true;
-                }
-                else if (!_attacking[side] && Pressing(tick, side, slot, out pressHomeX, out pressHomeY))
+                else if (job == BaseJob.Press)
                 {
                     PressSpot(side, k, out tx, out ty);
                     sprint = true;
                 }
-                else if (_attacking[side] && AlreadySupporting(side, slot))
-                {
-                    tx = _supportX[side];
-                    ty = _supportY[side];
-
-                    // A supporting run is a BURST to get there, not a ninety-minute sprint. Flat out
-                    // while the ground is still to be covered, and a jog once he is in the space he
-                    // ran into — which is the difference between a side that runs 12.1 km a man with
-                    // a busiest of 19.5 and one that runs 11 with a busiest of 15.
-                    sprint = U.DistanceSq(_px[k], _py[k], tx, ty) > (long)_approachU * _approachU;
-                }
-                else if (!_attacking[side] && _duty[k] == DutyCover)
+                else if (job == BaseJob.Cover)
                 {
                     CoverSpot(side, out tx, out ty);
                 }
-                else if (!_attacking[side] && _duty[k] == DutyMark && _mark[k] >= 0)
-                {
-                    MarkSpot(side, k, out tx, out ty);
-                }
-                else if (!_attacking[side])
-                {
-                    // Already worked out by the press test above; recomputing it is pure waste.
-                    tx = pressHomeX;
-                    ty = pressHomeY;
-                }
                 else
                 {
-                    HomeSpot(side, slot, out tx, out ty);
+                    MarkSpot(side, k, out tx, out ty);
                 }
 
                 // The recovery run (engine phase 3). A man who has been caught up the pitch does

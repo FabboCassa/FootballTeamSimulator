@@ -19,22 +19,21 @@ namespace Sim.Core.Tests.Match
     /// The tactics harness of the watchable-match spec (R8–R11), in the style of
     /// <see cref="InstructionsTests"/> and <see cref="RealismHarnessTests"/>: watched matches played
     /// with the shipped flags, equal squads on both sides (the same club, rotating across the league),
-    /// and readings PRINTED for the user to judge. On V10 a report; on V11 (tuned in task 11) it is
-    /// also the gate of R8-R11, asserted at the full sample (a smaller one only reads).
+    /// and readings PRINTED for the user to judge. It is also the gate of R8-R11, asserted at the
+    /// full sample (a smaller one only reads).
     ///
-    /// The brain is the test-case parameter. Explicit, because each run is thousands of watched
-    /// matches. Run one brain with:
+    /// Explicit, because each run is thousands of watched matches. Run it with:
     ///   dotnet test shared/Sim.Core.Tests/Sim.Core.Tests.csproj -c Release
-    ///     --filter "FullyQualifiedName~TacticHarnessTests&FullyQualifiedName~V10"
+    ///     --filter "FullyQualifiedName~TacticHarnessTests"
     ///     --logger "console;verbosity=detailed"
-    /// (V11 instead of V10 for the new brain; drop the second clause for both.) A quick look at fewer
+    /// A quick look at fewer
     /// matches: append  -- TestRunParameters.Parameter(name=\"perPairing\", value=\"20\")  (or
     /// "effectMatches").
     /// </summary>
     [TestFixture]
     public class TacticHarnessTests
     {
-        private const string Reason = "Report-only harness: thousands of watched matches per brain.";
+        private const string Reason = "Report-only harness: thousands of watched matches.";
         private const int MatchesPerPairing = 200;
         private const int EffectMatches = 400;
         private const ulong TournamentSeed = 37_000;
@@ -43,7 +42,7 @@ namespace Sim.Core.Tests.Match
         private const int TiredSubs = 3;
         private const int FreshIdOffset = 10_000_000;
 
-        // The R8-R11 gates V11 is held to (V10 is only read).
+        // The R8-R11 gates V11 is held to.
         private const double MaxPointsShare = 0.55;
         private const double MaxWorstMatchupShare = 0.45;
         private const double MinFamiliarityGd = 0.25;
@@ -58,10 +57,8 @@ namespace Sim.Core.Tests.Match
             TouchlineShout.Encourage, TouchlineShout.Concentrate
         };
 
-        [Explicit(Reason), Category("TacticHarness")]
-        [TestCase(MatchBrainVersion.V10)]
-        [TestCase(MatchBrainVersion.V11)]
-        public void Harness_TacticTournament(MatchBrainVersion brain)
+        [Test, Explicit(Reason), Category("TacticHarness")]
+        public void Harness_TacticTournament()
         {
             IReadOnlyList<TacticPreset> presets = TacticPresets.All;
             List<Club> clubs = Clubs();
@@ -70,7 +67,7 @@ namespace Sim.Core.Tests.Match
             int total = pairs.Count * perPairing;
             var aGoals = new int[total];
             var bGoals = new int[total];
-            BalanceConfig cfg = Config(brain);
+            var cfg = new BalanceConfig();
             int fam = cfg.Tactics.FamiliarityMax;
             var clock = Stopwatch.StartNew();
 
@@ -98,14 +95,14 @@ namespace Sim.Core.Tests.Match
             }
 
             TestContext.Out.WriteLine(table.Format(
-                $"{brain}, {perPairing}/pairing, {total} matches, {clock.Elapsed.TotalSeconds:F0} s",
+                $"V11, {perPairing}/pairing, {total} matches, {clock.Elapsed.TotalSeconds:F0} s",
                 presets.Select(p => p.Name).ToList()));
 
             for (int p = 0; p < presets.Count; p++)
                 Assert.That(table.Games(p), Is.EqualTo((presets.Count - 1) * perPairing), presets[p].Name);
 
-            // R8 is V11's gate at the full sample; V10, and a quick look at fewer matches, only read.
-            if (brain != MatchBrainVersion.V11 || perPairing < MatchesPerPairing) return;
+            // R8 is the gate at the full sample; a quick look at fewer matches only reads.
+            if (perPairing < MatchesPerPairing) return;
             for (int p = 0; p < presets.Count; p++)
             {
                 Assert.That(table.PointsShare(p), Is.LessThanOrEqualTo(MaxPointsShare), $"{presets[p].Name}: points share");
@@ -114,22 +111,20 @@ namespace Sim.Core.Tests.Match
             }
         }
 
-        [Explicit(Reason), Category("TacticHarness")]
-        [TestCase(MatchBrainVersion.V10)]
-        [TestCase(MatchBrainVersion.V11)]
-        public void Harness_EffectMeasurements(MatchBrainVersion brain)
+        [Test, Explicit(Reason), Category("TacticHarness")]
+        public void Harness_EffectMeasurements()
         {
             List<Club> clubs = Clubs();
-            BalanceConfig cfg = Config(brain);
+            var cfg = new BalanceConfig();
             var samples = new EffectSample[TestContext.Parameters.Get("effectMatches", EffectMatches)];
             var clock = Stopwatch.StartNew();
 
             Parallel.For(0, samples.Length, i => samples[i] = Measure(cfg, clubs[i % clubs.Count], i));
 
             var misses = new List<string>();
-            TestContext.Out.WriteLine(Report(brain, samples, cfg, clock.Elapsed.TotalSeconds, misses));
+            TestContext.Out.WriteLine(Report(samples, cfg, clock.Elapsed.TotalSeconds, misses));
             Assert.That(samples.All(s => s != null), Is.True, "every fixture must be measured");
-            if (brain == MatchBrainVersion.V11 && samples.Length >= EffectMatches)
+            if (samples.Length >= EffectMatches)
                 Assert.That(misses, Is.Empty, "R9-R11 on V11");
         }
 
@@ -199,7 +194,7 @@ namespace Sim.Core.Tests.Match
         // ------------------------------------------------------------------ the report
 
         /// <summary>The printable report; every R9-R11 reading short of its gate is added to <paramref name="misses"/>.</summary>
-        private static string Report(MatchBrainVersion brain, EffectSample[] samples, BalanceConfig cfg, double seconds,
+        private static string Report(EffectSample[] samples, BalanceConfig cfg, double seconds,
             List<string> misses)
         {
             CultureInfo inv = CultureInfo.InvariantCulture;
@@ -216,7 +211,7 @@ namespace Sim.Core.Tests.Match
             }
 
             var sb = new StringBuilder();
-            sb.AppendLine($"=== effect measurements: {brain} ({samples.Length} fixtures, {seconds:F0} s; GD = treated side) ===");
+            sb.AppendLine($"=== effect measurements: V11 ({samples.Length} fixtures, {seconds:F0} s; GD = treated side) ===");
             sb.AppendLine(Line(inv, "familiarity 100 vs 0 (GD/match)", fam, "R9 reads >= +0.25"));
             sb.AppendLine(Line(inv, $"natural vs out of role (GD/match, {samples[0].OutOfRoleSlots} men off role)", role, "R9 reads >= +0.25"));
             sb.AppendLine(Line(inv, $"{TiredSubs} fresh subs at {SubMinute}' vs none (GD {SubMinute}-90)", subs, "R10 reads >= +0.10"));
@@ -276,13 +271,6 @@ namespace Sim.Core.Tests.Match
         // ------------------------------------------------------------------ the bench
 
         private static List<Club> Clubs() => new LeagueGenerator().Generate(new Pcg32(20260611)).Clubs;
-
-        private static BalanceConfig Config(MatchBrainVersion brain)
-        {
-            var cfg = new BalanceConfig();
-            cfg.Match.Brain = brain;
-            return cfg;
-        }
 
         /// <summary>The flags the shipped client plays a watched match with (SeasonProgressor's); nothing reads the stats.</summary>
         private static MatchEngine Engine(BalanceConfig cfg) =>

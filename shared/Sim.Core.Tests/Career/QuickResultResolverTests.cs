@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using NUnit.Framework;
 using Sim.Core.Career;
 using Sim.Core.Config;
@@ -10,8 +11,8 @@ using Sim.Core.Tactics;
 namespace Sim.Core.Tests.Career
 {
     /// <summary>
-    /// The fast model of the watchable-match spec (R17): the background resolver carries a V11
-    /// calibration of its own, picked by the brain, and it reads the four instruction axes through
+    /// The fast model of the watchable-match spec (R17): the background resolver carries the V11
+    /// calibration, and it reads the four instruction axes through
     /// percent tables whose middle entry is the identity. The 1,000-match comparison against the
     /// full engine is <see cref="FastModelHarnessTests"/>.
     /// </summary>
@@ -20,13 +21,6 @@ namespace Sim.Core.Tests.Career
     {
         private const ulong Seed = 20260927UL;
         private const int Strength = 66;
-
-        private static BalanceConfig Config(MatchBrainVersion brain)
-        {
-            var cfg = new BalanceConfig();
-            cfg.Match.Brain = brain;
-            return cfg;
-        }
 
         private static (double Home, double Away) Expected(BalanceConfig cfg, TacticInstructions home, TacticInstructions away)
         {
@@ -37,49 +31,43 @@ namespace Sim.Core.Tests.Career
         private static readonly TacticInstructions Neutral = TacticInstructions.Neutral;
 
         [Test]
-        public void V11_ReadsItsOwnCalibration_AndV10KeepsTheOldOne()
+        public void ExpectedGoals_AreTheV11CalibratedFormula()
         {
-            BalanceConfig v10 = Config(MatchBrainVersion.V10), v11 = Config(MatchBrainVersion.V11);
-            (double v10Home, _) = Expected(v10, Neutral, Neutral);
-            (double v11Home, _) = Expected(v11, Neutral, Neutral);
-
-            v10.World.QuickV11BaseGoals *= 2;
-            v11.World.QuickBaseGoals *= 2;
-            Assert.That(Expected(v10, Neutral, Neutral).Home, Is.EqualTo(v10Home), "V10 never reads the V11 calibration");
-            Assert.That(Expected(v11, Neutral, Neutral).Home, Is.EqualTo(v11Home), "V11 never reads the V10 calibration");
-
-            v11.World.QuickV11BaseGoals *= 2;
-            Assert.That(Expected(v11, Neutral, Neutral).Home, Is.EqualTo(2 * v11Home).Within(1e-9), "V11 scales with its own base");
-        }
-
-        [Test]
-        public void V10_ExpectedGoals_AreTheFormulaTheWorldWasPinnedOn()
-        {
-            BalanceConfig cfg = Config(MatchBrainVersion.V10);
+            var cfg = new BalanceConfig();
             WorldBalance w = cfg.World;
-            double home = 70 * (100.0 + cfg.Match.HomeAdvantagePercent) / 100.0 + w.QuickHomeAdvantageStrength;
+            double home = 70 * (100.0 + cfg.Match.HomeAdvantagePercent) / 100.0 + w.QuickV11HomeAdvantageStrength;
             double difference = home - 62;
 
             QuickResultResolver.ExpectedGoals(70, 62, cfg, Neutral, Neutral, out double h, out double a);
 
-            Assert.That(h, Is.EqualTo(w.QuickBaseGoals * (1.0 + difference * w.QuickStrengthFactor)));
-            Assert.That(a, Is.EqualTo(w.QuickBaseGoals * (1.0 - difference * w.QuickStrengthFactor)));
+            Assert.That(h, Is.EqualTo(w.QuickV11BaseGoals * (1.0 + difference * w.QuickV11StrengthFactor)));
+            Assert.That(a, Is.EqualTo(w.QuickV11BaseGoals * (1.0 - difference * w.QuickV11StrengthFactor)));
         }
 
         [Test]
-        public void V11_Calibration_IsNotACopyOfV10()
+        public void AnOlderDocument_WithTheEngineV10Calibration_LoadsAndIsIgnored()
         {
-            WorldBalance w = new BalanceConfig().World;
-            bool same = w.QuickV11BaseGoals == w.QuickBaseGoals && w.QuickV11StrengthFactor == w.QuickStrengthFactor
-                        && w.QuickV11HomeAdvantageStrength == w.QuickHomeAdvantageStrength && w.QuickV11GoalTrials == w.QuickGoalTrials;
-            Assert.That(same, Is.False, "the fast model is fitted to V11, not inherited from V10");
+            // Balance revisions stored before engine v11 still carry the v10 fit under the old names.
+            BalanceConfig older = JsonSerializer.Deserialize<BalanceConfig>(
+                "{\"World\":{\"QuickBaseGoals\":1.29,\"QuickStrengthFactor\":0.022," +
+                "\"QuickHomeAdvantageStrength\":2,\"QuickGoalTrials\":14}}")!;
+            BalanceConfig current = new BalanceConfig();
+
+            Assert.That(Expected(older, Neutral, Neutral), Is.EqualTo(Expected(current, Neutral, Neutral)));
+            for (int id = 1; id <= 50; id++)
+            {
+                var a = new Fixture { Id = id };
+                var b = new Fixture { Id = id };
+                QuickResultResolver.Resolve(a, 70, 62, Seed, older);
+                QuickResultResolver.Resolve(b, 70, 62, Seed, current);
+                Assert.That((a.HomeGoals, a.AwayGoals), Is.EqualTo((b.HomeGoals, b.AwayGoals)), $"fixture {id}");
+            }
         }
 
-        [TestCase(MatchBrainVersion.V10)]
-        [TestCase(MatchBrainVersion.V11)]
-        public void NeutralInstructions_AreTheIdentity(MatchBrainVersion brain)
+        [Test]
+        public void NeutralInstructions_AreTheIdentity()
         {
-            BalanceConfig cfg = Config(brain);
+            var cfg = new BalanceConfig();
             for (int id = 1; id <= 200; id++)
             {
                 var none = new Fixture { Id = id };
@@ -103,7 +91,7 @@ namespace Sim.Core.Tests.Career
         [Test]
         public void AGoalsForEntry_MovesTheSidesOwnExpectedGoals_AndOnlyThose()
         {
-            BalanceConfig cfg = Config(MatchBrainVersion.V11);
+            var cfg = new BalanceConfig();
             cfg.World.QuickMentalityGoalsForPercent = new[] { -20, 0, 20 };
             cfg.World.QuickMentalityGoalsAgainstPercent = new[] { 0, 0, 0 };
             var attacking = new TacticInstructions(Mentality.Attacking, Pressing.Medium, Tempo.Normal, Width.Normal);
@@ -121,7 +109,7 @@ namespace Sim.Core.Tests.Career
         [Test]
         public void AGoalsAgainstEntry_MovesTheOpponentsExpectedGoals()
         {
-            BalanceConfig cfg = Config(MatchBrainVersion.V11);
+            var cfg = new BalanceConfig();
             cfg.World.QuickPressingGoalsForPercent = new[] { 0, 0, 0 };
             cfg.World.QuickPressingGoalsAgainstPercent = new[] { -10, 0, 10 };
             var low = new TacticInstructions(Mentality.Balanced, Pressing.Low, Tempo.Normal, Width.Normal);
@@ -135,7 +123,7 @@ namespace Sim.Core.Tests.Career
         [Test]
         public void AxesAdd_InPercentPoints()
         {
-            BalanceConfig cfg = Config(MatchBrainVersion.V11);
+            var cfg = new BalanceConfig();
             WorldBalance w = cfg.World;
             w.QuickTempoGoalsForPercent = new[] { 0, 0, 6 };
             w.QuickWidthGoalsForPercent = new[] { 0, 0, 4 };
@@ -157,7 +145,7 @@ namespace Sim.Core.Tests.Career
         [TestCase(Mentality.Balanced, Pressing.Medium, Tempo.Normal, Width.Wide, -1, +1)]
         public void ShippedTables_ShiftGoalsTheWayTheV11EngineDoes(Mentality m, Pressing p, Tempo t, Width w, int goalsFor, int goalsAgainst)
         {
-            BalanceConfig cfg = Config(MatchBrainVersion.V11);
+            var cfg = new BalanceConfig();
             var set = new TacticInstructions(m, p, t, w);
             (double home, double away) = Expected(cfg, Neutral, Neutral);
 
@@ -169,7 +157,7 @@ namespace Sim.Core.Tests.Career
         [Test]
         public void Instructions_MoveTheDrawnScores()
         {
-            BalanceConfig cfg = Config(MatchBrainVersion.V11);
+            var cfg = new BalanceConfig();
             cfg.World.QuickMentalityGoalsForPercent = new[] { -30, 0, 30 };
             var attacking = new TacticInstructions(Mentality.Attacking, Pressing.Medium, Tempo.Normal, Width.Normal);
             int neutralGoals = 0, attackingGoals = 0;
@@ -194,7 +182,7 @@ namespace Sim.Core.Tests.Career
             Club club = instructed.BackgroundSeason.Fixtures
                 .Select(f => instructed.FindClub(f.HomeClubId)).First(c => c != null)!;
             var attacking = new TacticInstructions(Mentality.Attacking, Pressing.High, Tempo.Fast, Width.Wide);
-            BalanceConfig cfg = Config(MatchBrainVersion.V11);
+            var cfg = new BalanceConfig();
             cfg.World.QuickMentalityGoalsForPercent = new[] { -40, 0, 40 };
             var progressor = new BackgroundLeagueProgressor(cfg);
 

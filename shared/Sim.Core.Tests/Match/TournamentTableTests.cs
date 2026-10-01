@@ -83,9 +83,9 @@ namespace Sim.Core.Tests.Match
             t.Add(0, 1, 3, 0);
             t.Add(1, 0, 1, 1);
 
-            string text = t.Format("V10", new[] { "alpha", "beta" });
+            string text = t.Format("V11", new[] { "alpha", "beta" });
 
-            Assert.That(text, Does.Contain("V10"));
+            Assert.That(text, Does.Contain("V11"));
             Assert.That(text, Does.Contain("alpha"));
             Assert.That(text, Does.Contain("66.7%"));   // alpha: 4 of 6
             Assert.That(text, Does.Contain("16.7%"));   // beta: 1 of 6

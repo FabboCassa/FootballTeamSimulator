@@ -8,8 +8,8 @@ namespace Sim.Core.Match.Movement
         /// <summary>Each side's build-up instruction: how its throw-ins and goal kicks are played on V11.</summary>
         private readonly Tempo[] _tempo = new Tempo[SideCount];
 
-        /// <summary>How close to goal a free kick gets a wall. V10 keeps its shooting range.</summary>
-        private int WallRangeDm => _cfg.Brain == MatchBrainVersion.V11 ? _cfg.SetPieceRangeDm : _cfg.MaxShootRangeDm;
+        /// <summary>How close to goal a free kick gets a wall.</summary>
+        private int WallRangeDm => _cfg.SetPieceRangeDm;
 
         private void SetTempo(MatchTactics? tactics)
         {

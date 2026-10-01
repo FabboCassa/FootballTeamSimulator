@@ -55,7 +55,7 @@ namespace Sim.Core.Career
                 homeInstructions ?? TacticInstructions.Neutral, awayInstructions ?? TacticInstructions.Neutral,
                 out double homeExpected, out double awayExpected);
 
-            int trials = cfg.Match.Brain == MatchBrainVersion.V11 ? cfg.World.QuickV11GoalTrials : cfg.World.QuickGoalTrials;
+            int trials = cfg.World.QuickV11GoalTrials;
             fixture.HomeGoals = DrawGoals(homeExpected, trials, rng);
             fixture.AwayGoals = DrawGoals(awayExpected, trials, rng);
             fixture.Played = true;
@@ -63,7 +63,7 @@ namespace Sim.Core.Career
 
         /// <summary>
         /// The two clamped expected-goal figures the score is drawn from: strengths through the
-        /// calibration of the configured brain, then each side's instruction percentages (its own
+        /// V11 calibration, then each side's instruction percentages (its own
         /// GoalsFor plus the opponent's GoalsAgainst).
         /// </summary>
         public static void ExpectedGoals(
@@ -71,15 +71,14 @@ namespace Sim.Core.Career
             out double homeExpected, out double awayExpected)
         {
             WorldBalance w = cfg.World;
-            bool v11 = cfg.Match.Brain == MatchBrainVersion.V11;
-            double baseGoals = v11 ? w.QuickV11BaseGoals : w.QuickBaseGoals;
-            double factor = v11 ? w.QuickV11StrengthFactor : w.QuickStrengthFactor;
-            int homeBonus = v11 ? w.QuickV11HomeAdvantageStrength : w.QuickHomeAdvantageStrength;
+            double baseGoals = w.QuickV11BaseGoals;
+            double factor = w.QuickV11StrengthFactor;
+            int homeBonus = w.QuickV11HomeAdvantageStrength;
 
             double homeStrengthNow = homeStrength * (100.0 + cfg.Match.HomeAdvantagePercent) / 100.0 + homeBonus;
             double difference = homeStrengthNow - awayStrength;
 
-            // percent / 100.0 is exactly 1.0 for neutral sides, so the V10 world stays bit-identical.
+            // percent / 100.0 is exactly 1.0 for neutral sides, so they read the calibration alone.
             homeExpected = Clamp(baseGoals * (1.0 + difference * factor) * (InstructionPercent(home, away, w) / 100.0), w);
             awayExpected = Clamp(baseGoals * (1.0 - difference * factor) * (InstructionPercent(away, home, w) / 100.0), w);
         }
