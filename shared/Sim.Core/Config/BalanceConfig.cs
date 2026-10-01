@@ -1201,10 +1201,10 @@ namespace Sim.Core.Config
         /// fatigue a side carries. A side that hunts the ball all match has less left in the last
         /// half hour than one that sits.
         /// </summary>
-        public int[] V11PressingFatiguePercent { get; set; } = { 85, 100, 150 };
+        public int[] V11PressingFatiguePercent { get; set; } = { 85, 100, 160 };
 
         /// <summary>Line height out of possession, by Pressing (low · medium · high), in dm.</summary>
-        public int[] V11PressingLinePushDm { get; set; } = { -15, 0, 15 };
+        public int[] V11PressingLinePushDm { get; set; } = { -35, 0, 35 };
 
         /// <summary>
         /// R2's "off target": a man further than this from his phase target spot (25 m), while he is
@@ -1250,6 +1250,15 @@ namespace Sim.Core.Config
         public int V11PressingSpreadPercent { get; set; } = 15;
         public int V11TempoSpreadPercent { get; set; } = 12;
         public int V11WidthSpreadPercent { get; set; } = 30;
+
+        /// <summary>
+        /// Issue #66: the spreads two effects are read at instead of their axis's. At the axis
+        /// spreads the shot appetite (Mentality times Tempo) and the release hold (Tempo) moved the
+        /// game by well under the instruction tests' margins: eager over patient +1.1 shots a match
+        /// (margin +2.5), fast over slow +15 passes, 525 / 540 (margin +30).
+        /// </summary>
+        public int V11ShotAppetiteSpreadPercent { get; set; } = 200;
+        public int V11TempoHoldSpreadPercent { get; set; } = 20;
 
         /// <summary>How long a side takes to open from its block into its attacking shape.</summary>
         public int V11ShapeExpandMs { get; set; } = 4000;
@@ -1375,6 +1384,12 @@ namespace Sim.Core.Config
         public int V11OpenGoalRangeDm { get; set; } = 200;
 
         /// <summary>
+        /// How much of a shot appetite above 100 stretches <see cref="V11OpenGoalRangeDm"/>, in
+        /// percent: at 100 a side with an appetite of 125 has a go at a clear sight from 25 m.
+        /// </summary>
+        public int V11ShotAppetiteRangePercent { get; set; } = 100;
+
+        /// <summary>
         /// ...and with the goal mouth in view: the sine of the angle between the lines to the two
         /// posts, in permille (250 is about 14.5 degrees, a 20 m shot 45 degrees off the axis).
         /// Without it every carrier by the byline with nobody in his sliver of a triangle had an
@@ -1478,7 +1493,14 @@ namespace Sim.Core.Config
         public int V11LossWeightPercent { get; set; } = 200;
 
         /// <summary>Cross appetite, by Width (narrow · normal · wide): the weight on a cross's gain.</summary>
-        public int[] V11WidthCrossPercent { get; set; } = { 75, 100, 130 };
+        public int[] V11WidthCrossPercent { get; set; } = { 35, 100, 220 };
+
+        /// <summary>
+        /// Width (narrow · normal · wide): the weight on the gain of a ball played out to the
+        /// touchline channel of the final stretch — the spot the feed calls a cross from. A wide
+        /// side looks for the man out there; a narrow one keeps it through the middle.
+        /// </summary>
+        public int[] V11WidthChannelPercent { get; set; } = { 40, 100, 250 };
 
         // --- V11 set pieces (R6) ---
 
@@ -2406,7 +2428,7 @@ namespace Sim.Core.Config
         /// <summary>
         /// How much more (or less) a shot is worth to the man deciding, in percent. An attacking
         /// side has a go; a defensive one keeps working the ball. Multiplied by
-        /// <see cref="TempoShotAppetitePercent"/>, and read at <see cref="V11MentalitySpreadPercent"/>.
+        /// <see cref="TempoShotAppetitePercent"/>, and read at <see cref="V11ShotAppetiteSpreadPercent"/>.
         ///
         /// NARROW ON PURPOSE, AND MEASURED. Phase 8 first shipped 82/100/122 here and 83/100/122
         /// on Tempo, and the harness said what that really was: 0.1 shots a match at the patient
@@ -2448,7 +2470,7 @@ namespace Sim.Core.Config
         /// </summary>
         public int[] PressingStandOffPercent { get; set; } = { 165, 100, 70 };
 
-        /// <summary>How long a player keeps the ball before he looks to release it, in milliseconds.</summary>
+        /// <summary>How long a player keeps the ball before he looks to release it, in milliseconds. Read at <see cref="V11TempoHoldSpreadPercent"/>.</summary>
         public int[] TempoHoldMsMin { get; set; } = { 2600, 1480, 700 };
         public int[] TempoHoldMsMax { get; set; } = { 4400, 2620, 1350 };
 
@@ -2456,12 +2478,13 @@ namespace Sim.Core.Config
         /// The other half of the shot appetite, from the Tempo axis (see
         /// <see cref="MentalityShotAppetitePercent"/>). A side playing quickly takes the first
         /// thing that is on, and one of the things that is on is the shot; a side keeping the
-        /// ball works the extra pass instead. Attacking + fast values a goal at 1.12 times what
-        /// a neutral side values it, defensive + slow at 0.92 — and the man on the ball is doing
-        /// nothing different with that number than he has done since phase 6, which is weighing
-        /// it against the pass, the run and the clearance in one currency. The range is narrow
-        /// because it was measured wide first; the note on MentalityShotAppetitePercent has the
-        /// numbers and the reason.
+        /// ball works the extra pass instead. Read at <see cref="V11ShotAppetiteSpreadPercent"/>
+        /// (200), both tables become 92/100/112, so attacking + fast values a goal at 1.25 times
+        /// what a neutral side values it (112 * 112 / 100) and defensive + slow at 0.84
+        /// (92 * 92 / 100) — and the man on the ball is doing nothing different with that number
+        /// than he has done since phase 6, which is weighing it against the pass, the run and the
+        /// clearance in one currency. The range is narrow because it was measured wide first; the
+        /// note on MentalityShotAppetitePercent has the numbers and the reason.
         /// </summary>
         public int[] TempoShotAppetitePercent { get; set; } = { 96, 100, 106 };
     }

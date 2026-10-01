@@ -132,7 +132,7 @@ namespace Sim.Core.Match.Movement
         public bool IsOpenGoal(V11Scene s)
         {
             int goalX = GoalX(s);
-            if (!OpenGoalLane.InRange(s.BallXDm, s.BallYDm, goalX, _cfg.V11OpenGoalRangeDm, _cfg.V11OpenGoalMinMouthSinePermille))
+            if (!OpenGoalLane.InRange(s.BallXDm, s.BallYDm, goalX, OpenGoalRangeDm(s), _cfg.V11OpenGoalMinMouthSinePermille))
                 return false;
 
             for (int i = 0; i < s.FoeCount; i++)
@@ -208,6 +208,16 @@ namespace Sim.Core.Match.Movement
             int half = MovementGeometry.GoalHalfWidthDm;
             return OpenGoalLane.InTriangle(px, py, s.BallXDm, s.BallYDm,
                 goalX, Pitch.CenterY - half, goalX, Pitch.CenterY + half);
+        }
+
+        /// <summary>
+        /// How far out a clear sight of goal is one he takes: an eager side has a go from further
+        /// than the open-goal range. It is never shorter — a patient side still shoots at an open goal.
+        /// </summary>
+        private int OpenGoalRangeDm(V11Scene s)
+        {
+            int over = s.ShotAppetitePercent > 100 ? s.ShotAppetitePercent - 100 : 0;
+            return _cfg.V11OpenGoalRangeDm * (100 + over * _cfg.V11ShotAppetiteRangePercent / 100) / 100;
         }
 
         // ------------------------------------------------------------------ the options
@@ -332,8 +342,10 @@ namespace Sim.Core.Match.Movement
 
                     bool cross = wide && !s.MateIsKeeper[m] && InAttackedBox(s, tx, ty);
                     bool longForward = distance > _cfg.LongBallFromDm && dir * (tx - s.BallXDm) > 0;
+                    bool outWide = IsWideChannel(ty) && DistanceSq(tx, ty, GoalX(s), Pitch.CenterY)
+                                   < (long)(Pitch.LengthDm / 3) * (Pitch.LengthDm / 3);
 
-                    MoveTerms(s, tx, ty, tx, ty, GainPercent(s, longForward, cross), out int keep, out int lost);
+                    MoveTerms(s, tx, ty, tx, ty, GainPercent(s, longForward, cross, outWide), out int keep, out int lost);
                     int execution = Execution(s, distance);
                     if (CannotWin(keep, lost, execution, best.ValuePer10k, floor)) continue;
 
@@ -405,12 +417,13 @@ namespace Sim.Core.Match.Movement
             return most <= best || most < floor;
         }
 
-        private int GainPercent(V11Scene s, bool longForward, bool cross)
+        private int GainPercent(V11Scene s, bool longForward, bool cross, bool outWide = false)
         {
             TacticInstructions i = s.Instructions;
             int percent = MovementTactics.Percent(_cfg.V11TempoGainPercent, (int)i.Tempo);
             if (longForward) percent = percent * MovementTactics.Percent(_cfg.V11DirectnessPercent, (int)i.Tempo) / 100;
             if (cross) percent = percent * MovementTactics.Percent(_cfg.V11WidthCrossPercent, (int)i.Width) / 100;
+            if (outWide) percent = percent * MovementTactics.Percent(_cfg.V11WidthChannelPercent, (int)i.Width) / 100;
             return percent * s.GainPercent / 100;
         }
 

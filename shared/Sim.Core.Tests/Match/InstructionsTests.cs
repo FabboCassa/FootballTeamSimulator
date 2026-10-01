@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using NUnit.Framework;
 using Sim.Core.Config;
 using Sim.Core.Domain;
@@ -43,16 +44,15 @@ namespace Sim.Core.Tests.Match
     /// the middle setting for the eye. The numbers to judge are in the printed lines, and the
     /// harness's `instructions` scenario measures the same thing over far more matches.
     ///
-    /// ENGINE V11, TEMPORARILY. Tempo, Width and the shot appetite do not yet move the game on
-    /// V11 by the margins pinned here (passes slow 525 / fast 540; crosses narrow 20.1 / normal
-    /// 26.1 / wide 20.5; shots patient 12.8 / eager 13.0, from outside the box 3.9 / 3.5). Those
-    /// three tests carry temporary no-regression bounds, each naming the real margin, until
-    /// issue #66 restores it.
+    /// Width and the shot are read over <see cref="LargeSample"/> seeds: a side's crosses and its
+    /// shots both swing by about four a match from seed to seed, so at eight seeds a difference
+    /// between two settings carries about two of noise, as much as the margins asserted (issue #66).
     /// </summary>
     [TestFixture]
     public class InstructionsTests
     {
         private const int Seeds = 8;
+        private const int LargeSample = 64;
         private const ulong FirstSeed = 6100;
 
         private static League _league = null!;
@@ -154,11 +154,8 @@ namespace Sim.Core.Tests.Match
                 $"[instructions-tempo] passes played by the side carrying the instruction: " +
                 $"slow {slow:F0}   normal {normal:F0}   fast {fast:F0}");
 
-            // Real margin: fast > slow + 30 passes. V11 gives +15 (525 / 540); the bound is only
-            // "fast is more" until issue #66 restores the +30.
-            Assert.That(fast, Is.GreaterThan(slow),
-                "a side told to play quickly releases the ball sooner, so it plays more passes " +
-                "(real margin +30; temporarily just more until issue #66, V11 gives +15)");
+            Assert.That(fast, Is.GreaterThan(slow + 30.0),
+                "a side told to play quickly releases the ball sooner, so it plays more passes");
             Assert.That(normal, Is.InRange(slow, fast),
                 "and the middle setting sits between the two");
         }
@@ -166,24 +163,19 @@ namespace Sim.Core.Tests.Match
         [Test]
         public void Width_PutsMoreOfThePlayDownTheTouchline()
         {
-            double narrow = Average(Width.Narrow, s => s.Crosses);
-            double normal = Average(Width.Normal, s => s.Crosses);
-            double wide = Average(Width.Wide, s => s.Crosses);
+            double narrow = Average(Width.Narrow, s => s.Crosses, LargeSample);
+            double normal = Average(Width.Normal, s => s.Crosses, LargeSample);
+            double wide = Average(Width.Wide, s => s.Crosses, LargeSample);
 
             TestContext.Out.WriteLine(
                 $"[instructions-width] crosses played by the side carrying the instruction: " +
                 $"narrow {narrow:F1}   normal {normal:F1}   wide {wide:F1}");
 
-            // Real margin: wide > narrow + 1.0 crosses, normal between the two. V11 has no such
-            // effect yet (20.1 / 26.1 / 20.5), so until issue #66 the bounds only guard against a
-            // regression: neither wide nor normal plays more than one cross fewer than narrow.
-            Assert.That(wide, Is.GreaterThanOrEqualTo(narrow - 1.0),
-                "a wide side finds the man on the touchline more often — real margin wide > " +
-                "narrow + 1.0 crosses; temporarily no-regression (wide >= narrow - 1.0) until " +
-                "issue #66, V11 gives +0.4");
-            Assert.That(normal, Is.GreaterThanOrEqualTo(narrow - 1.0),
-                "the middle setting sits between the two — temporarily no-regression " +
-                "(normal >= narrow - 1.0) until issue #66, V11 gives normal above both");
+            Assert.That(wide, Is.GreaterThan(narrow + 1.0),
+                "a wide side finds the man on the touchline more often — and a cross in this " +
+                "engine IS a pass from out there near the goal");
+            Assert.That(normal, Is.InRange(narrow, wide),
+                "and the middle setting sits between the two");
         }
 
         // ------------------------------------------------------------------ the shot
@@ -192,10 +184,10 @@ namespace Sim.Core.Tests.Match
         public void HaveAGo_IsAnInstruction_AndItIsMentalityAndTempoTogether()
         {
             Reading patient = Measure(new TacticInstructions(
-                Mentality.Defensive, Pressing.Medium, Tempo.Slow, Width.Normal));
-            Reading neutral = Measure(TacticInstructions.Neutral);
+                Mentality.Defensive, Pressing.Medium, Tempo.Slow, Width.Normal), LargeSample);
+            Reading neutral = Measure(TacticInstructions.Neutral, LargeSample);
             Reading eager = Measure(new TacticInstructions(
-                Mentality.Attacking, Pressing.Medium, Tempo.Fast, Width.Normal));
+                Mentality.Attacking, Pressing.Medium, Tempo.Fast, Width.Normal), LargeSample);
 
             TestContext.Out.WriteLine(
                 $"[instructions-shots] shots a match (in the box / edge / long range): " +
@@ -203,23 +195,15 @@ namespace Sim.Core.Tests.Match
                 $"neutral {neutral.Shots:F1} ({neutral.ShotsInBox:F1}/{neutral.ShotsEdge:F1}/{neutral.ShotsLong:F1})   " +
                 $"eager {eager.Shots:F1} ({eager.ShotsInBox:F1}/{eager.ShotsEdge:F1}/{eager.ShotsLong:F1})");
 
-            // Real margin: eager > patient + 1.0 shots. V11 gives +0.2 (12.8 / 13.0), so until
-            // issue #66 the bound only guards against a regression.
-            Assert.That(eager.Shots, Is.GreaterThanOrEqualTo(patient.Shots - 1.0),
-                "a side told to attack and to play quickly has a go more often — real margin " +
-                "+1.0; temporarily no-regression (eager >= patient - 1.0) until issue #66, " +
-                "V11 gives +0.2");
-
-            // NOT a strict inequality, and the reason is written down: phase 6 measured every
-            // strike coming from inside the box, so both sides of this comparison can legitimately
-            // read zero from outside it. What must never happen is the eager side attempting
-            // FEWER of them — and how far the appetite actually pushes the threshold out is the
-            // number to read off the line above, not to assert blind. V11 gives 3.5 against 3.9,
-            // so until issue #66 the bound tolerates one fewer.
+            // Measured at 64 seeds: with the shot appetite read at the Mentality/Tempo axis spreads,
+            // eager reads +1.1 shots / +0.4 from outside the box over patient; at
+            // V11ShotAppetiteSpreadPercent (200) plus the open-goal stretch, +4.3 / +4.2. The margins
+            // sit about halfway; a looser bound would pass without the fix.
+            Assert.That(eager.Shots, Is.GreaterThan(patient.Shots + 2.5),
+                "a side told to attack and to play quickly has a go more often");
             Assert.That(eager.ShotsEdge + eager.ShotsLong,
-                Is.GreaterThanOrEqualTo(patient.ShotsEdge + patient.ShotsLong - 1.0),
-                "and the ones he takes from further out are not fewer — real bound: not fewer; " +
-                "temporarily at most one fewer until issue #66, V11 gives 3.5 against 3.9");
+                Is.GreaterThan(patient.ShotsEdge + patient.ShotsLong + 2.0),
+                "and the extra attempts come from further out: the appetite moves the threshold");
         }
 
         // ------------------------------------------------------------------ the bench
@@ -244,26 +228,29 @@ namespace Sim.Core.Tests.Match
         private static double Average(Tempo t, Func<Reading, double> read) =>
             read(Measure(new TacticInstructions(Mentality.Balanced, Pressing.Medium, t, Width.Normal)));
 
-        private static double Average(Width w, Func<Reading, double> read) =>
-            read(Measure(new TacticInstructions(Mentality.Balanced, Pressing.Medium, Tempo.Normal, w)));
+        private static double Average(Width w, Func<Reading, double> read, int seeds) =>
+            read(Measure(new TacticInstructions(Mentality.Balanced, Pressing.Medium, Tempo.Normal, w), seeds));
 
         /// <summary>
         /// Plays the same fixtures with one instruction set and reads the home side off the
         /// finished matches. Everything here is READ after the last roll of the dice — the
         /// contract every measuring instrument in this rework has kept since phase 0.
         /// </summary>
-        private static Reading Measure(TacticInstructions instructions)
+        private static Reading Measure(TacticInstructions instructions, int seeds = Seeds)
         {
-            var analyzer = new MatchAnalyzer();
-            var reading = new Reading();
-
-            for (ulong seed = FirstSeed; seed < FirstSeed + Seeds; seed++)
+            var reports = new MatchReport[seeds];
+            var metrics = new MatchMetrics?[seeds];
+            Parallel.For(0, seeds, i =>
             {
-                MatchReport report = Play(seed, instructions);
-                MatchMetrics? metrics = analyzer.Measure(report);
-                if (metrics == null || report.Positions == null) continue;
+                reports[i] = Play(FirstSeed + (ulong)i, instructions);
+                metrics[i] = new MatchAnalyzer().Measure(reports[i]);
+            });
 
-                reading.Add(metrics.Home, report);
+            var reading = new Reading();
+            for (int i = 0; i < seeds; i++)
+            {
+                if (metrics[i] == null || reports[i].Positions == null) continue;
+                reading.Add(metrics[i]!.Home, reports[i]);
             }
 
             return reading;

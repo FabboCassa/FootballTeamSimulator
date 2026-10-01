@@ -142,7 +142,8 @@ namespace Sim.Core.Match.Movement
 
             /// <summary>
             /// The part of the scene an open goal is read off: where the ball is, which way he is
-            /// going, whether he is a keeper, and the other side. The mates are left empty.
+            /// going, whether he is a keeper, his side's shot appetite (how far out he has a go) and
+            /// the other side. The mates are left empty.
             /// </summary>
             private void ReadGoalward(int side, int slot)
             {
@@ -161,6 +162,7 @@ namespace Sim.Core.Match.Movement
                 s.BallXDm = U.Dm(sim._ball.X);
                 s.BallYDm = U.Dm(sim._ball.Y);
                 s.CarrierIsKeeper = sim._keeper[k];
+                s.ShotAppetitePercent = sim._tactics[side].ShotAppetitePercent;
 
                 int opponent = 1 - side;
                 for (int j = 0; j < n; j++)
@@ -195,7 +197,6 @@ namespace Sim.Core.Match.Movement
                                    + MovementGeometry.Direction(home) * (sim._cfg.OffsideMarginDm + sim._cfg.V11OffsideMisreadDm);
                 s.MaxPassDm = U.Dm(sim._maxPassRange);
                 s.Instructions = sim._tactics[side].Instructions;
-                s.ShotAppetitePercent = sim._tactics[side].ShotAppetitePercent;
                 s.RiskPercent = sim._tactics[side].RiskPercent;
                 s.GainPercent = sim._tactics[side].GainPercent;
 
