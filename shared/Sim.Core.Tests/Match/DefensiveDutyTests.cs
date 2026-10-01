@@ -170,12 +170,8 @@ namespace Sim.Core.Tests.Match
                 $"[press] space left to a man on the ball in his own third: " +
                 $"low {low:F2} m   medium {medium:F2} m   high {high:F2} m");
 
-            // Real margin: low > high + 0.3 m. V11 reads Pressing at its R8 spread and its presser
-            // stands goal-side, so the room given moves by 0.19 m (5.73 / 5.54); the bound is only
-            // "low leaves more" until issue #66 restores the 0.3 m.
-            Assert.That(low, Is.GreaterThan(high),
-                "a low block leaves the man in his own third alone; a high press does not " +
-                "(real margin 0.3 m; temporarily just more until issue #66, V11 gives 0.19 m)");
+            Assert.That(low, Is.GreaterThan(high + 0.3),
+                "a low block leaves the man in his own third alone; a high press does not");
             Assert.That(medium, Is.GreaterThan(high),
                 "and the middle setting sits between the two");
         }

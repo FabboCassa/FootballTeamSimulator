@@ -148,11 +148,11 @@ namespace Sim.Core.Match.Movement
             // Neutral reads 100 * 100 / 100 = 100, and the site that spends it divides by 100
             // again — so a neutral side's shot is valued exactly as the xG model prices it.
             int appetite =
-                InstructionTable.Percent(cfg.MentalityShotAppetitePercent, mentality, ms)
-                * InstructionTable.Percent(cfg.TempoShotAppetitePercent, tempo, ts) / 100
+                InstructionTable.Percent(cfg.MentalityShotAppetitePercent, mentality, cfg.V11ShotAppetiteSpreadPercent)
+                * InstructionTable.Percent(cfg.TempoShotAppetitePercent, tempo, cfg.V11ShotAppetiteSpreadPercent) / 100
                 * shout.ShotAppetitePercent / 100;
 
-            // A shout's hold is a tempo too, and is read at the same spread.
+            // A shout's hold is a tempo too, read at the Tempo axis spread (ts), not the hold tables'.
             int hold = 100 + (shout.HoldPercent - 100) * ts / 100;
 
             int supporters = InstructionTable.Pick(cfg.MentalitySupporters, mentality, ms) + shout.Supporters;
@@ -173,8 +173,8 @@ namespace Sim.Core.Match.Movement
                                 * InstructionTable.Percent(cfg.PressingStandOffPercent, pressing, ps) / 100
                                 * shout.PressStandOffPercent / 100,
                 supporters: supporters,
-                holdMin: cfg.TicksOfMs(InstructionTable.Pick(cfg.TempoHoldMsMin, tempo, ts) * hold / 100),
-                holdMax: cfg.TicksOfMs(InstructionTable.Pick(cfg.TempoHoldMsMax, tempo, ts) * hold / 100),
+                holdMin: cfg.TicksOfMs(InstructionTable.Pick(cfg.TempoHoldMsMin, tempo, cfg.V11TempoHoldSpreadPercent) * hold / 100),
+                holdMax: cfg.TicksOfMs(InstructionTable.Pick(cfg.TempoHoldMsMax, tempo, cfg.V11TempoHoldSpreadPercent) * hold / 100),
                 shotAppetitePercent: appetite,
                 instructions: i,
                 shout: shout,
