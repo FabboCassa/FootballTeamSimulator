@@ -45,7 +45,7 @@ namespace Fts.MatchView
         // Geometry in decimetres (Sim.Core pitch space), scaled to pixels on draw.
         private const float TokenRadiusDm = 15f;
         private const float BallRadiusDm = 7f;
-        private const int TrailTicks = 8;
+        private const int TrailSeconds = 4;
 
         private static readonly Color BallColor = new Color(0.98f, 0.98f, 0.98f);
         private static readonly Color BallOutline = new Color(0.1f, 0.1f, 0.1f, 0.9f);
@@ -66,6 +66,7 @@ namespace Fts.MatchView
         private readonly List<BallAction> _actions;
         private readonly int _players;
         private readonly int _ticksPerMinute;
+        private readonly int _trailFrames;
         private readonly int _lastTick;
 
         /// <summary>The director's clock, advanced by the pump unless a shared clock is followed.</summary>
@@ -155,6 +156,8 @@ namespace Fts.MatchView
             _actions = _stream.Actions ?? new List<BallAction>();
             _players = _stream.PlayerCount;
             _ticksPerMinute = _stream.TicksPerMinute > 0 ? _stream.TicksPerMinute : 1;
+            // In match time, so a replay stored at the old 2 fps draws the same tail as a 5 fps one.
+            _trailFrames = Mathf.Max(2, TrailSeconds * _ticksPerMinute / 60);
             _lastTick = _stream.TickCount > 0 ? _stream.TickCount - 1 : 0;
             Timeline = new BroadcastDirector().Build(report);
             _playback = new BroadcastPlayback(Timeline);
@@ -647,7 +650,7 @@ namespace Fts.MatchView
         /// <summary>A short fading tail behind the ball, so a pass reads as a pass.</summary>
         private void DrawTrail(Painter2D p, Rect fit, int ta)
         {
-            int from = Mathf.Max(0, ta - TrailTicks);
+            int from = Mathf.Max(0, ta - _trailFrames);
 
             // A trail drawn across the change of ends is a stripe across the pitch: it is the
             // mirror, not the ball.

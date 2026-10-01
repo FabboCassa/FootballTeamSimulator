@@ -87,12 +87,12 @@ namespace Sim.Core.Match.Movement
 
         /// <summary>
         /// Files what just happened to the ball, at the FRAME it belongs to. The simulation runs
-        /// at 10 Hz and the stream is written at 2 Hz (engine phase 1), so an action's tick has
+        /// at 10 Hz and the stream is written at 5 Hz (R13), so an action's tick has
         /// to be mapped into frame space here — otherwise every consumer of the stream (the
         /// renderer, the analyzer, the tests) would need two clocks and a conversion rule.
         ///
         /// Rounded UP, to the first frame at or AFTER the action, and that is not a detail: a
-        /// frame is half a second, and a shot struck at thirty metres a second covers fifteen
+        /// frame is a fifth of a second, and a shot struck at thirty metres a second covers six
         /// metres in one. Filed on the frame BEFORE, a goal is drawn with the ball still short of
         /// the line and a pass with the ball still at the passer's feet — the commentary would be
         /// announcing things the picture had not done yet. Rounding up is monotone, so the order

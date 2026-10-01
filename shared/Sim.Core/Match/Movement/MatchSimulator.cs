@@ -977,10 +977,11 @@ namespace Sim.Core.Match.Movement
 
             // Filed under the frame the strike was struck IN, not the next one written. Every
             // other action is rounded UP so it is never shown before it happened; a strike is the
-            // one thing for which that is wrong, because in half a second the ball has travelled
-            // sixteen metres and the frame would show it halfway to the goal. Anything that asks
-            // "where was this hit from" — the replay dump, the harness's shot map, a future
-            // player's shot chart — reads the ball at this frame.
+            // one thing for which that is wrong, because the next frame can come a tick after the
+            // strike, by which time the ball has travelled three metres and the frame would show
+            // it already away from the boot. Anything that asks "where was this hit from" — the
+            // replay dump, the harness's shot map, a future player's shot chart — reads the ball
+            // at this frame.
             _sheet.RecordStruckAt(tick, home, slot);
         }
 

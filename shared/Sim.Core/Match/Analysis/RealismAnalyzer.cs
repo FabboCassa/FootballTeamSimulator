@@ -33,6 +33,10 @@ namespace Sim.Core.Match.Analysis
     {
         private const int MsPerMinute = 60_000;
         private const int OpenGoalWindowMs = 1_500;
+        // Open lanes are fleeting, so their count depends on how often they are
+        // looked at. They are read on a fixed 2 Hz grid — every frame of the old 2 fps stream, one
+        // frame per half second of a denser one — so the band means the same at any frame rate.
+        private const int OpenGoalSampleMs = 500;
         private const int SterileMinMs = 20_000;
         private const int SterileProgressDm = 100;
 
@@ -95,9 +99,14 @@ namespace Sim.Core.Match.Analysis
             int tpm = s.TicksPerMinute > 0 ? s.TicksPerMinute : 1;
             int window = (OpenGoalWindowMs * tpm + MsPerMinute - 1) / MsPerMinute;
             int spellOwner = PositionStream.NoOwner;
+            long lastSample = -1;
 
             for (int t = 0; t < ticks; t++)
             {
+                long sample = (long)t * MsPerMinute / tpm / OpenGoalSampleMs;
+                if (sample == lastSample) continue;
+                lastSample = sample;
+
                 int code = s.Owner[t];
                 if (code == PositionStream.NoOwner) continue;
                 if (!LaneIsOpen(s, t, code))

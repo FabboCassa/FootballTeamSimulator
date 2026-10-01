@@ -136,10 +136,11 @@ namespace Sim.Core.Match
     /// never change a result.
     ///
     /// A "tick" HERE IS A FRAME, not a step of the simulation. Since engine phase 1 the model
-    /// runs at 10 Hz and the stream is written every fifth step, so one frame is 500 ms of match
-    /// time and there are 120 of them a minute. Everything that reads the stream — the renderer,
-    /// the analyzer, the tests, a BallAction's own Tick — is in this one index space, which is
-    /// why the simulator maps its ticks into frames before it writes anything down.
+    /// runs at 10 Hz; since R13 (#84) the stream is written every second step, so one frame is
+    /// 200 ms of match time and there are 300 of them a minute. Everything that reads the
+    /// stream — the renderer, the analyzer, the tests, a BallAction's own Tick — is in this one
+    /// index space, which is why the simulator maps its ticks into frames before it writes
+    /// anything down.
     ///
     /// Storage is deliberately flat: three int arrays of decimetre coordinates rather
     /// than a list of objects with named X/Y properties. The stream is persisted as
@@ -151,7 +152,7 @@ namespace Sim.Core.Match
     /// </summary>
     public sealed class PositionStream
     {
-        /// <summary>Frames per match minute (120 since engine phase 1; it was 12, and 4 before that).</summary>
+        /// <summary>Frames per match minute (300 since R13; it was 120 from engine phase 1, 12 and 4 before that).</summary>
         public int TicksPerMinute { get; set; }
 
         /// <summary>Players per side (<see cref="Lineup.Size"/>).</summary>
@@ -202,8 +203,8 @@ namespace Sim.Core.Match
         //
         // So the four integer tracks travel PACKED: per-lane delta, zigzag, varint, base64.
         // "Per-lane" because the arrays interleave frames — a man's X sits every stride values —
-        // and it is HIS movement that is small: in half a second nobody covers more than a few
-        // decimetres, so almost every delta fits in ONE byte. That is the whole trick, and it is
+        // and it is HIS movement that is small: in one 200 ms frame nobody covers two metres,
+        // so almost every delta fits in ONE byte. That is the whole trick, and it is
         // why this beats the int16 encoding the plan originally proposed (measured: 649 KB
         // against 1294 KB — a fixed two bytes a value cannot beat a variable one).
         //

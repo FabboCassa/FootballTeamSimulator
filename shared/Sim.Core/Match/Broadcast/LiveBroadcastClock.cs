@@ -16,6 +16,8 @@ namespace Sim.Core.Match.Broadcast
         private readonly BroadcastPlayback _playback;
         private double _elapsedSeconds;
 
+        private const double RoundingSlackMs = 0.001;
+
         public LiveBroadcastClock(BroadcastTimeline timeline, DateTime kickoffUtc)
         {
             Timeline = timeline ?? throw new ArgumentNullException(nameof(timeline));
@@ -79,7 +81,10 @@ namespace Sim.Core.Match.Broadcast
                 seconds += frames / (realFramesPerSecond * (int)s.Rate);
             }
 
-            return Math.Ceiling(seconds * 1000.0) / 1000.0;
+            // The microsecond of slack absorbs the rounding between this sum and Advance's running
+            // subtraction: at 5 fps a frame is 0.2 s, not exact in binary, and landing a hair short
+            // of a segment that ends at a cut would show the minute before.
+            return Math.Ceiling(seconds * 1000.0 + RoundingSlackMs) / 1000.0;
         }
     }
 }

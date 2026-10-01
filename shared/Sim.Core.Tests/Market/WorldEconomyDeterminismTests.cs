@@ -16,7 +16,7 @@ namespace Sim.Core.Tests.Market
 {
     /// <summary>
     /// Acceptance tests for R14 of realistic-club-economy.md:
-    /// - Golden master 0x071D9CA6D62160D9 (engine v11) unchanged;
+    /// - Golden master 0xE72BA81A6D7A469C (engine v11, 5 fps stream since issue #84) unchanged;
     /// - Two worlds from the same seed produce identical stature, finances and transfer records
     ///   after a full season with two windows;
     /// - No Math.Pow/Exp/Log or DateTime in new Market code.
@@ -24,7 +24,7 @@ namespace Sim.Core.Tests.Market
     [TestFixture]
     public class WorldEconomyDeterminismTests
     {
-        private const ulong GoldenCombinedHash = 0x071D9CA6D62160D9UL;
+        private const ulong GoldenCombinedHash = 0xE72BA81A6D7A469CUL;
         private const ulong TestSeed = 20260921_1300UL;
         private static readonly BalanceConfig Cfg = new BalanceConfig();
 
@@ -45,7 +45,7 @@ namespace Sim.Core.Tests.Market
             Assert.That(result.MatchHashes.Count, Is.EqualTo(DeterminismCheck.DefaultMatches));
             Assert.That(result.CombinedHash, Is.EqualTo(GoldenCombinedHash),
                 $"Combined hash {result.CombinedHashHex} != golden 0x{GoldenCombinedHash:X16}");
-            Assert.That(result.CombinedHashHex, Is.EqualTo("0x071D9CA6D62160D9"));
+            Assert.That(result.CombinedHashHex, Is.EqualTo("0xE72BA81A6D7A469C"));
         }
 
         // ============================================================ 2. Code purity (no Math.Pow/Exp/Log, DateTime, System.Random)

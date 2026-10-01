@@ -133,8 +133,8 @@ namespace Sim.Core.Tests.Match
                 saves += m.Home.Saves + m.Away.Saves;
 
                 // Nobody has a go from his own half. The exact range cannot be read back off the
-                // stream — a frame is five ticks and a struck ball covers sixteen metres in that
-                // time, so by the frame the action is filed under it has already gone — but which
+                // stream — a frame is two ticks (five before R13, #84), so the frame a strike is
+                // filed under need not be the instant it was struck — but which
                 // half it is in survives the rounding, because a strike travels toward the goal.
                 foreach (BallAction a in r.Positions!.Actions.Where(x => x.Kind == BallActionKind.Shot))
                 {
