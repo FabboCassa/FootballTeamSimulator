@@ -191,7 +191,8 @@ namespace Sim.Core.Match.Movement
                 s.CanClear = sim.ClearRoom(side, k, out int landing);
                 s.ClearXDm = U.Dm(landing);
                 s.ClearYDm = sim._py[k] < U.CenterYU ? 60 : Pitch.WidthDm - 60;
-                s.OffsideLineXDm = _lineX[side] + MovementGeometry.Direction(home) * sim._cfg.OffsideMarginDm;
+                s.OffsideLineXDm = _lineX[side]
+                                   + MovementGeometry.Direction(home) * (sim._cfg.OffsideMarginDm + sim._cfg.V11OffsideMisreadDm);
                 s.MaxPassDm = U.Dm(sim._maxPassRange);
                 s.Instructions = sim._tactics[side].Instructions;
                 s.ShotAppetitePercent = sim._tactics[side].ShotAppetitePercent;

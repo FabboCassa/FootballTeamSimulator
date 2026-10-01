@@ -172,11 +172,7 @@ namespace Sim.Core.Tests.Match
             TestContext.Out.WriteLine(
                 $"[laws-offside] {offsides / matches:F1} offsides a match, {checkedFlags} flags checked");
 
-            // Real football flags 1.5-5 a match. V11 holds its runners onside (R2), so it flags
-            // fewer (0.75 on these seeds). The 0.25 floor is temporary and goes back to 1.5 with
-            // issue #65.
-            Assert.That(offsides / matches, Is.InRange(0.25, 5.0),
-                "real band 1.5-5 a match; floor temporarily 0.25 until issue #65 lifts V11's offsides (about 0.75)");
+            Assert.That(offsides / matches, Is.InRange(1.5, 5.0), "real football flags 1.5-5 a match");
         }
 
         // ------------------------------------------------------------ fouls, cards, penalties

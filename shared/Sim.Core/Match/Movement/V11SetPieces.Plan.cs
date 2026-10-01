@@ -34,7 +34,7 @@ namespace Sim.Core.Match.Movement
                 {
                     int t = side * _n + _ctx.DeadTaker;
                     int goalX = U.Units(MovementGeometry.AttackedGoalX(side == 0));
-                    int distance = U.Dm(U.Distance(_ball.X, _ball.Y, goalX, U.CenterYU));
+                    int distance = U.StreamDistanceDm(_ball.X, _ball.Y, goalX, U.CenterYU);
                     int offCentre = U.Dm(_ball.Y > U.CenterYU ? _ball.Y - U.CenterYU : U.CenterYU - _ball.Y);
                     _freeKick = SetPiecePlan.ChooseFreeKick(
                         distance, offCentre, _sim._skShooting[t], _sim._skTechnique[t], _cfg, out _, out _);
