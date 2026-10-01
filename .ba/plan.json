@@ -1,140 +1,241 @@
 {
- "spec": "docs/specs/watchable-match-engine.md",
+ "spec": "docs/specs/real-match-and-playing-styles.md",
  "base": "main",
  "issues": [
   {
-   "n": 28,
-   "deps": [],
-   "kind": "refactor"
-  },
-  {
-   "n": 29,
-   "deps": [
-    28
-   ],
-   "kind": "refactor"
-  },
-  {
-   "n": 30,
-   "deps": [
-    29
-   ],
-   "kind": "feature"
-  },
-  {
-   "n": 31,
+   "n": 70,
    "deps": [],
    "kind": "feature"
   },
   {
-   "n": 32,
+   "n": 71,
    "deps": [
-    29
+    70
    ],
    "kind": "feature"
   },
   {
-   "n": 33,
+   "n": 72,
    "deps": [
-    32
+    70
    ],
    "kind": "feature"
   },
   {
-   "n": 34,
+   "n": 73,
    "deps": [
-    31,
-    33
+    70
    ],
    "kind": "feature"
   },
   {
-   "n": 35,
+   "n": 74,
    "deps": [
-    32
+    72
    ],
    "kind": "feature"
   },
   {
-   "n": 36,
+   "n": 75,
    "deps": [
-    29
+    72
    ],
    "kind": "feature"
   },
   {
-   "n": 37,
+   "n": 76,
    "deps": [
-    30,
-    36
+    71,
+    75
    ],
    "kind": "feature"
   },
   {
-   "n": 38,
+   "n": 77,
    "deps": [
-    34,
-    35,
-    37
+    72
    ],
    "kind": "feature"
   },
   {
-   "n": 39,
+   "n": 78,
    "deps": [
-    38
+    72,
+    77
    ],
    "kind": "feature"
   },
   {
-   "n": 40,
+   "n": 79,
+   "deps": [
+    78
+   ],
+   "kind": "feature"
+  },
+  {
+   "n": 80,
+   "deps": [
+    71
+   ],
+   "kind": "feature"
+  },
+  {
+   "n": 81,
+   "deps": [
+    71,
+    80
+   ],
+   "kind": "feature"
+  },
+  {
+   "n": 82,
+   "deps": [
+    71,
+    78
+   ],
+   "kind": "feature"
+  },
+  {
+   "n": 83,
+   "deps": [
+    73,
+    82
+   ],
+   "kind": "feature"
+  },
+  {
+   "n": 84,
    "deps": [],
    "kind": "feature"
   },
   {
-   "n": 41,
+   "n": 85,
    "deps": [
-    40
+    84
    ],
    "kind": "feature"
   },
   {
-   "n": 42,
+   "n": 86,
    "deps": [
-    36,
-    40
+    76,
+    85
    ],
    "kind": "feature"
   },
   {
-   "n": 43,
+   "n": 87,
    "deps": [
-    41,
-    42
+    74,
+    75,
+    76,
+    77,
+    78,
+    79,
+    80,
+    81,
+    82,
+    83
    ],
    "kind": "feature"
   },
   {
-   "n": 44,
+   "n": 88,
    "deps": [
-    36,
-    43
+    87
    ],
    "kind": "feature"
   },
   {
-   "n": 45,
+   "n": 89,
    "deps": [
-    40,
-    41
+    88
    ],
    "kind": "feature"
   },
   {
-   "n": 46,
+   "n": 90,
    "deps": [
-    38,
-    39
+    89
+   ],
+   "kind": "feature"
+  },
+  {
+   "n": 91,
+   "deps": [
+    89
+   ],
+   "kind": "feature"
+  },
+  {
+   "n": 92,
+   "deps": [
+    70,
+    89
+   ],
+   "kind": "feature"
+  },
+  {
+   "n": 93,
+   "deps": [
+    89
+   ],
+   "kind": "feature"
+  },
+  {
+   "n": 94,
+   "deps": [
+    90,
+    91,
+    93
+   ],
+   "kind": "feature"
+  },
+  {
+   "n": 95,
+   "deps": [
+    92,
+    94
+   ],
+   "kind": "feature"
+  },
+  {
+   "n": 96,
+   "deps": [
+    92,
+    93
+   ],
+   "kind": "feature"
+  },
+  {
+   "n": 97,
+   "deps": [
+    88
+   ],
+   "kind": "feature"
+  },
+  {
+   "n": 98,
+   "deps": [
+    92,
+    93
+   ],
+   "kind": "feature"
+  },
+  {
+   "n": 99,
+   "deps": [
+    92,
+    93,
+    96
+   ],
+   "kind": "feature"
+  },
+  {
+   "n": 100,
+   "deps": [
+    94,
+    95
    ],
    "kind": "feature"
   }
