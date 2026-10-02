@@ -18,18 +18,18 @@ namespace Sim.Core.Tests.Match
     public class LiveBroadcastClockTests
     {
         private const int Fpm = 120;
-        private const double RealFramesPerSecond = Fpm / 60.0;
+        private const double LiveFramesPerSecond = Fpm / 60.0 * 1.3;
 
         private static readonly DateTime Kickoff = new DateTime(2026, 9, 25, 21, 0, 0, DateTimeKind.Utc);
 
-        /// <summary>1x [0,20) = 10 s, cut [20,140), 2x [140,180) = 10 s, 1x [180,200) = 9.5 s to frame 199.</summary>
-        private static BroadcastTimeline HandBuilt() => new BroadcastTimeline(Fpm, 200, 100,
+        /// <summary>Live [0,26) = 10 s, cut [26,140), dead time [140,180) = 10 s, live [180,207) = 10 s to frame 206.</summary>
+        private static BroadcastTimeline HandBuilt() => new BroadcastTimeline(Fpm, 207, 100,
             new[]
             {
-                new BroadcastSegment(0, 20, PlaybackRate.RealTime),
-                new BroadcastSegment(20, 140, PlaybackRate.Cut),
-                new BroadcastSegment(140, 180, PlaybackRate.Double),
-                new BroadcastSegment(180, 200, PlaybackRate.RealTime)
+                new BroadcastSegment(0, 26, PlaybackRate.Live),
+                new BroadcastSegment(26, 140, PlaybackRate.Cut),
+                new BroadcastSegment(140, 180, PlaybackRate.DeadTime),
+                new BroadcastSegment(180, 207, PlaybackRate.Live)
             },
             Array.Empty<CutSummary>());
 
@@ -124,14 +124,14 @@ namespace Sim.Core.Tests.Match
 
             Assert.Multiple(() =>
             {
-                Assert.That(clock.PositionAt(At(5.0)), Is.EqualTo(5.0 * RealFramesPerSecond).Within(1e-6), "1x");
-                // 10 s of 1x reach the cut, which costs no wall time: the next frame shown is 140.
-                Assert.That(clock.PositionAt(At(10.0)), Is.EqualTo(140.0).Within(1e-6), "cut jumped");
-                Assert.That(clock.PositionAt(At(15.0)), Is.EqualTo(160.0).Within(1e-6), "2x");
+                Assert.That(clock.PositionAt(At(5.0)), Is.EqualTo(5.0 * LiveFramesPerSecond).Within(1e-6), "live");
+                // 10 s of live play reach the cut, which costs no wall time: 0.5 s on is two frames past 140.
+                Assert.That(clock.PositionAt(At(10.5)), Is.EqualTo(142.0).Within(1e-6), "cut jumped");
+                Assert.That(clock.PositionAt(At(15.0)), Is.EqualTo(160.0).Within(1e-6), "dead time");
                 Assert.That(clock.MinuteAt(At(15.0)), Is.EqualTo(1));
-                Assert.That(clock.FinishedAt(At(29.4)), Is.False, "29.5 s of playback to full time");
-                Assert.That(clock.FinishedAt(At(29.6)), Is.True);
-                Assert.That(clock.MinuteAt(At(29.6)), Is.EqualTo(BroadcastPlayback.FullTimeMinute));
+                Assert.That(clock.FinishedAt(At(29.9)), Is.False, "30 s of playback to full time");
+                Assert.That(clock.FinishedAt(At(30.1)), Is.True);
+                Assert.That(clock.MinuteAt(At(30.1)), Is.EqualTo(BroadcastPlayback.FullTimeMinute));
             });
         }
 
@@ -151,7 +151,7 @@ namespace Sim.Core.Tests.Match
             var clock = new LiveBroadcastClock(HandBuilt(), Kickoff);
             clock.PositionAt(At(20.0));
 
-            Assert.That(clock.PositionAt(At(4.0)), Is.EqualTo(4.0 * RealFramesPerSecond).Within(1e-6));
+            Assert.That(clock.PositionAt(At(4.0)), Is.EqualTo(4.0 * LiveFramesPerSecond).Within(1e-6));
         }
 
         [Test]
@@ -163,9 +163,9 @@ namespace Sim.Core.Tests.Match
             Assert.Multiple(() =>
             {
                 Assert.That(clock.SecondsToReach(0), Is.EqualTo(0.0));
-                // Frame 120 sits inside the cut, which is reached after the 10 s of 1x and jumped for free.
+                // Frame 120 sits inside the cut, which is reached after the 10 s of live play and jumped for free.
                 Assert.That(clock.SecondsToReach(1), Is.EqualTo(10.0).Within(2e-3));
-                Assert.That(clock.SecondsToReach(90), Is.EqualTo(29.5).Within(2e-3), "full time: the last frame");
+                Assert.That(clock.SecondsToReach(90), Is.EqualTo(30.0).Within(2e-3), "full time: the last frame");
                 Assert.That(clock.MinuteAt(At(clock.SecondsToReach(1))), Is.EqualTo(1));
                 Assert.That(clock.MinuteAt(At(clock.SecondsToReach(1) - 0.5)), Is.EqualTo(0));
                 Assert.That(clock.MinuteAt(At(clock.SecondsToReach(90))), Is.EqualTo(BroadcastPlayback.FullTimeMinute));
@@ -187,7 +187,7 @@ namespace Sim.Core.Tests.Match
                 previous = seconds;
             }
 
-            Assert.That(previous, Is.EqualTo(timeline.PlaybackMilliseconds(0, timeline.FrameCount - 1) / 1000.0).Within(0.01),
+            Assert.That(previous, Is.EqualTo(timeline.PlaybackSeconds(0, timeline.FrameCount - 1)).Within(0.01),
                 "full time is reached when playback arrives at the last frame");
         }
 

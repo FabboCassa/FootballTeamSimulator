@@ -26,8 +26,8 @@ namespace Fts.MatchView
     ///
     /// PACING. Playback advances in wall-clock time (scheduler delta) and interpolates linearly
     /// between stream ticks so motion stays smooth at any frame rate. It plays the broadcast
-    /// director's timeline (<see cref="Timeline"/>): each segment at real time or twice that, the
-    /// cut ones jumped (spec R12-R13), so nothing is ever slower than real time at 1x. A screen
+    /// director's timeline (<see cref="Timeline"/>): open play at 1.3x real time, dead time at 2x,
+    /// the cut segments jumped (spec R12), so nothing is ever slower than 1.3x real time at 1x. A screen
     /// whose moment is agreed with another viewer hands the renderer that clock instead
     /// (<see cref="FollowClock"/>), and the renderer then only draws where the clock says.
     ///

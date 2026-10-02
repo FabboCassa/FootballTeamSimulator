@@ -78,7 +78,7 @@ namespace Sim.Core.Match.Broadcast
                 if (s.Rate == PlaybackRate.Cut)
                     continue;
                 long frames = Math.Min(s.EndFrame, target) - s.StartFrame;
-                seconds += frames / (realFramesPerSecond * (int)s.Rate);
+                seconds += frames / (realFramesPerSecond * s.Rate.Factor());
             }
 
             // The microsecond of slack absorbs the rounding between this sum and Advance's running
