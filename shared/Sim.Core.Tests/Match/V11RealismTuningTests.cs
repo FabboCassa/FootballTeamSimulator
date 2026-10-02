@@ -107,7 +107,7 @@ namespace Sim.Core.Tests.Match
         {
             // The carry in the last stretch goes to a point 11 m out; a man who reached it and was
             // offered the same carry again stood on the ball there, a third of every match.
-            const int FramesPerSecond = 2;
+            int framesPerSecond = Config().Match.FramesPerMinute / 60;
             int longest = 0;
             long held = 0, frames = 0;
             for (ulong seed = FirstSeed; seed < FirstSeed + Matches; seed++)
@@ -119,13 +119,13 @@ namespace Sim.Core.Tests.Match
                     frames++;
                     bool same = s.Owner[t] != PositionStream.NoOwner && s.Owner[t] == s.Owner[t - 1];
                     run = same ? run + 1 : 0;
-                    if (run > 10 * FramesPerSecond) held++;
+                    if (run > 10 * framesPerSecond) held++;
                     if (run > longest) longest = run;
                 }
             }
 
-            TestContext.Out.WriteLine($"[V11 on the ball] longest {longest / FramesPerSecond} s, {100.0 * held / frames:F2}% of frames in spells over 10 s");
-            Assert.That(longest, Is.LessThan(60 * FramesPerSecond), "nobody keeps it a whole minute");
+            TestContext.Out.WriteLine($"[V11 on the ball] longest {longest / framesPerSecond} s, {100.0 * held / frames:F2}% of frames in spells over 10 s");
+            Assert.That(longest, Is.LessThan(60 * framesPerSecond), "nobody keeps it a whole minute");
             Assert.That((double)held / frames, Is.LessThan(0.02), "spells over 10 s are rare");
         }
 

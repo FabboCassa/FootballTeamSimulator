@@ -355,7 +355,12 @@ const scrub = document.getElementById("scrub");
 scrub.max = TICKS - 1;
 
 const layers = { box:true, line:true, mark:true, trail:true, names:false };
-let tick = 0, playing = true, speed = 1, last = 0;
+let tick = 0, playing = true, speed = 1, last = 0, carry = 0;
+
+// Playback and trail are in match seconds, converted through TPM (stream frames per match minute),
+// so a change of stream frame rate changes neither how fast "1x" plays nor how long the trail is.
+const MATCH_SECONDS_PER_WALL_SECOND = 10, TRAIL_SECONDS = 12;
+const TRAIL_FRAMES = Math.max(1, Math.round(TRAIL_SECONDS * TPM / 60));
 
 const PAD = 30;
 
@@ -423,7 +428,7 @@ function pitch() {
 
 // The clock, the half and the running score, drawn ON the pitch (a grey span in the page header is
 // a number nobody finds while he is watching the football). Minutes AND seconds, because a frame is
-// half a second and a match minute is 120 of them: without the seconds the number looks frozen.
+// a fraction of a second and a match minute is TPM of them: without the seconds the number looks frozen.
 function stamp(t) {
   const total = Math.floor(t * 60 / TPM);
   const mm = Math.floor(total / 60), ss = total % 60;
@@ -485,7 +490,7 @@ function draw() {
     ctx.strokeStyle = "rgba(255,255,255,.5)"; ctx.lineWidth = 2; ctx.beginPath();
     // The trail stops at the interval: a line drawn across the change of ends would be a
     // stripe across the pitch, which is the mirror and not the ball.
-    const from = Math.max(0, HALFTIME >= 0 && t >= HALFTIME ? Math.max(t-24, HALFTIME) : t-24);
+    const from = Math.max(0, HALFTIME >= 0 && t >= HALFTIME ? Math.max(t-TRAIL_FRAMES, HALFTIME) : t-TRAIL_FRAMES);
     for (let k = from; k <= t; k++) {
       const fx = sx(bx(k)), fy = sy(by(k));
       k === from ? ctx.moveTo(fx,fy) : ctx.lineTo(fx,fy);
@@ -562,14 +567,21 @@ function draw() {
   scrub.value = t;
 }
 
-// The stream is one frame per five match seconds, so "1x" here is the same 30x compression the
-// client plays a replay at: twenty stream frames a second.
+// Advances by elapsed wall time, not one frame per callback: at 5 frames per match second the
+// higher speeds need several frames per screen refresh. Elapsed time is capped so a tab that was
+// in the background does not jump minutes ahead when it comes back.
 function frame(now) {
-  if (playing && now - last >= 1000 / (20 * speed)) {
-    last = now;
-    tick = (tick + 1) % TICKS;
-    draw();
+  if (playing && last > 0) {
+    const wallSeconds = Math.min(now - last, 250) / 1000;
+    carry += wallSeconds * MATCH_SECONDS_PER_WALL_SECOND * speed * TPM / 60;
+    const step = Math.floor(carry);
+    if (step > 0) {
+      carry -= step;
+      tick = (tick + step) % TICKS;
+      draw();
+    }
   }
+  last = now;
   requestAnimationFrame(frame);
 }
 

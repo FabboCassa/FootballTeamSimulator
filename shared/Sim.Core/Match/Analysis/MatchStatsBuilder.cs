@@ -31,8 +31,12 @@ namespace Sim.Core.Match.Analysis
         /// <summary>Decimetres in a metre.</summary>
         private const int DmPerM = 10;
 
-        /// <summary>How far back the owner track is read to find the man a tackle took the ball off.</summary>
-        private const int DuelLookbackFrames = 6;
+        /// <summary>
+        /// How far back the owner track is read to find the man a tackle took the ball off: three
+        /// seconds of match time, and never fewer than six frames on a coarse stream.
+        /// </summary>
+        private const int DuelLookbackSeconds = 3;
+        private const int DuelLookbackMinFrames = 6;
 
         /// <summary>
         /// The three lines a man is compared against for the mark (see ClassifyLines), and how many
@@ -581,7 +585,8 @@ namespace Sim.Core.Match.Analysis
                 int from = frame;
                 if (from >= _stream.Owner.Length) from = _stream.Owner.Length - 1;
 
-                for (int t = from; t >= 0 && t > from - DuelLookbackFrames; t--)
+                int lookback = System.Math.Max(DuelLookbackMinFrames, DuelLookbackSeconds * _fpm / 60);
+                for (int t = from; t >= 0 && t > from - lookback; t--)
                 {
                     int code = _stream.Owner[t];
                     if (code == PositionStream.NoOwner) continue;

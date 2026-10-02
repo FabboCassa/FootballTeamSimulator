@@ -1562,11 +1562,11 @@ namespace Sim.Core.Config
 
         /// <summary>
         /// Simulation ticks per frame WRITTEN to the position stream. The physics needs 10 Hz;
-        /// the replay does not. At the 30x compression the renderer uses ("1x" = 180 real seconds
-        /// for 90') a 2 Hz stream already plays back at 60 fps, so writing every tick would make
-        /// the stream five times larger for a picture nobody could tell apart.
+        /// the replay does not need all of it. 5 Hz (R13) gives the slower live playback enough
+        /// frames for smooth movement at ~2.2x the packed size of the old 2 Hz stream; every tick
+        /// would roughly double that again for a picture nobody could tell apart.
         /// </summary>
-        public int StreamTicksPerFrame { get; set; } = 5;
+        public int StreamTicksPerFrame { get; set; } = 2;
 
         /// <summary>Stream frames per match minute — what PositionStream.TicksPerMinute carries.</summary>
         public int FramesPerMinute => TicksPerMinute / (StreamTicksPerFrame < 1 ? 1 : StreamTicksPerFrame);

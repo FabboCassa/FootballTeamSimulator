@@ -38,8 +38,8 @@ namespace Sim.Core.Tests.Match
         private static int SlotIndexOf(Lineup lineup, int playerId) =>
             lineup.Slots.FindIndex(s => s.Player.Id == playerId);
 
-        // Everything below counts in the stream's own unit: a FRAME, which since engine phase 1
-        // is five simulation ticks (500 ms of match time). Deriving these from the config rather
+        // Everything below counts in the stream's own unit: a FRAME, which since R13 (issue #84)
+        // is two simulation ticks (200 ms of match time). Deriving these from the config rather
         // than writing numbers down is what keeps the test true when the tick rate moves again.
 
         /// <summary>The furthest a player can move between two frames: full pace, flat out.</summary>
@@ -501,11 +501,11 @@ namespace Sim.Core.Tests.Match
         public void TheBall_NeverChangesDirectionUntouched()
         {
             // Checked at the SIMULATION's own resolution, not the replay's. Since engine phase 1
-            // the stream is written every fifth tick, and half a second is long enough for a ball
-            // to be struck, roll, be collected and struck again between two frames — so a turn
-            // measured across frames is not evidence of anything. Asking the model directly, with
-            // every tick written, is both the honest question and a far larger sample: two
-            // matches at 10 Hz give more moving ticks than ten did at the replay's rate.
+            // the stream has been decimated (every fifth tick, every second since R13, #84), and
+            // a gap of two ticks is enough for the ball to be played between two frames — so a
+            // turn measured across frames is not evidence of anything. Asking the model directly,
+            // with every tick written, is both the honest question and a large sample: two
+            // matches at 10 Hz give as many ticks as ten did at the old 2 Hz.
             var cfg = new BalanceConfig();
             cfg.Match.StreamTicksPerFrame = 1;
             var engine = new MatchEngine(cfg);
@@ -559,6 +559,16 @@ namespace Sim.Core.Tests.Match
         }
 
         // ------------------------------------------------------------ measurement
+
+        [Test]
+        public void Stream_IsWrittenAtFiveFramesPerMatchSecond()
+        {
+            PositionStream s = Play(31).Positions!;
+
+            Assert.That(Cfg.StreamTicksPerFrame, Is.EqualTo(2));
+            Assert.That(s.TicksPerMinute, Is.EqualTo(5 * 60), "R13: five frames per match second");
+            Assert.That(s.LastTick, Is.EqualTo(90 * 5 * 60), "ninety minutes of them");
+        }
 
         [Test]
         public void StreamSize_IsPrinted_ForTheRecord()
