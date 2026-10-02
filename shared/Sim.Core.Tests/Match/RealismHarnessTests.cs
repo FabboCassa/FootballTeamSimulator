@@ -33,9 +33,10 @@ namespace Sim.Core.Tests.Match
             League league = new LeagueGenerator().Generate(new Pcg32(20260611));
             Club a = league.Clubs[9], b = league.Clubs[10];   // mid-table neighbours: equal strength
 
-            RealismTally v11 = Run(a, b);
+            RealismTally v11 = Run(a, b, out ShapeMovementTally shape);
 
             TestContext.Out.WriteLine(v11.Format("V11"));
+            TestContext.Out.WriteLine(shape.Format("V11"));
 
             Assert.That(v11.Matches, Is.EqualTo(Matches), "Every match must come back with a stream.");
 
@@ -48,7 +49,7 @@ namespace Sim.Core.Tests.Match
                 Assert.That(row.InBand, Is.True, $"V11 {row.Band.Name} {row.Value:F3} outside {row.Band.Describe()}");
         }
 
-        private static RealismTally Run(Club a, Club b)
+        private static RealismTally Run(Club a, Club b, out ShapeMovementTally shape)
         {
             var cfg = new BalanceConfig();
 
@@ -60,6 +61,8 @@ namespace Sim.Core.Tests.Match
             var analyzer = new MatchAnalyzer();
             var realism = new RealismAnalyzer();
             var tally = new RealismTally();
+            var shapeAnalyzer = new ShapeMovementAnalyzer();
+            shape = new ShapeMovementTally();
             var clock = new Stopwatch();
 
             for (int i = 0; i < Matches; i++)
@@ -74,6 +77,8 @@ namespace Sim.Core.Tests.Match
                 MatchMetrics? m = analyzer.Measure(r);
                 RealismMetrics? rm = realism.Measure(r);
                 if (m != null && rm != null) tally.Add(m, rm, clock.Elapsed.TotalMilliseconds);
+                ShapeMovementMetrics? sm = shapeAnalyzer.Measure(r);
+                if (sm != null) shape.Add(sm);
             }
 
             return tally;
