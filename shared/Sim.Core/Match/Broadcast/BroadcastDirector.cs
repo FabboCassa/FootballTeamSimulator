@@ -3,9 +3,10 @@ using System.Collections.Generic;
 namespace Sim.Core.Match.Broadcast
 {
     /// <summary>
-    /// Turns a finished <see cref="MatchReport"/> into a playback timeline (spec R12-R14): key
-    /// events at 1x, their build-up at 1x or 2x, everything else cut, each half landing on
-    /// <see cref="BroadcastSettings.TargetSecondsPerHalf"/> of playback at 1x.
+    /// Turns a finished <see cref="MatchReport"/> into a playback timeline (spec R12): open play
+    /// live (1.3x real time), dead time at 2x, sterile possession and the rest cut, key events
+    /// always shown, each half landing on <see cref="BroadcastSettings.TargetSecondsPerHalf"/> of
+    /// playback at 1x.
     ///
     /// The budget is spent by growing lead-ins BACKWARDS from the key events: a frame is cheaper the
     /// closer it is to the next one, and frames are bought cheapest-first until the half is full,
@@ -36,9 +37,9 @@ namespace Sim.Core.Match.Broadcast
 
             FrameReading reading = FrameClassifier.Read(s, _settings);
             var rates = new PlaybackRate[s.TickCount];
-            long halfFrames = (long)_settings.TargetSecondsPerHalf * s.TicksPerMinute / 30;
-            SpendHalf(reading, rates, 0, reading.SecondHalfStart, halfFrames);
-            SpendHalf(reading, rates, reading.SecondHalfStart, rates.Length, halfFrames);
+            long halfUnits = (long)_settings.TargetSecondsPerHalf * s.TicksPerMinute * PlaybackRates.UnitsPerRealFrame / 60;
+            SpendHalf(reading, rates, 0, reading.SecondHalfStart, halfUnits);
+            SpendHalf(reading, rates, reading.SecondHalfStart, rates.Length, halfUnits);
 
             IReadOnlyList<BroadcastSegment> segments = Merge(rates);
             return new BroadcastTimeline(s.TicksPerMinute, s.TickCount, reading.SecondHalfStart,
@@ -46,8 +47,8 @@ namespace Sim.Core.Match.Broadcast
         }
 
         /// <summary>
-        /// Fills frames [from, to) up to <paramref name="budget"/> half-frames of 1x playback
-        /// (a 1x frame costs two, a 2x frame one).
+        /// Fills frames [from, to) up to <paramref name="budget"/> cost units of 1x playback
+        /// (see <see cref="PlaybackRates"/>: a live frame costs 20, a dead-time frame 13).
         /// </summary>
         private static void SpendHalf(FrameReading r, PlaybackRate[] rates, int from, int to, long budget)
         {
@@ -57,8 +58,8 @@ namespace Sim.Core.Match.Broadcast
             for (int f = from; f < to; f++)
                 if (r.Key[f])
                 {
-                    rates[f] = PlaybackRate.RealTime;
-                    spent += 2;
+                    rates[f] = r.ShownRate(f);
+                    spent += PlaybackRates.CostOf(rates[f]);
                 }
 
             // Frames with no anchor ahead come after every lead-in; sterile ones after everything.
@@ -70,7 +71,7 @@ namespace Sim.Core.Match.Broadcast
             for (int f = to - 1; f >= from; f--)
             {
                 if (r.Anchor[f]) nearest = f;
-                if (r.Key[f] || r.Classes[f] == FrameClass.Dead) continue;
+                if (r.Key[f] || r.Classes[f] == FrameClass.Idle) continue;
 
                 long score = nearest == long.MaxValue ? far + (to - f) : nearest - f;
                 if (r.Classes[f] == FrameClass.Sterile) score += sterile;
@@ -81,11 +82,11 @@ namespace Sim.Core.Match.Broadcast
             foreach (long key in keys)
             {
                 int f = (int)(key & FrameMask);
-                bool hot = r.Classes[f] == FrameClass.Hot;
-                int cost = hot ? 2 : 1;
+                PlaybackRate rate = r.ShownRate(f);
+                int cost = PlaybackRates.CostOf(rate);
                 if (spent + cost > budget) break;
                 spent += cost;
-                rates[f] = hot ? PlaybackRate.RealTime : PlaybackRate.Double;
+                rates[f] = rate;
             }
         }
 

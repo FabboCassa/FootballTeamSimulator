@@ -52,21 +52,27 @@ namespace Sim.Core.Match.Broadcast
             return PlaybackRate.Cut;
         }
 
-        /// <summary>Playback time at 1x of frames [<paramref name="fromFrame"/>, <paramref name="toFrame"/>).</summary>
-        public long PlaybackMilliseconds(int fromFrame, int toFrame)
-        {
-            if (FramesPerMinute <= 0) return 0;
+        /// <summary>Playback time at 1x of frames [<paramref name="fromFrame"/>, <paramref name="toFrame"/>), rounded down to the millisecond.</summary>
+        public long PlaybackMilliseconds(int fromFrame, int toFrame) =>
+            FramesPerMinute <= 0 ? 0
+                : PlaybackUnits(fromFrame, toFrame) * 60_000 / ((long)PlaybackRates.UnitsPerRealFrame * FramesPerMinute);
 
-            // Summed in half-frames (a 2x frame costs one, a 1x frame two) so the total stays exact.
-            long halfFrames = 0;
+        /// <summary>Playback time at 1x of frames [<paramref name="fromFrame"/>, <paramref name="toFrame"/>), in seconds.</summary>
+        public double PlaybackSeconds(int fromFrame, int toFrame) =>
+            FramesPerMinute <= 0 ? 0.0
+                : PlaybackUnits(fromFrame, toFrame) * 60.0 / ((double)PlaybackRates.UnitsPerRealFrame * FramesPerMinute);
+
+        /// <summary>Summed in whole cost units (see <see cref="PlaybackRates"/>) so the total stays exact.</summary>
+        private long PlaybackUnits(int fromFrame, int toFrame)
+        {
+            long units = 0;
             foreach (BroadcastSegment s in Segments)
             {
-                if (s.Rate == PlaybackRate.Cut) continue;
                 int frames = Math.Min(s.EndFrame, toFrame) - Math.Max(s.StartFrame, fromFrame);
-                if (frames > 0) halfFrames += (long)frames * 2 / (int)s.Rate;
+                if (frames > 0) units += (long)frames * PlaybackRates.CostOf(s.Rate);
             }
 
-            return halfFrames * 30_000 / FramesPerMinute;
+            return units;
         }
     }
 }
