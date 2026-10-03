@@ -3,8 +3,14 @@ using System;
 namespace Sim.Core.Match.Analysis
 {
     /// <summary>
-    /// R2 of the watchable-match spec: how long each outfielder spends more than 25 m from his
-    /// phase target while neither chasing the ball nor marking a man.
+    /// R2 of the watchable-match spec, read by real-match spec R4 as "off-target seconds per
+    /// player": how long each outfielder spends more than 25 m from his phase target while
+    /// neither chasing the ball nor marking a man. Every such open-play frame counts. Dead-ball
+    /// frames do not: the target read here is the open-play shape, and a restart is the
+    /// set-piece phase of watchable-match R1, with targets of its own (where the wall, the
+    /// corner roles and the taker go). Open play is the convention of
+    /// <see cref="ShapeMovementAnalyzer"/>: dead from a restart's whistle, a goal or half-time
+    /// until somebody holds the ball after the restart's whistle.
     ///
     /// The stream does not carry the brain's targets, so the target is read back from the play
     /// itself: the phase is which side last held the ball (in possession / out of it), and a
@@ -34,6 +40,7 @@ namespace Sim.Core.Match.Analysis
         private int[] _medianX = Array.Empty<int>();    // per (side, slot, phase)
         private int[] _medianY = Array.Empty<int>();
         private int[] _frames = Array.Empty<int>();     // per (side, slot): frames off target
+        private bool[] _open = Array.Empty<bool>();     // per frame: the ball is in play
         private int _ticksPerMinute = 1;
 
         public double Seconds(bool home, int slot) =>
@@ -45,6 +52,7 @@ namespace Sim.Core.Match.Analysis
             Ensure(s.PlayerCount, ticks);
             _ticksPerMinute = s.TicksPerMinute > 0 ? s.TicksPerMinute : 1;
             TrackPhase(s);
+            MarkOpenPlay(s);
             StoreOffsets(s, keeper, sentOffFrom);
             TakeMedians(keeper, sentOffFrom);
             CountFrames(s, keeper, sentOffFrom);
@@ -55,7 +63,12 @@ namespace Sim.Core.Match.Analysis
         {
             _n = n;
             _ticks = ticks;
-            if (_phase.Length < ticks) _phase = new int[ticks];
+            if (_phase.Length < ticks)
+            {
+                _phase = new int[ticks];
+                _open = new bool[ticks];
+            }
+
             if (_offX.Length < 2 * n * ticks)
             {
                 _offX = new int[2 * n * ticks];
@@ -88,6 +101,37 @@ namespace Sim.Core.Match.Analysis
                 _phase[t] = last;
             }
         }
+
+        private void MarkOpenPlay(PositionStream s)
+        {
+            bool dead = false, awaitingTaker = false;
+            int restartTick = Unknown, next = 0;
+            for (int t = 0; t < _ticks; t++)
+            {
+                for (; next < s.Actions.Count && s.Actions[next].Tick <= t; next++)
+                {
+                    BallActionKind k = s.Actions[next].Kind;
+                    if (IsRestart(k))
+                    {
+                        dead = awaitingTaker = true;
+                        restartTick = s.Actions[next].Tick;
+                    }
+                    else if (k == BallActionKind.Goal || k == BallActionKind.HalfTime)
+                    {
+                        dead = true;
+                        awaitingTaker = false;
+                    }
+                }
+
+                if (dead && awaitingTaker && t > restartTick && s.Owner[t] != PositionStream.NoOwner)
+                    dead = awaitingTaker = false;
+                _open[t] = !dead;
+            }
+        }
+
+        private static bool IsRestart(BallActionKind k) =>
+            k == BallActionKind.Kickoff || k == BallActionKind.ThrowIn || k == BallActionKind.GoalKick
+            || k == BallActionKind.FreeKick || k == BallActionKind.Corner || k == BallActionKind.Penalty;
 
         private bool Active(int side, int slot, int t, int[] keeper, int[] sentOffFrom) =>
             slot != keeper[side] && t < sentOffFrom[side * _n + slot];
@@ -137,13 +181,13 @@ namespace Sim.Core.Match.Analysis
             }
         }
 
-        /// <summary>Lower median of one man's offsets over the frames of one phase, up to his sending-off.</summary>
+        /// <summary>Lower median of one man's offsets over the open-play frames of one phase, up to his sending-off.</summary>
         private int Median(int[] offsets, int side, int slot, int held, int until)
         {
             int count = 0;
             for (int t = 0; t < _ticks && t < until; t++)
             {
-                if (_phase[t] == Unknown || (_phase[t] == side ? 1 : 0) != held) continue;
+                if (_phase[t] == Unknown || !_open[t] || (_phase[t] == side ? 1 : 0) != held) continue;
                 _scratch[count++] = offsets[Index(side, slot, t)];
             }
 
@@ -156,7 +200,8 @@ namespace Sim.Core.Match.Analysis
         {
             for (int t = 0; t < _ticks; t++)
             {
-                if (_phase[t] == Unknown) continue;
+                if (_phase[t] == Unknown || !_open[t]) continue;
+
                 int bx = s.BallXY[t * 2], by = s.BallXY[t * 2 + 1];
 
                 for (int side = 0; side < 2; side++)

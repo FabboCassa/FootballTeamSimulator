@@ -6,9 +6,11 @@ namespace Sim.Core.Match.Movement
         {
             /// <summary>
             /// Where a man with a job goes (<see cref="JobOf"/>, which the V11 brain has just asked):
-            /// every man with none, or on a supporting run, is the V11 brain's own.
+            /// every man with none, or on a supporting run, is the V11 brain's own. A press, cover
+            /// or mark target further than <paramref name="leashU"/> from (<paramref name="leashX"/>,
+            /// <paramref name="leashY"/>) is pulled back to that distance; 0 leaves it alone.
             /// </summary>
-            public void Move(int side, int slot, BaseJob job)
+            public void Move(int side, int slot, BaseJob job, int leashX, int leashY, int leashU)
             {
                 int k = side * _n + slot;
                 bool home = side == 0;
@@ -108,6 +110,9 @@ namespace Sim.Core.Match.Movement
                 {
                     MarkSpot(side, k, out tx, out ty);
                 }
+
+                bool leashed = job == BaseJob.Press || job == BaseJob.Cover || job == BaseJob.Mark;
+                if (leashed && leashU > 0) Leash(leashX, leashY, leashU, ref tx, ref ty);
 
                 // The recovery run (engine phase 3). A man who has been caught up the pitch does
                 // not jog home while the ball goes the other way, and the difference is not cosmetic:

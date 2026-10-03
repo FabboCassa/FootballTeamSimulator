@@ -1225,10 +1225,15 @@ namespace Sim.Core.Config
         /// 118/60: every turnover moves the whole shape from one to the other, and the further
         /// apart they are the longer the front men are stranded off target (R2). The block's 60
         /// stands it about 40 m wide, inside real football's 28-42 m; at 80 it stood 46 m wide.
+        /// Without the ball the lines stand at 84% of the spacing: a block 25 m long on its spots
+        /// and 33 m in play in its own half (real-match spec R4, 25-40 m), with less room between
+        /// its lines. With the ball, 130 puts the wide men within 8 m of both touchlines in the
+        /// opposition half (real-match spec R4); at 110 the shape stood 48 m wide with both touchline zones
+        /// manned one frame in twenty.
         /// </summary>
         public int V11AttackLineSpacingPercent { get; set; } = 100;
-        public int V11DefendLineSpacingPercent { get; set; } = 100;
-        public int V11AttackWidthPercent { get; set; } = 110;
+        public int V11DefendLineSpacingPercent { get; set; } = 84;
+        public int V11AttackWidthPercent { get; set; } = 130;
         public int V11DefendWidthPercent { get; set; } = 60;
 
         /// <summary>
@@ -1264,8 +1269,12 @@ namespace Sim.Core.Config
         public int V11ShapeExpandMs { get; set; } = 4000;
         public int V11ShapeExpandTicks => TicksOfMs(V11ShapeExpandMs);
 
-        /// <summary>How long a side takes to drop from its attacking shape into its block.</summary>
-        public int V11ShapeCollapseMs { get; set; } = 5000;
+        /// <summary>
+        /// How long a side takes to drop from its attacking shape into its block. 4 s rather than
+        /// 5 s since the attacking shape went to 130% width (R4): dropping from it at the old pace
+        /// left the block more than 42 m wide.
+        /// </summary>
+        public int V11ShapeCollapseMs { get; set; } = 4000;
         public int V11ShapeCollapseTicks => TicksOfMs(V11ShapeCollapseMs);
 
         /// <summary>Top speed of a man running with the ball, in percent of his own (see MatchSimulator.CarrierTop).</summary>
@@ -1315,6 +1324,20 @@ namespace Sim.Core.Config
 
         /// <summary>A supporting run or an overlap goes no further than this from the man's phase target spot.</summary>
         public int V11SupportLeashDm { get; set; } = 200;
+
+        /// <summary>
+        /// Real-match spec R4: a press, a cover or a mark goes no further than this from the man's
+        /// phase target spot. Unleashed, a man followed the ball or his opponent across half the
+        /// pitch and then spent seconds sprinting back to his place, which put the median
+        /// outfielder 29 s a match more than 25 m off it.
+        /// </summary>
+        public int V11JobLeashDm { get; set; } = 220;
+
+        /// <summary>
+        /// Real-match spec R4: with a pass on its way to somebody else, a man chases it only where
+        /// he would meet it within this of his phase target spot (see V11Brain.ChasesAPassOutOfReach).
+        /// </summary>
+        public int V11PassChaseLeashDm { get; set; } = 220;
 
         /// <summary>How far short of the offside line a man in possession holds when he is not running.</summary>
         public int V11OnsideHoldDm { get; set; } = 16;
@@ -2249,6 +2272,13 @@ namespace Sim.Core.Config
         /// play around, and near your own goal that is not a risk anybody takes.
         /// </summary>
         public int SecondPressDepthDm { get; set; } = 350;
+
+        /// <summary>
+        /// Real-match spec R4: how much the choice of the man who doubles up reads his place in
+        /// the block rather than where he stands, in percent. At 0 it was the second-nearest man
+        /// wherever he came from, and he spent the press 25 m or more out of the shape.
+        /// </summary>
+        public int SecondPresserSpotPercent { get; set; } = 40;
 
         /// <summary>How long before the man who played the ball may take it back.</summary>
         public int ReleaseLockMs { get; set; } = 400;
