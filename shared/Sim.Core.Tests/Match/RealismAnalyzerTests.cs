@@ -240,6 +240,24 @@ namespace Sim.Core.Tests.Match
         }
 
         [Test]
+        public void OffTarget_WhileTheBallIsDead_DoesNotCount()
+        {
+            // A free kick is whistled at frame 10 and taken at frame 60: the 25 s he spends thirty
+            // metres out waiting for it are the set-piece phase, not open play. The 15 s he stays
+            // out once the ball is back in play count.
+            PositionStream s = NewStream(120);
+            Hold(s, 0, 0, true, 1, Pitch.CenterX, CY);
+            s.Actions.Add(new BallAction(10, BallActionKind.FreeKick, true, 2, -1));
+            Hold(s, 60, 60, true, 2, Pitch.CenterX, CY);
+            for (int t = 10; t < 90; t++) Put(s, true, t, 5, HomeStackX, CY + 300);
+
+            var analyzer = new RealismAnalyzer();
+            analyzer.Measure(new MatchReport { Positions = s });
+
+            Assert.That(analyzer.OffTargetSeconds(true, 5), Is.EqualTo(15.0));
+        }
+
+        [Test]
         public void OffTarget_ChasingTheBall_IsExempt()
         {
             PositionStream s = NewStream(100);

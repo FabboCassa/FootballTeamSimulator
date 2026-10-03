@@ -42,6 +42,13 @@ namespace Sim.Core.Match.Movement
                 return BaseJob.None;
             }
 
+            /// <summary>Whether a pass is on its way and this man is not the one it is meant for.</summary>
+            public bool PassToSomebodyElse(int side, int slot) =>
+                _receiver[side] != slot && (_receiver[0] >= 0 || _receiver[1] >= 0);
+
+            /// <summary>Where this man would meet the ball, for the V11 brain.</summary>
+            public void InterceptFor(int side, int slot, out int x, out int y) => InterceptSpot(side * _n + slot, out x, out y);
+
             /// <summary>Where this side's supporting run is going, for the V11 brain.</summary>
             public void SupportSpot(int side, out int x, out int y)
             {
