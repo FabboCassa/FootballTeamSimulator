@@ -47,6 +47,10 @@ namespace Sim.Core.Tests.Match
             };
             foreach (RealismRow row in v11.Rows().Where(row => gated.Contains(row.Band.Name)))
                 Assert.That(row.InBand, Is.True, $"V11 {row.Band.Name} {row.Value:F3} outside {row.Band.Describe()}");
+
+            // R5: not one outfield frame more than 1 m off the pitch over the whole run.
+            ShapeMovementRow offPitch = shape.Rows().Single(row => row.Name == ShapeMovementTargets.OffPitchFrames.Name);
+            Assert.That(offPitch.Value, Is.Zero, $"V11 {offPitch.Name} {offPitch.Value:F0}: R5 wants 0");
         }
 
         private static RealismTally Run(Club a, Club b, out ShapeMovementTally shape)
