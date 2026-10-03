@@ -1172,6 +1172,18 @@ namespace Sim.Core.Match.Movement
             int top = CarrierTop(k, sprint ? _maxSpeed[k] : _cruise[k]);
             if (top < 1) top = 1;
 
+            // R5: an outfield man sent at a spot beyond a line runs to the line, not into it.
+            // Going there IS the job, so the arrival deadband must not stop him three metres short.
+            // The man sent off walks over it and the throw-in or corner taker stands at the ball.
+            bool toTheLine = false;
+            if (!_sentOff[k] && !_keeper[k] && !IsLineTaker(k))
+            {
+                int insideX = U.ClampX(tx), insideY = U.ClampY(ty);
+                toTheLine = insideX != tx || insideY != ty;
+                tx = insideX;
+                ty = insideY;
+            }
+
             // Within one step of the target the vector IS the step, so no root is needed: this
             // is the common case for the twenty players who are not chasing anything.
             int dx = tx - _px[k], dy = ty - _py[k];
@@ -1191,7 +1203,7 @@ namespace Sim.Core.Match.Movement
                 top = paced;
             }
 
-            if (!sprint && gap <= (long)_arrivalU * _arrivalU)
+            if (!sprint && !toTheLine && gap <= (long)_arrivalU * _arrivalU)
             {
                 // Arrived. A footballer standing in position stands in it; chasing a spot that
                 // drifts with the ball ten times a second is how the eleven of them walked
@@ -1228,7 +1240,18 @@ namespace Sim.Core.Match.Movement
 
             _px[k] = U.ClampX(_stepToX[k]);
             _py[k] = U.ClampY(_stepToY[k]);
+
+            // The line stopped him, so it stopped his run across it too: momentum kept while his
+            // feet stand on the line is a man pressing against it, a stride outside every tick.
+            if (_px[k] != _stepToX[k]) _vx[k] = 0;
+            if (_py[k] != _stepToY[k]) _vy[k] = 0;
         }
+
+        /// <summary>The man standing at a dead ball on a line: the throw-in or corner taker.</summary>
+        private bool IsLineTaker(int k) =>
+            _ball.Dead
+            && (_ctx.DeadKind == BallActionKind.ThrowIn || _ctx.DeadKind == BallActionKind.Corner)
+            && k == _ctx.DeadSide * _n + _ctx.DeadTaker;
 
         /// <summary>Keeps team-mates off each other, so eleven men never stand in one heap.</summary>
         private void Separate(int k, ref int wx, ref int wy, int top)
