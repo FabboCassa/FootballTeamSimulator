@@ -35,8 +35,8 @@ namespace Sim.Core.Match.Movement
                     // He goes to the ball — and at a kickoff he stands just BEHIND it, in his own half,
                     // because that is where the man taking a kickoff stands (Law 8) and standing on the
                     // centre spot itself puts him a stride into the other half. Placed, not steered:
-                    // the deadband would leave him three metres off the ball, which at a kickoff is
-                    // three metres inside the other side's half.
+                    // the approach would leave him crawling the last metres to the ball, which at a
+                    // kickoff is a man still inside the other side's half.
                     _sim.WalkTo(
                         k,
                         _ctx.DeadKind == BallActionKind.Kickoff
@@ -65,8 +65,8 @@ namespace Sim.Core.Match.Movement
                     // what the replay dump showed: sprinting, he carries his momentum straight past the
                     // spot and spends the stoppage orbiting it (measured eight metres beyond); walking,
                     // the approach slowdown paces him down to a fifth of a jog inside fifteen metres and
-                    // the arrival deadband stops him three metres short — so he never makes the nine
-                    // fifteen and the wall stands at five metres, which is against the law he is
+                    // the arrival deadband of the time stopped him three metres short — so he never
+                    // made the nine fifteen and the wall stands at five metres, which is against the law he is
                     // standing there to obey. A referee walks a wall onto its mark and it stays there.
                     _sim.WalkTo(k, retreatX, retreatY);
                     return;

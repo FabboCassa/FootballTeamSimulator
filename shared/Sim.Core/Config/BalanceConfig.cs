@@ -1627,16 +1627,11 @@ namespace Sim.Core.Config
         /// </summary>
         public int PlayerCruisePercent { get; set; } = 42;
 
-        /// <summary>Acceleration in decimetres per second per second (35 = 3.5 m/s^2, so ~2s to top speed).</summary>
-        public int PlayerAccelDmPerSecond2 { get; set; } = 35;
-
         /// <summary>
-        /// How near his target a player has to be to call it arrived and stand still. Without a
-        /// deadband every man chases a position that moves with the ball ten times a second, and
-        /// the eleven of them walk a marathon: it is the difference between covering eleven
-        /// kilometres in a match and covering sixteen.
+        /// Acceleration in decimetres per second per second (50 = 5 m/s^2, so ~1.5 s to top
+        /// speed): a professional reaches 5-6 m/s^2 from a standing start (R8).
         /// </summary>
-        public int PlayerArrivalRadiusDm { get; set; } = 30;
+        public int PlayerAccelDmPerSecond2 { get; set; } = 50;
 
         /// <summary>
         /// Inside this distance from his position a player scales his pace down with the
