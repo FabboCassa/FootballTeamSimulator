@@ -1281,9 +1281,11 @@ namespace Sim.Core.Config
         /// <summary>
         /// How wide a V11 strike can go, in percent of ShotSpreadDm. That spread was sized for the
         /// close-range shots engine v10 took; V11 shoots at the open goal from the edge of the box
-        /// too, and from there the full spread put three strikes in four off target.
+        /// too, and from there the full spread put three strikes in four off target. 45 since R6: with
+        /// V11KeeperStopPercent cut and the keeper claiming balls in his box, fewer close-range
+        /// rebounds land on target, and at 56 on-target fell under 30%.
         /// </summary>
-        public int V11ShotSpreadPercent { get; set; } = 56;
+        public int V11ShotSpreadPercent { get; set; } = 45;
 
         /// <summary>
         /// R9 on V11: what a side's skills lose at zero familiarity with its tactic, in permille,
@@ -1441,10 +1443,12 @@ namespace Sim.Core.Config
         /// The keeper on V11, in percent of the base Keeper* figures: how far he dives, the odds he
         /// stops a shot on target he reaches, that he holds one he stops rather than parrying it,
         /// and that a parry goes behind (a corner). The base figures were sized for engine v10's
-        /// chances, most of them from inside six yards.
+        /// chances, most of them from inside six yards. Dive fell from 130 and stop from 125 when R6
+        /// put the keeper on the ball-goal line: standing there he reaches nearly every strike on
+        /// target, and at 130/125 goals fell to 0.17 a match (interim, until R7's save model).
         /// </summary>
-        public int V11KeeperDivePercent { get; set; } = 130;
-        public int V11KeeperStopPercent { get; set; } = 125;
+        public int V11KeeperDivePercent { get; set; } = 55;
+        public int V11KeeperStopPercent { get; set; } = 38;
         public int V11KeeperHoldPercent { get; set; } = 90;
         public int V11KeeperParryBehindPercent { get; set; } = 180;
 
@@ -2181,9 +2185,19 @@ namespace Sim.Core.Config
 
         // --- Goalkeeper ---
 
+        // Where he stands in open play: see KeeperPositioning (R6). Depths run from his goal centre.
         public int KeeperDepthDm { get; set; } = 45;
-        public int KeeperLateralPercent { get; set; } = 38;
-        public int KeeperRushDm { get; set; } = 130;
+        public int KeeperRushDm { get; set; } = 125;
+        public int KeeperRushFromDm { get; set; } = 400;
+        public int KeeperRushFullDm { get; set; } = 650;
+        // R6 took him off the edge of his box, where he swept up what was played into it (+5 shots
+        // a match inside the box). He still owns it: a ball the other side played into his box he
+        // reaches for KeeperClaimReachDm further than a man does with his feet, and catches it,
+        // punching KeeperClaimPunchPercent of them. One he claimed past KeeperCarryDepthDm he plays
+        // from where he took it, so he is not caught off his line when it leaves him.
+        public int KeeperClaimReachDm { get; set; } = 40;
+        public int KeeperClaimPunchPercent { get; set; } = 40;
+        public int KeeperCarryDepthDm { get; set; } = 55;
 
         // --- Restarts ---
 

@@ -1136,16 +1136,17 @@ namespace Sim.Core.Match.Movement
         /// metres and the arrival deadband parks him three metres short — so a wall stood at five
         /// metres instead of nine fifteen, and men were left standing over the halfway line at a
         /// kickoff. Capped at his own running speed, so it can no more teleport a body than the
-        /// steering can (PositionStreamTests.NobodyTeleports).
+        /// steering can (PositionStreamTests.NobodyTeleports). In a <paramref name="hurry"/> he runs
+        /// the last stretch too: a keeper shadowing the ball cannot walk back onto his line.
         /// </summary>
-        private void WalkTo(int k, int tx, int ty)
+        private void WalkTo(int k, int tx, int ty, bool hurry = false)
         {
             _stepFromX[k] = _px[k];
             _stepFromY[k] = _py[k];
 
             int dx = tx - _px[k], dy = ty - _py[k];
             int gap = U.Length(dx, dy);
-            int step = gap > _approachU ? _maxSpeed[k] : _cruise[k];
+            int step = hurry || gap > _approachU ? _maxSpeed[k] : _cruise[k];
             if (step < 1) step = 1;
 
             if (gap <= step)
@@ -1461,6 +1462,7 @@ namespace Sim.Core.Match.Movement
                     // he is facing it and running onto it while the man behind him is turning
                     // (engine phase 4).
                     if (_receiver[side] == i) reach += U.Units(_cfg.ReceiveReachDm);
+                    if (KeeperClaims(side, k)) reach += U.Units(_cfg.KeeperClaimReachDm);
 
                     int distance = _ctx.ShotLive
                         ? SweptDistance(k, inVx, inVy)
@@ -1482,6 +1484,7 @@ namespace Sim.Core.Match.Movement
 
             bool wasShot = _ctx.ShotLive;
             bool interception = _ball.LastTouchSide >= 0 && _ball.LastTouchSide != bestSide;
+            bool claimed = KeeperClaims(bestSide, bestSide * _n + bestSlot);
 
             // The keeper's hands (engine phase 4). A save used to end the move by definition:
             // he got to it, therefore he had it. Goalkeeping now says how often he actually
@@ -1582,7 +1585,9 @@ namespace Sim.Core.Match.Movement
             // line, scattered sideways and sometimes turned back off him, at the share of its own
             // speed the config allows. Where it ends up is then the referee's business like any
             // other loose ball, which is exactly the point.
-            if (_rng.NextInt(0, 100) < V11Scaled(_cfg.DeflectPercent, _cfg.V11DeflectPercent))
+            // A keeper claiming it in his box catches it, or now and then punches it.
+            int deflect = claimed ? _cfg.KeeperClaimPunchPercent : V11Scaled(_cfg.DeflectPercent, _cfg.V11DeflectPercent);
+            if (_rng.NextInt(0, 100) < deflect)
             {
                 Deflect(tick, bestSide, bestSlot, inVx, inVy);
                 return;
@@ -1766,6 +1771,14 @@ namespace Sim.Core.Match.Movement
         }
 
         // ------------------------------------------------------------------ lookups
+
+        /// <summary>
+        /// R6: a keeper on his line still owns his box. A ball the other side played into it is
+        /// his to take with his hands, a jump and an arm further than a man reaches with his feet.
+        /// </summary>
+        private bool KeeperClaims(int side, int k) =>
+            _keeper[k] && !_ctx.ShotLive && _ball.LastTouchSide >= 0 && _ball.LastTouchSide != side
+            && MovementGeometry.InOwnBox(side == 0, U.Dm(_ball.X), U.Dm(_ball.Y));
 
         private int NearestToBall(int side, bool includeKeeper) =>
             _ctx.NearestTo(side, _ball.X, _ball.Y, includeKeeper);
