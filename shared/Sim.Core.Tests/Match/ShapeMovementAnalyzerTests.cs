@@ -278,6 +278,58 @@ namespace Sim.Core.Tests.Match
             Assert.That(Measure(s).KeeperDepthBreakFrames, Is.EqualTo(breaks));
         }
 
+        // ------------------------------------------------------------------ R11: restart shapes
+
+        [Test]
+        public void GoalKicks_AreShortOrLongByThePassThatPutsThemInPlay()
+        {
+            PositionStream s = NewStream(20);
+            Act(s, 2, BallActionKind.GoalKick, true, Keeper);
+            Act(s, 5, BallActionKind.Pass, true, Keeper, 2);
+            Act(s, 8, BallActionKind.GoalKick, true, Keeper);
+            Act(s, 10, BallActionKind.LongBall, true, Keeper, 9);
+            Act(s, 12, BallActionKind.GoalKick, false, Keeper);
+            Act(s, 13, BallActionKind.HalfTime, true, -1);           // never taken: neither
+
+            ShapeMovementMetrics m = Measure(s);
+
+            Assert.That(m.ShortGoalKicks, Is.EqualTo(1));
+            Assert.That(m.LongGoalKicks, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void ThrowIns_CountTwoTeamMatesWithin15mOnTheFrameBeforeTheThrow()
+        {
+            PositionStream s = NewStream(20);
+            Act(s, 2, BallActionKind.ThrowIn, true, 3);
+            for (int t = 2; t <= 4; t++)
+            {
+                Ball(s, t, 300, 8);
+                Put(s, true, t, 3, 300, 8);
+                Put(s, true, t, 4, 300, 100);         // 9.2 m
+                Put(s, true, t, 5, 400, 60);          // 11.3 m
+            }
+
+            Act(s, 5, BallActionKind.Pass, true, 3, 4);
+
+            Act(s, 10, BallActionKind.ThrowIn, true, 3);
+            for (int t = 10; t <= 12; t++)
+            {
+                Ball(s, t, 300, 8);
+                Put(s, true, t, 3, 300, 8);
+                Put(s, true, t, 4, 300, 100);
+                Put(s, true, t, 5, 450, 60);          // 15.9 m: too far to offer
+            }
+
+            Act(s, 13, BallActionKind.Pass, true, 3, 4);
+
+            ShapeMovementMetrics m = Measure(s);
+
+            Assert.That(m.ThrowIns, Is.EqualTo(2));
+            Assert.That(m.OfferedThrowIns, Is.EqualTo(1));
+            Assert.That(m.OfferedThrowInPercent, Is.EqualTo(50.0));
+        }
+
         // ------------------------------------------------------------------ the printed report
 
         [Test]
@@ -293,7 +345,8 @@ namespace Sim.Core.Tests.Match
                 OutfieldOpenPlayFrames = 2000, StandStillFrames = 400,
                 HomeOutfieldDistanceDm = 1_000_000, AwayOutfieldDistanceDm = 1_100_000,
                 OffPitchFrames = 3,
-                KeeperOpenPlayFrames = 200, KeeperDepthBreakFrames = 1
+                KeeperOpenPlayFrames = 200, KeeperDepthBreakFrames = 1,
+                ShortGoalKicks = 4, LongGoalKicks = 0, ThrowIns = 20, OfferedThrowIns = 19
             };
             var tally = new ShapeMovementTally();
             tally.Add(match);
@@ -312,6 +365,9 @@ namespace Sim.Core.Tests.Match
             AssertRow(rows[RealismReference.DistancePerOutfieldPlayerKm.Name], 10.5, true);
             AssertRow(rows[ShapeMovementTargets.OffPitchFrames.Name], 6.0, false);
             AssertRow(rows[ShapeMovementTargets.KeeperDepthBreakPercent.Name], 0.5, true);
+            AssertRow(rows[ShapeMovementTargets.ShortGoalKicks.Name], 8.0, true);
+            AssertRow(rows[ShapeMovementTargets.LongGoalKicks.Name], 0.0, false);
+            AssertRow(rows[ShapeMovementTargets.OfferedThrowInPercent.Name], 95.0, true);
 
             string text = tally.Format("V11");
             Assert.That(text, Does.Contain("2 matches"));

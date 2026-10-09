@@ -1,3 +1,5 @@
+using Sim.Core.Domain;
+
 namespace Sim.Core.Match.Movement
 {
     public sealed partial class MatchSimulator
@@ -6,6 +8,10 @@ namespace Sim.Core.Match.Movement
         {
             /// <summary>Close enough to his set-piece spot to count as on it.</summary>
             private const int PlacedDm = 20;
+
+            // A man easing into his offer spot, or kept off it by a team-mate, stops short of it;
+            // this keeps the throw-in's wait at ThrowInOfferDm + slack, inside R11's 15 m.
+            private const int OfferSlackDm = 25;
 
             /// <summary>How far short of the offside line a man waiting for a crossed free kick stands.</summary>
             private const int LineMarginDm = 10;
@@ -25,6 +31,9 @@ namespace Sim.Core.Match.Movement
                 _placedAt = -1;
                 _freeKick = FreeKickOption.None;
                 _hasRoles = false;
+                _hasShape = false;
+                System.Array.Clear(_placed, 0, _placed.Length);
+                System.Array.Clear(_offering, 0, _offering.Length);
 
                 int side = _ctx.DeadSide;
                 if (side < 0) return;
@@ -41,6 +50,85 @@ namespace Sim.Core.Match.Movement
                 }
 
                 if (_ctx.DeadKind == BallActionKind.Corner || _freeKick == FreeKickOption.Cross) AssignRoles(side);
+                if (_ctx.DeadKind == BallActionKind.GoalKick
+                    && SetPiecePlan.Length(BallActionKind.GoalKick, _sim._tempo[side], _cfg) != RestartLength.Long)
+                    ShapeGoalKick(side);
+                if (_ctx.DeadKind == BallActionKind.ThrowIn) ShapeThrowIn(side);
+            }
+
+            /// <summary>A goal kick that may be played short is played out of a shape (R11).</summary>
+            private void ShapeGoalKick(int side)
+            {
+                Lineup lineup = side == 0 ? _sim._home : _sim._away;
+                for (int i = 0; i < _n; i++)
+                {
+                    int k = side * _n + i;
+                    _eligible[i] = !_sim._keeper[k] && !_sim._sentOff[k];
+                    _roleOf[i] = lineup.Slots[i].Role;
+                    _baseYOf[i] = _sim._baseY[k];
+                }
+
+                RestartShape.GoalKick(_roleOf, _baseYOf, _eligible, side == 0, _cfg, _placed, _spotX, _spotY);
+                _hasShape = true;
+            }
+
+            /// <summary>The two men nearest a throw-in offer for it (R11), picked where they stand at the whistle.</summary>
+            private void ShapeThrowIn(int side)
+            {
+                for (int i = 0; i < _n; i++)
+                {
+                    int k = side * _n + i;
+                    _xs[i] = U.Dm(_px[k]);
+                    _ys[i] = U.Dm(_py[k]);
+                    _eligible[i] = !_sim._keeper[k] && !_sim._sentOff[k] && i != _ctx.DeadTaker;
+                }
+
+                _offers = RestartShape.ThrowIn(U.Dm(_ball.X), U.Dm(_ball.Y), _xs, _ys, _eligible, _offering);
+                _hasShape = true;
+            }
+
+            /// <summary>
+            /// Whether this man offers for the throw-in being taken: he goes to his place in the
+            /// shape held within reach of the ball (<see cref="RestartShape.OfferSpot"/>).
+            /// </summary>
+            public bool Offers(int side, int slot) =>
+                _ball.Dead && _hasShape && _ctx.DeadKind == BallActionKind.ThrowIn && _ctx.DeadSide == side
+                && slot != _ctx.DeadTaker && _offering[slot];
+
+            /// <summary>The restart's shape is up or the wait for it is over.</summary>
+            private bool ShapeUp(int tick) =>
+                !_hasShape || tick >= _ctx.DeadAt + _cfg.RestartShapeWaitTicks
+                || (_ctx.DeadKind == BallActionKind.ThrowIn ? Offering() >= _offers : ShapeInPlace());
+
+            /// <summary>
+            /// Team-mates of a throw-in's taker within reach of the ball now, whoever they are: the
+            /// reading R11 takes.
+            /// </summary>
+            private int Offering()
+            {
+                int reach = U.Units(_cfg.ThrowInOfferDm + OfferSlackDm), near = 0;
+                for (int i = 0; i < _n; i++)
+                {
+                    int k = _ctx.DeadSide * _n + i;
+                    if (i == _ctx.DeadTaker || _sim._keeper[k] || _sim._sentOff[k]) continue;
+                    if (U.Distance(_px[k], _py[k], _ball.X, _ball.Y) <= reach) near++;
+                }
+
+                return near;
+            }
+
+            /// <summary>Every man of the restart's shape is on his spot.</summary>
+            private bool ShapeInPlace()
+            {
+                int placed = U.Units(PlacedDm);
+                for (int i = 0; i < _n; i++)
+                {
+                    if (!_placed[i] || i == _ctx.DeadTaker) continue;
+                    int k = _ctx.DeadSide * _n + i;
+                    if (U.Distance(_px[k], _py[k], U.Units(_spotX[i]), U.Units(_spotY[i])) > placed) return false;
+                }
+
+                return true;
             }
 
             private void AssignRoles(int side)
@@ -177,8 +265,11 @@ namespace Sim.Core.Match.Movement
             }
 
             /// <summary>
-            /// A goal kick or a throw-in, played at once: short to the nearest man or long to the
-            /// furthest man forward, as the build-up instruction says. Neither can be offside.
+            /// A goal kick or a throw-in: short to the nearest man or long to the furthest man
+            /// forward, as the build-up instruction says. A goal kick out of the shape goes short to
+            /// a split centre-back, or long when the wait for the shape ran out; one that is short
+            /// unless pressed goes long when every man it could go to short has an opponent on him.
+            /// Neither can be offside.
             /// </summary>
             private void PlayRestart(int tick, int side, int slot)
             {
@@ -193,11 +284,15 @@ namespace Sim.Core.Match.Movement
                     _eligible[i] = !_sim._keeper[k] && !_sim._sentOff[k] && i != slot;
                 }
 
-                bool longBall = SetPiecePlan.LongRestart(kind, _sim._tempo[side], _cfg);
+                RestartLength length = SetPiecePlan.Length(kind, _sim._tempo[side], _cfg);
+                // A keeper whose back line is not split yet when the wait runs out does not play it short into them.
+                if (kind == BallActionKind.GoalKick && _hasShape && !ShapeInPlace()) length = RestartLength.Long;
                 int reach = kind == BallActionKind.ThrowIn ? U.Units(_cfg.ThrowInMaxDm) : _sim._maxPassRange;
-                int target = SetPiecePlan.PickRestartTarget(
-                    longBall, _ball.X, _ball.Y, MovementGeometry.Direction(side == 0),
-                    _xs, _ys, _eligible, U.Units(_cfg.RestartMinPassDm), reach);
+                int target = length == RestartLength.Long
+                    ? PickTarget(side, true, _eligible, reach)
+                    : ShortTarget(side, length == RestartLength.ShortUnlessPressed, reach);
+                if (target < 0 && length == RestartLength.ShortUnlessPressed) target = PickTarget(side, true, _eligible, reach);
+
                 if (target < 0) return;
 
                 int tk = side * _n + target;
@@ -211,6 +306,47 @@ namespace Sim.Core.Match.Movement
                 };
                 _sim.PlayPass(tick, side, slot, pass, _sim.PressurePermille(side, slot));
                 _sim._offside.ClearFlags();
+            }
+
+            private int PickTarget(int side, bool longBall, bool[] eligible, int reach) =>
+                SetPiecePlan.PickRestartTarget(
+                    longBall, _ball.X, _ball.Y, MovementGeometry.Direction(side == 0),
+                    _xs, _ys, eligible, U.Units(_cfg.RestartMinPassDm), reach);
+
+            /// <summary>
+            /// The nearest man a restart can be played short to: on a goal kick out of the shape, a
+            /// centre-back on his box corner; when it is short only unless pressed, a man with no
+            /// opponent on him. -1 when there is none.
+            /// </summary>
+            private int ShortTarget(int side, bool unlessPressed, int reach)
+            {
+                bool splitOnly = false;
+                if (_ctx.DeadKind == BallActionKind.GoalKick && _hasShape)
+                    for (int i = 0; i < _n; i++) splitOnly |= _eligible[i] && SplitCentreBack(i);
+
+                if (unlessPressed) LoadFoes(side);
+                int radius = U.Units(_cfg.GoalKickPressedDm);
+                for (int i = 0; i < _n; i++)
+                {
+                    _shortOk[i] = _eligible[i] && (!splitOnly || SplitCentreBack(i))
+                        && (!unlessPressed || !SetPiecePlan.Pressed(_xs[i], _ys[i], _foeX, _foeY, _foeOn, radius));
+                }
+
+                return PickTarget(side, false, _shortOk, reach);
+            }
+
+            private bool SplitCentreBack(int i) => _placed[i] && _roleOf[i] == PositionRole.CentreBack;
+
+            private void LoadFoes(int side)
+            {
+                int foe = 1 - side;
+                for (int i = 0; i < _n; i++)
+                {
+                    int k = foe * _n + i;
+                    _foeX[i] = _px[k];
+                    _foeY[i] = _py[k];
+                    _foeOn[i] = !_sim._sentOff[k];
+                }
             }
         }
     }

@@ -5,8 +5,8 @@ using Sim.Core.Match.Movement;
 namespace Sim.Core.Match.Analysis
 {
     /// <summary>
-    /// The shape, movement, pitch-bounds and keeper readings of docs/specs/real-match-and-playing-styles.md
-    /// (R4, R5, R6, R8), counted off a finished match's position stream. A measuring instrument like
+    /// The shape, movement, pitch-bounds, keeper and restart readings of docs/specs/real-match-and-playing-styles.md
+    /// (R4, R5, R6, R8, R11), counted off a finished match's position stream. A measuring instrument like
     /// <see cref="RealismAnalyzer"/>: it reads the report, draws nothing from any RNG and touches
     /// nothing, so it can never move a result. One pass over the frames, allocation-free per frame.
     ///
@@ -30,6 +30,10 @@ namespace Sim.Core.Match.Analysis
     ///   * R8 distance per outfield player: doc §1.5 — each side's outfield distance over every
     ///     frame, substitutes included, ÷ 10.
     ///   * R5 off pitch: see <see cref="OffPitchMeter"/>.
+    ///   * R11 goal kicks: short when the action that puts one in play is a pass by its side, long
+    ///     when it is a long ball (over MatchBalance.LongBallFromDm).
+    ///   * R11 throw-ins: one taken by its taker is offered when, on the frame before he throws it,
+    ///     at least two outfielders of his side other than him are within 15 m of the ball.
     ///   * R6 keeper depth: in an open-play frame the keeper's distance from his goal line must be
     ///     ≤ 6 m with the ball within 35 m of his goal centre, ≤ 18 m otherwise. Claiming the ball
     ///     is exempt (convention): he holds it, or it is loose and nobody on the pitch is nearer it.
@@ -43,6 +47,8 @@ namespace Sim.Core.Match.Analysis
         private const int NearGoalDm = 350;
         private const int KeeperNearDepthDm = 60;
         private const int KeeperFarDepthDm = 180;
+        private const int ThrowInOfferDm = 150;
+        private const int ThrowInOffers = 2;
 
         // speed (m/s) = step (dm) × frames per minute ÷ 600, so speed < 0.2 ⇔ step × fpm < 120.
         private const long StandStillStepTimesFpm = 120;
@@ -78,6 +84,7 @@ namespace Sim.Core.Match.Analysis
 
             var m = new ShapeMovementMetrics();
             WalkFrames(s, ticks, m);
+            Restarts(s, m);
             m.MedianOffTargetSeconds = _offTarget.Measure(s, ticks, _keeper, _sentOffFrom);
             return m;
         }
@@ -231,6 +238,47 @@ namespace Sim.Core.Match.Analysis
             width = count < 2 ? 0 : maxY - minY;
             return count >= 2;
         }
+
+        // ------------------------------------------------------------------ R11: restart shapes
+
+        private void Restarts(PositionStream s, ShapeMovementMetrics m)
+        {
+            List<BallAction> a = s.Actions;
+            for (int i = 0; i + 1 < a.Count; i++)
+            {
+                BallAction restart = a[i], kick = a[i + 1];
+                if (kick.Home != restart.Home) continue;
+
+                if (restart.Kind == BallActionKind.GoalKick)
+                {
+                    if (kick.Kind == BallActionKind.Pass) m.ShortGoalKicks++;
+                    else if (kick.Kind == BallActionKind.LongBall) m.LongGoalKicks++;
+                }
+                else if (restart.Kind == BallActionKind.ThrowIn && kick.Slot == restart.Slot && IsPlayed(kick.Kind))
+                {
+                    m.ThrowIns++;
+                    int before = Math.Max(restart.Tick, kick.Tick - 1);
+                    if (Offers(s, restart.Home, restart.Slot, before) >= ThrowInOffers) m.OfferedThrowIns++;
+                }
+            }
+        }
+
+        /// <summary>Outfielders of the taker's side, him aside, within 15 m of the ball in frame t.</summary>
+        private int Offers(PositionStream s, bool home, int taker, int t)
+        {
+            int side = home ? 0 : 1, near = 0;
+            int bx = s.BallXY[t * 2], by = s.BallXY[t * 2 + 1];
+            for (int k = 0; k < _n; k++)
+            {
+                if (k == taker || !Outfielder(side, k, t)) continue;
+                if (Distance2(s, side, k, t, bx, by) <= (long)ThrowInOfferDm * ThrowInOfferDm) near++;
+            }
+
+            return near;
+        }
+
+        private static bool IsPlayed(BallActionKind k) =>
+            k == BallActionKind.Pass || k == BallActionKind.LongBall || k == BallActionKind.Cross;
 
         // ------------------------------------------------------------------ R6: keeper depth
 

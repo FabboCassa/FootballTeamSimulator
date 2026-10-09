@@ -47,6 +47,14 @@ namespace Sim.Core.Match.Analysis
         public long KeeperOpenPlayFrames { get; set; }
         public long KeeperDepthBreakFrames { get; set; }
 
+        /// <summary>R11: goal kicks put in play by a short pass and by a long ball.</summary>
+        public int ShortGoalKicks { get; set; }
+        public int LongGoalKicks { get; set; }
+
+        /// <summary>R11: throw-ins taken, and those with two team-mates offering within 15 m.</summary>
+        public int ThrowIns { get; set; }
+        public int OfferedThrowIns { get; set; }
+
         public double BlockLengthM => Mean(DefendingLengthDm, DefendingSamples);
         public double OwnHalfBlockLengthM => Mean(OwnHalfLengthDm, OwnHalfDefendingSamples);
         public double BlockWidthM => Mean(DefendingWidthDm, DefendingSamples);
@@ -54,6 +62,7 @@ namespace Sim.Core.Match.Analysis
         public double BothTouchlinesPercent => Percent(BothTouchlinesSamples, AttackingSamples);
         public double StandStillPercent => Percent(StandStillFrames, OutfieldOpenPlayFrames);
         public double KeeperDepthBreakPercent => Percent(KeeperDepthBreakFrames, KeeperOpenPlayFrames);
+        public double OfferedThrowInPercent => Percent(OfferedThrowIns, ThrowIns);
 
         /// <summary>Doc §1.5 convention: the side's outfield distance ÷ 10, whoever was sent off.</summary>
         public double DistancePerOutfieldPlayerKm(bool home) =>

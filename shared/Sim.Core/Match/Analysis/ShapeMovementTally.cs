@@ -25,7 +25,7 @@ namespace Sim.Core.Match.Analysis
 
     /// <summary>
     /// Pools the <see cref="ShapeMovementMetrics"/> of many matches and prints them against
-    /// <see cref="ShapeMovementTargets"/> (spec R4, R5, R6, R8) and, for distance, the R2 band of
+    /// <see cref="ShapeMovementTargets"/> (spec R4, R5, R6, R8, R11) and, for distance, the R2 band of
     /// <see cref="RealismReference"/>. A REPORT, not a gate: nothing here fails a run.
     /// </summary>
     public sealed class ShapeMovementTally
@@ -58,6 +58,10 @@ namespace Sim.Core.Match.Analysis
             _sum.OffPitchFrames += m.OffPitchFrames;
             _sum.KeeperOpenPlayFrames += m.KeeperOpenPlayFrames;
             _sum.KeeperDepthBreakFrames += m.KeeperDepthBreakFrames;
+            _sum.ShortGoalKicks += m.ShortGoalKicks;
+            _sum.LongGoalKicks += m.LongGoalKicks;
+            _sum.ThrowIns += m.ThrowIns;
+            _sum.OfferedThrowIns += m.OfferedThrowIns;
             _offTargetMedians.Add(m.MedianOffTargetSeconds);
         }
 
@@ -79,6 +83,9 @@ namespace Sim.Core.Match.Analysis
                 Row(RealismReference.DistancePerOutfieldPlayerKm, distanceKm, Reference),
                 Row(ShapeMovementTargets.OffPitchFrames, _sum.OffPitchFrames, ShapeMovementTargets.R5),
                 Row(ShapeMovementTargets.KeeperDepthBreakPercent, _sum.KeeperDepthBreakPercent, ShapeMovementTargets.R6),
+                Row(ShapeMovementTargets.ShortGoalKicks, _sum.ShortGoalKicks, ShapeMovementTargets.R11),
+                Row(ShapeMovementTargets.LongGoalKicks, _sum.LongGoalKicks, ShapeMovementTargets.R11),
+                Row(ShapeMovementTargets.OfferedThrowInPercent, _sum.OfferedThrowInPercent, ShapeMovementTargets.R11),
             };
         }
 

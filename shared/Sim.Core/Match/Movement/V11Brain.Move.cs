@@ -59,6 +59,16 @@ namespace Sim.Core.Match.Movement
                 int spotX = U.ClampX(U.Units(sx));
                 int spotY = _sim._ctx.Inside(U.Units(sy));
 
+                if (_setPieces.Offers(side, slot))
+                {
+                    // R11: his place in the shape, held within reach of the throw.
+                    EndSpell(side, slot);
+                    RestartShape.OfferSpot(U.Dm(ball.X), U.Dm(ball.Y), U.Dm(spotX), U.Dm(spotY), _sim._cfg,
+                        out int ox, out int oy);
+                    _sim.Steer(k, U.ClampX(U.Units(ox)), _sim._ctx.Inside(U.Units(oy)), sprint: true);
+                    return;
+                }
+
                 if (leashed)
                 {
                     // R4: the job is done from his place in the block, not wherever it leads him.
