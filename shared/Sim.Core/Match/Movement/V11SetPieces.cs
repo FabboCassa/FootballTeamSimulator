@@ -1,4 +1,5 @@
 using Sim.Core.Config;
+using Sim.Core.Domain;
 using Sim.Core.Tactics;
 
 namespace Sim.Core.Match.Movement
@@ -28,7 +29,10 @@ namespace Sim.Core.Match.Movement
         ///   the near-post or the far-post man.
         /// - A penalty taker walks back to the start of his run-up and runs in: the strike comes
         ///   at the end of a run the stream can see.
-        /// - A goal kick or a throw-in is played at once, short or long as Tempo says.
+        /// - A goal kick or a throw-in is played short or long as Tempo says, once its shape is
+        ///   up (real-match spec R11, <see cref="RestartShape"/>): for a goal kick that may go short
+        ///   the centre-backs split to the box corners and the full-backs go wide; for a throw-in
+        ///   the two nearest men offer, each on his place in the shape held within reach of the throw.
         ///
         /// A set piece is taken once its men have been in place for a moment, or when the wait
         /// runs out, so the picture shows the structure before the kick.
@@ -50,6 +54,16 @@ namespace Sim.Core.Match.Movement
             private bool[] _eligible = System.Array.Empty<bool>();
             private int[] _xs = System.Array.Empty<int>();
             private int[] _ys = System.Array.Empty<int>();
+            private PositionRole[] _roleOf = System.Array.Empty<PositionRole>();
+            private int[] _baseYOf = System.Array.Empty<int>();
+            private bool[] _placed = System.Array.Empty<bool>();
+            private bool[] _offering = System.Array.Empty<bool>();
+            private int[] _spotX = System.Array.Empty<int>();
+            private int[] _spotY = System.Array.Empty<int>();
+            private int[] _foeX = System.Array.Empty<int>();
+            private int[] _foeY = System.Array.Empty<int>();
+            private bool[] _foeOn = System.Array.Empty<bool>();
+            private bool[] _shortOk = System.Array.Empty<bool>();
 
             // The plan for the dead ball in hand, keyed on its whistle.
             private int _planAt;
@@ -57,6 +71,8 @@ namespace Sim.Core.Match.Movement
             private int _planSide;
             private FreeKickOption _freeKick;
             private bool _hasRoles;
+            private bool _hasShape;
+            private int _offers;
             private bool _lowY;
             private int _placedAt;
             private int _runUpFor;
@@ -80,6 +96,16 @@ namespace Sim.Core.Match.Movement
                 _eligible = new bool[_n];
                 _xs = new int[_n];
                 _ys = new int[_n];
+                _roleOf = new PositionRole[_n];
+                _baseYOf = new int[_n];
+                _placed = new bool[_n];
+                _offering = new bool[_n];
+                _spotX = new int[_n];
+                _spotY = new int[_n];
+                _foeX = new int[_n];
+                _foeY = new int[_n];
+                _foeOn = new bool[_n];
+                _shortOk = new bool[_n];
                 _planAt = int.MinValue;
                 _runUpFor = int.MinValue;
             }
@@ -97,7 +123,7 @@ namespace Sim.Core.Match.Movement
                         return _runUpFor != _ctx.DeadAt;
                     case BallActionKind.GoalKick:
                     case BallActionKind.ThrowIn:
-                        if (!OnTheBall(tick, side, slot)) return true;
+                        if (!OnTheBall(tick, side, slot) || !ShapeUp(tick)) return true;
                         PlayRestart(tick, side, slot);
                         return true;
                     case BallActionKind.Corner:
@@ -134,6 +160,12 @@ namespace Sim.Core.Match.Movement
                 if (_ctx.DeadKind == BallActionKind.Penalty && slot == _ctx.DeadTaker)
                 {
                     RunUp(tick, side, k);
+                    return true;
+                }
+
+                if (_hasShape && _placed[slot] && slot != _ctx.DeadTaker)
+                {
+                    RunTo(k, U.Units(_spotX[slot]), U.Units(_spotY[slot]));
                     return true;
                 }
 

@@ -1559,11 +1559,40 @@ namespace Sim.Core.Config
         public int PenaltyRunUpDm { get; set; } = 70;
 
         /// <summary>
-        /// Whether a goal kick / a throw-in is played long (1) or short (0), by Tempo
-        /// Slow/Normal/Fast — the build-up instruction.
+        /// How a goal kick / a throw-in is played, by Tempo Slow/Normal/Fast — the build-up
+        /// instruction: short (0), long (1), or short unless the man it would go to is pressed (2),
+        /// as Match.Movement.RestartLength names them.
         /// </summary>
-        public int[] GoalKickLongByTempo { get; set; } = { 0, 1, 1 };
+        public int[] GoalKickLongByTempo { get; set; } = { 0, 2, 1 };
         public int[] ThrowInLongByTempo { get; set; } = { 0, 0, 1 };
+
+        /// <summary>
+        /// An opponent this close to the man a goal kick would be played short to presses him: it goes long.
+        /// 10 m, wider than the ~5 m "pressure" radius of event data, because the presser has the ball's
+        /// flight time: a short kick to a centre-back on the box corner travels ~16-20 m (~1.3-1.5 s),
+        /// in which a presser at 6-7 m/s closes ~9-10 m and arrives with the ball.
+        /// </summary>
+        public int GoalKickPressedDm { get; set; } = 100;
+
+        /// <summary>
+        /// The goal-kick shape a side plays out of (real-match spec R11): its two outer centre-backs
+        /// split to the corners of the box, this deep and this far across from the middle; its
+        /// full-backs go wide, this deep and this far in from the touchline.
+        /// </summary>
+        public int GoalKickCentreBackDepthDm { get; set; } = 160;
+        public int GoalKickCentreBackAcrossDm { get; set; } = 195;
+        public int GoalKickFullBackDepthDm { get; set; } = 250;
+        public int GoalKickFullBackInsetDm { get; set; } = 30;
+
+        /// <summary>
+        /// The two men nearest a throw-in offer for it (R11): each goes to his place in the shape,
+        /// held this close to the ball.
+        /// </summary>
+        public int ThrowInOfferDm { get; set; } = 120;
+
+        /// <summary>How long, past the usual pause, a goal kick or a throw-in waits for its shape.</summary>
+        public int RestartShapeWaitMs { get; set; } = 3000;
+        public int RestartShapeWaitTicks => TicksOfMs(RestartShapeWaitMs);
 
         /// <summary>The nearest a restart is played to a man, and the furthest a thrown ball goes.</summary>
         public int RestartMinPassDm { get; set; } = 40;
