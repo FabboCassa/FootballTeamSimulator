@@ -115,7 +115,9 @@ namespace Sim.Core.Tests.Match
                 $"[passing] {attempted / 12:F0} passes a match at {accuracy:F1}% accuracy");
 
             Assert.That(accuracy, Is.InRange(76.0, 88.0), "real football completes 76-88% of its passes");
-            Assert.That(played / 12, Is.InRange(700.0, 1200.0), "and plays roughly a thousand of them");
+            // Cap scaled by 81/56: the engine's ball is in play about 81 minutes, real football's
+            // 53-59 (user decision 2026-10-10, #82).
+            Assert.That(played / 12, Is.InRange(700.0, 1750.0), "and plays roughly a thousand of them, per 56 minutes in play");
         }
 
         // ------------------------------------------------------------ the keeper's hands

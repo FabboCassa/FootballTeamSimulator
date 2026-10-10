@@ -63,7 +63,7 @@ namespace Sim.Core.Match.Analysis
                 new ShotPassRow(RealismReference.SaveRateOutsideBoxPercent, t.SaveRateOutsideBoxPercent),
                 new ShotPassRow(ShotPassBands.KeeperReachPercent, t.KeeperReachPercent),
                 new ShotPassRow(KeeperToCrossingName, t.MeanKeeperToCrossingM),
-                new ShotPassRow(RealismReference.PassesPerTeam, t.PassesAttempted / teams),
+                new ShotPassRow(ShotPassBands.PassesPerTeamAt81Minutes, t.PassesAttempted / teams),
                 new ShotPassRow(RealismReference.PassAccuracyPercent, t.PassAccuracyPercent),
                 new ShotPassRow(RealismReference.PassesPerSequence, t.PassesPerSequence),
                 new ShotPassRow(RealismReference.TenPlusSequencesPerTeam, t.TenPlusSequences / teams),

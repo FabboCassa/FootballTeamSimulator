@@ -13,8 +13,8 @@ namespace Sim.Core.Tests.Match
     /// <summary>
     /// The realism harness of the watchable-match spec (R2, R4, R5, R7): 1,000 watched matches
     /// between two equal-strength sides, measured and printed against the bands in
-    /// <see cref="RealismBands"/>, and gated on the R7 bands; the user judges the output. The
-    /// header prints ms/match, which is R19's timing line.
+    /// <see cref="RealismBands"/>, and gated on the R7 bands and real-match spec R9's passing
+    /// volume; the user judges the output. The header prints ms/match, which is R19's timing line.
     ///
     /// Explicit, because 1,000 matches with the position stream on cost minutes, not the
     /// milliseconds the score-model harnesses in <see cref="MatchEngineTests"/> cost. Run it with:
@@ -48,6 +48,13 @@ namespace Sim.Core.Tests.Match
             };
             foreach (RealismRow row in v11.Rows().Where(row => gated.Contains(row.Band.Name)))
                 Assert.That(row.InBand, Is.True, $"V11 {row.Band.Name} {row.Value:F3} outside {row.Band.Describe()}");
+
+            // Real-match spec R9: the passing volume, at the 81-minute ball in play (550-750 a team).
+            // Its ratio rows (pass accuracy, passes per sequence, 10+ sequences, shots after 0-1 and
+            // 3+ passes) are printed above, report-only here: they move to #87 (user decision
+            // 2026-10-10, #82).
+            ShotPassRow volume = shotPass.Rows().Single(row => row.Name == ShotPassBands.PassesPerTeamAt81Minutes.Name);
+            Assert.That(volume.InBand, Is.True, $"V11 {volume.Name} {volume.Value:F3} outside {volume.Band?.Describe()}");
         }
 
         private static RealismTally Run(Club a, Club b, out ShapeMovementTally shape, out ShotPassTally shotPass)

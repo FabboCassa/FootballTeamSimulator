@@ -16,6 +16,11 @@ namespace Sim.Core.Match.Movement
             private int _openCarrier = -1;
             private int _openSince;
 
+            // R9: the man (side * n + slot) on the ball, and since when: a pressed man lets it go
+            // only once he has had it V11ReleaseSettleMs.
+            private int _possessor = -1;
+            private int _possessedSince;
+
             /// <summary>
             /// What this man does with the ball (R3-R5). A dead ball V11's set pieces do not take (R6) is the base brain's restart. On the ball he
             /// reads the scene and <see cref="V11ActionValuation"/> chooses: while the tempo's hold
@@ -40,10 +45,18 @@ namespace Sim.Core.Match.Movement
 
                 bool holding = _sim._hold[k] > 0;
                 if (holding) _sim._hold[k]--;
+                if (_possessor != k)
+                {
+                    _possessor = k;
+                    _possessedSince = tick;
+                }
 
                 // While the hold runs only an open goal can move him, and that reads the ball and
-                // the other side alone: the whole scene is read once there is a choice to make.
-                if (holding)
+                // the other side alone — unless he is pressed, when a free man can (R9): the whole
+                // scene is read once there is a choice to make.
+                int raw = _sim.RawPressurePermille(side, slot);
+                bool settled = tick - _possessedSince >= _sim._cfg.TicksOfMs(_sim._cfg.V11ReleaseSettleMs);
+                if (holding && (raw < _sim._cfg.V11PressedReleasePermille || !settled))
                 {
                     ReadGoalward(side, slot);
                     TrackOpenGoal(tick, k);
@@ -53,7 +66,7 @@ namespace Sim.Core.Match.Movement
                 // He chooses on the pressure as it is and executes on the pressure he feels: a shout
                 // that calms him makes him surer on the ball, not bolder with it.
                 int pressure = _sim.PressurePermille(side, slot);
-                Read(side, slot, _sim.RawPressurePermille(side, slot));
+                Read(side, slot, raw);
                 TrackOpenGoal(tick, k);
                 V11Choice choice = _valuation.Choose(_scene, holding);
                 if (choice.Kind != V11ActionKind.Hold)
@@ -64,6 +77,7 @@ namespace Sim.Core.Match.Movement
                     _sim._v11Carrier = runsWithIt ? k : -1;
                 }
 
+                if (choice.Release) _releases[side]++;
                 switch (choice.Kind)
                 {
                     case V11ActionKind.Hold:

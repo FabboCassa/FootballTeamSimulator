@@ -3,7 +3,8 @@ namespace Sim.Core.Match.Analysis
     /// <summary>
     /// The bands of docs/specs/real-match-and-playing-styles.md that are not R2 rows, and so not
     /// in <see cref="RealismReference"/>: R7 (keeper reach), R9 (passing chains) and R10 (the
-    /// open-goal shortcut). Percentages are 0-100.
+    /// open-goal shortcut), plus R9's pass volume
+    /// (R2's row scaled to the engine's ball in play). Percentages are 0-100.
     /// </summary>
     public static class ShotPassBands
     {
@@ -25,6 +26,14 @@ namespace Sim.Core.Match.Analysis
         /// <summary>R9: open-play shots after 3+ passes in the sequence, at least 40%.</summary>
         public static readonly RealismBand OpenPlayShotsThreePlusPercent =
             new RealismBand("open-play shots after 3+ passes %", 40, double.PositiveInfinity);
+
+        /// <summary>
+        /// R9's volume row: passes attempted per team, read against R2's 380-520
+        /// (<see cref="RealismReference.PassesPerTeam"/>) scaled by 81/56, because the engine's ball is
+        /// in play about 81 minutes, not real football's 53-59 (user decision 2026-10-10, #82).
+        /// </summary>
+        public static readonly RealismBand PassesPerTeamAt81Minutes =
+            new RealismBand(RealismReference.PassesPerTeam.Name, 550, 750);
 
         /// <summary>R10: shots from the open-goal shortcut, at most 15% of all shots.</summary>
         public static readonly RealismBand OpenGoalShortcutPercent =

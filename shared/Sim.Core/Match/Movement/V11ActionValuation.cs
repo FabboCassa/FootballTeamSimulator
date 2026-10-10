@@ -39,6 +39,9 @@ namespace Sim.Core.Match.Movement
         public int SafetyPermille;
 
         public int ValuePer10k;
+
+        /// <summary>A pressed man's ball to a free team-mate (real-match spec R9), rather than his own pick.</summary>
+        public bool Release;
     }
 
     /// <summary>
@@ -64,17 +67,20 @@ namespace Sim.Core.Match.Movement
 
         private readonly MatchBalance _cfg;
         private readonly ActionModelBalance _models;
+        private readonly ActionModelBalance _releaseModels;
 
         public V11ActionValuation(MatchBalance cfg)
         {
             _cfg = cfg;
             _models = cfg.ActionModels;
+            _releaseModels = _models.WithPitchControl(cfg.V11PressedReleaseReactionMs, cfg.V11PressedReleaseReachDm);
         }
 
         /// <summary>
         /// The choice. While <paramref name="holding"/> (the tempo's hold is still running) he acts
-        /// only on an open goal; otherwise he takes the dearest option — ties go to the shot, then
-        /// the pass, then the clearance, and a man with nothing else carries it.
+        /// only on an open goal, or, pressed, on a safe ball to a free man (R9); otherwise he
+        /// takes the dearest option — ties go to the shot, then the pass, then the clearance, and
+        /// a man with nothing else carries it, unless he is pressed and has that safe ball (R9).
         /// </summary>
         public V11Choice Choose(V11Scene s, bool holding)
         {
@@ -93,7 +99,7 @@ namespace Sim.Core.Match.Movement
                 };
             }
 
-            if (holding) return new V11Choice { Kind = V11ActionKind.Hold, Mate = -1 };
+            if (holding) return PressedRelease(s);
 
             int carry = CarryValue(s, out int cx, out int cy);
             var best = new V11Choice
@@ -112,14 +118,45 @@ namespace Sim.Core.Match.Movement
                 };
             }
 
-            int pass = PassValue(s, best.ValuePer10k, out V11Choice bestPass);
+            int pass = PassValue(s, best.ValuePer10k, 0, _models, out V11Choice bestPass);
             if (pass > NoOption && pass >= best.ValuePer10k) best = bestPass;
 
             int shot = ShotValue(s);
             if (shot > NoOption && shot >= best.ValuePer10k)
                 best = new V11Choice { Kind = V11ActionKind.Shot, Mate = -1, XDm = GoalX(s), YDm = Pitch.CenterY, ValuePer10k = shot };
 
+            // Running at the man closing him down is how a chain ends: pressed, the free man gets it.
+            if (best.Kind == V11ActionKind.Carry)
+            {
+                V11Choice release = PressedRelease(s);
+                if (release.Kind != V11ActionKind.Hold) best = release;
+            }
+
             return best;
+        }
+
+        /// <summary>Whether the man on the ball is pressed hard enough to look for a release.</summary>
+        public bool Pressed(V11Scene s) => s.PressurePermille >= _cfg.V11PressedReleasePermille;
+
+        /// <summary>
+        /// Real-match spec R9: a pressed man gives it to a free man, the dearest ball whose odds are
+        /// at least <see cref="MatchBalance.V11PressedReleaseSafetyPermille"/> (in his own third
+        /// <see cref="MatchBalance.V11PressedReleaseDeepSafetyPermille"/>); unpressed, or with
+        /// nobody free, he keeps it.
+        /// </summary>
+        private V11Choice PressedRelease(V11Scene s)
+        {
+            var hold = new V11Choice { Kind = V11ActionKind.Hold, Mate = -1 };
+            if (!Pressed(s)) return hold;
+
+            int depth = s.AttacksHighX ? s.BallXDm : Pitch.LengthDm - s.BallXDm;
+            int minSafety = depth < Pitch.LengthDm / 3
+                ? _cfg.V11PressedReleaseDeepSafetyPermille
+                : _cfg.V11PressedReleaseSafetyPermille;
+            int pass = PassValue(s, NoOption, minSafety, _releaseModels, out V11Choice release);
+            if (pass == NoOption) return hold;
+            release.Release = true;
+            return release;
         }
 
         // ------------------------------------------------------------------ R4
@@ -309,7 +346,7 @@ namespace Sim.Core.Match.Movement
         /// channel of the final stretch a ball to a man in the box is a cross. The odds are the
         /// lane's and the receiver's under pitch control, times the passer's execution.
         /// </summary>
-        public int PassValue(V11Scene s, out V11Choice best) => PassValue(s, NoOption, out best);
+        public int PassValue(V11Scene s, out V11Choice best) => PassValue(s, NoOption, 0, _models, out best);
 
         /// <summary>
         /// <see cref="PassValue(V11Scene, out V11Choice)"/> for a man who already has an option worth
@@ -317,8 +354,9 @@ namespace Sim.Core.Match.Movement
         /// not priced. The value only rises with the odds, so the odds without the lane, and
         /// without the lane and the receiver, bound it from above, and the dear pitch-control lane
         /// is read only for a ball that could still win. The choice is the same as pricing them all.
+        /// A ball whose odds fall short of <paramref name="minSafety"/> is no option.
         /// </summary>
-        private int PassValue(V11Scene s, int floor, out V11Choice best)
+        private int PassValue(V11Scene s, int floor, int minSafety, ActionModelBalance models, out V11Choice best)
         {
             best = new V11Choice { Kind = V11ActionKind.Pass, Mate = -1, ValuePer10k = NoOption };
             int dir = s.AttacksHighX ? 1 : -1;
@@ -347,14 +385,17 @@ namespace Sim.Core.Match.Movement
 
                     MoveTerms(s, tx, ty, tx, ty, GainPercent(s, longForward, cross, outWide), out int keep, out int lost);
                     int execution = Execution(s, distance);
+                    if (execution < minSafety) continue;
                     if (CannotWin(keep, lost, execution, best.ValuePer10k, floor)) continue;
 
-                    int receiver = PitchControl.ReceiverSafetyPermille(mate, foes, tx, ty, _models);
+                    int receiver = PitchControl.ReceiverSafetyPermille(mate, foes, tx, ty, models);
+                    if (receiver * execution / 1000 < minSafety) continue;
                     if (CannotWin(keep, lost, receiver * execution / 1000, best.ValuePer10k, floor)) continue;
 
                     int lane = PitchControl.LaneSafetyPermille(
-                        s.BallXDm, s.BallYDm, tx, ty, _cfg.V11PassBallSpeedDmPerSecond, foes, _models);
+                        s.BallXDm, s.BallYDm, tx, ty, _cfg.V11PassBallSpeedDmPerSecond, foes, models);
                     int safety = lane * receiver / 1000 * execution / 1000;
+                    if (safety < minSafety) continue;
 
                     int value = Worth(keep, lost, safety);
                     if (value > best.ValuePer10k)
