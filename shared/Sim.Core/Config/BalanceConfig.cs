@@ -1433,8 +1433,11 @@ namespace Sim.Core.Config
         /// What each outfield defender in the way of a shot leaves of its value, in percent: in the
         /// ball-to-posts triangle or within V11ShotBlockerMarginDm of it, where he blocks it. The
         /// man on the shooter is not counted: he is the pressure the xG already reads.
+        /// 25 since issue #80 (was 20): a real striker also hits it through a crowded box, which is
+        /// where a quarter of real shots hit a defender; at 20 one body all but vetoed the shot.
+        /// Much higher pushes shots/match past R7's 28 (40: 28.8).
         /// </summary>
-        public int V11ShotBlockerPercent { get; set; } = 20;
+        public int V11ShotBlockerPercent { get; set; } = 25;
         public int V11ShotBlockerMarginDm { get; set; } = 80;
 
         /// <summary>
@@ -1711,8 +1714,23 @@ namespace Sim.Core.Config
         public int DeflectBehindPermille { get; set; } = 265;
         public int DeflectIntoTouchPermille { get; set; } = 170;
 
-        public int BlockReachDm { get; set; } = 8;
-        public int BlockPermillePerTick { get; set; } = 320;
+        /// <summary>
+        /// A body in the lane of a strike (real-match spec R2, issue #80; see
+        /// <see cref="Sim.Core.Match.Movement.ShotBlock"/>), one go per man as the ball comes level
+        /// with him. Football: a defender gets a leg or his body to a strike within a stride and a
+        /// stretch of its line, never from further. So his reach is his intercept reach plus
+        /// BlockReachDm (2.5 + 1.5 = 4 m from the line, at the edge only just); within
+        /// BlockFullOddsDm of the line the ball is struck straight at him and he has the full
+        /// BlockPermilleOnLine (not certain: some are lifted over him or bent round him), falling
+        /// to nothing at the edge of his reach. The man within BlockCloseRangeDm of the strike
+        /// point, closing the striker down square to it, charges it down BlockClosePercent as often.
+        /// R2's band: 20-30% of shots blocked.
+        /// </summary>
+        public int BlockReachDm { get; set; } = 15;
+        public int BlockPermilleOnLine { get; set; } = 900;
+        public int BlockFullOddsDm { get; set; } = 15;
+        public int BlockCloseRangeDm { get; set; } = 40;
+        public int BlockClosePercent { get; set; } = 150;
 
         // --- Striking the ball ---
 

@@ -19,9 +19,10 @@ Exit code 0 or the submission is not ready.
 
 - [ ] `.\tools\build-simcore.ps1` — the client is running the current Sim.Core.
 - [ ] `dotnet test shared/Sim.Core.Tests/Sim.Core.Tests.csproj` — green, golden master
-      `0xE72BA81A6D7A469C` unchanged (engine v11, the watchable-match brain, 5 fps stream since issue #84).
+      `0xE2E39D335A8A3DE9` unchanged (engine v11, the watchable-match brain, 5 fps stream since issue #84, blocked shots
+      since issue #80 — interim, final v12 hash approved in #88).
 - [ ] `cd server && dotnet test Api.Tests/Api.Tests.csproj` — green, and
-      `[server-determinism] 0xE72BA81A6D7A469C` matches the client's.
+      `[server-determinism] 0xE2E39D335A8A3DE9` matches the client's.
 - [ ] `.\tools\set-version.ps1 -Check` — every target agrees with `tools/version.json`.
       (`.\tools\preflight-store.ps1` asserts the same thing, and was written because they did
       not agree: `ProjectSettings.asset` said 1.0 while `version.json` said 0.1.0.)
