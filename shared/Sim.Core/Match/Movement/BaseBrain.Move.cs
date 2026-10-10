@@ -92,6 +92,15 @@ namespace Sim.Core.Match.Movement
                 }
                 else if (job == BaseJob.Keeper)
                 {
+                    // A strike at his goal: he goes for its line, flat out (R7). Placed rather than
+                    // steered for the same reason as his spot below: the deadband would stop him
+                    // short of the ball.
+                    if (_ctx.ShotLive && _ctx.ShotHome != home && ShotLineSpot(k, home, out tx, out ty))
+                    {
+                        _sim.WalkTo(k, tx, ty, hurry: true);
+                        return;
+                    }
+
                     // Off the ball he is PLACED on his spot, not steered at it (R6): the arrival
                     // deadband parks a jogging man three metres short, which for a keeper is three
                     // metres off his line, and the jog leaves him upfield while the ball comes back.
@@ -192,6 +201,34 @@ namespace Sim.Core.Match.Movement
                 }
 
                 return false;
+            }
+
+            /// <summary>
+            /// The point of the strike's path nearest him, between the ball and his goal line: where
+            /// he meets it soonest, and on its way to the crossing point. Kept within a stride of the
+            /// goal mouth, so a strike going well wide does not drag him to the corner flag.
+            /// </summary>
+            private bool ShotLineSpot(int k, bool home, out int x, out int y)
+            {
+                long vx = _ball.Vx, vy = _ball.Vy;
+                int goalX = U.Units(MovementGeometry.OwnGoalX(home));
+                long toLine = goalX - _ball.X;
+                x = _px[k];
+                y = _py[k];
+                if (vx == 0 || toLine * vx <= 0) return false;
+
+                // Along the path in units of the velocity, scaled by speed²: t is the foot of the
+                // perpendicular from him, end is the goal line.
+                long speedSq = vx * vx + vy * vy;
+                long t = (_px[k] - _ball.X) * vx + (_py[k] - _ball.Y) * vy;
+                long end = toLine * speedSq / vx;
+                if (t < 0) t = 0;
+                if (t > end) t = end;
+
+                x = U.ClampX((int)(_ball.X + vx * t / speedSq));
+                int mouth = U.Units(MovementGeometry.GoalHalfWidthDm + 10);
+                y = MovementGeometry.Clamp((int)(_ball.Y + vy * t / speedSq), U.CenterYU - mouth, U.CenterYU + mouth);
+                return true;
             }
 
             private void InterceptSpot(int k, out int x, out int y)

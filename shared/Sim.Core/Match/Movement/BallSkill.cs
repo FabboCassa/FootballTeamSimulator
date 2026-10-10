@@ -174,34 +174,6 @@ namespace Sim.Core.Match.Movement
         public static int GoalOddsPermille(int shotQualityPermille, MatchBalance cfg)
             => Clamp(Clamp(shotQualityPermille, 0, 1000) * cfg.ShotConversionPercent / 100, 5, 900);
 
-        /// <summary>
-        /// The keeper's dive, in decimetres of reach on top of everyone's control radius. Most of
-        /// it is Goalkeeping; a fierce, well-placed strike takes some of it back. This is the
-        /// save — phase 5 had one only because the timeline had already decided there would be.
-        /// </summary>
-        public static int KeeperDiveDm(int goalkeeping, int shotQualityPermille, MatchBalance cfg)
-        {
-            int reach = cfg.KeeperDiveBaseDm
-                        + cfg.KeeperDiveSkillDm * Clamp(goalkeeping, 1, 100) / 100
-                        - cfg.KeeperDiveQualityDm * Clamp(shotQualityPermille, 0, 1000) / 1000;
-            return reach < 0 ? 0 : reach;
-        }
-
-        /// <summary>
-        /// And having got there — does he KEEP IT OUT? Reaching a strike and stopping it are two
-        /// different things, and the difference is the goalkeeper. Making the save pure geometry
-        /// saturates: a dive long enough to reach the corners saves everything and one short
-        /// enough to be beaten reaches nothing. So the dive says whether he is near it, and this
-        /// says whether being near it was enough — his Goalkeeping against how good the strike is.
-        /// </summary>
-        public static int KeeperStopPercent(int goalkeeping, int shotQualityPermille, MatchBalance cfg)
-        {
-            int stop = cfg.KeeperStopBasePercent
-                       + cfg.KeeperStopSkillPercent * Clamp(goalkeeping, 1, 100) / 100
-                       - cfg.KeeperStopQualityPercent * Clamp(shotQualityPermille, 0, 1000) / 1000;
-            return Clamp(stop, 2, 98);
-        }
-
         /// <summary>Does the keeper hold it, or is it a parry and a live ball in his six-yard box?</summary>
         public static int KeeperHoldPercent(int goalkeeping, int shotQualityPermille, MatchBalance cfg)
         {

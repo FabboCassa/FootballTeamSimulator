@@ -13,7 +13,8 @@ namespace Sim.Core.Tests.Match
     /// <summary>
     /// The realism harness of the watchable-match spec (R2, R4, R5, R7): 1,000 watched matches
     /// between two equal-strength sides, measured and printed against the bands in
-    /// <see cref="RealismBands"/>, and gated on the R7 bands; the user judges the output. The
+    /// <see cref="RealismBands"/>, and gated on the R7 bands plus the save rates and keeper reach of
+    /// the real-match spec's R7; the user judges the output. The
     /// header prints ms/match, which is R19's timing line.
     ///
     /// Explicit, because 1,000 matches with the position stream on cost minutes, not the
@@ -33,10 +34,11 @@ namespace Sim.Core.Tests.Match
             League league = new LeagueGenerator().Generate(new Pcg32(20260611));
             Club a = league.Clubs[9], b = league.Clubs[10];   // mid-table neighbours: equal strength
 
-            RealismTally v11 = Run(a, b, out ShapeMovementTally shape);
+            RealismTally v11 = Run(a, b, out ShapeMovementTally shape, out ShotPassTally shotPass);
 
             TestContext.Out.WriteLine(v11.Format("V11"));
             TestContext.Out.WriteLine(shape.Format("V11"));
+            TestContext.Out.WriteLine(shotPass.Format("V11"));
 
             Assert.That(v11.Matches, Is.EqualTo(Matches), "Every match must come back with a stream.");
 
@@ -47,9 +49,18 @@ namespace Sim.Core.Tests.Match
             };
             foreach (RealismRow row in v11.Rows().Where(row => gated.Contains(row.Band.Name)))
                 Assert.That(row.InBand, Is.True, $"V11 {row.Band.Name} {row.Value:F3} outside {row.Band.Describe()}");
+
+            // R7 of the real-match spec: the R2 save rates and the keeper reaching the ball.
+            string[] gatedSaves =
+            {
+                RealismReference.SaveRatePercent.Name, RealismReference.SaveRateInsideBoxPercent.Name,
+                RealismReference.SaveRateOutsideBoxPercent.Name, ShotPassBands.KeeperReachPercent.Name
+            };
+            foreach (ShotPassRow row in shotPass.Rows().Where(row => gatedSaves.Contains(row.Name)))
+                Assert.That(row.InBand, Is.True, $"V11 {row.Name} {row.Value:F3} outside {row.Band?.Describe()}");
         }
 
-        private static RealismTally Run(Club a, Club b, out ShapeMovementTally shape)
+        private static RealismTally Run(Club a, Club b, out ShapeMovementTally shape, out ShotPassTally shotPass)
         {
             var cfg = new BalanceConfig();
 
@@ -63,6 +74,8 @@ namespace Sim.Core.Tests.Match
             var tally = new RealismTally();
             var shapeAnalyzer = new ShapeMovementAnalyzer();
             shape = new ShapeMovementTally();
+            var shotPassAnalyzer = new ShotPassAnalyzer();
+            shotPass = new ShotPassTally();
             var clock = new Stopwatch();
 
             for (int i = 0; i < Matches; i++)
@@ -79,6 +92,8 @@ namespace Sim.Core.Tests.Match
                 if (m != null && rm != null) tally.Add(m, rm, clock.Elapsed.TotalMilliseconds);
                 ShapeMovementMetrics? sm = shapeAnalyzer.Measure(r);
                 if (sm != null) shape.Add(sm);
+                ShotPassMetrics? sp = shotPassAnalyzer.Measure(r);
+                if (sp != null) shotPass.Add(sp);
             }
 
             return tally;
