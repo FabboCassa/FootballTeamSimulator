@@ -1326,6 +1326,61 @@ namespace Sim.Core.Config
         public int V11SupportLeashDm { get; set; } = 200;
 
         /// <summary>
+        /// Real-match spec R9, the short option (see V11SupportAngles): in the build-up and the
+        /// progression this many of the men nearest the ball offer themselves on a ring of
+        /// <see cref="V11SupportOfferDm"/> round it, one on each side. The angle is scored on the
+        /// lane (an opponent nearer than <see cref="V11SupportOfferLaneDm"/> to it cuts it), the
+        /// room at the spot, the ground it gains and the ground he has to cover to get there.
+        /// Two men, ten metres, one either side: the triangle a build-up side makes round the ball,
+        /// a pass short enough to play first time under pressure.
+        /// </summary>
+        public int V11SupportOffers { get; set; } = 2;
+        public int V11SupportOfferDm { get; set; } = 100;
+        public int V11SupportOfferLaneDm { get; set; } = 70;
+        public int V11SupportOfferGainPercent { get; set; } = 30;
+        public int V11SupportOfferTravelPercent { get; set; } = 25;
+
+        /// <summary>
+        /// R9: who offers is read this share (percent) off where his place in the shape is and the
+        /// rest off where he stands; the offer goes no further than <see cref="V11SupportOfferLeashDm"/>
+        /// from that place. The man whose zone the ball is in comes short, not whoever the last
+        /// move left near it, and twelve metres off his place still leaves it covered.
+        /// </summary>
+        public int V11SupportOfferSpotPercent { get; set; } = 50;
+        public int V11SupportOfferLeashDm { get; set; } = 120;
+
+        /// <summary>
+        /// Real-match spec R9: a man on the ball pressed at least this hard (permille, see
+        /// PressureRadiusDm) does not sit out the tempo's hold, nor run with it, when he has a pass
+        /// whose odds are at least <see cref="V11PressedReleaseSafetyPermille"/> — in his own third
+        /// <see cref="V11PressedReleaseDeepSafetyPermille"/>, where a ball cut out is a chance for
+        /// the other side: he gives it to the free man once he has had it
+        /// <see cref="V11ReleaseSettleMs"/>.
+        /// 700 is a man on him from under a metre and a half, inside challenge range: the one making
+        /// the challenge, not the one still coming. Odds of 85% (90% in front of his own goal, where
+        /// a ball cut out is a chance against) are met when that man has committed and his momentum
+        /// carries him away from the lane. 300 ms is the touch that controls it and a look up: the
+        /// free man is found on the second touch, as footballers under a press do. Every looser
+        /// reading tried (550-675, odds of 80-82.5% or 95% deep, a first-time release) breaks a
+        /// bar of the suite: goals past R7's 3.0, fouls under football's 18-20, the poor tacklers'
+        /// cards, R4's off-target seconds, the better passers' share of the ball or the width
+        /// instruction's crosses (issue #82, tuned under the user decision of 2026-10-10: a
+        /// 1,750-pass cap for an 81-minute ball in play).
+        /// </summary>
+        public int V11PressedReleasePermille { get; set; } = 700;
+        public int V11PressedReleaseSafetyPermille { get; set; } = 850;
+        public int V11PressedReleaseDeepSafetyPermille { get; set; } = 900;
+        public int V11ReleaseSettleMs { get; set; } = 300;
+
+        /// <summary>
+        /// R9: the release is read with pitch control at this reach and reaction, nearer the engine's
+        /// ControlRadiusDm and pass reaction than ActionModels' figures: a ball played under
+        /// pressure that a defender near its path can touch is no release.
+        /// </summary>
+        public int V11PressedReleaseReachDm { get; set; } = 16;
+        public int V11PressedReleaseReactionMs { get; set; } = 215;
+
+        /// <summary>
         /// Real-match spec R4: a press, a cover or a mark goes no further than this from the man's
         /// phase target spot. Unleashed, a man followed the ball or his opponent across half the
         /// pitch and then spent seconds sprinting back to his place, which put the median

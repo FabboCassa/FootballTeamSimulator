@@ -13,14 +13,15 @@ namespace Fts.Application.Simulation;
 public sealed class SimulationService : ISimulationService
 {
     /// <summary>Combined hash of the default <see cref="DeterminismCheck.Run()"/> — the value the
-    /// client logs (golden master 0xB709A88D6957AA28, an INTERIM v12 value after issue #77's eased
-    /// arrival and issue #78's leashed jobs and wider attacking shape, pending approval in #88;
-    /// v11 at the 5 fps stream of issue #84 was 0xE72BA81A6D7A469C).
+    /// client logs (golden master 0x3C09C781A8278559, an INTERIM v12 value after issue #77's eased
+    /// arrival, issue #78's leashed jobs and wider attacking shape (0xB709A88D6957AA28) and issue
+    /// #82's support angles and longer passing chains, pending approval in #88; v11 at the 5 fps
+    /// stream of issue #84 was 0xE72BA81A6D7A469C).
     /// The run is on NEUTRAL tactics, and every
     /// instruction table reads its middle entry as the identity, so retuning an instruction cannot
     /// move this number.
     /// Pinned by <c>SimulationDeterminismTests</c>.</summary>
-    public ulong GoldenCombinedHash => 0xB709A88D6957AA28UL;
+    public ulong GoldenCombinedHash => 0x3C09C781A8278559UL;
 
     public SimulateMatchResponse SimulateMatch(SimulateMatchRequest request)
     {

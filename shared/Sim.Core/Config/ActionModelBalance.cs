@@ -84,5 +84,14 @@ namespace Sim.Core.Config
 
         /// <summary>Points sampled along a pass lane, between the passer and the receiver.</summary>
         public int PitchControlLaneSamples { get; set; } = 7;
+
+        /// <summary>These models with pitch control read at another reaction and reach.</summary>
+        public ActionModelBalance WithPitchControl(int reactionMs, int reachDm)
+        {
+            var copy = (ActionModelBalance)MemberwiseClone();
+            copy.PitchControlReactionMs = reactionMs;
+            copy.PitchControlReachDm = reachDm;
+            return copy;
+        }
     }
 }

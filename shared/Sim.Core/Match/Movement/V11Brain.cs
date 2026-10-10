@@ -25,6 +25,12 @@ namespace Sim.Core.Match.Movement
         /// <summary>Runs in behind the given side started in the last match played.</summary>
         public int RunsInBehind(int side) => _brain.Runs(side);
 
+        /// <summary>Player-ticks the given side's men spent offering the short option (real-match spec R9) in the last match.</summary>
+        public int OfferTicks(int side) => _brain.Offers(side);
+
+        /// <summary>Balls the given side's pressed men released to a free team-mate (real-match spec R9) in the last match.</summary>
+        public int PressedReleases(int side) => _brain.Releases(side);
+
         /// <summary>Player-ticks the given side's full-backs spent on the overlap in the last match.</summary>
         public int OverlapTicks(int side) => _brain.Overlaps(side);
 
@@ -53,6 +59,8 @@ namespace Sim.Core.Match.Movement
             private readonly int[] _runY = new int[SideCount];
             private readonly int[] _runs = new int[SideCount];
             private readonly int[] _overlaps = new int[SideCount];
+            private readonly int[] _offerTicks = new int[SideCount];
+            private readonly int[] _releases = new int[SideCount];
 
             // Read once a tick for each side: the offside line it attacks (dm) and the opponents (dm).
             private readonly int[] _lineX = new int[SideCount];
@@ -76,6 +84,7 @@ namespace Sim.Core.Match.Movement
                 _positioning = new V11Positioning(sim._cfg);
                 _valuation = new V11ActionValuation(sim._cfg);
                 _setPieces = new V11SetPieces(sim);
+                _supportAngles = new V11SupportAngles(sim._cfg);
             }
 
             public int PhaseTicks(int side, TeamPhase phase) =>
@@ -89,10 +98,15 @@ namespace Sim.Core.Match.Movement
 
             public int Overlaps(int side) => _overlaps[side];
 
+            public int Offers(int side) => _offerTicks[side];
+
+            public int Releases(int side) => _releases[side];
+
             public void Begin()
             {
                 _phases.Reset();
                 _openCarrier = -1;
+                _possessor = -1;
                 _sim._v11Carrier = -1;
                 System.Array.Clear(_phaseTicks, 0, _phaseTicks.Length);
                 _spell = new int[_sim._n * SideCount];
@@ -104,10 +118,13 @@ namespace Sim.Core.Match.Movement
                     _expansion[side] = 0;
                     _runs[side] = 0;
                     _overlaps[side] = 0;
+                    _offerTicks[side] = 0;
+                    _releases[side] = 0;
                     _foeX[side] = new int[_sim._n];
                     _foeY[side] = new int[_sim._n];
                 }
 
+                BeginOffers();
                 _base.Begin();
                 _setPieces.Begin();
             }
@@ -126,6 +143,7 @@ namespace Sim.Core.Match.Movement
                 {
                     Expand(side);
                     ReadOpponents(side);
+                    UpdateOffers(tick, side);
                 }
             }
 

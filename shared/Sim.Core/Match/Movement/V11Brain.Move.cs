@@ -20,10 +20,12 @@ namespace Sim.Core.Match.Movement
             /// Where this man goes (R2). A man placed for a V11 set piece (R6) is its own; the presser
             /// closes the man on the ball down goal-side of him; any other man the base brain has a
             /// job for is its, a press, cover or mark no further than V11JobLeashDm from his phase
-            /// target spot (real-match spec R4); a supporter keeps its supporting run unless he is a
-            /// forward with a run in behind on, and a pass meant for somebody else is chased only within
-            /// reach of his place. Everybody else goes to his phase target spot — held onside when his
-            /// side has the ball — or, for a full-back whose side asks for it, on the overlap.
+            /// target spot (real-match spec R4); in the build-up and the progression the men nearest
+            /// the ball offer the short option (R9, V11Brain.Support), ahead of a supporting run; a
+            /// supporter keeps its supporting run unless he is a forward with a run in behind on, and a
+            /// pass meant for somebody else is chased only within reach of his place. Everybody else
+            /// goes to his phase target spot — held onside when his side has the ball — or, for a
+            /// full-back whose side asks for it, on the overlap.
             /// </summary>
             public void Move(int tick, int side, int slot)
             {
@@ -76,6 +78,16 @@ namespace Sim.Core.Match.Movement
                     tx = rx;
                     ty = ry;
                     sprint = true;
+                }
+                else if (inPossession && OfferTarget(side, slot, out int fx, out int fy))
+                {
+                    // R9: the short option, a pass away from the ball at an angle nobody shuts, on a
+                    // leash from his own spot.
+                    tx = fx;
+                    ty = fy;
+                    Leash(spotX, spotY, U.Units(_sim._cfg.V11SupportOfferLeashDm), ref tx, ref ty);
+                    sprint = U.DistanceSq(_sim._px[k], _sim._py[k], tx, ty) > (long)_sim._approachU * _sim._approachU;
+                    _offerTicks[side]++;
                 }
                 else if (job == BaseJob.Support)
                 {
