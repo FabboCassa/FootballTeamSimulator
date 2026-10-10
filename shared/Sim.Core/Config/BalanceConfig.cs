@@ -1282,8 +1282,8 @@ namespace Sim.Core.Config
         /// How wide a V11 strike can go, in percent of ShotSpreadDm. That spread was sized for the
         /// close-range shots engine v10 took; V11 shoots at the open goal from the edge of the box
         /// too, and from there the full spread put three strikes in four off target. 45 since R6: with
-        /// V11KeeperStopPercent cut and the keeper claiming balls in his box, fewer close-range
-        /// rebounds land on target, and at 56 on-target fell under 30%.
+        /// the keeper claiming balls in his box, fewer close-range rebounds land on target, and at
+        /// 56 on-target fell under 30%.
         /// </summary>
         public int V11ShotSpreadPercent { get; set; } = 45;
 
@@ -1440,17 +1440,14 @@ namespace Sim.Core.Config
         public int V11ShotBlockerMarginDm { get; set; } = 80;
 
         /// <summary>
-        /// The keeper on V11, in percent of the base Keeper* figures: how far he dives, the odds he
-        /// stops a shot on target he reaches, that he holds one he stops rather than parrying it,
-        /// and that a parry goes behind (a corner). The base figures were sized for engine v10's
-        /// chances, most of them from inside six yards. Dive fell from 130 and stop from 125 when R6
-        /// put the keeper on the ball-goal line: standing there he reaches nearly every strike on
-        /// target, and at 130/125 goals fell to 0.17 a match (interim, until R7's save model).
+        /// The keeper on V11, in percent of the base Keeper* figures: the odds he holds a strike he
+        /// saves rather than parrying it, and that a parry goes behind (a corner). Whether he saves
+        /// it at all is the zone model's (Save*, R7). Parry-behind fell from 180 to 100 in R7: the
+        /// keeper used to take his own parry straight back, so nearly every parry that counted went
+        /// behind; with the parry leaving his hands, 180 put corners over the band.
         /// </summary>
-        public int V11KeeperDivePercent { get; set; } = 55;
-        public int V11KeeperStopPercent { get; set; } = 38;
         public int V11KeeperHoldPercent { get; set; } = 90;
-        public int V11KeeperParryBehindPercent { get; set; } = 180;
+        public int V11KeeperParryBehindPercent { get; set; } = 100;
 
         /// <summary>
         /// The odds a ball a defender gets to comes off him rather than being controlled, on V11,
@@ -2229,24 +2226,42 @@ namespace Sim.Core.Config
         /// </summary>
         public int ShotSpreadDm { get; set; } = 700;
 
-        /// <summary>
-        /// The keeper's dive: the extra reach, in decimetres, he has at a ball struck at his
-        /// goal, on top of the control radius everyone has. Goalkeeping earns most of it and the
-        /// quality of the strike takes some of it away.
-        /// </summary>
-        /// <summary>
-        /// And whether being near it was enough (engine phase 6): the odds he actually keeps the
-        /// strike out. This is the knob behind "the keeper saves about seven of every ten shots
-        /// on target", and it is separate from the dive on purpose — the dive is where he is, this
-        /// is who he is.
-        /// </summary>
-        public int KeeperStopBasePercent { get; set; } = 80;
-        public int KeeperStopSkillPercent { get; set; } = 46;
-        public int KeeperStopQualityPercent { get; set; } = 30;
+        // --- Saves (real-match spec R7): see KeeperSaveModel ---
+        //
+        // The odds, in permille, that a keeper keeps out a strike on target, decided when it is
+        // struck: a base per zone, plus SavePerMetrePermille per metre from the goal centre,
+        // SaveAnglePermille at the tightest angle, SavePressurePermille per opponent on the
+        // striker (up to three), SaveSkillPermille at Goalkeeping 100 (taken away at 1), less
+        // SaveOffLinePermillePerMetre per metre the keeper stands off the strike's line. The R2
+        // bands are 65-75% overall, 55-68% inside the box and 78-90% outside it.
+        // From six yards the keeper has no time to react: most on-target strikes beat him.
+        public int SaveSixYardBoxPermille { get; set; } = 250;
+        // In the box he sees it a beat earlier; the distance term does most of the rest.
+        public int SaveBoxPermille { get; set; } = 350;
+        // From outside the box he sees it all the way: four in five are kept out.
+        public int SaveOutsidePermille { get; set; } = 500;
+        // Penalties: roughly three in four on target go in, whatever the pitch around them.
+        public int SavePenaltyPermille { get; set; } = 220;
+        // Every metre is travel time for the keeper.
+        public int SavePerMetrePermille { get; set; } = 15;
+        // From a tight angle the near post is all he has to cover.
+        public int SaveAnglePermille { get; set; } = 200;
+        // A hurried, blocked-off strike is a weaker one.
+        public int SavePressurePermille { get; set; } = 30;
+        // A top keeper keeps out about one more in ten than an average one.
+        public int SaveSkillPermille { get; set; } = 100;
+        // A strike away from him is the hard one; one at him is the easy one.
+        public int SaveOffLinePermillePerMetre { get; set; } = 40;
+        // Even a tap-in can hit the keeper; even a speculative one can beat him.
+        public int SaveMinPermille { get; set; } = 50;
+        public int SaveMaxPermille { get; set; } = 970;
 
-        public int KeeperDiveBaseDm { get; set; } = 10;
-        public int KeeperDiveSkillDm { get; set; } = 40;
-        public int KeeperDiveQualityDm { get; set; } = 12;
+        /// <summary>
+        /// How far past everyone's control radius a keeper gets a hand to a strike he is saving, in
+        /// decimetres: an arm and a dive. He runs at the strike's line meanwhile, so most saves are
+        /// made where he stands (R7: within 1.5 m on 70% of them).
+        /// </summary>
+        public int KeeperSaveReachDm { get; set; } = 10;
 
         /// <summary>
         /// Home advantage ON THE PITCH, in permille on every attribute of the home eleven. The

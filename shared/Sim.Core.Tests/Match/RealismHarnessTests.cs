@@ -13,7 +13,8 @@ namespace Sim.Core.Tests.Match
     /// <summary>
     /// The realism harness of the watchable-match spec (R2, R4, R5, R7): 1,000 watched matches
     /// between two equal-strength sides, measured and printed against the bands in
-    /// <see cref="RealismBands"/>, and gated on the R7 bands; the user judges the output. The
+    /// <see cref="RealismBands"/>, and gated on the R7 bands plus the save rates and keeper reach of
+    /// the real-match spec's R7; the user judges the output. The
     /// header prints ms/match, which is R19's timing line.
     ///
     /// Explicit, because 1,000 matches with the position stream on cost minutes, not the
@@ -48,6 +49,15 @@ namespace Sim.Core.Tests.Match
             };
             foreach (RealismRow row in v11.Rows().Where(row => gated.Contains(row.Band.Name)))
                 Assert.That(row.InBand, Is.True, $"V11 {row.Band.Name} {row.Value:F3} outside {row.Band.Describe()}");
+
+            // R7 of the real-match spec: the R2 save rates and the keeper reaching the ball.
+            string[] gatedSaves =
+            {
+                RealismReference.SaveRatePercent.Name, RealismReference.SaveRateInsideBoxPercent.Name,
+                RealismReference.SaveRateOutsideBoxPercent.Name, ShotPassBands.KeeperReachPercent.Name
+            };
+            foreach (ShotPassRow row in shotPass.Rows().Where(row => gatedSaves.Contains(row.Name)))
+                Assert.That(row.InBand, Is.True, $"V11 {row.Name} {row.Value:F3} outside {row.Band?.Describe()}");
         }
 
         private static RealismTally Run(Club a, Club b, out ShapeMovementTally shape, out ShotPassTally shotPass)
