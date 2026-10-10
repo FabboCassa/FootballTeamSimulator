@@ -183,6 +183,12 @@ namespace Sim.Core.Match.Movement
 
         /// <summary>How good the strike in the air was, for the keeper who has to deal with it.</summary>
         private int _shotQuality;
+
+        /// <summary>Where the strike in the air was struck from: a man near it is the one closing the striker down.</summary>
+        private int _shotFromX, _shotFromY;
+
+        /// <summary>Who has already had his one go at charging the strike in the air down.</summary>
+        private bool[] _blockTried = System.Array.Empty<bool>();
         private int _pressureU;
 
         public MatchSimulator(MatchBalance cfg)
@@ -354,6 +360,7 @@ namespace Sim.Core.Match.Movement
             _vx = new int[total];
             _vy = new int[total];
             _sentOff = new bool[total];
+            _blockTried = new bool[total];
             _stepFromX = new int[total];
             _stepFromY = new int[total];
             _stepToX = new int[total];
@@ -970,6 +977,9 @@ namespace Sim.Core.Match.Movement
             _ball.Kick(side, slot, goalX - _ball.X, aimY - _ball.Y, _maxShootForce);
 
             _ctx.ShotLive = true;
+            _shotFromX = _ball.X;
+            _shotFromY = _ball.Y;
+            System.Array.Clear(_blockTried, 0, _blockTried.Length);
             _ctx.ShotHome = home;
             _ctx.ShotSlot = slot;
             _lastTouch[side] = slot;
@@ -1618,9 +1628,20 @@ namespace Sim.Core.Match.Movement
             for (int j = 0; j < _n; j++)
             {
                 int k = defending * _n + j;
-                if (_keeper[k] || _sentOff[k]) continue;
-                if (SweptDistance(k, inVx, inVy) > reach) continue;
-                if (_rng.NextInt(0, 1000) >= _cfg.BlockPermillePerTick) continue;
+                if (_keeper[k] || _sentOff[k] || _blockTried[k]) continue;
+
+                // ONE go per man, on the tick the ball comes level with him, and only if he stands
+                // past the strike point (issue #80): the swept distance is then his distance from
+                // its line. A man behind the striker never gets one at a ball moving away from him.
+                // Rolled on every tick it is in reach, a man near the line got two or three goes
+                // and the odds stopped meaning anything.
+                if (!ShotBlock.IsOffered(_px[k], _py[k], _shotFromX, _shotFromY, _ball.X, _ball.Y, inVx, inVy)) continue;
+                int lane = SweptDistance(k, inVx, inVy);
+                if (lane > reach) continue;
+                _blockTried[k] = true;
+
+                int fromStrike = U.Distance(_px[k], _py[k], _shotFromX, _shotFromY);
+                if (_rng.NextInt(0, 1000) >= ShotBlock.Permille(lane, reach, fromStrike, _cfg)) continue;
 
                 // A BLOCK is not a save and it is not a miss — football counts it as its own
                 // thing, and so does the timeline: the strike is over, nobody kept it out, and
