@@ -79,11 +79,30 @@ namespace Sim.Core.Match.Movement
                     // defender ends up carrying the ball into his own corner; sending him straight
                     // ahead for ever is how he ends up standing on the goal line holding it.
                     _sim.CarryTarget(side, k, U.Units(160), out tx, out ty);
-                    sprint = true;
+                    sprint = !_keeper[k];
+
+                    // A keeper walks it out rather than sprinting, and one who claimed it out past
+                    // his six-yard line plays it from there, so he is near his line when it
+                    // leaves him (R6).
+                    if (_keeper[k] && System.Math.Abs(_px[k] - U.Units(MovementGeometry.OwnGoalX(home))) > U.Units(_cfg.KeeperCarryDepthDm))
+                    {
+                        tx = _px[k];
+                        ty = _py[k];
+                    }
                 }
                 else if (job == BaseJob.Keeper)
                 {
-                    KeeperSpot(side, out tx, out ty);
+                    // Off the ball he is PLACED on his spot, not steered at it (R6): the arrival
+                    // deadband parks a jogging man three metres short, which for a keeper is three
+                    // metres off his line, and the jog leaves him upfield while the ball comes back.
+                    if (!KeeperSpot(side, out tx, out ty))
+                    {
+                        _sim.WalkTo(k, tx, ty, hurry: true);
+                        return;
+                    }
+
+                    InterceptSpot(k, out tx, out ty);
+                    sprint = true;
                 }
                 else if (job == BaseJob.Chase)
                 {
@@ -154,20 +173,13 @@ namespace Sim.Core.Match.Movement
                 }
             }
 
-            private void KeeperSpot(int side, out int x, out int y)
+            /// <summary>His spot (<see cref="KeeperPositioning"/>); true when he is coming to claim the ball instead.</summary>
+            private bool KeeperSpot(int side, out int x, out int y)
             {
                 bool home = side == 0;
-                int goalX = U.Units(MovementGeometry.OwnGoalX(home));
-                int dx = _ball.X - goalX;
-                int distance = dx < 0 ? -dx : dx;
-
-                int far = U.LengthU / 2;
-                int reach = distance < far ? distance : far;
-                int depth = U.Units(_cfg.KeeperDepthDm) + U.Units(_cfg.KeeperRushDm) * reach / far;
-
-                x = home ? depth : U.LengthU - depth;
-                y = U.CenterYU + (_ball.Y - U.CenterYU) * _cfg.KeeperLateralPercent / 100;
-                y = MovementGeometry.Clamp(y, U.CenterYU - U.Units(110), U.CenterYU + U.Units(110));
+                KeeperPositioning.Target(_cfg, home, U.Dm(_ball.X), U.Dm(_ball.Y), out int xDm, out int yDm);
+                x = U.Units(xDm);
+                y = U.Units(yDm);
 
                 // In his own box and nearest to it, he comes and claims it.
                 if (_ball.Free && !_ball.Dead
@@ -176,7 +188,10 @@ namespace Sim.Core.Match.Movement
                 {
                     x = _ball.X;
                     y = _ball.Y;
+                    return true;
                 }
+
+                return false;
             }
 
             private void InterceptSpot(int k, out int x, out int y)
