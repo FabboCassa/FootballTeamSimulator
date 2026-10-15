@@ -71,6 +71,15 @@ namespace Sim.Core.Tests.Match
             }
         }
 
+        /// <summary>The <paramref name="home"/> side's keeper stranded 15 m out and wide of his goal, the net empty behind him.</summary>
+        public static void StrandKeeper(PositionStream s, bool home, int from, int to)
+        {
+            int x = home ? StrandedDm : Pitch.LengthDm - StrandedDm;
+            for (int t = from; t <= to; t++) Put(s, home, t, Keeper, x, Pitch.CenterY + StrandedDm);
+        }
+
+        private const int StrandedDm = 150;
+
         public static void Act(PositionStream s, int tick, BallActionKind kind, bool home, int slot = 1, int target = -1) =>
             s.Actions.Add(new BallAction(tick, kind, home, slot, target));
     }

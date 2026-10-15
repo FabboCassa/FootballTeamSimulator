@@ -7,7 +7,7 @@ namespace Fts.Api.Tests;
 /// <summary>
 /// Server half of the cross-runtime determinism check (Phase 7.3, extends Sim.Core test 1.6).
 /// The server runs the SAME Sim.Core as the client, so the fixed determinism run must produce the
-/// exact combined hash the client logs (golden master 0xE2E39D335A8A3DE9). Pure unit tests — no
+/// exact combined hash the client logs (golden master 0xB23A291903F13C3C). Pure unit tests — no
 /// WebApplicationFactory, no DB, no Redis.
 /// </summary>
 [TestFixture]
@@ -26,8 +26,10 @@ public class SimulationDeterminismTests
     // first v11 0x6BBB306F6C224B06, v11 at the 2 fps stream 0x071D9CA6D62160D9 (issue #84 writes
     // the stream at 5 fps: same simulation, denser picture, so the hash moved, the version did not),
     // v11 at 5 fps 0xE72BA81A6D7A469C. Issue #80 (shots blocked by defenders in the lane) moved it
-    // again: interim, final v12 hash approved in #88.
-    private const ulong GoldenCombinedHash = 0xE2E39D335A8A3DE9UL;
+    // again (0xE2E39D335A8A3DE9; #75's keeper positioning alone 0xF6DBAE0B0D923CD3), and issues #75
+    // + #81 together (keeper positioning, the open-goal shortcut only with the keeper
+    // beaten or out of position, shot selection) once more: interim, final v12 hash approved in #88.
+    private const ulong GoldenCombinedHash = 0xB23A291903F13C3CUL;
 
     [Test]
     public void ServerRuntime_DeterminismCheck_MatchesTheClientGoldenHash()
@@ -55,7 +57,7 @@ public class SimulationDeterminismTests
 
         Assert.That(response.MatchCount, Is.EqualTo(DeterminismCheck.DefaultMatches));
         Assert.That(response.CombinedHash, Is.EqualTo(GoldenCombinedHash));
-        Assert.That(response.CombinedHashHex, Is.EqualTo("0xE2E39D335A8A3DE9"));
+        Assert.That(response.CombinedHashHex, Is.EqualTo("0xB23A291903F13C3C"));
         Assert.That(response.MatchesGolden, Is.True);
         Assert.That(response.GoldenHashHex, Is.EqualTo(response.CombinedHashHex));
         Assert.That(sim.GoldenCombinedHash, Is.EqualTo(GoldenCombinedHash));

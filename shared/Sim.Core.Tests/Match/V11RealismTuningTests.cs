@@ -15,15 +15,16 @@ namespace Sim.Core.Tests.Match
     /// (<see cref="RealismHarnessTests"/>, <see cref="TacticHarnessTests"/>) and judged with the
     /// user; these are the cheap regressions under them.
     ///
-    /// Fragility: the open-goal bounds are counts over four matches, set far from the harness
-    /// value (about 6 open goals a match over 1,000 matches) so that only a real regression
-    /// trips them; the band sample is flagged where it stands.
+    /// Fragility: the open-goal bounds are counts over twelve matches, set far from the harness
+    /// value (about 0.5 open goals a match over 1,000 matches since R10, issue #81; about 6 before)
+    /// so that only a real regression trips them; the band sample is flagged where it stands.
     /// </summary>
     [TestFixture]
     public class V11RealismTuningTests
     {
         private const ulong FirstSeed = 3400;
         private const int Matches = 4;
+        private const int OpenGoalMatches = 12;
         private const ulong BandSeed = 30_000;   // the realism harness's first seed
 
         private static League _league = null!;
@@ -93,13 +94,17 @@ namespace Sim.Core.Tests.Match
         {
             // Before the lane needed the mouth in view and nobody a stride from it, the trigger
             // fired 89-353 times a match and every one of them was a forced shot.
+            // Since R10 (issue #81) the keeper has to be beaten or out of position too, and the
+            // harness reads about 0.5 a match (it was about 6): so twelve of the harness's own
+            // seeds rather than four from FirstSeed (whose first twelve matches have none), and a
+            // floor of 0.1 (two in twelve) — still zero only if the trigger never fires.
             int chances = 0;
-            for (ulong seed = FirstSeed; seed < FirstSeed + Matches; seed++)
+            for (ulong seed = BandSeed; seed < BandSeed + OpenGoalMatches; seed++)
                 chances += RealismAnalyzer.Analyze(Play(Config(), seed))!.OpenGoalChances;
 
-            double perMatch = (double)chances / Matches;
-            TestContext.Out.WriteLine($"[V11 open goals] {perMatch:F1} a match");
-            Assert.That(perMatch, Is.InRange(0.5, 12.0));
+            double perMatch = (double)chances / OpenGoalMatches;
+            TestContext.Out.WriteLine($"[V11 open goals] {perMatch:F2} a match");
+            Assert.That(perMatch, Is.InRange(0.1, 12.0));
         }
 
         [Test]
@@ -190,11 +195,18 @@ namespace Sim.Core.Tests.Match
         [Test]
         public void TheRealismAnalyzer_ReadsTheBrainsOpenGoalGeometry()
         {
-            MatchReport r = Play(Config(), FirstSeed);
+            // R10 (issue #81) made an open goal rare (about 0.5 a match), so the first of the
+            // harness's seeds that has one, rather than FirstSeed's match, which has none.
             var none = new MatchBalance { V11OpenGoalRangeDm = 0 };
+            MatchReport? r = null;
+            for (ulong seed = BandSeed; seed < BandSeed + OpenGoalMatches && r == null; seed++)
+            {
+                MatchReport played = Play(Config(), seed);
+                if (new RealismAnalyzer().Measure(played)!.OpenGoalChances > 0) r = played;
+            }
 
-            Assert.That(new RealismAnalyzer().Measure(r)!.OpenGoalChances, Is.GreaterThan(0));
-            Assert.That(new RealismAnalyzer(none).Measure(r)!.OpenGoalChances, Is.Zero);
+            Assert.That(r, Is.Not.Null, "an open goal in one of the test seeds");
+            Assert.That(new RealismAnalyzer(none).Measure(r!)!.OpenGoalChances, Is.Zero);
         }
     }
 }

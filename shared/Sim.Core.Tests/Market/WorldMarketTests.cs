@@ -24,6 +24,7 @@ namespace Sim.Core.Tests.Market
     /// golden master is untouched - proven elsewhere by SimulationDeterminismTests staying green.
     /// </summary>
     [TestFixture]
+    [NonParallelizable] // asserts a wall-clock budget
     public class WorldMarketTests
     {
         private static readonly BalanceConfig Cfg = new BalanceConfig();

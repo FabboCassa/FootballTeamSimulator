@@ -1281,9 +1281,11 @@ namespace Sim.Core.Config
         /// <summary>
         /// How wide a V11 strike can go, in percent of ShotSpreadDm. That spread was sized for the
         /// close-range shots engine v10 took; V11 shoots at the open goal from the edge of the box
-        /// too, and from there the full spread put three strikes in four off target.
+        /// too, and from there the full spread put three strikes in four off target. 45 since R6: with
+        /// V11KeeperStopPercent cut and the keeper claiming balls in his box, fewer close-range
+        /// rebounds land on target, and at 56 on-target fell under 30%.
         /// </summary>
-        public int V11ShotSpreadPercent { get; set; } = 56;
+        public int V11ShotSpreadPercent { get; set; } = 45;
 
         /// <summary>
         /// R9 on V11: what a side's skills lose at zero familiarity with its tactic, in permille,
@@ -1384,10 +1386,14 @@ namespace Sim.Core.Config
         public int V11OpenGoalRangeDm { get; set; } = 200;
 
         /// <summary>
-        /// How much of a shot appetite above 100 stretches <see cref="V11OpenGoalRangeDm"/>, in
-        /// percent: at 100 a side with an appetite of 125 has a go at a clear sight from 25 m.
+        /// How much of a shot appetite above 100 adds to <see cref="V11ShotFromDistancePercent"/>'s
+        /// credit for a clear sight from outside the box, in percent: at 400 a side with an appetite
+        /// of 125 credits it twice over. Until issue #81 it stretched <see cref="V11OpenGoalRangeDm"/>
+        /// (a keen side's shortcut from 25 m); R10 holds the shortcut to 20 m, so a keen side's long
+        /// sight is now a priced shot. 400: at 100 eager sides took 6.6 shots a match from outside
+        /// the box against patient ones' 4.8 (InstructionsTests wants 2 more), at 400 7.8.
         /// </summary>
-        public int V11ShotAppetiteRangePercent { get; set; } = 100;
+        public int V11ShotAppetiteRangePercent { get; set; } = 400;
 
         /// <summary>
         /// ...and with the goal mouth in view: the sine of the angle between the lines to the two
@@ -1409,14 +1415,30 @@ namespace Sim.Core.Config
         public int V11OpenGoalFreeRadiusDm { get; set; } = 50;
         public int V11OpenGoalLaneMarginDm { get; set; } = 60;
 
+        /// <summary>
+        /// ...and the keeper beaten or out of position (R10): not in the lane nor within this of
+        /// its sides — a keeper between ball and goal saves the shot a striker would walk in, two
+        /// metres being about the reach of his dive — unless he has come right out onto the ball,
+        /// within <see cref="V11OpenGoalKeeperOneOnOneDm"/>, committed: the striker goes round or
+        /// past him. Without it two shots in three were taken on sight at a keeper in the way.
+        /// 35 (issue #81): at 40 the keeper rushing out made 16-18% of shots shortcuts (R10: at
+        /// most 15%), at 25 the rounding spell outlived R4's 1.5 s and openGoalShotRate fell to 0.57.
+        /// </summary>
+        public int V11OpenGoalKeeperMarginDm { get; set; } = 20;
+        public int V11OpenGoalKeeperOneOnOneDm { get; set; } = 35;
+
         /// <summary>Inside this distance an open goal is shot at on sight; beyond it he takes one touch in first.</summary>
         public int V11OpenGoalShootNowDm { get; set; } = 120;
 
         /// <summary>The touch in toward the goal centre before the shot at an open goal from the edge of range.</summary>
         public int V11OpenGoalDriveDm { get; set; } = 50;
 
-        /// <summary>In a 1v1, a keeper in the triangle this close to the ball is dribbled round rather than shot at.</summary>
-        public int V11RoundKeeperDm { get; set; } = 25;
+        /// <summary>
+        /// In a 1v1, a keeper in the triangle this close to the ball is dribbled round rather than shot at.
+        /// 15 since issue #81 (was 25): with the keeper no longer ignored, the dribble round a man
+        /// 2-2.5 m off lost one open goal in eleven to him (openGoalShotRate 0.92 -> 0.97).
+        /// </summary>
+        public int V11RoundKeeperDm { get; set; } = 15;
 
         /// <summary>How far to the side of the keeper the dribble round him goes.</summary>
         public int V11RoundKeeperSideDm { get; set; } = 30;
@@ -1426,13 +1448,16 @@ namespace Sim.Core.Config
         /// table stays a real-scale model; the simulator's keeper and blocks turn a real-scale
         /// chance into a goal less often than that, and at the full xG every touch in the box
         /// was a strike.
+        /// 105 since issue #81 (was 10): with the open-goal shortcut only for a genuinely open goal
+        /// the priced shot is where shots come from, and the man on the shooter square in the lane
+        /// now vetoes it (V11ShotCloseBlocker*); at 10 a match had 10.6 shots and 1.2 goals.
         /// </summary>
-        public int V11ShotValuePercent { get; set; } = 10;
+        public int V11ShotValuePercent { get; set; } = 105;
 
         /// <summary>
         /// What each outfield defender in the way of a shot leaves of its value, in percent: in the
         /// ball-to-posts triangle or within V11ShotBlockerMarginDm of it, where he blocks it. The
-        /// man on the shooter is not counted: he is the pressure the xG already reads.
+        /// man on the shooter is priced by V11ShotCloseBlocker* instead.
         /// 25 since issue #80 (was 20): a real striker also hits it through a crowded box, which is
         /// where a quarter of real shots hit a defender; at 20 one body all but vetoed the shot.
         /// Much higher pushes shots/match past R7's 28 (40: 28.8).
@@ -1441,13 +1466,38 @@ namespace Sim.Core.Config
         public int V11ShotBlockerMarginDm { get; set; } = 80;
 
         /// <summary>
+        /// The man on the shooter (within PressureRadiusDm) in the ball-to-posts triangle or within
+        /// V11ShotCloseBlockerMarginDm of it leaves the shot this much of its value (issue #81): he
+        /// charges a strike down nearly every time (ShotBlock's close range), so a striker with a
+        /// man square in front of him seldom shoots into him. Uncounted, he made three blocks in
+        /// four of R2's blocked share (42% of shots); at 0 the share fell under R2's 20% floor.
+        /// </summary>
+        public int V11ShotCloseBlockerMarginDm { get; set; } = 35;
+        public int V11ShotCloseBlockerPercent { get; set; } = 10;
+
+        /// <summary>
+        /// A shot from outside the box at a clear sight — no outfield defender in the ball-to-posts
+        /// triangle or within V11ShotClearSightMarginDm of it — is credited this percent of its
+        /// value (issue #81, R10 shot selection). The xG table is real-scale, but a ball into this
+        /// engine's box is completed far more often than football's, so at the plain xG the shot
+        /// from distance never beat the ball in: with the shortcut gone 87% of shots came from
+        /// inside the box (R2: 60-72%). Only at a clear sight, so that a man in the lane still
+        /// sends the ball to the team-mate free in the box (R10's scripted case); the 8 m blocker
+        /// margin is wider than any block's reach, so the sight uses ShotBlock's own 3 m.
+        /// </summary>
+        public int V11ShotFromDistancePercent { get; set; } = 900;
+        public int V11ShotClearSightMarginDm { get; set; } = 30;
+
+        /// <summary>
         /// The keeper on V11, in percent of the base Keeper* figures: how far he dives, the odds he
         /// stops a shot on target he reaches, that he holds one he stops rather than parrying it,
         /// and that a parry goes behind (a corner). The base figures were sized for engine v10's
-        /// chances, most of them from inside six yards.
+        /// chances, most of them from inside six yards. Dive fell from 130 and stop from 125 when R6
+        /// put the keeper on the ball-goal line: standing there he reaches nearly every strike on
+        /// target, and at 130/125 goals fell to 0.17 a match (interim, until R7's save model).
         /// </summary>
-        public int V11KeeperDivePercent { get; set; } = 130;
-        public int V11KeeperStopPercent { get; set; } = 125;
+        public int V11KeeperDivePercent { get; set; } = 55;
+        public int V11KeeperStopPercent { get; set; } = 38;
         public int V11KeeperHoldPercent { get; set; } = 90;
         public int V11KeeperParryBehindPercent { get; set; } = 180;
 
@@ -1709,9 +1759,14 @@ namespace Sim.Core.Config
         /// A ball a defender only gets something on INSIDE HIS OWN BOX is a clearance, not a
         /// deflection: how hard he gets it away, and how often he simply puts it behind for the
         /// corner.
+        /// 210 since issue #81 (was 265): with the open-goal shortcut only for a genuinely open
+        /// goal, a move is played on into the box rather than finished on sight, and more balls are
+        /// got at there (corners off passes, recoveries, saves and blocks all rose): at 265 the
+        /// pitch harness had 11.8 corners a match and RefereeTests' sample 14.1 (8-13); at 210,
+        /// 9.8 and 10.9, with goals 2.52 (220: 10.2 corners but goals 2.47, nearer R7's 2.4 floor).
         /// </summary>
         public int DeflectClearForcePercent { get; set; } = 100;
-        public int DeflectBehindPermille { get; set; } = 265;
+        public int DeflectBehindPermille { get; set; } = 210;
         public int DeflectIntoTouchPermille { get; set; } = 170;
 
         /// <summary>
@@ -2199,9 +2254,19 @@ namespace Sim.Core.Config
 
         // --- Goalkeeper ---
 
+        // Where he stands in open play: see KeeperPositioning (R6). Depths run from his goal centre.
         public int KeeperDepthDm { get; set; } = 45;
-        public int KeeperLateralPercent { get; set; } = 38;
-        public int KeeperRushDm { get; set; } = 130;
+        public int KeeperRushDm { get; set; } = 125;
+        public int KeeperRushFromDm { get; set; } = 400;
+        public int KeeperRushFullDm { get; set; } = 650;
+        // R6 took him off the edge of his box, where he swept up what was played into it (+5 shots
+        // a match inside the box). He still owns it: a ball the other side played into his box he
+        // reaches for KeeperClaimReachDm further than a man does with his feet, and catches it,
+        // punching KeeperClaimPunchPercent of them. One he claimed past KeeperCarryDepthDm he plays
+        // from where he took it, so he is not caught off his line when it leaves him.
+        public int KeeperClaimReachDm { get; set; } = 40;
+        public int KeeperClaimPunchPercent { get; set; } = 40;
+        public int KeeperCarryDepthDm { get; set; } = 55;
 
         // --- Restarts ---
 

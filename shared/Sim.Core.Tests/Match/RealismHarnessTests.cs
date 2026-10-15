@@ -49,9 +49,17 @@ namespace Sim.Core.Tests.Match
             foreach (RealismRow row in v11.Rows().Where(row => gated.Contains(row.Band.Name)))
                 Assert.That(row.InBand, Is.True, $"V11 {row.Band.Name} {row.Value:F3} outside {row.Band.Describe()}");
 
-            // R2's "blocked % of shots" is REPORT-ONLY here (printed above by shotPass.Format): issue #80
-            // ships the block mechanism, and #81 owns bringing it into the 20-30% band (user decision
-            // 2026-10-10); ~73% of shots are open-goal shortcuts no plausible block reach can touch.
+            // R10 (#81): the open-goal shortcut only for a genuinely open goal, so the shot mix is the
+            // brain's priced choice — and with it the share of shots a body in the lane blocks.
+            string[] shotGated =
+            {
+                ShotPassBands.OpenGoalShortcutPercent.Name, RealismReference.InsideBoxPercent.Name,
+                RealismReference.BlockedPercent.Name
+            };
+            foreach (ShotPassRow row in shotPass.Rows().Where(row => shotGated.Contains(row.Name)))
+                Assert.That(row.InBand, Is.True, $"V11 {row.Name} {row.Value:F3} outside its band");
+            RealismRow openGoal = v11.Rows().Single(row => row.Band.Name == RealismBands.OpenGoalShotRate.Name);
+            Assert.That(openGoal.InBand, Is.True, $"V11 openGoalShotRate {openGoal.Value:F3} outside {openGoal.Band.Describe()}");
         }
 
         private static RealismTally Run(Club a, Club b, out ShapeMovementTally shape, out ShotPassTally shotPass)
