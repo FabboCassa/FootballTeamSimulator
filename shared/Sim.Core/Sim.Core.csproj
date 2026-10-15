@@ -9,6 +9,9 @@
     <AssemblyName>Sim.Core</AssemblyName>
     <Deterministic>true</Deterministic>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- Optimized in Debug too: unoptimized JIT runs the watched-match tests ~2.6x slower, and
+         Unity takes the Release DLL anyway (tools/build-simcore.ps1). -->
+    <Optimize>true</Optimize>
   </PropertyGroup>
 
 </Project>

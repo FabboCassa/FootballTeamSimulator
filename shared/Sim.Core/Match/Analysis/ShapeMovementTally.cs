@@ -34,6 +34,7 @@ namespace Sim.Core.Match.Analysis
 
         private readonly ShapeMovementMetrics _sum = new ShapeMovementMetrics();
         private readonly List<double> _offTargetMedians = new List<double>();
+        private readonly List<double> _offTargetNoWindowMedians = new List<double>();
 
         public int Matches { get; private set; }
 
@@ -59,6 +60,7 @@ namespace Sim.Core.Match.Analysis
             _sum.KeeperOpenPlayFrames += m.KeeperOpenPlayFrames;
             _sum.KeeperDepthBreakFrames += m.KeeperDepthBreakFrames;
             _offTargetMedians.Add(m.MedianOffTargetSeconds);
+            _offTargetNoWindowMedians.Add(m.MedianOffTargetSecondsNoWindow);
         }
 
         /// <summary>Every reading against its target, in spec order.</summary>
@@ -75,6 +77,7 @@ namespace Sim.Core.Match.Analysis
                 Row(ShapeMovementTargets.AttackingWidthM, _sum.AttackingWidthM, ShapeMovementTargets.R4),
                 new ShapeMovementRow(ShapeMovementTargets.BothTouchlinesName, _sum.BothTouchlinesPercent, null, ShapeMovementTargets.R4),
                 Row(ShapeMovementTargets.MedianOffTargetSeconds, Median(_offTargetMedians), ShapeMovementTargets.R4),
+                new ShapeMovementRow(ShapeMovementTargets.OffTargetNoWindowName, Median(_offTargetNoWindowMedians), null, ShapeMovementTargets.R4),
                 Row(ShapeMovementTargets.StandStillPercent, _sum.StandStillPercent, ShapeMovementTargets.R8),
                 Row(RealismReference.DistancePerOutfieldPlayerKm, distanceKm, Reference),
                 Row(ShapeMovementTargets.OffPitchFrames, _sum.OffPitchFrames, ShapeMovementTargets.R5),

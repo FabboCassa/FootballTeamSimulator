@@ -49,6 +49,11 @@ namespace Sim.Core.Tests.Match
             foreach (RealismRow row in v11.Rows().Where(row => gated.Contains(row.Band.Name)))
                 Assert.That(row.InBand, Is.True, $"V11 {row.Band.Name} {row.Value:F3} outside {row.Band.Describe()}");
 
+            // Real-match spec R4: off-target time, gated on the reading with the turnover window;
+            // the one without it is printed beside it for the user to judge the gap (#117).
+            ShapeMovementRow offTarget = shape.Rows().Single(row => row.Name == ShapeMovementTargets.MedianOffTargetSeconds.Name);
+            Assert.That(offTarget.InBand, Is.True, $"V11 {offTarget.Name} {offTarget.Value:F3} outside {offTarget.Band?.Describe()}");
+
             // Real-match spec R9: the passing volume, at the 81-minute ball in play (550-750 a team).
             // Its ratio rows (pass accuracy, passes per sequence, 10+ sequences, shots after 0-1 and
             // 3+ passes) are printed above, report-only here: they move to #87 (user decision

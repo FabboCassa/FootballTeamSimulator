@@ -136,6 +136,29 @@ namespace Sim.Core.Tests.Match
             Assert.That(Measure(s).MedianOffTargetSeconds, Is.EqualTo(10.0));
         }
 
+        [Test]
+        public void OffTarget_TheRunBackAfterATurnover_IsReadWithAndWithoutTheWindow()
+        {
+            // Eleven men each run thirty metres off for four seconds right after a turnover: the
+            // reading with the 5 s transition window is 0, the one without it 4.
+            PositionStream s = NewStream(350);
+            Hold(s, 0, 0, true, 1, Pitch.CenterX, CY);
+            for (int r = 0; r < 11; r++)
+            {
+                bool home = r < 10;
+                int slot = home ? r + 1 : 2;           // never the man who wins the ball (slot 1)
+                int turnover = 10 + 30 * r;
+                Hold(s, turnover, turnover, r % 2 == 1, 1, Pitch.CenterX, CY);
+                for (int t = turnover; t < turnover + 8; t++)
+                    Put(s, home, t, slot, home ? HomeStackX : AwayStackX, home ? CY + 300 : CY - 300);
+            }
+
+            ShapeMovementMetrics m = Measure(s);
+
+            Assert.That(m.MedianOffTargetSeconds, Is.EqualTo(0.0));
+            Assert.That(m.MedianOffTargetSecondsNoWindow, Is.EqualTo(4.0));
+        }
+
         // ------------------------------------------------------------------ R8: movement
 
         [Test]
@@ -289,7 +312,7 @@ namespace Sim.Core.Tests.Match
                 DefendingSamples = 100, DefendingLengthDm = 100 * 420, DefendingWidthDm = 100 * 380,
                 OwnHalfDefendingSamples = 50, OwnHalfLengthDm = 50 * 350,
                 AttackingSamples = 40, AttackingWidthDm = 40 * 400, BothTouchlinesSamples = 10,
-                MedianOffTargetSeconds = 4,
+                MedianOffTargetSeconds = 4, MedianOffTargetSecondsNoWindow = 7,
                 OutfieldOpenPlayFrames = 2000, StandStillFrames = 400,
                 HomeOutfieldDistanceDm = 1_000_000, AwayOutfieldDistanceDm = 1_100_000,
                 OffPitchFrames = 3,
@@ -308,6 +331,7 @@ namespace Sim.Core.Tests.Match
             AssertRow(rows[ShapeMovementTargets.AttackingWidthM.Name], 40.0, false);
             AssertRow(rows[ShapeMovementTargets.BothTouchlinesName], 25.0, null);
             AssertRow(rows[ShapeMovementTargets.MedianOffTargetSeconds.Name], 4.0, true);
+            AssertRow(rows[ShapeMovementTargets.OffTargetNoWindowName], 7.0, null);
             AssertRow(rows[ShapeMovementTargets.StandStillPercent.Name], 20.0, false);
             AssertRow(rows[RealismReference.DistancePerOutfieldPlayerKm.Name], 10.5, true);
             AssertRow(rows[ShapeMovementTargets.OffPitchFrames.Name], 6.0, false);
