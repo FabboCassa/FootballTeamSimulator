@@ -79,6 +79,7 @@ namespace Sim.Core.Match.Analysis
             var m = new ShapeMovementMetrics();
             WalkFrames(s, ticks, m);
             m.MedianOffTargetSeconds = _offTarget.Measure(s, ticks, _keeper, _sentOffFrom);
+            m.MedianOffTargetSecondsNoWindow = _offTarget.MedianWithoutWindow;
             return m;
         }
 
