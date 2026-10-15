@@ -54,12 +54,21 @@ namespace Sim.Core.Tests.Match
             return s;
         }
 
+        /// <summary>A scene with the keeper stranded 15 m out and wide of his goal (R10: beaten).</summary>
+        private static V11Scene Stranded(int ballX, int ballY)
+        {
+            V11Scene s = Scene(ballX, ballY);
+            s.Reset();
+            s.AddFoe(At(GoalX - 150, Mid + 150), keeper: true);
+            return s;
+        }
+
         // ---------------------------------------------------------------- R4: the open goal
 
         [Test]
         public void OpenGoal_Inside20m_IsTakenOn_EvenWhileHolding_AndEvenWithAManBetterPlaced()
         {
-            V11Scene s = Scene(GoalX - 160, Mid - 40);
+            V11Scene s = Stranded(GoalX - 160, Mid - 40);
             s.AddFoe(At(GoalX - 250, Mid), keeper: false);        // beaten: behind the ball
             s.AddFoe(At(GoalX - 120, Mid + 200), keeper: false);  // wide of the posts' triangle
             s.AddMate(At(GoalX - 60, Mid + 10), keeper: false);   // free on the six-yard line
@@ -81,7 +90,7 @@ namespace Sim.Core.Tests.Match
         [Test]
         public void OpenGoal_CloseIn_IsShotOnSight()
         {
-            V11Scene s = Scene(GoalX - 100, Mid + 30);
+            V11Scene s = Stranded(GoalX - 100, Mid + 30);
             s.AddFoe(At(GoalX - 180, Mid), keeper: false);
             s.AddMate(At(GoalX - 50, Mid - 20), keeper: false);
 
@@ -102,25 +111,25 @@ namespace Sim.Core.Tests.Match
         [Test]
         public void ADefenderInTheTriangle_OrBeyond20m_IsNoOpenGoal()
         {
-            V11Scene blocked = Scene(GoalX - 160, Mid);
+            V11Scene blocked = Stranded(GoalX - 160, Mid);
             blocked.AddFoe(At(GoalX - 80, Mid + 10), keeper: false);
             Assert.That(_valuation.IsOpenGoal(blocked), Is.False, "a defender on the line to goal closes it");
 
-            V11Scene far = Scene(GoalX - 230, Mid);
+            V11Scene far = Stranded(GoalX - 230, Mid);
             Assert.That(_valuation.IsOpenGoal(far), Is.False, "23 m out is not R4's open goal");
 
-            V11Scene keeperOnly = Scene(GoalX - 160, Mid);
-            Assert.That(_valuation.IsOpenGoal(keeperOnly), Is.True, "the keeper alone does not close it");
+            V11Scene keeperOnly = Stranded(GoalX - 160, Mid);
+            Assert.That(_valuation.IsOpenGoal(keeperOnly), Is.True, "a stranded keeper alone does not close it");
         }
 
         [Test]
         public void AnEmptySliverByTheByline_IsNoOpenGoal_TheMouthMustBeInView()
         {
             // 18 m from the goal centre, but two metres off the byline: the posts are almost in line.
-            V11Scene byline = Scene(GoalX - 20, Mid + 180);
+            V11Scene byline = Stranded(GoalX - 20, Mid + 180);
             Assert.That(_valuation.IsOpenGoal(byline), Is.False);
 
-            V11Scene inFront = Scene(GoalX - 180, Mid + 20);
+            V11Scene inFront = Stranded(GoalX - 180, Mid + 20);
             Assert.That(_valuation.IsOpenGoal(inFront), Is.True, "the same distance with the goal in view is open");
         }
 
@@ -129,33 +138,84 @@ namespace Sim.Core.Tests.Match
         {
             // From 16 m straight on, 6 m in front of goal the lane is (37 * 6 / 16) = 14 dm either side.
             int margin = _cfg.V11OpenGoalLaneMarginDm;
-            V11Scene beside = Scene(GoalX - 160, Mid);
+            V11Scene beside = Stranded(GoalX - 160, Mid);
             beside.AddFoe(At(GoalX - 60, Mid + 14 + margin / 2), keeper: false);
             Assert.That(_valuation.IsOpenGoal(beside), Is.False, "a man a stride from the line of the shot blocks it");
 
-            V11Scene wide = Scene(GoalX - 160, Mid);
+            V11Scene wide = Stranded(GoalX - 160, Mid);
             wide.AddFoe(At(GoalX - 60, Mid + 14 + margin * 2), keeper: false);
             Assert.That(_valuation.IsOpenGoal(wide), Is.True, "a man well wide of it does not");
 
-            V11Scene onHim = Scene(GoalX - 160, Mid);
+            V11Scene onHim = Stranded(GoalX - 160, Mid);
             onHim.AddFoe(At(GoalX - 160 - _cfg.V11OpenGoalFreeRadiusDm * 3 / 4, Mid + 5), keeper: false);
             Assert.That(_valuation.IsOpenGoal(onHim), Is.False, "a man on the ball closes it");
         }
 
         [Test]
-        public void ABodyInTheWay_CutsTheShot_ButTheManOnHimIsOnlyPressure()
+        public void AKeeperInTheWay_ClosesTheShortcut_OneStrandedOrOutOnTheBall_DoesNot()
         {
-            int Shot(int? foeX)
+            V11Scene set = Scene(GoalX - 160, Mid);
+            Assert.That(_valuation.IsOpenGoal(set), Is.False, "a keeper set between the posts is no open goal");
+
+            V11Scene stranded = Scene(GoalX - 160, Mid);
+            stranded.Reset();
+            stranded.AddFoe(At(GoalX - 40, Mid + 37 + _cfg.V11OpenGoalKeeperMarginDm * 2), keeper: true);
+            Assert.That(_valuation.IsOpenGoal(stranded), Is.True, "a keeper out by the post leaves the goal open");
+
+            V11Scene midway = Scene(GoalX - 160, Mid);
+            midway.Reset();
+            midway.AddFoe(At(GoalX - 80, Mid + 10), keeper: true);
+            Assert.That(_valuation.IsOpenGoal(midway), Is.False, "a keeper off his line but still in the way covers it");
+
+            V11Scene onHim = Scene(GoalX - 160, Mid);
+            onHim.Reset();
+            onHim.AddFoe(At(GoalX - 160 + _cfg.V11OpenGoalKeeperOneOnOneDm - 5, Mid), keeper: true);
+            Assert.That(_valuation.IsOpenGoal(onHim), Is.True, "a keeper come right out onto him is committed: round him or past him");
+        }
+
+        /// <summary>
+        /// R10: from outside the box, with a defender in the lane to goal and a team-mate free in the
+        /// box, the play is worked on — a ball to him or a run at the box — not a shot into the man.
+        /// </summary>
+        [Test]
+        public void OutsideTheBox_ABlockerInTheLane_AndAManFreeInTheBox_IsPassedOrCarried()
+        {
+            int cases = 0, worked = 0;
+            foreach (int depth in new[] { 170, 190, 210, 230 })
+            foreach (int across in new[] { -80, 0, 80 })
+            foreach (int mateY in new[] { Mid - 50, Mid + 60 })
+            {
+                int ballX = GoalX - depth, ballY = Mid + across;
+                V11Scene s = Scene(ballX, ballY);
+                s.AddFoe(At((ballX + GoalX) / 2, (ballY + Mid) / 2), keeper: false);   // square in the lane
+                s.AddMate(At(GoalX - 80, mateY), keeper: false);                        // free at the penalty spot
+
+                V11ActionKind kind = _valuation.Choose(s, holding: false).Kind;
+                cases++;
+                if (kind == V11ActionKind.Pass || kind == V11ActionKind.Cross || kind == V11ActionKind.Carry) worked++;
+            }
+
+            TestContext.Out.WriteLine($"[R10] worked {worked}/{cases}");
+            Assert.That(worked, Is.GreaterThanOrEqualTo(cases * 7 / 10));
+        }
+
+        [Test]
+        public void ABodyInTheWay_CutsTheShot_ButTheManOnHimIsOnlyPressure_UnlessHeIsSquareInTheLane()
+        {
+            int Shot(int? foeX, int foeY = Mid)
             {
                 V11Scene s = Scene(GoalX - 160, Mid);
-                if (foeX.HasValue) s.AddFoe(At(foeX.Value, Mid), keeper: false);
+                if (foeX.HasValue) s.AddFoe(At(foeX.Value, foeY), keeper: false);
                 return _valuation.ShotValue(s);
             }
 
             int clear = Shot(null);
+            int onHim = _cfg.PressureRadiusDm / 2;
             Assert.That(Shot(GoalX - 60), Is.EqualTo(clear * _cfg.V11ShotBlockerPercent / 100), "a blocker 10 m ahead");
-            Assert.That(Shot(GoalX - 160 + _cfg.PressureRadiusDm / 2), Is.EqualTo(clear),
-                "the man on him is the pressure the xG reads, not a second discount");
+            Assert.That(Shot(GoalX - 160, Mid + _cfg.PressureRadiusDm - 8), Is.EqualTo(clear),
+                "the man on him at his shoulder is the pressure the xG reads, not a second discount");
+            Assert.That(Shot(GoalX - 160 + onHim), Is.EqualTo(clear * _cfg.V11ShotCloseBlockerPercent / 100),
+                "R10: the man on him square in the line of it charges it down");
         }
 
         [Test]
@@ -189,7 +249,7 @@ namespace Sim.Core.Tests.Match
         /// ball where it was aimed and the keeper holds his ground. It must end in a shot, with a
         /// dribble round him on the way if he is on top of him — never in a pass back or a stall.
         /// </summary>
-        [TestCase(40)]
+        [TestCase(30)]   // inside V11OpenGoalKeeperOneOnOneDm (35): further off, still in the lane, he is not beaten (R10)
         [TestCase(20)]
         [TestCase(10)]
         public void OneVersusOne_EndsInAShot_OrADribbleRoundTheKeeper(int keeperGapDm)
@@ -296,7 +356,7 @@ namespace Sim.Core.Tests.Match
         public void ACloseCentralChance_IsShot_AndThe30mOne_IsWorked()
         {
             V11Scene close = Scene(GoalX - 90, Mid);
-            close.AddFoe(At(GoalX - 70, Mid + 5), keeper: false);    // in the triangle: no open goal
+            close.AddFoe(At(GoalX - 30, Mid + 5), keeper: false);    // in the triangle: no open goal, but not on him
             close.AddMate(At(GoalX - 250, Mid + 150), keeper: false);
             Assert.That(_valuation.IsOpenGoal(close), Is.False);
             Assert.That(_valuation.Choose(close, holding: false).Kind, Is.EqualTo(V11ActionKind.Shot));
@@ -353,7 +413,7 @@ namespace Sim.Core.Tests.Match
         // ---------------------------------------------------------------- in a match
 
         /// <summary>
-        /// The scripted rule, on the pitch: over forty whole V11 matches, measured off the position
+        /// The scripted rule, on the pitch: over 480 whole V11 matches, measured off the position
         /// stream by the harness's own <see cref="RealismAnalyzer"/>, the open goals are shot at
         /// within 1.5 s. The 1,000-match reading is <see cref="V11ActionHarnessTests"/>.
         /// </summary>
@@ -362,8 +422,9 @@ namespace Sim.Core.Tests.Match
         {
             League league = new LeagueGenerator().Generate(new Pcg32(20260611));
             var cfg = new BalanceConfig();
-            // Four matches (~24 chances) flipped with every tuning change; this gives a couple of hundred.
-            const int Matches = 40;
+            // Four matches (~24 chances) flipped with every tuning change; since R10 (#81) a genuinely
+            // open goal is rarer (~0.4 a match), and this gives a couple of hundred again.
+            const int Matches = 480;
             var metrics = new RealismMetrics[Matches];
 
             Parallel.For(0, Matches, i =>
@@ -392,6 +453,57 @@ namespace Sim.Core.Tests.Match
         private static TacticInstructions With(Mentality m, Tempo t, Width w = Width.Normal) =>
             new TacticInstructions(m, Pressing.Medium, t, w);
 
+        /// <summary>
+        /// R10: the shortcut is for a genuinely open goal within 20 m, whatever the side's shot
+        /// appetite — a keen side's strike from further out is a priced shot, not a goal walked into.
+        /// </summary>
+        [Test]
+        public void AKeenSide_GetsNoShortcutBeyond20m_NorPastASetKeeper()
+        {
+            V11Scene keenFar = Stranded(GoalX - 230, Mid);
+            keenFar.ShotAppetitePercent = 125;
+            Assert.That(_valuation.IsOpenGoal(keenFar), Is.False, "23 m is beyond the shortcut, keeper beaten or not");
+
+            V11Scene keenNear = Scene(GoalX - 160, Mid);
+            keenNear.ShotAppetitePercent = 125;
+            Assert.That(_valuation.IsOpenGoal(keenNear), Is.False, "inside 20 m the set keeper closes it for anybody");
+
+            V11Scene keenOpen = Stranded(GoalX - 160, Mid);
+            keenOpen.ShotAppetitePercent = 125;
+            Assert.That(_valuation.IsOpenGoal(keenOpen), Is.True, "16 m with the keeper stranded is open");
+        }
+
+        /// <summary>
+        /// R10's shot selection from distance: from outside the box a clear sight is credited
+        /// V11ShotFromDistancePercent of its value; a man in the lane takes that away as well as
+        /// cutting the shot, so the ball goes to the man free in the box instead.
+        /// </summary>
+        [Test]
+        public void FromOutsideTheBox_AClearSightIsWorthTheShot_AManInTheLaneIsNot()
+        {
+            int Shot(int ballX, bool blocker)
+            {
+                V11Scene s = Scene(ballX, Mid);
+                if (blocker) s.AddFoe(At((ballX + GoalX) / 2, Mid), keeper: false);
+                return _valuation.ShotValue(s);
+            }
+
+            int Plain(int ballX)
+            {
+                V11Scene s = Scene(ballX, Mid);
+                int xg = ExpectedGoals.Permille(s.BallXDm, s.BallYDm, s.AttacksHighX, s.PressurePermille,
+                    s.Shooting, s.Technique, _cfg.ActionModels);
+                return xg * 10 * _cfg.V11ShotValuePercent / 100;
+            }
+
+            int far = Plain(GoalX - 200);
+            Assert.That(Shot(GoalX - 200, blocker: false), Is.EqualTo(far * _cfg.V11ShotFromDistancePercent / 100),
+                "a clear sight from 20 m");
+            Assert.That(Shot(GoalX - 200, blocker: true), Is.EqualTo(far * _cfg.V11ShotBlockerPercent / 100),
+                "a man in the lane: no credit for distance, and the block's cut");
+            Assert.That(Shot(GoalX - 120, blocker: false), Is.EqualTo(Plain(GoalX - 120)), "inside the box the xG alone");
+        }
+
         [Test]
         public void ShotAppetite_PricesTheShot()
         {
@@ -401,6 +513,27 @@ namespace Sim.Core.Tests.Match
             shy.ShotAppetitePercent = 80;
 
             Assert.That(_valuation.ShotValue(keen), Is.GreaterThan(_valuation.ShotValue(shy)));
+        }
+
+        /// <summary>
+        /// Issue #66's long sight, priced since R10 (#81): a keen side credits a clear sight from
+        /// outside the box with V11ShotAppetiteRangePercent of its appetite above 100 on top of the
+        /// appetite itself; inside the box, and for a patient side, the appetite alone.
+        /// </summary>
+        [Test]
+        public void AKeenSide_CreditsAClearSightFromDistance_BeyondItsAppetite()
+        {
+            double Ratio(int ballX, int appetite)
+            {
+                V11Scene s = Scene(ballX, Mid);
+                s.ShotAppetitePercent = appetite;
+                return (double)_valuation.ShotValue(s) / _valuation.ShotValue(Scene(ballX, Mid));
+            }
+
+            double reach = (100 + 25 * _cfg.V11ShotAppetiteRangePercent / 100) / 100.0;
+            Assert.That(Ratio(GoalX - 230, 125), Is.EqualTo(1.25 * reach).Within(0.01), "23 m out, a clear sight");
+            Assert.That(Ratio(GoalX - 120, 125), Is.EqualTo(1.25).Within(0.01), "inside the box: the appetite alone");
+            Assert.That(Ratio(GoalX - 230, 80), Is.EqualTo(0.80).Within(0.01), "a patient side: the appetite alone");
         }
 
         [Test]
