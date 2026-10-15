@@ -292,6 +292,33 @@ namespace Sim.Core.Tests.Match
             Assert.That(analyzer.OffTargetSeconds(false, 6), Is.EqualTo(0.0));
         }
 
+        // A turnover flips every man's target to the other phase's shape in one frame; the run
+        // back in the first 5 s after it (R2's written window, 10 frames here) is not off target.
+        private static double OffTargetAfterTurnover(int turnover, int from, int to)
+        {
+            PositionStream s = NewStream(120);
+            Hold(s, 0, 0, true, 1, Pitch.CenterX, CY);
+            if (turnover >= 0) Hold(s, turnover, turnover, false, 1, Pitch.CenterX, CY);
+            for (int t = from; t < to; t++) Put(s, true, t, 5, HomeStackX, CY + 300);
+
+            var analyzer = new RealismAnalyzer();
+            analyzer.Measure(new MatchReport { Positions = s });
+            return analyzer.OffTargetSeconds(true, 5);
+        }
+
+        [Test]
+        public void OffTarget_FourSecondsRightAfterATurnover_DoNotCount() =>
+            Assert.That(OffTargetAfterTurnover(40, 40, 48), Is.EqualTo(0.0));
+
+        [Test]
+        public void OffTarget_FourSecondsInASettledPhase_Count() =>
+            Assert.That(OffTargetAfterTurnover(20, 40, 48), Is.EqualTo(4.0));
+
+        [Test]
+        public void OffTarget_ASpellRunningPastTheTransitionWindow_CountsOnlyThePartAfterIt() =>
+            // turnover at frame 40: window is frames 40-49, the spell 44-59 counts 50-59
+            Assert.That(OffTargetAfterTurnover(40, 44, 60), Is.EqualTo(5.0));
+
         [Test]
         public void OffTarget_MedianIsTakenOverTheTwentyOutfielders()
         {

@@ -32,6 +32,9 @@ namespace Sim.Core.Match.Analysis
         /// <summary>R4: the median, over the outfielders of both sides, of each man's off-target seconds.</summary>
         public double MedianOffTargetSeconds { get; set; }
 
+        /// <summary>The same reading with the run back after a turnover counted (no transition window): printed, not judged.</summary>
+        public double MedianOffTargetSecondsNoWindow { get; set; }
+
         /// <summary>R8: outfielder-frames of open play, and those spent under 0.2 m/s.</summary>
         public long OutfieldOpenPlayFrames { get; set; }
         public long StandStillFrames { get; set; }

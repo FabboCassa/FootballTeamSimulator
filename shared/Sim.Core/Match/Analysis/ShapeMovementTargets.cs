@@ -27,6 +27,9 @@ namespace Sim.Core.Match.Analysis
 
         public static readonly RealismBand MedianOffTargetSeconds =
             new RealismBand("off-target s/player (median)", double.NegativeInfinity, 5);
+        /// <summary>The off-target reading without the turnover window, printed beside it for the user to judge the gap.</summary>
+        public const string OffTargetNoWindowName = "off-target s/player, no window";
+
         public static readonly RealismBand StandStillPercent =
             new RealismBand("stand-still % of open play", double.NegativeInfinity, 15);
 
