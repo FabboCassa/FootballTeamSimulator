@@ -39,6 +39,17 @@ namespace Sim.Core.Match.Movement
                    || U.DistanceSqToSegment(px, py, bx, by, goalX, high) <= margin;
         }
 
+        /// <summary>
+        /// R10: whether the keeper at (<paramref name="kx"/>, <paramref name="ky"/>) leaves the goal
+        /// open — beaten or out of position (out of the lane and more than <paramref name="marginDm"/>
+        /// from its sides), or come out onto the ball, within <paramref name="oneOnOneDm"/> of it.
+        /// </summary>
+        public static bool KeeperBeaten(int kx, int ky, int bx, int by, int goalX, int marginDm, int oneOnOneDm)
+        {
+            if (U.DistanceSq(kx, ky, bx, by) <= (long)oneOnOneDm * oneOnOneDm) return true;
+            return !Closes(kx, ky, bx, by, goalX, marginDm, 0);
+        }
+
         /// <summary>Inclusive of the edges: a man standing on the line to a post is in it.</summary>
         public static bool InTriangle(long px, long py, long ax, long ay, long bx, long by, long cx, long cy)
         {

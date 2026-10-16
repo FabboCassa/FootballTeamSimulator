@@ -54,7 +54,8 @@ namespace Sim.Core.Match.Movement
     /// the long forward ball; Mentality the risk; Mentality times Tempo the shot; Width the cross.
     ///
     /// R4 sits above the prices: a carrier inside <see cref="MatchBalance.V11OpenGoalRangeDm"/> of
-    /// goal with no outfield defender in the ball-to-posts triangle shoots, whatever else is on:
+    /// goal with no outfield defender in the ball-to-posts triangle and the keeper beaten or out of
+    /// position (R10) shoots, whatever else is on:
     /// at once from close in, after one touch in from the edge of range, and with the keeper on
     /// top of him he takes it round him instead.
     ///
@@ -164,18 +165,26 @@ namespace Sim.Core.Match.Movement
         /// <summary>
         /// Inside the open-goal range of the goal centre with the goal mouth in view, and no
         /// outfield defender closing the lane to the posts (<see cref="OpenGoalLane"/>: in it, a
-        /// stride from it, or on the ball). The keeper does not close it.
+        /// stride from it, or on the ball), and the keeper beaten or out of position (R10,
+        /// <see cref="OpenGoalLane.KeeperBeaten"/>).
         /// </summary>
         public bool IsOpenGoal(V11Scene s)
         {
             int goalX = GoalX(s);
-            if (!OpenGoalLane.InRange(s.BallXDm, s.BallYDm, goalX, OpenGoalRangeDm(s), _cfg.V11OpenGoalMinMouthSinePermille))
+            if (!OpenGoalLane.InRange(s.BallXDm, s.BallYDm, goalX, _cfg.V11OpenGoalRangeDm, _cfg.V11OpenGoalMinMouthSinePermille))
                 return false;
 
             for (int i = 0; i < s.FoeCount; i++)
             {
-                if (i == s.FoeKeeper) continue;
                 PitchActor foe = s.Foes[i];
+                if (i == s.FoeKeeper)
+                {
+                    if (!OpenGoalLane.KeeperBeaten(foe.XDm, foe.YDm, s.BallXDm, s.BallYDm, goalX,
+                            _cfg.V11OpenGoalKeeperMarginDm, _cfg.V11OpenGoalKeeperOneOnOneDm))
+                        return false;
+                    continue;
+                }
+
                 if (OpenGoalLane.Closes(foe.XDm, foe.YDm, s.BallXDm, s.BallYDm, goalX,
                         _cfg.V11OpenGoalLaneMarginDm, _cfg.V11OpenGoalFreeRadiusDm))
                     return false;
@@ -248,18 +257,22 @@ namespace Sim.Core.Match.Movement
         }
 
         /// <summary>
-        /// How far out a clear sight of goal is one he takes: an eager side has a go from further
-        /// than the open-goal range. It is never shorter — a patient side still shoots at an open goal.
+        /// A keen side has a go from distance more readily: the appetite above 100, at
+        /// <see cref="MatchBalance.V11ShotAppetiteRangePercent"/>, on top of the clear sight's credit.
+        /// Never below 100 — a patient side's shot is already priced down by its appetite.
         /// </summary>
-        private int OpenGoalRangeDm(V11Scene s)
+        private int DistanceReachPercent(V11Scene s)
         {
             int over = s.ShotAppetitePercent > 100 ? s.ShotAppetitePercent - 100 : 0;
-            return _cfg.V11OpenGoalRangeDm * (100 + over * _cfg.V11ShotAppetiteRangePercent / 100) / 100;
+            return 100 + over * _cfg.V11ShotAppetiteRangePercent / 100;
         }
 
         // ------------------------------------------------------------------ the options
 
-        /// <summary>Having a go: the xG of it, weighed by his side's shot appetite. NoOption out of range or for a keeper.</summary>
+        /// <summary>
+        /// Having a go: the xG of it, weighed by his side's shot appetite and, from outside the box,
+        /// <see cref="MatchBalance.V11ShotFromDistancePercent"/>. NoOption out of range or for a keeper.
+        /// </summary>
         public int ShotValue(V11Scene s)
         {
             if (s.CarrierIsKeeper) return NoOption;
@@ -270,19 +283,27 @@ namespace Sim.Core.Match.Movement
             int xg = ExpectedGoals.Permille(
                 s.BallXDm, s.BallYDm, s.AttacksHighX, s.PressurePermille, s.Shooting, s.Technique, _models);
             int value = xg * 10 * Math.Max(0, s.ShotAppetitePercent) / 100 * _cfg.V11ShotValuePercent / 100;
+            bool clear = true;
 
             // Every body in the way is a shot that may never reach the keeper. The man on him is
-            // not counted again: he is the pressure the xG has already read.
+            // the pressure the xG has already read — unless he is square in the line of it (R10):
+            // closing the striker down there he charges the strike down nearly every time.
             long onHim = (long)_cfg.PressureRadiusDm * _cfg.PressureRadiusDm;
             for (int i = 0; i < s.FoeCount; i++)
             {
                 if (i == s.FoeKeeper) continue;
                 PitchActor foe = s.Foes[i];
-                if (DistanceSq(foe.XDm, foe.YDm, s.BallXDm, s.BallYDm) < onHim) continue;
-                if (OpenGoalLane.Closes(foe.XDm, foe.YDm, s.BallXDm, s.BallYDm, goalX, _cfg.V11ShotBlockerMarginDm, 0))
-                    value = value * _cfg.V11ShotBlockerPercent / 100;
+                bool close = DistanceSq(foe.XDm, foe.YDm, s.BallXDm, s.BallYDm) < onHim;
+                int margin = close ? _cfg.V11ShotCloseBlockerMarginDm : _cfg.V11ShotBlockerMarginDm;
+                if (OpenGoalLane.Closes(foe.XDm, foe.YDm, s.BallXDm, s.BallYDm, goalX, _cfg.V11ShotClearSightMarginDm, 0))
+                    clear = false;
+                if (OpenGoalLane.Closes(foe.XDm, foe.YDm, s.BallXDm, s.BallYDm, goalX, margin, 0))
+                    value = value * (close ? _cfg.V11ShotCloseBlockerPercent : _cfg.V11ShotBlockerPercent) / 100;
             }
 
+            bool outsideBox = Math.Abs(goalX - s.BallXDm) > MovementGeometry.BoxDepthDm
+                              || Math.Abs(s.BallYDm - Pitch.CenterY) > MovementGeometry.BoxHalfWidthDm;
+            if (clear && outsideBox) value = value * _cfg.V11ShotFromDistancePercent / 100 * DistanceReachPercent(s) / 100;
             return value;
         }
 

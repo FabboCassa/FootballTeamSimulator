@@ -34,7 +34,8 @@ namespace Sim.Core.Tests.Match
         public void OpenGoal_ShotWithinOneAndAHalfSeconds_IsTaken()
         {
             PositionStream s = NewStream(30);
-            Hold(s, 5, 12, true, 9, 950, CY);          // 10 m out, only the keeper in the triangle
+            Hold(s, 5, 12, true, 9, 950, CY);          // 10 m out, the keeper stranded
+            StrandKeeper(s, false, 0, 29);
             Act(s, 8, BallActionKind.Shot, true, 9);    // three frames after the chance opened
 
             RealismMetrics m = Measure(s);
@@ -49,6 +50,7 @@ namespace Sim.Core.Tests.Match
         {
             PositionStream s = NewStream(30);
             Hold(s, 5, 12, true, 9, 950, CY);
+            StrandKeeper(s, false, 0, 29);
             Act(s, 9, BallActionKind.Shot, true, 9);    // four frames = 2 s: too late
 
             RealismMetrics m = Measure(s);
@@ -63,8 +65,10 @@ namespace Sim.Core.Tests.Match
         {
             PositionStream s = NewStream(60);
             Hold(s, 5, 12, true, 9, 950, CY);
+            StrandKeeper(s, false, 0, 59);
             Act(s, 7, BallActionKind.Shot, true, 9);
             Hold(s, 30, 40, false, 9, 100, CY);         // the away side, in front of the home goal
+            StrandKeeper(s, true, 0, 59);
             Act(s, 38, BallActionKind.Shot, false, 9);  // eight frames late
 
             RealismMetrics m = Measure(s);
@@ -80,6 +84,7 @@ namespace Sim.Core.Tests.Match
             PositionStream s = NewStream(30);
             Hold(s, 5, 8, true, 9, 950, CY);
             Hold(s, 10, 12, true, 9, 960, CY);         // frame 9: the ball a stride ahead of him
+            StrandKeeper(s, false, 0, 29);
 
             RealismMetrics m = Measure(s);
 
@@ -88,10 +93,20 @@ namespace Sim.Core.Tests.Match
         }
 
         [Test]
+        public void OpenGoal_KeeperSetOnHisLine_IsNoChance()
+        {
+            PositionStream s = NewStream(30);
+            Hold(s, 5, 12, true, 9, 950, CY);          // 10 m out, the keeper on his line between the posts
+
+            Assert.That(Measure(s).OpenGoalChances, Is.EqualTo(0));
+        }
+
+        [Test]
         public void OpenGoal_OutfieldDefenderInTheTriangle_IsNoChance()
         {
             PositionStream s = NewStream(30);
             Hold(s, 5, 12, true, 9, 950, CY);
+            StrandKeeper(s, false, 0, 29);
             for (int t = 0; t < 30; t++) Put(s, false, t, 4, 1000, 330);   // inside ball-to-posts
 
             Assert.That(Measure(s).OpenGoalChances, Is.EqualTo(0));
@@ -102,6 +117,7 @@ namespace Sim.Core.Tests.Match
         {
             PositionStream s = NewStream(30);
             Hold(s, 5, 12, true, 9, 840, CY);          // 21 m out
+            StrandKeeper(s, false, 0, 29);
 
             Assert.That(Measure(s).OpenGoalChances, Is.EqualTo(0));
         }

@@ -79,6 +79,18 @@ namespace Sim.Core.Tests.Match
             string[] goalKicks = { ShapeMovementTargets.ShortGoalKicks.Name, ShapeMovementTargets.LongGoalKicks.Name };
             foreach (ShapeMovementRow row in shape.Rows().Where(row => goalKicks.Contains(row.Name)))
                 Assert.That(row.Value, Is.GreaterThan(0), $"V11 {row.Name}");
+
+            // R10 (#81): the open-goal shortcut only for a genuinely open goal, so the shot mix is the
+            // brain's priced choice — and with it the share of shots a body in the lane blocks.
+            string[] shotGated =
+            {
+                ShotPassBands.OpenGoalShortcutPercent.Name, RealismReference.InsideBoxPercent.Name,
+                RealismReference.BlockedPercent.Name
+            };
+            foreach (ShotPassRow row in shotPass.Rows().Where(row => shotGated.Contains(row.Name)))
+                Assert.That(row.InBand, Is.True, $"V11 {row.Name} {row.Value:F3} outside its band");
+            RealismRow openGoal = v11.Rows().Single(row => row.Band.Name == RealismBands.OpenGoalShotRate.Name);
+            Assert.That(openGoal.InBand, Is.True, $"V11 openGoalShotRate {openGoal.Value:F3} outside {openGoal.Band.Describe()}");
         }
 
         private static RealismTally Run(Club a, Club b, out ShapeMovementTally shape, out ShotPassTally shotPass)
