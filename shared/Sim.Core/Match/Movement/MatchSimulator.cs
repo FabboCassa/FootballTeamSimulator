@@ -1052,7 +1052,8 @@ namespace Sim.Core.Match.Movement
             int distance = U.Length(dx, dy);
             bool longBall = distance > U.Units(_cfg.LongBallFromDm);
 
-            int error = BallSkill.PassErrorPermille(_skPassing[k], _skTechnique[k], pressure, longBall, _cfg);
+            int error = BallSkill.PassErrorPermille(
+                _skPassing[k], _skTechnique[k], pressure, longBall, _cfg, IntoTheirHalf(home, choice.X));
             int sideways = (int)((long)distance * BallSkill.Spread(_rng, error) / 1000);
             int weight = BallSkill.Spread(_rng, error * _cfg.PassWeightErrorPermille / 1000);
 
@@ -1096,6 +1097,8 @@ namespace Sim.Core.Match.Movement
                 : IsCross(side, k) ? BallActionKind.Cross : BallActionKind.Pass;
             _sheet.Record(tick, kind, home, slot, choice.Slot);
         }
+
+        private static bool IntoTheirHalf(bool home, int xU) => home ? xU > U.LengthU / 2 : xU < U.LengthU / 2;
 
         /// <summary>
         /// He has played it: for the next couple of ticks the ball is not his to pick up again.

@@ -496,6 +496,10 @@ namespace Sim.Core.Tests.Match
                 s.AddFoe(At(600, Mid + 60), keeper: false);          // could get across to the lane
                 s.AddMate(At(430, Mid + 180), keeper: false);
                 s.CarryKeepPermille = 500;
+                // A passer at the trust mark, so his own skill adds no directness (R3) and the
+                // instructions are the only thing that differs.
+                s.Passing = _cfg.V11ShortGameTrustSkill;
+                s.Technique = _cfg.V11ShortGameTrustSkill;
                 return s;
             }
 

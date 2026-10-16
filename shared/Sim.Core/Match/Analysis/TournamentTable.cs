@@ -73,6 +73,8 @@ namespace Sim.Core.Match.Analysis
 
         public double ShareAgainst(int preset, int opponent) => Share(_points[preset, opponent], _games[preset, opponent]);
 
+        public int GamesAgainst(int preset, int opponent) => _games[preset, opponent];
+
         /// <summary>The opponent the preset takes least from (ties to the lower index), or -1 when it has not played.</summary>
         public int WorstOpponent(int preset)
         {

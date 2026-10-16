@@ -1557,6 +1557,22 @@ namespace Sim.Core.Config
         public int[] V11DirectnessPercent { get; set; } = { 75, 100, 135 };
 
         /// <summary>
+        /// Directness by the passer's own ball skill (real-match spec R3): below this passing mix
+        /// (Passing and Technique, weighted as for the pass error) a man trusts his short game
+        /// less. About the top flight's median outfielder, so its football is touched only at
+        /// the back.
+        /// </summary>
+        public int V11ShortGameTrustSkill { get; set; } = 78;
+
+        /// <summary>
+        /// The extra weight on a long forward ball's gain per point of passing mix under
+        /// <see cref="V11ShortGameTrustSkill"/>: lower-league sides that cannot keep it on the
+        /// ground under pressure get it up to the big man early. With 75 a second-tier side
+        /// goes long about twice as often as a top-flight one (R3 tier harness).
+        /// </summary>
+        public int V11LowSkillDirectnessPercentPerPoint { get; set; } = 75;
+
+        /// <summary>
         /// Risk, by Mentality (defensive · balanced · attacking): the weight on what the other side
         /// is given when the ball is lost. A defensive side takes no chances; an attacking one does.
         /// </summary>
@@ -2090,6 +2106,17 @@ namespace Sim.Core.Config
         public int PassErrorLongBallPercent { get; set; } = 55;
 
         /// <summary>
+        /// Real-match spec R3: below this passing mix a ball played into the opposition half
+        /// misses by <see cref="PassErrorLowSkillPermillePerPoint"/> more a point. The linear
+        /// slope alone barely separates a 64 from a 79, and what a lower-league side cannot do is
+        /// find a man in the other half; keeping it among its own back line it does as well as
+        /// anyone, which is also why its own half does not leak more goals. The passer's own
+        /// valuation does not price this extra: he does not play safer to make up for it.
+        /// </summary>
+        public int PassErrorLowSkillFrom { get; set; } = 78;
+        public int PassErrorLowSkillPermillePerPoint { get; set; } = 10;
+
+        /// <summary>
         /// How fast the ball should still be going when it reaches the man it is for, in
         /// decimetres per second. This is the WEIGHT of the pass: a ball struck to arrive dying
         /// can be taken in his stride, and one struck to merely reach him runs on past him and
@@ -2108,8 +2135,12 @@ namespace Sim.Core.Config
         /// <summary>The same, for a man knocking it ahead of himself and running onto it.</summary>
         public int CarryArrivalSpeedDmPerSecond { get; set; } = 25;
 
-        /// <summary>Error on the WEIGHT of the pass, as a share of the force, scaled the same way.</summary>
-        public int PassWeightErrorPermille { get; set; } = 130;
+        /// <summary>
+        /// Error on the WEIGHT of the pass, as a share of the force, scaled the same way. Raised
+        /// from 130 for real-match spec R3: a poor passer's ball now runs past his man or out of
+        /// play as well as wide of him, while a good one's weight is still within a few percent.
+        /// </summary>
+        public int PassWeightErrorPermille { get; set; } = 800;
 
         /// <summary>
         /// Weight of Passing against Technique in the execution of a pass, out of ten. Passing

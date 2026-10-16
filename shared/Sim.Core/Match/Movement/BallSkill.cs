@@ -63,16 +63,20 @@ namespace Sim.Core.Match.Movement
         /// How far off line a struck ball goes, as a share (permille) of the distance it travels.
         /// A player with nothing in Passing or Technique, pressed and hitting it long, misses by
         /// the configured maximum; the best player unpressed still misses by the floor, because
-        /// nobody completes every pass.
+        /// nobody completes every pass. A ball into the opposition half by a man under
+        /// <see cref="MatchBalance.PassErrorLowSkillFrom"/> misses by more (real-match spec R3).
         /// </summary>
         public static int PassErrorPermille(
-            int passing, int technique, int pressurePermille, bool longBall, MatchBalance cfg)
+            int passing, int technique, int pressurePermille, bool longBall, MatchBalance cfg,
+            bool intoTheirHalf = false)
         {
             int weight = Clamp(cfg.PassSkillPassingWeight, 0, 10);
             int skill = Clamp(Mix(passing, weight, technique, 10 - weight), 1, 100);
 
             int error = cfg.PassErrorFloorPermille
                         + cfg.PassErrorMaxPermille * (100 - skill) / 100;
+            int shortfall = cfg.PassErrorLowSkillFrom - skill;
+            if (intoTheirHalf && shortfall > 0) error += shortfall * cfg.PassErrorLowSkillPermillePerPoint;
 
             error += error * cfg.PassErrorPressurePercent * Clamp(pressurePermille, 0, 1000) / 100_000;
             if (longBall) error += error * cfg.PassErrorLongBallPercent / 100;
