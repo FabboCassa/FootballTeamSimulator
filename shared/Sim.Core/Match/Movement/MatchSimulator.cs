@@ -132,6 +132,9 @@ namespace Sim.Core.Match.Movement
         /// </summary>
         private bool _shotOnTarget;
 
+        /// <summary>Whether the keeper keeps the strike in the air out if he gets to it (R7, <see cref="KeeperSaveModel"/>).</summary>
+        private bool _shotSaveable;
+
         /// <summary>No second challenge for a moment after one is won, or the ball ping-pongs.</summary>
         private int _tackleLock;
 
@@ -945,7 +948,7 @@ namespace Sim.Core.Match.Movement
         /// it may block it, the keeper may reach it, and if it crosses the line between the posts
         /// it is a goal. That sentence is the whole of engine phase 6.
         /// </summary>
-        private void TakeShot(int tick, int side, int slot)
+        private void TakeShot(int tick, int side, int slot, bool penalty = false)
         {
             bool home = side == 0;
             int goalX = U.Units(MovementGeometry.AttackedGoalX(home));
@@ -964,6 +967,7 @@ namespace Sim.Core.Match.Movement
 
             int offCentre = aimY > U.CenterYU ? aimY - U.CenterYU : U.CenterYU - aimY;
             _shotOnTarget = offCentre < half;
+            _shotSaveable = _shotOnTarget && KeeperSaveModel.Saves(_rng, SavePermille(side, goalX, aimY, penalty));
 
             // Struck as hard as a shot is struck: it gets there, and it gets there quickly.
             // It leaves from the BALL, so nothing jumps; the striker is on it by construction.
@@ -1000,6 +1004,13 @@ namespace Sim.Core.Match.Movement
             int distance = U.Dm(U.Distance(_ball.X, _ball.Y, goalX, U.CenterYU));
             int offCentre = U.Dm(_ball.Y > U.CenterYU ? _ball.Y - U.CenterYU : U.CenterYU - _ball.Y);
 
+            return BallSkill.ShotQualityPermille(
+                distance, offCentre, PressingMen(side), _skShooting[k], _skTechnique[k], _cfg);
+        }
+
+        /// <summary>Outfield opponents within pressure range of the ball, for a strike by <paramref name="side"/>.</summary>
+        private int PressingMen(int side)
+        {
             int opponent = 1 - side;
             int crowd = 0;
             for (int j = 0; j < _n; j++)
@@ -1009,9 +1020,29 @@ namespace Sim.Core.Match.Movement
                 if (U.Distance(_px[ok], _py[ok], _ball.X, _ball.Y) < _pressureU) crowd++;
             }
 
-            return BallSkill.ShotQualityPermille(
-                distance, offCentre, crowd, _skShooting[k], _skTechnique[k], _cfg);
+            return crowd;
         }
+
+        /// <summary>
+        /// The odds the keeper saves this strike, aimed at (<paramref name="goalX"/>, <paramref name="aimY"/>),
+        /// off where the ball and he are now (R7). Off the line is how far he stands from the strike's path.
+        /// </summary>
+        private int SavePermille(int side, int goalX, int aimY, bool penalty)
+        {
+            int defending = 1 - side;
+            int gk = defending * _n + _ctx.KeeperOf(defending);
+            int offLine = MovementGeometry.Sqrt(ClampSq(U.DistanceSqToSegment(_px[gk], _py[gk], _ball.X, _ball.Y, goalX, aimY)));
+            return KeeperSaveModel.SavePermille(
+                _cfg,
+                U.Dm(goalX - _ball.X),
+                U.Dm(_ball.Y - U.CenterYU),
+                PressingMen(side),
+                _skGoalkeeping[gk],
+                U.Dm(offLine),
+                penalty);
+        }
+
+        private static int ClampSq(long sq) => sq > int.MaxValue ? int.MaxValue : (int)sq;
 
         private int HoldTicks(int side)
         {
@@ -1139,16 +1170,17 @@ namespace Sim.Core.Match.Movement
         /// metres and the arrival deadband of the time (removed in issue #77) parked him three
         /// metres short — so a wall stood at five metres instead of nine fifteen, and men were left standing over the halfway line at a
         /// kickoff. Capped at his own running speed, so it can no more teleport a body than the
-        /// steering can (PositionStreamTests.NobodyTeleports).
+        /// steering can (PositionStreamTests.NobodyTeleports). In a <paramref name="hurry"/> he runs
+        /// the last stretch too: a keeper shadowing the ball cannot walk back onto his line.
         /// </summary>
-        private void WalkTo(int k, int tx, int ty)
+        private void WalkTo(int k, int tx, int ty, bool hurry = false)
         {
             _stepFromX[k] = _px[k];
             _stepFromY[k] = _py[k];
 
             int dx = tx - _px[k], dy = ty - _py[k];
             int gap = U.Length(dx, dy);
-            int step = gap > _approachU ? _maxSpeed[k] : _cruise[k];
+            int step = hurry || gap > _approachU ? _maxSpeed[k] : _cruise[k];
             if (step < 1) step = 1;
 
             if (gap <= step)
@@ -1434,16 +1466,16 @@ namespace Sim.Core.Match.Movement
                     int reach = _controlU;
 
                     // THE DIVE (engine phase 6). A strike at his goal is the one ball a keeper
-                    // reaches further for than anybody reaches for anything, and it is the whole
-                    // of the save: phase 5 had saves only because the timeline had already
-                    // decided there would be one.
+                    // reaches further for than anybody reaches for anything. Whether reaching it
+                    // keeps it out was settled when it was struck (R7, KeeperSaveModel).
                     if (_ctx.ShotLive && _keeper[k] && side == keeperOnly)
-                        reach += U.Units(V11Scaled(BallSkill.KeeperDiveDm(_skGoalkeeping[k], _shotQuality, _cfg), _cfg.V11KeeperDivePercent));
+                        reach += U.Units(_cfg.KeeperSaveReachDm);
 
                     // The man it was played to reaches further for it than anyone else, because
                     // he is facing it and running onto it while the man behind him is turning
                     // (engine phase 4).
                     if (_receiver[side] == i) reach += U.Units(_cfg.ReceiveReachDm);
+                    if (KeeperClaims(side, k)) reach += U.Units(_cfg.KeeperClaimReachDm);
 
                     int distance = _ctx.ShotLive
                         ? SweptDistance(k, inVx, inVy)
@@ -1465,6 +1497,7 @@ namespace Sim.Core.Match.Movement
 
             bool wasShot = _ctx.ShotLive;
             bool interception = _ball.LastTouchSide >= 0 && _ball.LastTouchSide != bestSide;
+            bool claimed = KeeperClaims(bestSide, bestSide * _n + bestSlot);
 
             // The keeper's hands (engine phase 4). A save used to end the move by definition:
             // he got to it, therefore he had it. Goalkeeping now says how often he actually
@@ -1473,10 +1506,9 @@ namespace Sim.Core.Match.Movement
             int gkSlot = bestSide * _n + bestSlot;
 
             // BEATEN (engine phase 6). He got across to it; that is not the same as keeping it
-            // out. If his Goalkeeping is not equal to the strike he never touches it, the ball
-            // carries on, and — since it was on target to be his ball at all — it is a goal.
-            if (wasShot && bestSide != (_ctx.ShotHome ? 0 : 1) && _keeper[gkSlot]
-                && _rng.NextInt(0, 100) >= V11Scaled(BallSkill.KeeperStopPercent(_skGoalkeeping[gkSlot], _shotQuality, _cfg), _cfg.V11KeeperStopPercent))
+            // out. The save model settled that when it was struck (R7): if it beats him he never
+            // touches it, the ball carries on, and — on target to be his ball at all — it is a goal.
+            if (wasShot && bestSide != (_ctx.ShotHome ? 0 : 1) && _keeper[gkSlot] && !_shotSaveable)
                 return;
 
             if (wasShot && bestSide != (_ctx.ShotHome ? 0 : 1) && _keeper[gkSlot]
@@ -1518,6 +1550,11 @@ namespace Sim.Core.Match.Movement
                 _ball.Kick(bestSide, bestSlot, outX, outY,
                     _ball.ForceForTicks(U.Units(_cfg.KeeperParryDm), _cfg.TicksOfMs(700), _maxPassForce));
                 _lastTouch[bestSide] = bestSlot;
+
+                // A parry leaves his hands like a pass leaves a foot (R7): without the release lock
+                // the keeper, on his line, took his own parry back the next tick and nearly every
+                // save read as a catch.
+                Release(tick, bestSide, bestSlot);
                 _sheet.RecordSave(tick, bestSide, bestSlot, _ctx.ShotSlot);
                 return;
             }
@@ -1565,7 +1602,9 @@ namespace Sim.Core.Match.Movement
             // line, scattered sideways and sometimes turned back off him, at the share of its own
             // speed the config allows. Where it ends up is then the referee's business like any
             // other loose ball, which is exactly the point.
-            if (_rng.NextInt(0, 100) < V11Scaled(_cfg.DeflectPercent, _cfg.V11DeflectPercent))
+            // A keeper claiming it in his box catches it, or now and then punches it.
+            int deflect = claimed ? _cfg.KeeperClaimPunchPercent : V11Scaled(_cfg.DeflectPercent, _cfg.V11DeflectPercent);
+            if (_rng.NextInt(0, 100) < deflect)
             {
                 Deflect(tick, bestSide, bestSlot, inVx, inVy);
                 return;
@@ -1735,20 +1774,27 @@ namespace Sim.Core.Match.Movement
         }
 
         /// <summary>
-        /// A penalty (Law 14) — and since engine phase 6 it is simply a strike from twelve yards
-        /// with nobody in the way. It goes in when it beats the keeper and it does not when it
-        /// does not; the phase-5 version had to borrow an outcome from the timeline, because the
-        /// score was not the pitch's to write. The odds it converts at are therefore not a knob
-        /// any more: they are the taker's Shooting against the keeper's Goalkeeping, from six
-        /// metres out and straight in front, which is what makes a penalty a penalty.
+        /// A penalty (Law 14) — a strike from twelve yards with nobody in the way, played out on
+        /// the pitch like any other. The taker's Shooting (through the strike's quality) decides
+        /// where it goes and so whether it is on target; whether the keeper keeps an on-target one
+        /// out is the save model's penalty zone (R7, <see cref="KeeperSaveModel"/>): the
+        /// SavePenaltyPermille knob and his Goalkeeping, and nothing about the taker.
         /// </summary>
         private void TakePenalty(int tick, int side, int slot)
         {
             if (_ctx.ShotLive) ForceResolveShot(tick);
-            TakeShot(tick, side, slot);
+            TakeShot(tick, side, slot, penalty: true);
         }
 
         // ------------------------------------------------------------------ lookups
+
+        /// <summary>
+        /// R6: a keeper on his line still owns his box. A ball the other side played into it is
+        /// his to take with his hands, a jump and an arm further than a man reaches with his feet.
+        /// </summary>
+        private bool KeeperClaims(int side, int k) =>
+            _keeper[k] && !_ctx.ShotLive && _ball.LastTouchSide >= 0 && _ball.LastTouchSide != side
+            && MovementGeometry.InOwnBox(side == 0, U.Dm(_ball.X), U.Dm(_ball.Y));
 
         private int NearestToBall(int side, bool includeKeeper) =>
             _ctx.NearestTo(side, _ball.X, _ball.Y, includeKeeper);

@@ -53,10 +53,11 @@ namespace Sim.Core.Tests.Match
         [Test]
         public void BetterFootballers_KeepTheBall_AndGetItForward()
         {
-            SkillEffect effect = Play(seeds: 8, passing: true, dribbling: true);
+            // User decision 2026-10-10, #76: 48 seeds, bar from base mean (52.93).
+            SkillEffect effect = Play(seeds: 48, passing: true, dribbling: true);
             Report("[ball-skill] passing, technique and dribbling", effect);
 
-            Assert.That(effect.GoodPossessionPercent, Is.GreaterThan(53.0),
+            Assert.That(effect.GoodPossessionPercent, Is.GreaterThan(52.5),
                 "the side that can play keeps the ball");
             Assert.That(effect.GoodIntoFinalThird, Is.GreaterThan(effect.BadIntoFinalThird * 1.15),
                 "and gets it into the final third markedly more often");
