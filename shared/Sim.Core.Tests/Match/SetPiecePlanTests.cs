@@ -132,10 +132,39 @@ namespace Sim.Core.Tests.Match
         [Test]
         public void Restarts_FollowTheBuildUpInstruction()
         {
-            Assert.That(SetPiecePlan.LongRestart(BallActionKind.GoalKick, Tempo.Slow, _cfg), Is.False);
-            Assert.That(SetPiecePlan.LongRestart(BallActionKind.GoalKick, Tempo.Fast, _cfg), Is.True);
-            Assert.That(SetPiecePlan.LongRestart(BallActionKind.ThrowIn, Tempo.Slow, _cfg), Is.False);
-            Assert.That(SetPiecePlan.LongRestart(BallActionKind.ThrowIn, Tempo.Fast, _cfg), Is.True);
+            Assert.That(SetPiecePlan.Length(BallActionKind.GoalKick, Tempo.Slow, _cfg), Is.EqualTo(RestartLength.Short));
+            Assert.That(SetPiecePlan.Length(BallActionKind.GoalKick, Tempo.Fast, _cfg), Is.EqualTo(RestartLength.Long));
+            Assert.That(SetPiecePlan.Length(BallActionKind.ThrowIn, Tempo.Slow, _cfg), Is.EqualTo(RestartLength.Short));
+            Assert.That(SetPiecePlan.Length(BallActionKind.ThrowIn, Tempo.Fast, _cfg), Is.EqualTo(RestartLength.Long));
+        }
+
+        /// <summary>
+        /// R11: the middle build-up neither always plays out nor always kicks long — a goal kick
+        /// goes short to a free man and long when he is pressed, so a match sees both.
+        /// </summary>
+        [Test]
+        public void GoalKick_NormalBuildUp_IsShortUnlessPressed()
+        {
+            Assert.That(SetPiecePlan.Length(BallActionKind.GoalKick, Tempo.Normal, _cfg),
+                Is.EqualTo(RestartLength.ShortUnlessPressed));
+        }
+
+        [Test]
+        public void Pressed_IsAnOpponentWithinTheRadiusOfTheMan()
+        {
+            int[] foeX = { 1000, 300, 200 };
+            int[] foeY = { 340, 340, 100 };
+            bool[] on = { true, true, true };
+            int radius = _cfg.GoalKickPressedDm;
+
+            Assert.That(SetPiecePlan.Pressed(200, 100 + radius + 1, foeX, foeY, on, radius), Is.False,
+                "nobody within reach of him");
+            Assert.That(SetPiecePlan.Pressed(200, 100 + radius, foeX, foeY, on, radius), Is.True,
+                "a man on the edge of the radius presses him");
+
+            on[2] = false;
+            Assert.That(SetPiecePlan.Pressed(200, 100 + radius, foeX, foeY, on, radius), Is.False,
+                "a man sent off presses nobody");
         }
 
         [Test]

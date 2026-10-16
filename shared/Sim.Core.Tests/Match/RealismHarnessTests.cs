@@ -74,6 +74,11 @@ namespace Sim.Core.Tests.Match
             };
             foreach (ShotPassRow row in shotPass.Rows().Where(row => gatedSaves.Contains(row.Name)))
                 Assert.That(row.InBand, Is.True, $"V11 {row.Name} {row.Value:F3} outside {row.Band?.Describe()}");
+
+            // R11: both kinds of goal kick are seen over the run.
+            string[] goalKicks = { ShapeMovementTargets.ShortGoalKicks.Name, ShapeMovementTargets.LongGoalKicks.Name };
+            foreach (ShapeMovementRow row in shape.Rows().Where(row => goalKicks.Contains(row.Name)))
+                Assert.That(row.Value, Is.GreaterThan(0), $"V11 {row.Name}");
         }
 
         private static RealismTally Run(Club a, Club b, out ShapeMovementTally shape, out ShotPassTally shotPass)

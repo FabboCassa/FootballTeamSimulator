@@ -12,6 +12,16 @@ namespace Sim.Core.Match.Movement
         Cross = 2
     }
 
+    /// <summary>How a goal kick or a throw-in is played (the values of the Tempo tables in <see cref="MatchBalance"/>).</summary>
+    public enum RestartLength
+    {
+        Short = 0,
+        Long = 1,
+
+        /// <summary>Short to the nearest man, long when an opponent presses him (real-match spec R11).</summary>
+        ShortUnlessPressed = 2
+    }
+
     /// <summary>
     /// The V11 set-piece decisions, pure and draw-free so they can be scripted in a test: whether
     /// a free kick is shot or crossed, and whether a goal kick or a throw-in goes short or long
@@ -37,12 +47,32 @@ namespace Sim.Core.Match.Movement
             return directOddsPermille >= crossOddsPermille ? FreeKickOption.DirectShot : FreeKickOption.Cross;
         }
 
-        /// <summary>Whether the build-up instruction plays this restart long.</summary>
-        public static bool LongRestart(BallActionKind kind, Tempo tempo, MatchBalance cfg)
+        /// <summary>How the build-up instruction plays this restart; short when the table has no entry for it.</summary>
+        public static RestartLength Length(BallActionKind kind, Tempo tempo, MatchBalance cfg)
         {
             int[] table = kind == BallActionKind.GoalKick ? cfg.GoalKickLongByTempo : cfg.ThrowInLongByTempo;
             int i = (int)tempo;
-            return table != null && i >= 0 && i < table.Length && table[i] != 0;
+            if (table == null || i < 0 || i >= table.Length) return RestartLength.Short;
+            return table[i] == (int)RestartLength.Long ? RestartLength.Long
+                : table[i] == (int)RestartLength.ShortUnlessPressed ? RestartLength.ShortUnlessPressed
+                : RestartLength.Short;
+        }
+
+        /// <summary>
+        /// Whether an opponent still on the pitch stands within <paramref name="radius"/> of the man
+        /// at (<paramref name="x"/>, <paramref name="y"/>). Positions and radius in any one unit.
+        /// </summary>
+        public static bool Pressed(int x, int y, int[] foeX, int[] foeY, bool[] foeOn, int radius)
+        {
+            long reach = (long)radius * radius;
+            for (int i = 0; i < foeX.Length; i++)
+            {
+                if (!foeOn[i]) continue;
+                long dx = foeX[i] - x, dy = foeY[i] - y;
+                if (dx * dx + dy * dy <= reach) return true;
+            }
+
+            return false;
         }
 
         /// <summary>
