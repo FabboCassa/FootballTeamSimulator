@@ -152,7 +152,8 @@ namespace Sim.Core.Match.Movement
 
                 int dx = aimX - _ball.X, dy = aimY - _ball.Y;
                 int distance = U.Length(dx, dy);
-                int error = BallSkill.PassErrorPermille(_sim._skPassing[k], _sim._skTechnique[k], 0, true, _cfg);
+                int error = BallSkill.PassErrorPermille(_sim._skPassing[k], _sim._skTechnique[k], 0, true, _cfg,
+                    MatchSimulator.IntoTheirHalf(side == 0, aimX));
                 int sideways = (int)((long)distance * BallSkill.Spread(_ctx.Rng, error) / 1000);
                 if (distance > 0 && sideways != 0)
                 {

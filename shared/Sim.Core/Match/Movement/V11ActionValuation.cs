@@ -462,13 +462,34 @@ namespace Sim.Core.Match.Movement
         {
             TacticInstructions i = s.Instructions;
             int percent = MovementTactics.Percent(_cfg.V11TempoGainPercent, (int)i.Tempo);
-            if (longForward) percent = percent * MovementTactics.Percent(_cfg.V11DirectnessPercent, (int)i.Tempo) / 100;
+            if (longForward)
+            {
+                percent = percent * MovementTactics.Percent(_cfg.V11DirectnessPercent, (int)i.Tempo) / 100;
+                percent = percent * SkillDirectnessPercent(s) / 100;
+            }
             if (cross) percent = percent * MovementTactics.Percent(_cfg.V11WidthCrossPercent, (int)i.Width) / 100;
             if (outWide) percent = percent * MovementTactics.Percent(_cfg.V11WidthChannelPercent, (int)i.Width) / 100;
             return percent * s.GainPercent / 100;
         }
 
-        /// <summary>The odds his own foot puts it where he means to, in permille: the pass error the simulator will draw.</summary>
+        /// <summary>
+        /// R3: the weight a man's own ball skill puts on a long forward ball. Under
+        /// <see cref="MatchBalance.V11ShortGameTrustSkill"/> each point of passing mix adds to it,
+        /// so a weaker side goes long more often from the ratings alone, with no tier flag.
+        /// </summary>
+        private int SkillDirectnessPercent(V11Scene s)
+        {
+            int weight = BallSkill.Clamp(_cfg.PassSkillPassingWeight, 0, 10);
+            int skill = BallSkill.Mix(s.Passing, weight, s.Technique, 10 - weight);
+            int shortfall = _cfg.V11ShortGameTrustSkill - skill;
+            return shortfall <= 0 ? 100 : 100 + shortfall * _cfg.V11LowSkillDirectnessPercentPerPoint;
+        }
+
+        /// <summary>
+        /// The odds his own foot puts it where he means to, in permille: the pass error the
+        /// simulator will draw, less the low-skill extra into their half, which he does not know
+        /// he has (real-match spec R3: a poor passer does not play safer to make up for it).
+        /// </summary>
         private int Execution(V11Scene s, int distanceDm)
         {
             bool longBall = distanceDm > _cfg.LongBallFromDm;
