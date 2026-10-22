@@ -213,6 +213,7 @@ namespace Sim.Core.Match.Movement
                 s.Instructions = sim._tactics[side].Instructions;
                 s.RiskPercent = sim._tactics[side].RiskPercent;
                 s.GainPercent = sim._tactics[side].GainPercent;
+                ApplyOnBallWon(s, side);
 
                 for (int j = 0; j < n; j++)
                 {

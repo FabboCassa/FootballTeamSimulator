@@ -133,6 +133,7 @@ namespace Sim.Core.Match.Movement
             {
                 MatchBall ball = _sim._ball;
                 _phases.Update(tick, U.Dm(ball.X), ball.OwnerSide, ball.Dead, _sim._ctx.DeadSide);
+                ShareTransitions();
                 for (int side = 0; side < SideCount; side++)
                     _phaseTicks[side * TeamPhaseMachine.PhaseCount + (int)_phases.PhaseOf(side)]++;
 
@@ -149,10 +150,9 @@ namespace Sim.Core.Match.Movement
 
             private void Expand(int side)
             {
-                MatchBalance cfg = _sim._cfg;
                 int e = _expansion[side];
-                if (_phases.InPossession(side)) e += 1000 / cfg.V11ShapeExpandTicks;
-                else e -= 1000 / cfg.V11ShapeCollapseTicks;
+                if (_phases.InPossession(side)) e += 1000 / ExpandTicks(side);
+                else e -= 1000 / CollapseTicks(side);
                 _expansion[side] = MovementGeometry.Clamp(e, 0, 1000);
             }
 

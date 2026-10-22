@@ -77,7 +77,9 @@ namespace Sim.Core.Match.Movement
             line += inPossession
                 ? MovementTactics.Pick(_cfg.V11LineShiftInPossessionDm, (int)phase)
                 : MovementTactics.Pick(_cfg.V11LineShiftOutOfPossessionDm, (int)phase)
-                  + MovementTactics.Pick(_cfg.V11PressingLinePushDm, (int)instructions.Pressing);
+                  + MovementTactics.Pick(_cfg.V11PressingLinePushDm, (int)instructions.Pressing)
+                  + DefendingAxes.BackLinePushDm(_cfg.DefendingAxes, instructions)
+                  + (phase == TeamPhase.DefenceTransition ? DefendingAxes.OnBallLostLinePushDm(_cfg.DefendingAxes, instructions) : 0);
             line = MovementGeometry.Clamp(line, _cfg.BackLineMinDepthDm, _cfg.BackLineMaxDepthDm);
 
             // A shape spans the same depth whatever the number of its lines: a three-line 4-4-2
@@ -95,6 +97,8 @@ namespace Sim.Core.Match.Movement
                 spacing = reach > line ? (reach - line) / (lines - 1) : 0;
 
             int depth = line + man.LineRank * spacing + man.OffsetXDm;
+            if (!inPossession)
+                depth += DefendingAxes.FrontLinePushDm(_cfg.DefendingAxes, instructions, man.LineRank, lines);
 
             int widthPercent = InstructionTable.Percent(_cfg.WidthSpreadPercent, (int)instructions.Width, _cfg.V11WidthSpreadPercent)
                                * (inPossession ? _cfg.V11AttackWidthPercent : _cfg.V11DefendWidthPercent) / 100;

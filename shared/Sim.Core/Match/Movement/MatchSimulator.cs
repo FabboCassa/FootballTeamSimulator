@@ -1061,6 +1061,7 @@ namespace Sim.Core.Match.Movement
             MovementTactics t = _tactics[side];
             int min = t.HoldTicksMin < 1 ? 1 : t.HoldTicksMin;
             int max = t.HoldTicksMax < min ? min : t.HoldTicksMax;
+            _brain.OnBallWonHold(side, ref min, ref max);
             int held = _rng.NextInt(min, max + 1);
             return held;
         }
