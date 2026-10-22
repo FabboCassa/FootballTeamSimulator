@@ -54,7 +54,7 @@ namespace Sim.Core.Tests.Match
         [Test]
         public void EveryLine_IsLaidOutAcrossThePitch_NotOneRoleAtATime()
         {
-            foreach (Formation f in Formations.All)
+            foreach (Formation f in Formations.Catalogue)
             {
                 PositionRole[] roles = Formations.Roles(f);
 
@@ -118,7 +118,7 @@ namespace Sim.Core.Tests.Match
         {
             // The block's depth follows from the shape rather than from a table: a flat 4-4-2 has
             // three lines and defends compactly, a 4-2-3-1 has four.
-            foreach (Formation f in Formations.All)
+            foreach (Formation f in Formations.Catalogue)
             {
                 PositionRole[] roles = Formations.Roles(f);
                 var ranks = new HashSet<int>();
