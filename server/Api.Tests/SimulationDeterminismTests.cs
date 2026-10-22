@@ -7,7 +7,7 @@ namespace Fts.Api.Tests;
 /// <summary>
 /// Server half of the cross-runtime determinism check (Phase 7.3, extends Sim.Core test 1.6).
 /// The server runs the SAME Sim.Core as the client, so the fixed determinism run must produce the
-/// exact combined hash the client logs (golden master 0xA5034724A9E2992F). Pure unit tests — no
+/// exact combined hash the client logs (golden master 0x42952113BDF98179). Pure unit tests — no
 /// WebApplicationFactory, no DB, no Redis.
 /// </summary>
 [TestFixture]
@@ -32,8 +32,10 @@ public class SimulationDeterminismTests
     // moved it again to 0xB709A88D6957AA28, and issue #82 (real-match spec R9: the short option
     // offered, the pressed carrier releasing it to a free man) moved it to 0x3C09C781A8278559, and
     // issue #83 (real-match spec R3: a poorer passer misses more in the other half and weighs the
-    // long forward ball higher) moved it to this value; the final v12 hash is approved in #88.
-    private const ulong GoldenCombinedHash = 0xA5034724A9E2992FUL;
+    // long forward ball higher) moved it to 0xA5034724A9E2992F, and issue #87 (the v12 tuning on
+    // top of #74, #76, #79 and #81: challenges from closer, passes cut out from closer, throw-ins,
+    // saves and home advantage retuned) moved it to this value; the final v12 hash is approved in #88.
+    private const ulong GoldenCombinedHash = 0x42952113BDF98179UL;
 
     [Test]
     public void ServerRuntime_DeterminismCheck_MatchesTheClientGoldenHash()
@@ -61,7 +63,7 @@ public class SimulationDeterminismTests
 
         Assert.That(response.MatchCount, Is.EqualTo(DeterminismCheck.DefaultMatches));
         Assert.That(response.CombinedHash, Is.EqualTo(GoldenCombinedHash));
-        Assert.That(response.CombinedHashHex, Is.EqualTo("0xA5034724A9E2992F"));
+        Assert.That(response.CombinedHashHex, Is.EqualTo("0x42952113BDF98179"));
         Assert.That(response.MatchesGolden, Is.True);
         Assert.That(response.GoldenHashHex, Is.EqualTo(response.CombinedHashHex));
         Assert.That(sim.GoldenCombinedHash, Is.EqualTo(GoldenCombinedHash));

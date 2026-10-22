@@ -17,8 +17,8 @@ namespace Sim.Core.Tests.Match
     /// <summary>
     /// The R3 quality-tier harness of the real-match spec: 1,000 watched matches between two equal
     /// sides at the world generator's top-tier average, 1,000 between two at its second-tier
-    /// average, on the same seeds, printed with the R3 gaps (<see cref="QualityTierTally"/>). A
-    /// REPORT: the user judges the output.
+    /// average, on the same seeds, printed with the R3 gaps (<see cref="QualityTierTally"/>) and
+    /// gated on them at the full sample; the user judges the output.
     ///
     /// "Average" is read off a generated world: the clubs of the tier whose strength lies nearest
     /// the league's mean, each playing itself (equal sides).
@@ -38,7 +38,7 @@ namespace Sim.Core.Tests.Match
         private const string NationCode = "ITA";
         private const int SidesPerTier = 4;
 
-        [Test, Explicit("Report-only harness: 2,000 watched matches."), Category("RealismHarness")]
+        [Test, Explicit("Harness: 2,000 watched matches."), Category("RealismHarness")]
         public void Harness_QualityTierComparison()
         {
             World world = Generate();
@@ -56,6 +56,11 @@ namespace Sim.Core.Tests.Match
 
             Assert.That(top.Matches, Is.EqualTo(matches), "Every top-tier match must come back with a stream.");
             Assert.That(second.Matches, Is.EqualTo(matches), "Every second-tier match must come back with a stream.");
+
+            // R3 is the gate at the full sample; a quick look at fewer matches only reads.
+            if (matches < MatchesPerTier) return;
+            foreach (TierGap gap in QualityTierTally.Compare(top, second))
+                Assert.That(gap.Met, Is.True, $"R3 {gap.Name}: top {gap.Top:F2}, second {gap.Second:F2}, wants {gap.Target}");
         }
 
         private static QualityTierTally Run(League league, int matches, out string sides)

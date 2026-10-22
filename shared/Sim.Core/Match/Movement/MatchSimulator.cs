@@ -144,7 +144,7 @@ namespace Sim.Core.Match.Movement
         private int _releasedBy = -1;
         private int _releasedUntil = -1;
 
-        private int _controlU, _kickU, _separationU, _interceptU, _dribbleReportU;
+        private int _controlU, _challengeU, _cutOutU, _kickU, _separationU, _interceptU, _dribbleReportU;
         private PlayerSteering _steering;
         private int _foeSeparationU;
         private int _recoveryU;
@@ -402,6 +402,8 @@ namespace Sim.Core.Match.Movement
             if (_approachU < 1) _approachU = 1;
             _dribbleReportU = U.Units(_cfg.DribbleReportDm);
             _controlU = U.Units(_cfg.ControlRadiusDm);
+            _challengeU = U.Units(_cfg.ChallengeRadiusDm);
+            _cutOutU = U.Units(_cfg.PassCutOutReachDm);
             _kickU = U.Units(_cfg.KickRangeDm);
             _separationU = U.Units(_cfg.SeparationRadiusDm);
             _separationSq = _separationU * _separationU;
@@ -1373,8 +1375,9 @@ namespace Sim.Core.Match.Movement
                 BallToFeet(owner);
 
                 int taker = -1, takerSide = -1;
-                long best = (long)_controlU * _controlU;
                 int other = 1 - _ball.OwnerSide;
+                long challenge = (long)_challengeU * _tactics[other].ChallengePercent / 100;
+                long best = challenge * challenge;
                 for (int j = 0; j < _n; j++)
                 {
                     int ok = other * _n + j;
@@ -1461,6 +1464,9 @@ namespace Sim.Core.Match.Movement
             // allows itself, and the reason the timeline's chance arrives with the ball at the
             // right feet instead of having to be handed to a man forty metres out.
             int bestSide = -1, bestSlot = -1, bestDistance = int.MaxValue;
+            int passer = !_ctx.ShotLive && _ball.LastTouchSide >= 0 && _receiver[_ball.LastTouchSide] >= 0
+                ? _ball.LastTouchSide
+                : -1;
             for (int side = 0; side < SideCount; side++)
                 for (int i = 0; i < _n; i++)
                 {
@@ -1474,6 +1480,10 @@ namespace Sim.Core.Match.Movement
                     // ball cut out. It is NOT a licence to pluck a team-mate's pass out of the
                     // air a metre after it leaves his foot, which turns the move into a huddle.
                     int reach = _controlU;
+
+                    // A pass on its way to a team-mate is cut out from closer than a loose ball is
+                    // picked up: the defender has to read it and get a foot to a moving ball.
+                    if (passer >= 0 && side != passer) reach = _cutOutU;
 
                     // THE DIVE (engine phase 6). A strike at his goal is the one ball a keeper
                     // reaches further for than anybody reaches for anything. Whether reaching it

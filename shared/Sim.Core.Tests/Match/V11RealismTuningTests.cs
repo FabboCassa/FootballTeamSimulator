@@ -90,6 +90,47 @@ namespace Sim.Core.Tests.Match
         }
 
         [Test]
+        public void V11_OverASmallSample_ReadsNearTheRealMatchR2Bands()
+        {
+            // STATISTICALLY FRAGILE: sixteen matches, eight per mirror, not the harness's thousand
+            // each. Every R2 band the harness gates and #87 reached is widened by its own width on
+            // either side, so that only a real regression trips it (before #87's tuning goals read
+            // 1.4 and PPDA 3.9).
+            const int PerMirror = 8;
+            const double BandSlack = 1.0;
+            BalanceConfig cfg = Config();
+            var realism = new RealismTally();
+            var shape = new ShapeMovementTally();
+            var shotPass = new ShotPassTally();
+            foreach (Formation formation in new[] { Formation.F442, Formation.F433 })
+            {
+                Lineup a = LineupSelector.BestEleven(_league.Clubs[9], formation);
+                Lineup b = LineupSelector.BestEleven(_league.Clubs[10], formation);
+                var neutral = new TacticContext(new Tactic(formation), cfg.Tactics.FamiliarityMax);
+                var reports = new MatchReport[PerMirror];
+                System.Threading.Tasks.Parallel.For(0, PerMirror, i => reports[i] = i % 2 == 0
+                    ? Engine(cfg).Simulate(a, b, new Pcg32(BandSeed + (ulong)i), new MatchTactics(neutral, neutral))
+                    : Engine(cfg).Simulate(b, a, new Pcg32(BandSeed + (ulong)i), new MatchTactics(neutral, neutral)));
+                foreach (MatchReport r in reports)
+                {
+                    realism.Add(new MatchAnalyzer().Measure(r)!, new RealismAnalyzer(cfg.Match).Measure(r)!, 0);
+                    shape.Add(new ShapeMovementAnalyzer().Measure(r)!);
+                    shotPass.Add(new ShotPassAnalyzer(cfg.Match).Measure(r)!);
+                }
+            }
+
+            foreach ((RealismBand band, double value) in RealismHarnessTests.R2Rows(realism, shape, shotPass))
+            {
+                TestContext.Out.WriteLine($"[V11 R2 sample] {band.Name} {value:F3} (band {band.Describe()})");
+                // Unreached rows are exempt only until #120 decides them (see RealismHarnessTests.Unreached).
+                if (RealismHarnessTests.ReportOnly.ContainsKey(band.Name) || RealismHarnessTests.Unreached.ContainsKey(band.Name))
+                    continue;
+                double slack = (band.Max - band.Min) * BandSlack;
+                Assert.That(value, Is.InRange(band.Min - slack, band.Max + slack), band.Name);
+            }
+        }
+
+        [Test]
         public void OpenGoals_AreRareChances_NotEveryTouchNearTheBox()
         {
             // Before the lane needed the mouth in view and nobody a stride from it, the trigger
