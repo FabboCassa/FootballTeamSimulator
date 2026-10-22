@@ -6,8 +6,9 @@ namespace Sim.Core.Match.Movement
 {
     public sealed partial class MatchSimulator
     {
-        /// <summary>Each side's build-up instruction: how its throw-ins and goal kicks are played on V11.</summary>
+        /// <summary>Each side's Tempo and build-up instruction: how its throw-ins and goal kicks are played on V11.</summary>
         private readonly Tempo[] _tempo = new Tempo[SideCount];
+        private readonly BuildUp[] _buildUp = new BuildUp[SideCount];
 
         /// <summary>How close to goal a free kick gets a wall.</summary>
         private int WallRangeDm => _cfg.SetPieceRangeDm;
@@ -16,6 +17,8 @@ namespace Sim.Core.Match.Movement
         {
             _tempo[0] = tactics != null ? tactics.Home.Tactic.Instructions.Tempo : Tempo.Normal;
             _tempo[1] = tactics != null ? tactics.Away.Tactic.Instructions.Tempo : Tempo.Normal;
+            _buildUp[0] = tactics != null ? tactics.Home.Tactic.Instructions.BuildUp : BuildUp.Mixed;
+            _buildUp[1] = tactics != null ? tactics.Away.Tactic.Instructions.BuildUp : BuildUp.Mixed;
         }
 
         /// <summary>
@@ -29,7 +32,8 @@ namespace Sim.Core.Match.Movement
         ///   the near-post or the far-post man.
         /// - A penalty taker walks back to the start of his run-up and runs in: the strike comes
         ///   at the end of a run the stream can see.
-        /// - A goal kick or a throw-in is played short or long as Tempo says, once its shape is
+        /// - A goal kick or a throw-in is played short or long as Tempo says (a goal kick as the
+        ///   build-up axis says, when it is off its middle level), once its shape is
         ///   up (real-match spec R11, <see cref="RestartShape"/>): for a goal kick that may go short
         ///   the centre-backs split to the box corners and the full-backs go wide; for a throw-in
         ///   the two nearest men offer, each on his place in the shape held within reach of the throw.
