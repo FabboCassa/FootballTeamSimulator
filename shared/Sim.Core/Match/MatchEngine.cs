@@ -75,7 +75,11 @@ namespace Sim.Core.Match
         // team phases, off-ball runs, xT / pitch-control / xG decisions, its own set pieces, the
         // player's own fatigue clock, familiarity and role fit, shouts — and the v10 decisions are
         // gone. Every watched match moves; the fast model reads its V11 calibration.
-        public const int Version = 11;
+        // v12: the real-match brain (docs/specs/real-match-and-playing-styles.md, Phase A) — compact
+        // block and width in possession, keeper positioning and zone saves, eased acceleration,
+        // support angles and longer chains, blocked shots, restart shapes, players kept on the pitch,
+        // a genuine open-goal shortcut and the realism retune. The fast model reads its V12 calibration.
+        public const int Version = 12;
 
         private const int MatchMinutes = 90;
 

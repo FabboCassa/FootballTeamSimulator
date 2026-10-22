@@ -17,7 +17,7 @@ namespace Sim.Core.Tests.Career
 {
     /// <summary>
     /// R17 of the watchable-match spec: the fast model (<see cref="QuickResultResolver"/>) against
-    /// the full engine on the V11 brain. Two readings, both printed as a table:
+    /// the full engine (v12 since the real-match spec's R15). Two readings, both printed as a table:
     ///   - outcomes: 1,000 fixtures of a generated league (every pairing, both venues) played by
     ///     the full engine, and the same fixtures through the fast model — mean goals within 0.15,
     ///     home/draw/away shares within 3 pp. The fast side is drawn many times per fixture so its
@@ -37,7 +37,7 @@ namespace Sim.Core.Tests.Career
     [TestFixture]
     public class FastModelHarnessTests
     {
-        private const string Reason = "Report-only harness: thousands of watched V11 matches.";
+        private const string Reason = "Report-only harness: thousands of watched matches.";
         private const int Matches = 1000;
         private const int InstructionMatches = 1000;
         private const int FastDrawsPerFixture = 50;
@@ -50,10 +50,10 @@ namespace Sim.Core.Tests.Career
         private const double SignalStandardErrors = 2.0;
 
         [Test, Explicit(Reason), Category("FastModelHarness")]
-        public void Harness_FastModelVsV11_Outcomes()
+        public void Harness_FastModelVsFullEngine_Outcomes()
         {
             List<Club> clubs = Clubs();
-            BalanceConfig cfg = V11();
+            BalanceConfig cfg = new BalanceConfig();
             var full = new OutcomeTally();
             var fast = new OutcomeTally();
             var homeGoals = new int[Matches];
@@ -88,10 +88,10 @@ namespace Sim.Core.Tests.Career
         }
 
         [Test, Explicit(Reason), Category("FastModelHarness")]
-        public void Harness_FastModelVsV11_InstructionDirections()
+        public void Harness_FastModelVsFullEngine_InstructionDirections()
         {
             List<Club> clubs = Clubs();
-            BalanceConfig cfg = V11();
+            BalanceConfig cfg = new BalanceConfig();
             int n = TestContext.Parameters.Get("instructionMatches", InstructionMatches);
             IReadOnlyList<(string Name, TacticInstructions Set)> settings = Settings();
             var clock = Stopwatch.StartNew();
@@ -111,7 +111,7 @@ namespace Sim.Core.Tests.Career
             }
 
             var misses = new List<string>();
-            TestContext.Out.WriteLine(FormatDirections(rows, n, clock.Elapsed.TotalSeconds, misses));
+            TestContext.Out.WriteLine(FormatDirections(rows, n, clock.Elapsed.TotalSeconds, (neutral.MeanFor + neutral.MeanAgainst) / 2, misses));
             Assert.That(misses, Is.Empty, "R17 instruction directions");
         }
 
@@ -230,7 +230,7 @@ namespace Sim.Core.Tests.Career
         private static string FormatOutcomes(OutcomeTally full, OutcomeTally fast, double seconds, List<string> misses)
         {
             var sb = new StringBuilder();
-            sb.AppendLine(Inv($"[fast-model] V11 full engine {Matches} matches vs fast model x{FastDrawsPerFixture} draws per fixture, {seconds:F0} s"));
+            sb.AppendLine(Inv($"[fast-model] v{MatchEngine.Version} full engine {Matches} matches vs fast model x{FastDrawsPerFixture} draws per fixture, {seconds:F0} s"));
             sb.AppendLine("  reading        full      fast      gap   tolerance");
             Row(sb, misses, "mean goals", full.MeanGoals, fast.MeanGoals, MaxGoalsGap, "F2");
             Row(sb, misses, "home win %", full.HomePercent, fast.HomePercent, MaxSharePpGap, "F1");
@@ -270,10 +270,12 @@ namespace Sim.Core.Tests.Career
             }
         }
 
-        private static string FormatDirections(List<DirectionRow> rows, int n, double seconds, List<string> misses)
+        /// <summary><paramref name="neutralSideGoals"/> is what a table entry is a share of: entry ≈ 100 × shift / side goals.</summary>
+        private static string FormatDirections(List<DirectionRow> rows, int n, double seconds, double neutralSideGoals, List<string> misses)
         {
             var sb = new StringBuilder();
-            sb.AppendLine(Inv($"[fast-model-instructions] V11 full engine {n} matches per setting (+ neutral) vs fast-model expected goals, {seconds:F0} s"));
+            sb.AppendLine(Inv($"[fast-model-instructions] v{MatchEngine.Version} full engine {n} matches per setting (+ neutral) vs fast-model expected goals, {seconds:F0} s"));
+            sb.AppendLine(Inv($"  neutral side goals (full engine) {neutralSideGoals:F3}"));
             sb.AppendLine("  treated side    full dGF (se)    fast dGF   GF     full dGA (se)    fast dGA   GA");
             foreach (DirectionRow r in rows)
             {
@@ -318,8 +320,6 @@ namespace Sim.Core.Tests.Career
             if (away >= home) away++;
             return (clubs[home], clubs[away]);
         }
-
-        private static BalanceConfig V11() => new BalanceConfig();
 
         /// <summary>The flags the shipped client plays a watched match with (SeasonProgressor's); nothing reads the stats.</summary>
         private static MatchEngine Engine(BalanceConfig cfg) =>

@@ -105,7 +105,7 @@ Rules the server enforces, and why:
 
 World *generation* is deliberately **not** affected: `WorldFactory` still builds worlds from the balance
 embedded in the build, so a seed keeps generating the same world forever and the golden master
-`0x42952113BDF98179` (interim v12 after issues #77, #78, #82, #83 and #87, final value approved in #88; before #87 it was `0xA5034724A9E2992F`, before #83 `0x3C09C781A8278559`, before #82 `0xB709A88D6957AA28`, v11 was `0xE72BA81A6D7A469C`) stays meaningful. The push covers the live knobs — match, condition, development,
+`0x8BAA4E49A3BD0A0F` (engine v12, issue #88; the interim v12 values were `0x42952113BDF98179` after #87, before #87 `0xA5034724A9E2992F`, before #83 `0x3C09C781A8278559`, before #82 `0xB709A88D6957AA28`, v11 was `0xE72BA81A6D7A469C`) stays meaningful. The push covers the live knobs — match, condition, development,
 market, finance, tactics.
 
 If a pushed revision turns out to be unreadable, every instance logs it and **stays on the balance it
