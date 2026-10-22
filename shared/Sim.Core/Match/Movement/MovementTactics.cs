@@ -154,7 +154,8 @@ namespace Sim.Core.Match.Movement
             int appetite =
                 InstructionTable.Percent(cfg.MentalityShotAppetitePercent, mentality, cfg.V11ShotAppetiteSpreadPercent)
                 * InstructionTable.Percent(cfg.TempoShotAppetitePercent, tempo, cfg.V11ShotAppetiteSpreadPercent) / 100
-                * shout.ShotAppetitePercent / 100;
+                * shout.ShotAppetitePercent / 100
+                * Percent(cfg.ShotSelectionAppetitePercent, (int)i.ShotSelection) / 100;
 
             // A shout's hold is a tempo too, read at the Tempo axis spread (ts), not the hold tables'.
             int hold = 100 + (shout.HoldPercent - 100) * ts / 100;
