@@ -566,6 +566,45 @@ league means only, never beside Opta or FBref figures.
   20.4 m gives 33.5 m as the tournament's mean back line (**derived**: 13.1 + 20.4) [36], so ≤ 32 m
   is a deeper-than-average block.
 
+### 3.3 R19 fingerprint directions (#94)
+
+The direction each style moves each R19 metric against the league mean, read from §3.1 (issue #94,
+to be judged with the user). `StyleFingerprints` in `Sim.Core.Match.Analysis` carries the same
+table. "+" up, "-" down, "0" no published direction: a 0 can never count as moved, so a style with
+two 0s must move all five others. **def** marks a direction read from the style's definition in the
+catalogue above because §3.1 quotes no figure for it.
+
+| Style | Passes | Poss | Pass/seq | 10+ | Direct speed | PPDA | 7th metric |
+|---|---|---|---|---|---|---|---|
+| Tiki-taka | + (Barcelona 677) | + (66.2%) | + (6.86) | + (17.4) | - (1.55 vs 2.0-2.1) | - (0.58x) | long - (10.8 vs 16.2%) |
+| Positional play | + (City 643 vs 487) | + (61.3%) | + (5.1, PL max) | + (17.3) | - (slowest) | - (Bayern 0.69x; City 1.07x) | line + (start 46.2 m, PL max) |
+| Gegenpress | - (Leverkusen 480) | + (52.8%, 56.7%) | - (4.52) | - (8.2) | + (2.13) | - (0.65-0.75x) | line + (def: counter-press high) |
+| Vertical tiki-taka | + (Napoli 708) | + (62.5%) | + (6.60) | + (19.0) | - (1.74; Alonso slowest) | - (0.89x, 0.97x) | long - (9.3 vs 15.0%) |
+| Control possession | + (Real 637) | + (60.4%) | + (Juventus 5.85) | + (13.5) | - (1.69) | 0 (0.99x) | long - (10.7 vs 14.8%) |
+| Wing play | - def | - def | - def | - def | + def | - (Bournemouth 0.75x) | crosses + (1.17-1.34x) |
+| Route one | - (West Brom 368) | - (39.9%) | - (Getafe 2.1) | - (4.8 vs 9.7) | + (2.36) | + (Everton 1.26x) | long + (21.4%, 22.8%) |
+| Direct | - (Brentford 450) | - def | - (2.84) | - def | + def | 0 | long + (16.0 vs 13.1%) |
+| Fluid counter | - (Leicester 397) | - (42.5%) | - (3.99) | - (5.7) | + (2.44) | 0 (1.02x) | long + (19.8 vs 15.9%) |
+| Direct counter | - (Forest 378) | - (39.5%) | - (2.8) | - (5.1 vs 17.3) | + (2.1, PL max) | + (1.25x) | long + (16.3 vs 13.1%) |
+| Mid block | + (Atlético 1.05x) | - (48.5%) | + (4.94) | + (11.6) | 0 (2.05) | 0 (1.02x) | long - (13.5 vs 16.2%) |
+| Catenaccio | - def | - def | - def | - def | + def | + (Torino 1.23x) | line - (start 31.3 m) |
+| Park the bus | - (Forest 378) | - (39.5%) | - (2.8) | - (5.1) | + (2.1) | + (St. Pauli, Parma >= 16) | line - (anchor <= 32 m) |
+| Man-oriented press | - def | 0 | - def | - def | + def | - (Atalanta 0.73x) | line + (def: 1v1 at the back) |
+
+Documented minimum shift against Balanced, same fixtures: passes, passes per sequence, direct
+speed and PPDA 5% of the Balanced reading; 10+ sequences and crosses 10%; possession and long-ball
+share 2 percentage points; line height 1.5 m. Each is about the smallest gap §3.1 shows between a
+style's example team and its league (Atlético 15-16: 1.05x the passes, 1.5 pp under even possession).
+The line is the side's last line (second-deepest man, keeper first) while the opponent has the
+ball, metres from its own goal; Balanced reads about 32-33 m, beside the WC 2022 mean back line of
+33.5 m (§3.2).
+
+Not reached by an honest preset in #94, so printed and flagged, not gated: Tiki-taka's passes
+(about 800 against the 780 ceiling, as passes per sequence ≥ 5.0 only comes with that volume),
+Park the bus's possession (about 47% against ≤ 40%, within 1 pp of Balanced in 5-3-2) and Mid
+block's moves (3 of 7: more passes with less possession and a lower long-ball share do not go
+together in the engine).
+
 ## 4. Formation catalogue
 
 Position codes: GK, RB/LB full-backs, CB, RWB/LWB wing-backs, DM, CM, AM, RM/LM wide midfielders,
@@ -765,8 +804,8 @@ Considered and kept at the R2 starting value:
   sides. The Championship (2.45, 2.61) and Serie B (2.46, 2.56) sit inside it in 2024-25 and
   2025-26, but 2. Bundesliga sits above it in both, 3.02 and 2.93 [1] (§7). The target fits two of
   the three second tiers reached, not all; whether to keep it is left to the user (#73, #83).
-- **R19 directions per style.** No per-metric direction table is given; R19's directions are left
-  to #94, read from §3.1 with the user.
+- **R19 directions per style.** #94 reads them from §3.1 into §3.3; the table and its minimums
+  are to be judged with the user.
 
 ## Sources
 
