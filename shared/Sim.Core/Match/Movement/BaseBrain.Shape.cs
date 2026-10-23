@@ -55,6 +55,7 @@ namespace Sim.Core.Match.Movement
                          + t.LinePushDm
                          + _cfg.PossessionLinePushDm * e / 1000;
                 if (_driving[side]) line += _cfg.PitchDriveShiftPermille * Pitch.LengthDm * e / 1000_000;
+                line += BackLinePushDm(side) * (1000 - e) / 1000;
                 line = MovementGeometry.Clamp(line, _cfg.BackLineMinDepthDm, _cfg.BackLineMaxDepthDm);
 
                 int spacing = kickoff

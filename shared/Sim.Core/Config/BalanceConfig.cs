@@ -1803,6 +1803,9 @@ namespace Sim.Core.Config
         /// <summary>Touchline shouts: duration, cooldown and magnitudes (watchable-match spec R11).</summary>
         public ShoutBalance Shouts { get; set; } = new ShoutBalance();
 
+        /// <summary>The R16 transition and out-of-possession axes (issue #91).</summary>
+        public DefendingAxesBalance DefendingAxes { get; set; } = new DefendingAxesBalance();
+
         // --- Time base ---
 
         /// <summary>

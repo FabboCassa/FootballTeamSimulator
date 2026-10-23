@@ -31,10 +31,10 @@ namespace Sim.Core.Match.Movement
                     if (_keeper[k] || _second[side] != slot) return false;
                     int dir = MovementGeometry.Direction(side == 0);
                     int ownGoalX = U.Units(MovementGeometry.OwnGoalX(side == 0));
-                    if (dir * (_ball.X - ownGoalX) > U.Units(_tactics[side].SecondPressDepthDm)) return false;
+                    if (dir * (_ball.X - ownGoalX) > U.Units(_tactics[side].SecondPressDepthDm + SecondPressShiftDm(side))) return false;
                 }
 
-                long reach = _tactics[side].PressReachU;
+                long reach = PressReach(side, _tactics[side].PressReachU);
 
                 // The TRIGGER (engine phase 3). A side does not chase the man on the ball
                 // wherever he stands: it has a zone it presses in, which is what the coach's
@@ -44,7 +44,7 @@ namespace Sim.Core.Match.Movement
                 // have it. (A loose ball is not in here on purpose: it is chased by the branch
                 // above this one, whoever owns the trigger.)
                 int ballDepth = side == 0 ? U.Dm(_ball.X) : Pitch.LengthDm - U.Dm(_ball.X);
-                if (ballDepth > _tactics[side].PressTriggerDepthDm) return false;
+                if (ballDepth > _tactics[side].PressTriggerDepthDm + PressTriggerShiftDm(side)) return false;
 
                 int pressBoost = 100;
                 if (_pressUntil[side] > tick) pressBoost = pressBoost * _cfg.PressBackPassPercent / 100;
@@ -53,6 +53,7 @@ namespace Sim.Core.Match.Movement
                 if (pressOffCentre > U.Units(_cfg.PressWideThresholdDm))
                     pressBoost = pressBoost * _cfg.PressWideReceptionPercent / 100;
                 reach = reach * pressBoost / 100;
+                reach = PressDirectionReach(side, reach, pressOffCentre > U.Units(_cfg.PressWideThresholdDm));
 
                 return U.DistanceSq(homeX, homeY, _ball.X, _ball.Y) <= reach * reach;
             }
@@ -101,9 +102,10 @@ namespace Sim.Core.Match.Movement
                 bool home = side == 0;
                 int goalX = U.Units(MovementGeometry.OwnGoalX(home));
 
-                // Goal-side of his man.
-                int dx = goalX - _px[ok], dy = U.CenterYU - _py[ok];
-                U.Scaled(dx, dy, U.Units(_cfg.MarkDistanceDm), out int gx, out int gy);
+                // Goal-side of his man; a man-oriented side stands part-way toward the ball (issue #91).
+                MarkAim(side, goalX, out int aimX, out int aimY);
+                int dx = aimX - _px[ok], dy = aimY - _py[ok];
+                U.Scaled(dx, dy, U.Units(MarkDistanceDm(side)), out int gx, out int gy);
                 x = _px[ok] + gx;
                 y = _py[ok] + gy;
 
