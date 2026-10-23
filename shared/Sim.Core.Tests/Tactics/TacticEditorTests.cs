@@ -33,15 +33,17 @@ namespace Sim.Core.Tests.Tactics
         public void TweakingAnInstruction_KeepsTheStyle_AndMarksItCustom()
         {
             TacticPlan tiki = TacticEditor.WithStyle(TacticPlan.Neutral(), PlayingStyle.TikiTaka);
-
-            TacticPlan tweaked = TacticEditor.WithInstruction(tiki, InstructionAxis.Tempo, (int)Tempo.Fast);
-
             TacticInstructions preset = PlayingStyles.Get(PlayingStyle.TikiTaka).Instructions;
+            int tempo = OtherLevel(tiki, InstructionAxis.Tempo);
+            Assert.That(tempo, Is.Not.EqualTo((int)preset.Tempo), "the tweak must leave the preset");
+
+            TacticPlan tweaked = TacticEditor.WithInstruction(tiki, InstructionAxis.Tempo, tempo);
+
             Assert.Multiple(() =>
             {
                 Assert.That(tweaked.Style, Is.EqualTo(PlayingStyle.TikiTaka));
                 Assert.That(TacticEditor.IsCustom(tweaked), Is.True);
-                Assert.That(tweaked.Tempo, Is.EqualTo(Tempo.Fast));
+                Assert.That(tweaked.Tempo, Is.EqualTo((Tempo)tempo));
                 Assert.That(tweaked.Pressing, Is.EqualTo(preset.Pressing), "untouched axes keep the preset");
                 Assert.That(tweaked.ToStylePlan().Overrides.Count(), Is.EqualTo(1));
                 Assert.That(tiki.Tempo, Is.EqualTo(preset.Tempo), "the source plan is not mutated");
@@ -53,9 +55,11 @@ namespace Sim.Core.Tests.Tactics
         public void TweakingBackToThePresetLevel_ClearsCustom()
         {
             TacticPlan tiki = TacticEditor.WithStyle(TacticPlan.Neutral(), PlayingStyle.TikiTaka);
-            TacticPlan tweaked = TacticEditor.WithInstruction(tiki, InstructionAxis.DefensiveLine, (int)DefensiveLine.VeryDeep);
+            int presetLine = (int)PlayingStyles.Get(PlayingStyle.TikiTaka).Instructions.DefensiveLine;
+            TacticPlan tweaked = TacticEditor.WithInstruction(tiki, InstructionAxis.DefensiveLine,
+                OtherLevel(tiki, InstructionAxis.DefensiveLine));
 
-            TacticPlan back = TacticEditor.WithInstruction(tweaked, InstructionAxis.DefensiveLine, (int)DefensiveLine.High);
+            TacticPlan back = TacticEditor.WithInstruction(tweaked, InstructionAxis.DefensiveLine, presetLine);
 
             Assert.That(TacticEditor.IsCustom(tweaked), Is.True);
             Assert.That(TacticEditor.IsCustom(back), Is.False);
@@ -64,17 +68,18 @@ namespace Sim.Core.Tests.Tactics
         [Test]
         public void RepickingAStyle_DropsTheTweaks()
         {
+            TacticPlan catenaccio = TacticEditor.WithStyle(TacticPlan.Neutral(), PlayingStyle.Catenaccio);
             TacticPlan custom = TacticEditor.WithInstruction(
-                TacticEditor.WithStyle(TacticPlan.Neutral(), PlayingStyle.Catenaccio),
-                InstructionAxis.Mentality, (int)Mentality.Attacking);
+                catenaccio, InstructionAxis.Mentality, OtherLevel(catenaccio, InstructionAxis.Mentality));
 
             TacticPlan reset = TacticEditor.WithStyle(custom, PlayingStyle.Catenaccio);
             TacticPlan other = TacticEditor.WithStyle(custom, PlayingStyle.Gegenpress);
 
             Assert.Multiple(() =>
             {
+                Assert.That(TacticEditor.IsCustom(custom), Is.True);
                 Assert.That(TacticEditor.IsCustom(reset), Is.False);
-                Assert.That(reset.Mentality, Is.EqualTo(Mentality.Defensive));
+                Assert.That(reset.Mentality, Is.EqualTo(PlayingStyles.Get(PlayingStyle.Catenaccio).Instructions.Mentality));
                 Assert.That(TacticEditor.IsCustom(other), Is.False);
                 Assert.That(other.ToTactic().Instructions, Is.EqualTo(PlayingStyles.Get(PlayingStyle.Gegenpress).Instructions));
             });
@@ -83,9 +88,9 @@ namespace Sim.Core.Tests.Tactics
         [Test]
         public void ChangingTheFormation_KeepsStyleAndTweaks()
         {
-            TacticPlan custom = TacticEditor.WithInstruction(
-                TacticEditor.WithStyle(TacticPlan.Neutral(), PlayingStyle.WingPlay),
-                InstructionAxis.MarkingScheme, (int)MarkingScheme.ManOriented);
+            TacticPlan wing = TacticEditor.WithStyle(TacticPlan.Neutral(), PlayingStyle.WingPlay);
+            int marking = OtherLevel(wing, InstructionAxis.MarkingScheme);
+            TacticPlan custom = TacticEditor.WithInstruction(wing, InstructionAxis.MarkingScheme, marking);
 
             TacticPlan moved = TacticEditor.WithFormation(custom, Formation.F4411);
 
@@ -93,7 +98,7 @@ namespace Sim.Core.Tests.Tactics
             {
                 Assert.That(moved.Formation, Is.EqualTo(Formation.F4411));
                 Assert.That(moved.Style, Is.EqualTo(PlayingStyle.WingPlay));
-                Assert.That(moved.MarkingScheme, Is.EqualTo(MarkingScheme.ManOriented));
+                Assert.That(moved.MarkingScheme, Is.EqualTo((MarkingScheme)marking));
                 Assert.That(TacticEditor.IsCustom(moved), Is.True);
                 Assert.That(custom.Formation, Is.EqualTo(Formation.F433), "the source plan is not mutated");
             });
@@ -156,9 +161,9 @@ namespace Sim.Core.Tests.Tactics
         [Test]
         public void ACustomPlan_SurvivesTheStoredStylePlanRoundTrip()
         {
+            TacticPlan bus = TacticEditor.WithStyle(TacticPlan.Neutral(), PlayingStyle.ParkTheBus);
             TacticPlan custom = TacticEditor.WithInstruction(
-                TacticEditor.WithStyle(TacticPlan.Neutral(), PlayingStyle.ParkTheBus),
-                InstructionAxis.ShotSelection, (int)ShotSelection.ShootOnSight);
+                bus, InstructionAxis.ShotSelection, OtherLevel(bus, InstructionAxis.ShotSelection));
 
             TacticPlan reloaded = TacticPlan.FromStyle(custom.Formation, custom.ToStylePlan());
 
@@ -166,5 +171,9 @@ namespace Sim.Core.Tests.Tactics
             Assert.That(reloaded.Style, Is.EqualTo(PlayingStyle.ParkTheBus));
             Assert.That(TacticEditor.IsCustom(reloaded), Is.True);
         }
+
+        // Tweaks are derived from the current preset so a preset retune cannot turn them into no-ops.
+        private static int OtherLevel(TacticPlan plan, InstructionAxis axis) =>
+            (TacticEditor.LevelOf(plan, axis) + 1) % TacticEditor.LevelCount(axis);
     }
 }
