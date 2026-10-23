@@ -180,8 +180,12 @@ public sealed class LiveMatchService : ILiveMatchService
     // --- pause-point change ------------------------------------------------------------------------
 
     public async Task<LeagueResult<LiveMatchStateDto>> SubmitChangeAsync(
-        Guid userId, Guid leagueId, Guid fixtureId, SubmitLiveChangeRequest request, CancellationToken ct = default)
+        Guid userId, Guid leagueId, Guid fixtureId, int? clientEngineVersion, SubmitLiveChangeRequest request,
+        CancellationToken ct = default)
     {
+        if (clientEngineVersion != MatchEngine.Version)
+            return EngineMismatch(clientEngineVersion);
+
         var (error, message, live) = await LoadParticipantAsync(userId, leagueId, fixtureId, ct);
         if (live is null) return Fail(message, error);
 
