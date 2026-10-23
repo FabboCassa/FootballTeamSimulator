@@ -141,7 +141,8 @@ namespace Sim.Core.Match.Movement
         private int _releasedBy = -1;
         private int _releasedUntil = -1;
 
-        private int _controlU, _kickU, _separationU, _interceptU, _arrivalU, _dribbleReportU;
+        private int _controlU, _kickU, _separationU, _interceptU, _dribbleReportU;
+        private PlayerSteering _steering;
         private int _foeSeparationU;
         private int _recoveryU;
         private long _foeSeparationSq;
@@ -386,7 +387,7 @@ namespace Sim.Core.Match.Movement
             _stamina = new int[total];
             _onSince = new int[total];
 
-            _arrivalU = U.Units(_cfg.PlayerArrivalRadiusDm);
+            _steering = new PlayerSteering(_cfg);
             _approachU = U.Units(_cfg.PlayerApproachDm);
             if (_approachU < 1) _approachU = 1;
             _dribbleReportU = U.Units(_cfg.DribbleReportDm);
@@ -553,8 +554,7 @@ namespace Sim.Core.Match.Movement
             if (_maxSpeed[k] < 1) _maxSpeed[k] = 1;
             _cruise[k] = _maxSpeed[k] * _cfg.PlayerCruisePercent / 100;
             if (_cruise[k] < 1) _cruise[k] = 1;
-            _accel[k] = U.PerTickPerTick(_cfg.PlayerAccelDmPerSecond2, _cfg);
-            if (_accel[k] < 1) _accel[k] = 1;
+            _accel[k] = _steering.Accel;
         }
 
         private static int Rate(int attribute, int scalePermille)
@@ -1133,8 +1133,8 @@ namespace Sim.Core.Match.Movement
         /// This exists because the steering is wrong for a mark in both its gears, which the replay
         /// dump showed three times over: sprinting, a man carries his momentum eight metres past the
         /// spot and orbits it; jogging, the approach slowdown paces him to a crawl inside fifteen
-        /// metres and the arrival deadband parks him three metres short — so a wall stood at five
-        /// metres instead of nine fifteen, and men were left standing over the halfway line at a
+        /// metres and the arrival deadband of the time (removed in issue #77) parked him three
+        /// metres short — so a wall stood at five metres instead of nine fifteen, and men were left standing over the halfway line at a
         /// kickoff. Capped at his own running speed, so it can no more teleport a body than the
         /// steering can (PositionStreamTests.NobodyTeleports).
         /// </summary>
@@ -1172,51 +1172,12 @@ namespace Sim.Core.Match.Movement
             int top = CarrierTop(k, sprint ? _maxSpeed[k] : _cruise[k]);
             if (top < 1) top = 1;
 
-            // Within one step of the target the vector IS the step, so no root is needed: this
-            // is the common case for the twenty players who are not chasing anything.
-            int dx = tx - _px[k], dy = ty - _py[k];
-            long gap = (long)dx * dx + (long)dy * dy;
             int wx, wy;
-
-            // He WALKS to a place a few metres away and jogs to one across the pitch. Setting
-            // off at a constant jog for a five-metre correction is a kilometre a match of
-            // running no footballer does, and it also means a man chasing a spot that jitters
-            // can never settle: at walking pace he averages the jitter out instead, which is
-            // what actually happens on a pitch (engine phase 2).
-            if (!sprint && gap < (long)_approachU * _approachU)
-            {
-                int near = U.Length(dx, dy);
-                int paced = top * near / _approachU;
-                if (paced < 1) paced = 1;
-                top = paced;
-            }
-
-            if (!sprint && gap <= (long)_arrivalU * _arrivalU)
-            {
-                // Arrived. A footballer standing in position stands in it; chasing a spot that
-                // drifts with the ball ten times a second is how the eleven of them walked
-                // sixteen kilometres a match. It is a deadband on REPOSITIONING only — a man
-                // going for the ball goes all the way to it, or nobody ever collects it.
-                wx = 0;
-                wy = 0;
-            }
-            else if (gap <= (long)top * top)
-            {
-                wx = dx;
-                wy = dy;
-            }
-            else
-            {
-                U.Scaled(dx, dy, top, out wx, out wy);
-            }
+            top = _steering.Desired(tx - _px[k], ty - _py[k], top, sprint, out wx, out wy);
 
             Separate(k, ref wx, ref wy, top);
 
-            int ax = wx - _vx[k], ay = wy - _vy[k];
-            U.Cap(ref ax, ref ay, _accel[k]);
-            _vx[k] += ax;
-            _vy[k] += ay;
-            U.Cap(ref _vx[k], ref _vy[k], top);
+            PlayerSteering.Accelerate(ref _vx[k], ref _vy[k], wx, wy, _accel[k], top);
 
             // The step, before the pitch is allowed to have an opinion about it. A man who runs
             // over a line is put back on it; the ball he is holding is NOT, and the referee reads
