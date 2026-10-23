@@ -1693,6 +1693,40 @@ namespace Sim.Core.Config
         /// </summary>
         public int[] V11WidthChannelPercent { get; set; } = { 40, 100, 250 };
 
+        // --- R16 in-possession axes (issue #90). Each table is read low · middle · high and its
+        // middle entry is the identity, so a v11 tactic (every expanded axis at its middle) plays
+        // as in v12. Measured shifts against neutral are in InPossessionInstructionsTests. ---
+
+        /// <summary>Passing directness (short · mixed · direct): the weight on a long forward ball's gain, on top of Tempo's.</summary>
+        public int[] V11PassingDirectnessPercent { get; set; } = { 50, 100, 220 };
+
+        /// <summary>
+        /// Build-up (play out from the back · mixed · goal kick long): the weight on a long forward
+        /// ball's gain while the ball is in the side's own third — the keeper's and the back line's first ball.
+        /// </summary>
+        public int[] V11BuildUpLongPercent { get; set; } = { 50, 100, 200 };
+
+        /// <summary>
+        /// Build-up: how a goal kick is played, as <see cref="GoalKickLongByTempo"/> names the
+        /// values; -1 (the middle) leaves it to Tempo.
+        /// </summary>
+        public int[] GoalKickLengthByBuildUp { get; set; } = { 0, -1, 1 };
+
+        /// <summary>Final-third approach (work into the box · mixed · cross early): the weight on a cross's gain, on top of Width's.</summary>
+        public int[] V11FinalThirdCrossPercent { get; set; } = { 40, 100, 250 };
+
+        /// <summary>
+        /// Final-third approach: the weight on a ball out to the touchline channel of the final
+        /// stretch, on top of Width's — where a cross comes from, and where the feed counts one.
+        /// </summary>
+        public int[] V11FinalThirdChannelPercent { get; set; } = { 40, 100, 250 };
+
+        /// <summary>Shooting (patient · normal · shoot on sight): the side's shot appetite, on top of Mentality's and Tempo's.</summary>
+        public int[] ShotSelectionAppetitePercent { get; set; } = { 85, 100, 118 };
+
+        /// <summary>Dribbling (less · normal · more): the weight on a carry's gain.</summary>
+        public int[] V11DribbleCarryPercent { get; set; } = { 60, 100, 160 };
+
         // --- V11 set pieces (R6) ---
 
         /// <summary>A free kick this close to the goal it attacks gets a wall and is shot or crossed.</summary>
@@ -1768,6 +1802,9 @@ namespace Sim.Core.Config
 
         /// <summary>Touchline shouts: duration, cooldown and magnitudes (watchable-match spec R11).</summary>
         public ShoutBalance Shouts { get; set; } = new ShoutBalance();
+
+        /// <summary>The R16 transition and out-of-possession axes (issue #91).</summary>
+        public DefendingAxesBalance DefendingAxes { get; set; } = new DefendingAxesBalance();
 
         // --- Time base ---
 

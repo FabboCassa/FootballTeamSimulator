@@ -52,6 +52,9 @@ namespace Sim.Core.Match.Movement
     /// comes off are pitch control's (Spearman) for a pass and a cross, the duel's for a carry. A
     /// shot is worth its xG. The instructions weigh the terms: Tempo the gain, and its directness
     /// the long forward ball; Mentality the risk; Mentality times Tempo the shot; Width the cross.
+    /// The R16 in-possession axes weigh the same terms (issue #90): passing directness the long
+    /// forward ball, build-up the long ball out of the own third, final-third approach the cross
+    /// and the ball out to the channel, dribbling the carry (shooting is in the shot appetite).
     ///
     /// R4 sits above the prices: a carrier inside <see cref="MatchBalance.V11OpenGoalRangeDm"/> of
     /// goal with no outfield defender in the ball-to-posts triangle and the keeper beaten or out of
@@ -351,7 +354,9 @@ namespace Sim.Core.Match.Movement
             if (DistanceSq(s.BallXDm, s.BallYDm, x, y) < (long)_cfg.V11CarryMinDm * _cfg.V11CarryMinDm
                 || DistanceSq(x, y, goalX, Pitch.CenterY) > DistanceSq(s.BallXDm, s.BallYDm, goalX, Pitch.CenterY))
                 return NoOption;
-            return MoveValue(s, x, y, s.CarryKeepPermille, s.BallXDm, s.BallYDm, GainPercent(s, false, false));
+            int gain = GainPercent(s, false, false)
+                       * MovementTactics.Percent(_cfg.V11DribbleCarryPercent, (int)s.Instructions.DribbleFrequency) / 100;
+            return MoveValue(s, x, y, s.CarryKeepPermille, s.BallXDm, s.BallYDm, gain);
         }
 
         /// <summary>Hoofing it upfield: kept now and then, and lost forty metres from his own goal.</summary>
@@ -487,9 +492,19 @@ namespace Sim.Core.Match.Movement
             {
                 percent = percent * MovementTactics.Percent(_cfg.V11DirectnessPercent, (int)i.Tempo) / 100;
                 percent = percent * SkillDirectnessPercent(s) / 100;
+                percent = percent * MovementTactics.Percent(_cfg.V11PassingDirectnessPercent, (int)i.PassingDirectness) / 100;
+                if (InOwnThird(s)) percent = percent * MovementTactics.Percent(_cfg.V11BuildUpLongPercent, (int)i.BuildUp) / 100;
             }
-            if (cross) percent = percent * MovementTactics.Percent(_cfg.V11WidthCrossPercent, (int)i.Width) / 100;
-            if (outWide) percent = percent * MovementTactics.Percent(_cfg.V11WidthChannelPercent, (int)i.Width) / 100;
+            if (cross)
+            {
+                percent = percent * MovementTactics.Percent(_cfg.V11WidthCrossPercent, (int)i.Width) / 100;
+                percent = percent * MovementTactics.Percent(_cfg.V11FinalThirdCrossPercent, (int)i.FinalThirdApproach) / 100;
+            }
+            if (outWide)
+            {
+                percent = percent * MovementTactics.Percent(_cfg.V11WidthChannelPercent, (int)i.Width) / 100;
+                percent = percent * MovementTactics.Percent(_cfg.V11FinalThirdChannelPercent, (int)i.FinalThirdApproach) / 100;
+            }
             return percent * s.GainPercent / 100;
         }
 
@@ -522,6 +537,9 @@ namespace Sim.Core.Match.Movement
         }
 
         private static int GoalX(V11Scene s) => MovementGeometry.AttackedGoalX(s.AttacksHighX);
+
+        private static bool InOwnThird(V11Scene s) =>
+            (s.AttacksHighX ? s.BallXDm : Pitch.LengthDm - s.BallXDm) < Pitch.LengthDm / 3;
 
         private static bool IsWideChannel(int yDm) => yDm < Pitch.WidthDm / 4 || yDm > Pitch.WidthDm * 3 / 4;
 
