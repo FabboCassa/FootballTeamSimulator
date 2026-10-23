@@ -136,6 +136,29 @@ namespace Sim.Core.Tests.Match
             Assert.That(Measure(s).MedianOffTargetSeconds, Is.EqualTo(10.0));
         }
 
+        [Test]
+        public void OffTarget_TheRunBackAfterATurnover_IsReadWithAndWithoutTheWindow()
+        {
+            // Eleven men each run thirty metres off for four seconds right after a turnover: the
+            // reading with the 5 s transition window is 0, the one without it 4.
+            PositionStream s = NewStream(350);
+            Hold(s, 0, 0, true, 1, Pitch.CenterX, CY);
+            for (int r = 0; r < 11; r++)
+            {
+                bool home = r < 10;
+                int slot = home ? r + 1 : 2;           // never the man who wins the ball (slot 1)
+                int turnover = 10 + 30 * r;
+                Hold(s, turnover, turnover, r % 2 == 1, 1, Pitch.CenterX, CY);
+                for (int t = turnover; t < turnover + 8; t++)
+                    Put(s, home, t, slot, home ? HomeStackX : AwayStackX, home ? CY + 300 : CY - 300);
+            }
+
+            ShapeMovementMetrics m = Measure(s);
+
+            Assert.That(m.MedianOffTargetSeconds, Is.EqualTo(0.0));
+            Assert.That(m.MedianOffTargetSecondsNoWindow, Is.EqualTo(4.0));
+        }
+
         // ------------------------------------------------------------------ R8: movement
 
         [Test]
@@ -278,6 +301,58 @@ namespace Sim.Core.Tests.Match
             Assert.That(Measure(s).KeeperDepthBreakFrames, Is.EqualTo(breaks));
         }
 
+        // ------------------------------------------------------------------ R11: restart shapes
+
+        [Test]
+        public void GoalKicks_AreShortOrLongByThePassThatPutsThemInPlay()
+        {
+            PositionStream s = NewStream(20);
+            Act(s, 2, BallActionKind.GoalKick, true, Keeper);
+            Act(s, 5, BallActionKind.Pass, true, Keeper, 2);
+            Act(s, 8, BallActionKind.GoalKick, true, Keeper);
+            Act(s, 10, BallActionKind.LongBall, true, Keeper, 9);
+            Act(s, 12, BallActionKind.GoalKick, false, Keeper);
+            Act(s, 13, BallActionKind.HalfTime, true, -1);           // never taken: neither
+
+            ShapeMovementMetrics m = Measure(s);
+
+            Assert.That(m.ShortGoalKicks, Is.EqualTo(1));
+            Assert.That(m.LongGoalKicks, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void ThrowIns_CountTwoTeamMatesWithin15mOnTheFrameBeforeTheThrow()
+        {
+            PositionStream s = NewStream(20);
+            Act(s, 2, BallActionKind.ThrowIn, true, 3);
+            for (int t = 2; t <= 4; t++)
+            {
+                Ball(s, t, 300, 8);
+                Put(s, true, t, 3, 300, 8);
+                Put(s, true, t, 4, 300, 100);         // 9.2 m
+                Put(s, true, t, 5, 400, 60);          // 11.3 m
+            }
+
+            Act(s, 5, BallActionKind.Pass, true, 3, 4);
+
+            Act(s, 10, BallActionKind.ThrowIn, true, 3);
+            for (int t = 10; t <= 12; t++)
+            {
+                Ball(s, t, 300, 8);
+                Put(s, true, t, 3, 300, 8);
+                Put(s, true, t, 4, 300, 100);
+                Put(s, true, t, 5, 450, 60);          // 15.9 m: too far to offer
+            }
+
+            Act(s, 13, BallActionKind.Pass, true, 3, 4);
+
+            ShapeMovementMetrics m = Measure(s);
+
+            Assert.That(m.ThrowIns, Is.EqualTo(2));
+            Assert.That(m.OfferedThrowIns, Is.EqualTo(1));
+            Assert.That(m.OfferedThrowInPercent, Is.EqualTo(50.0));
+        }
+
         // ------------------------------------------------------------------ the printed report
 
         [Test]
@@ -289,11 +364,12 @@ namespace Sim.Core.Tests.Match
                 DefendingSamples = 100, DefendingLengthDm = 100 * 420, DefendingWidthDm = 100 * 380,
                 OwnHalfDefendingSamples = 50, OwnHalfLengthDm = 50 * 350,
                 AttackingSamples = 40, AttackingWidthDm = 40 * 400, BothTouchlinesSamples = 10,
-                MedianOffTargetSeconds = 4,
+                MedianOffTargetSeconds = 4, MedianOffTargetSecondsNoWindow = 7,
                 OutfieldOpenPlayFrames = 2000, StandStillFrames = 400,
                 HomeOutfieldDistanceDm = 1_000_000, AwayOutfieldDistanceDm = 1_100_000,
                 OffPitchFrames = 3,
-                KeeperOpenPlayFrames = 200, KeeperDepthBreakFrames = 1
+                KeeperOpenPlayFrames = 200, KeeperDepthBreakFrames = 1,
+                ShortGoalKicks = 4, LongGoalKicks = 0, ThrowIns = 20, OfferedThrowIns = 19
             };
             var tally = new ShapeMovementTally();
             tally.Add(match);
@@ -308,10 +384,14 @@ namespace Sim.Core.Tests.Match
             AssertRow(rows[ShapeMovementTargets.AttackingWidthM.Name], 40.0, false);
             AssertRow(rows[ShapeMovementTargets.BothTouchlinesName], 25.0, null);
             AssertRow(rows[ShapeMovementTargets.MedianOffTargetSeconds.Name], 4.0, true);
+            AssertRow(rows[ShapeMovementTargets.OffTargetNoWindowName], 7.0, null);
             AssertRow(rows[ShapeMovementTargets.StandStillPercent.Name], 20.0, false);
             AssertRow(rows[RealismReference.DistancePerOutfieldPlayerKm.Name], 10.5, true);
             AssertRow(rows[ShapeMovementTargets.OffPitchFrames.Name], 6.0, false);
             AssertRow(rows[ShapeMovementTargets.KeeperDepthBreakPercent.Name], 0.5, true);
+            AssertRow(rows[ShapeMovementTargets.ShortGoalKicks.Name], 8.0, true);
+            AssertRow(rows[ShapeMovementTargets.LongGoalKicks.Name], 0.0, false);
+            AssertRow(rows[ShapeMovementTargets.OfferedThrowInPercent.Name], 95.0, true);
 
             string text = tally.Format("V11");
             Assert.That(text, Does.Contain("2 matches"));

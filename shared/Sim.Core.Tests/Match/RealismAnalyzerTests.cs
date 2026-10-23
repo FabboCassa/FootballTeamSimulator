@@ -34,7 +34,8 @@ namespace Sim.Core.Tests.Match
         public void OpenGoal_ShotWithinOneAndAHalfSeconds_IsTaken()
         {
             PositionStream s = NewStream(30);
-            Hold(s, 5, 12, true, 9, 950, CY);          // 10 m out, only the keeper in the triangle
+            Hold(s, 5, 12, true, 9, 950, CY);          // 10 m out, the keeper stranded
+            StrandKeeper(s, false, 0, 29);
             Act(s, 8, BallActionKind.Shot, true, 9);    // three frames after the chance opened
 
             RealismMetrics m = Measure(s);
@@ -49,6 +50,7 @@ namespace Sim.Core.Tests.Match
         {
             PositionStream s = NewStream(30);
             Hold(s, 5, 12, true, 9, 950, CY);
+            StrandKeeper(s, false, 0, 29);
             Act(s, 9, BallActionKind.Shot, true, 9);    // four frames = 2 s: too late
 
             RealismMetrics m = Measure(s);
@@ -63,8 +65,10 @@ namespace Sim.Core.Tests.Match
         {
             PositionStream s = NewStream(60);
             Hold(s, 5, 12, true, 9, 950, CY);
+            StrandKeeper(s, false, 0, 59);
             Act(s, 7, BallActionKind.Shot, true, 9);
             Hold(s, 30, 40, false, 9, 100, CY);         // the away side, in front of the home goal
+            StrandKeeper(s, true, 0, 59);
             Act(s, 38, BallActionKind.Shot, false, 9);  // eight frames late
 
             RealismMetrics m = Measure(s);
@@ -80,6 +84,7 @@ namespace Sim.Core.Tests.Match
             PositionStream s = NewStream(30);
             Hold(s, 5, 8, true, 9, 950, CY);
             Hold(s, 10, 12, true, 9, 960, CY);         // frame 9: the ball a stride ahead of him
+            StrandKeeper(s, false, 0, 29);
 
             RealismMetrics m = Measure(s);
 
@@ -88,10 +93,20 @@ namespace Sim.Core.Tests.Match
         }
 
         [Test]
+        public void OpenGoal_KeeperSetOnHisLine_IsNoChance()
+        {
+            PositionStream s = NewStream(30);
+            Hold(s, 5, 12, true, 9, 950, CY);          // 10 m out, the keeper on his line between the posts
+
+            Assert.That(Measure(s).OpenGoalChances, Is.EqualTo(0));
+        }
+
+        [Test]
         public void OpenGoal_OutfieldDefenderInTheTriangle_IsNoChance()
         {
             PositionStream s = NewStream(30);
             Hold(s, 5, 12, true, 9, 950, CY);
+            StrandKeeper(s, false, 0, 29);
             for (int t = 0; t < 30; t++) Put(s, false, t, 4, 1000, 330);   // inside ball-to-posts
 
             Assert.That(Measure(s).OpenGoalChances, Is.EqualTo(0));
@@ -102,6 +117,7 @@ namespace Sim.Core.Tests.Match
         {
             PositionStream s = NewStream(30);
             Hold(s, 5, 12, true, 9, 840, CY);          // 21 m out
+            StrandKeeper(s, false, 0, 29);
 
             Assert.That(Measure(s).OpenGoalChances, Is.EqualTo(0));
         }
@@ -240,6 +256,24 @@ namespace Sim.Core.Tests.Match
         }
 
         [Test]
+        public void OffTarget_WhileTheBallIsDead_DoesNotCount()
+        {
+            // A free kick is whistled at frame 10 and taken at frame 60: the 25 s he spends thirty
+            // metres out waiting for it are the set-piece phase, not open play. The 15 s he stays
+            // out once the ball is back in play count.
+            PositionStream s = NewStream(120);
+            Hold(s, 0, 0, true, 1, Pitch.CenterX, CY);
+            s.Actions.Add(new BallAction(10, BallActionKind.FreeKick, true, 2, -1));
+            Hold(s, 60, 60, true, 2, Pitch.CenterX, CY);
+            for (int t = 10; t < 90; t++) Put(s, true, t, 5, HomeStackX, CY + 300);
+
+            var analyzer = new RealismAnalyzer();
+            analyzer.Measure(new MatchReport { Positions = s });
+
+            Assert.That(analyzer.OffTargetSeconds(true, 5), Is.EqualTo(15.0));
+        }
+
+        [Test]
         public void OffTarget_ChasingTheBall_IsExempt()
         {
             PositionStream s = NewStream(100);
@@ -273,6 +307,33 @@ namespace Sim.Core.Tests.Match
             Assert.That(analyzer.OffTargetSeconds(true, 5), Is.EqualTo(0.0));
             Assert.That(analyzer.OffTargetSeconds(false, 6), Is.EqualTo(0.0));
         }
+
+        // A turnover flips every man's target to the other phase's shape in one frame; the run
+        // back in the first 5 s after it (R2's written window, 10 frames here) is not off target.
+        private static double OffTargetAfterTurnover(int turnover, int from, int to)
+        {
+            PositionStream s = NewStream(120);
+            Hold(s, 0, 0, true, 1, Pitch.CenterX, CY);
+            if (turnover >= 0) Hold(s, turnover, turnover, false, 1, Pitch.CenterX, CY);
+            for (int t = from; t < to; t++) Put(s, true, t, 5, HomeStackX, CY + 300);
+
+            var analyzer = new RealismAnalyzer();
+            analyzer.Measure(new MatchReport { Positions = s });
+            return analyzer.OffTargetSeconds(true, 5);
+        }
+
+        [Test]
+        public void OffTarget_FourSecondsRightAfterATurnover_DoNotCount() =>
+            Assert.That(OffTargetAfterTurnover(40, 40, 48), Is.EqualTo(0.0));
+
+        [Test]
+        public void OffTarget_FourSecondsInASettledPhase_Count() =>
+            Assert.That(OffTargetAfterTurnover(20, 40, 48), Is.EqualTo(4.0));
+
+        [Test]
+        public void OffTarget_ASpellRunningPastTheTransitionWindow_CountsOnlyThePartAfterIt() =>
+            // turnover at frame 40: window is frames 40-49, the spell 44-59 counts 50-59
+            Assert.That(OffTargetAfterTurnover(40, 44, 60), Is.EqualTo(5.0));
 
         [Test]
         public void OffTarget_MedianIsTakenOverTheTwentyOutfielders()

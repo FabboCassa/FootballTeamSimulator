@@ -36,6 +36,9 @@ namespace Sim.Core.Match
         public readonly int DuelLossPercent;
         public readonly int OwnHalfDuelLossPercent;
 
+        /// <summary>Percent on how close this side's pressers get before they challenge.</summary>
+        public readonly int ChallengePercent;
+
         public static ShoutEffect None => new ShoutEffect(0, 100, 0, 100, 0, 100, 100, 100, 100, 100, 100, 100);
 
         private ShoutEffect(
@@ -43,7 +46,7 @@ namespace Sim.Core.Match
             int pressTriggerDepthDm, int secondPressPercent, int pressStandOffPercent, int holdPercent,
             int shotAppetitePercent, int fatiguePercent, int pressureFeltPercent,
             int ownHalfPressureFeltPercent, int riskPercent = 100, int gainPercent = 100,
-            int duelLossPercent = 100, int ownHalfDuelLossPercent = 100)
+            int duelLossPercent = 100, int ownHalfDuelLossPercent = 100, int challengePercent = 100)
         {
             LinePushDm = linePushDm;
             FrontLineGapPercent = frontLineGapPercent;
@@ -61,6 +64,7 @@ namespace Sim.Core.Match
             GainPercent = gainPercent;
             DuelLossPercent = duelLossPercent;
             OwnHalfDuelLossPercent = ownHalfDuelLossPercent;
+            ChallengePercent = challengePercent;
         }
 
         /// <summary>
@@ -76,7 +80,7 @@ namespace Sim.Core.Match
                     return new ShoutEffect(0, 100, 0, s.PressHighReachPercent, s.PressHighTriggerDepthDm,
                         s.PressHighSecondPressPercent, s.PressHighStandOffPercent, 100, 100,
                         s.V11PressHighFatiguePercent,
-                        100, 100);
+                        100, 100, challengePercent: s.PressHighChallengePercent);
                 case TouchlineShout.KeepBall:
                     return new ShoutEffect(0, 100, 0, 100, 0, 100, 100, s.KeepBallHoldPercent,
                         s.KeepBallShotAppetitePercent, 100, 100, 100,

@@ -255,6 +255,37 @@ public class LiveMatchTests
         });
     }
 
+    /// <summary>A change is judged at a minute of the client's own director timeline and re-simulated with the
+    /// server's engine (spec real-match-and-playing-styles R23): a build on another engine, or one that does
+    /// not say, is refused like at open, and the match is left untouched.</summary>
+    [Test]
+    public async Task Change_FromAClientOnAnotherEngine_IsRefused_AndChangesNothing()
+    {
+        var fx = await SetUpLiveFixture();
+        await OpenLive(fx.HomeAcc.Tok, fx.LeagueId, fx.FixtureId);
+        var before = await JoinLive(fx.AwayAcc.Tok, fx.LeagueId, fx.FixtureId);
+        var change = new SubmitLiveChangeRequest(30, null, null, TouchlineShout.PressHigh);
+
+        var older = await ChangeRaw(fx.HomeAcc.Tok, fx.LeagueId, fx.FixtureId, change, MatchEngine.Version - 1);
+        var unsaid = await ChangeRaw(fx.HomeAcc.Tok, fx.LeagueId, fx.FixtureId, change, engineVersion: null);
+
+        using var doc = JsonDocument.Parse(await older.Content.ReadAsStringAsync());
+        string message = doc.RootElement.GetProperty("message").GetString()!;
+        string unsaidBody = await unsaid.Content.ReadAsStringAsync();
+        var after = await GetLive(fx.AwayAcc.Tok, fx.LeagueId, fx.FixtureId);
+        Assert.Multiple(() =>
+        {
+            Assert.That(older.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
+            Assert.That(doc.RootElement.GetProperty("error").GetString(), Is.EqualTo("engine_version_mismatch"));
+            Assert.That(message, Does.Contain($"v{MatchEngine.Version - 1}"), "names the client's engine");
+            Assert.That(message, Does.Contain($"v{MatchEngine.Version}"), "names the match's engine");
+            Assert.That(unsaid.StatusCode, Is.EqualTo(HttpStatusCode.Conflict), "an old build does not say its engine");
+            Assert.That(unsaidBody, Does.Contain("engine_version_mismatch"));
+            Assert.That(after.Changes, Is.Empty, "a refused change never reached the match");
+            Assert.That(after.ReportJson, Is.EqualTo(before.ReportJson), "the report was not re-simulated");
+        });
+    }
+
     /// <summary>The state names the engine the STORED report was simulated with, not the server's constant: a
     /// report from another engine is announced as such, so a client can refuse to build its timeline.</summary>
     [Test]
@@ -546,8 +577,10 @@ public class LiveMatchTests
         return (await resp.Content.ReadFromJsonAsync<LiveMatchStateDto>())!;
     }
 
-    private Task<HttpResponseMessage> ChangeRaw(string tok, Guid leagueId, Guid fixtureId, SubmitLiveChangeRequest req) =>
-        _client.SendAsync(Authed(HttpMethod.Post, $"/leagues/{leagueId}/live/{fixtureId}/change", tok, req));
+    private Task<HttpResponseMessage> ChangeRaw(
+        string tok, Guid leagueId, Guid fixtureId, SubmitLiveChangeRequest req, int? engineVersion = MatchEngine.Version) =>
+        _client.SendAsync(Authed(HttpMethod.Post,
+            $"/leagues/{leagueId}/live/{fixtureId}/change{VersionQuery(engineVersion)}", tok, req));
 
     private async Task<LiveMatchStateDto> Finish(string tok, Guid leagueId, Guid fixtureId)
     {

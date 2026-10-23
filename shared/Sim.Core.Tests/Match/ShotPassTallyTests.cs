@@ -63,7 +63,7 @@ namespace Sim.Core.Tests.Match
             AssertRow(rows[RealismReference.SaveRateInsideBoxPercent.Name], 70.0, false); // 7 / 10
             AssertRow(rows[RealismReference.SaveRateOutsideBoxPercent.Name], 100.0, false); // 5 / 5
             AssertRow(rows[ShotPassBands.KeeperReachPercent.Name], 70.0, true);         // 7 / 10
-            AssertRow(rows[RealismReference.PassesPerTeam.Name], 475.0, true);           // 1900 / 4
+            AssertRow(rows[RealismReference.PassesPerTeam.Name], 475.0, false);          // 1900 / 4, under the 81-minute 550-750 (user decision 2026-10-10, #82)
             AssertRow(rows[RealismReference.PassAccuracyPercent.Name], 80.0, true);
             AssertRow(rows[RealismReference.PassesPerSequence.Name], 4.0, true);         // 1600 / 400
             AssertRow(rows[RealismReference.TenPlusSequencesPerTeam.Name], 11.0, true);  // 44 / 4

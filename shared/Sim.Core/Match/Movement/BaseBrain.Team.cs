@@ -174,7 +174,7 @@ namespace Sim.Core.Match.Movement
 
                 // The dangerous ones first — nearest our goal wins, and a man the timeline says has
                 // found a yard counts as nearer than he is.
-                for (int pass = 0; pass < _cfg.MaxMarkers; pass++)
+                for (int pass = 0, markers = Markers(side); pass < markers; pass++)
                 {
                     int worst = -1, worstDanger = int.MaxValue;
                     for (int j = 0; j < _n; j++)
@@ -183,7 +183,7 @@ namespace Sim.Core.Match.Movement
                         if (_keeper[ok] || _sentOff[ok] || taken[j]) continue;
 
                         int depth = home ? U.Dm(_px[ok]) : Pitch.LengthDm - U.Dm(_px[ok]);
-                        bool inOurThird = depth <= _cfg.MarkOwnThirdDepthDm;
+                        bool inOurThird = depth <= MarkZoneDepthDm(side);
                         bool inBehind = depth < lineDepth - _cfg.MarkBehindLineDm;
                         if (!inOurThird && !inBehind) continue;
 
@@ -227,15 +227,28 @@ namespace Sim.Core.Match.Movement
                 if (cover >= 0) _duty[side * _n + cover] = DutyCover;
             }
 
+            /// <summary>
+            /// The man who doubles up on the ball. Real-match spec R4: read off where he stands AND
+            /// where his place in the block is (SecondPresserSpotPercent of the second), so it is
+            /// the man whose zone the ball is in who closes it down, not a man the last move left
+            /// nearby and who then stands thirty metres out of the shape doing it.
+            /// </summary>
             private int SecondNearestToBall(int side, int excluded)
             {
                 int best = -1;
                 long bestDistance = long.MaxValue;
+                int spotPercent = _cfg.SecondPresserSpotPercent;
                 for (int i = 0; i < _n; i++)
                 {
                     int k = side * _n + i;
                     if (i == excluded || _keeper[k] || _sentOff[k]) continue;
                     long d = U.DistanceSq(_px[k], _py[k], _ball.X, _ball.Y);
+                    if (spotPercent > 0)
+                    {
+                        HomeSpot(side, i, out int hx, out int hy);
+                        d = (d * (100 - spotPercent) + U.DistanceSq(hx, hy, _ball.X, _ball.Y) * spotPercent) / 100;
+                    }
+
                     if (d < bestDistance) { bestDistance = d; best = i; }
                 }
 

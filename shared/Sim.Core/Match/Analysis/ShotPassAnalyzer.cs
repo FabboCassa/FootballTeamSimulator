@@ -258,8 +258,17 @@ namespace Sim.Core.Match.Analysis
             int[] xy = home ? s.AwayXY : s.HomeXY;
             for (int slot = 0; slot < n; slot++)
             {
-                if (slot == _keeper[foe] || t >= _sentOffFrom[foe * n + slot]) continue;
-                if (OpenGoalLane.Closes(s.PlayerX(xy, t, slot), s.PlayerY(xy, t, slot), bx, by, goalX,
+                if (t >= _sentOffFrom[foe * n + slot]) continue;
+                int px = s.PlayerX(xy, t, slot), py = s.PlayerY(xy, t, slot);
+                if (slot == _keeper[foe])
+                {
+                    if (!OpenGoalLane.KeeperBeaten(px, py, bx, by, goalX,
+                            _cfg.V11OpenGoalKeeperMarginDm, _cfg.V11OpenGoalKeeperOneOnOneDm))
+                        return false;
+                    continue;
+                }
+
+                if (OpenGoalLane.Closes(px, py, bx, by, goalX,
                         _cfg.V11OpenGoalLaneMarginDm, _cfg.V11OpenGoalFreeRadiusDm))
                     return false;
             }
