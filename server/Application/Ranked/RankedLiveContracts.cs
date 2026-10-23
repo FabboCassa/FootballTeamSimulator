@@ -99,9 +99,12 @@ public interface IRankedLiveMatchService
     Task<RankedResult<RankedLiveStateDto>> GetAsync(Guid userId, Guid fixtureId, CancellationToken ct = default);
 
     /// <summary>Submit a pause-point change for the caller's own side: append it to the authoritative plan,
-    /// re-simulate the 90' from the fixture seed, store the new report and broadcast the state.</summary>
+    /// re-simulate the 90' from the fixture seed, store the new report and broadcast the state. The change's
+    /// minute is read off the client's director timeline, so the engine version is checked as in
+    /// <see cref="OpenAsync"/>.</summary>
     Task<RankedResult<RankedLiveStateDto>> SubmitChangeAsync(
-        Guid userId, Guid fixtureId, SubmitRankedLiveChangeRequest request, CancellationToken ct = default);
+        Guid userId, Guid fixtureId, int? clientEngineVersion, SubmitRankedLiveChangeRequest request,
+        CancellationToken ct = default);
 
     /// <summary>Mark the caller absent (he closed the screen). The match keeps running on the accumulated
     /// plan — the ladder's clock does not care who is watching.</summary>

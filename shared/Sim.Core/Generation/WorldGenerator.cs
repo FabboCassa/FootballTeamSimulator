@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Sim.Core.Config;
 using Sim.Core.Domain;
 using Sim.Core.Random;
+using Sim.Core.Tactics;
 
 namespace Sim.Core.Generation
 {
@@ -30,6 +31,7 @@ namespace Sim.Core.Generation
         private const ulong NationalitySequence = 9300UL;
         private const ulong FixtureSequence = 9400UL;
         private const ulong StatureSequence = 9500UL;
+        private const ulong ManagerProfileSequence = 9600UL;
 
         private readonly WorldGenerationOptions _options;
         private readonly BalanceConfig _config;
@@ -241,6 +243,12 @@ namespace Sim.Core.Generation
 
                 league.Clubs.Add(club);
             }
+
+            // Own sub-stream, drawn after the squads: the existing draws stay byte-identical.
+            var profileRng = new Pcg32(NationSeed(seed, nationIndex), ManagerProfileSequence + (ulong)tier);
+            foreach (Club club in league.Clubs)
+                club.Coach.Profile = ManagerProfile.Draw(profileRng);
+            AiStyleChooser.AssignLeague(league);
 
             return league;
         }

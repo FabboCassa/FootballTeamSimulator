@@ -1,8 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Text;
 using Newtonsoft.Json;
+using Sim.Core.Tactics;
 using UnityEngine;
 
 namespace Fts.Services.Persistence
@@ -16,7 +18,7 @@ namespace Fts.Services.Persistence
     /// </summary>
     public sealed class LocalJsonSaveRepository : ISaveRepository
     {
-        private const int CurrentSaveVersion = 18;
+        private const int CurrentSaveVersion = 19;
         private const string FileName = "career.sav";
 
         private static string SavePath => Path.Combine(Application.persistentDataPath, FileName);
@@ -67,7 +69,7 @@ namespace Fts.Services.Persistence
                 if (loaded == null)
                     return SaveLoadStatus.Corrupted;
 
-                if (loaded.SaveVersion != CurrentSaveVersion)
+                if (loaded.SaveVersion != CurrentSaveVersion && loaded.SaveVersion != TacticsSaveMigration.FromSaveVersion)
                     return SaveLoadStatus.IncompatibleVersion;
 
                 // Task 11.1b: a pre-v16 save stored a flat "Leagues" array. Lift it into a world
@@ -105,6 +107,14 @@ namespace Fts.Services.Persistence
         private static void Migrate(CareerState state)
         {
             // Migrations for pre-v18 saves dropped (R13): older saves are refused with IncompatibleVersion.
+            if (state.SaveVersion == TacticsSaveMigration.FromSaveVersion)
+            {
+                state.UserTactic = TacticsSaveMigration.MigrateTactic(state.UserTactic);
+                state.TacticFamiliarity = TacticsSaveMigration.MigrateFamiliarity(
+                    state.TacticFamiliarity ?? new Dictionary<string, int>());
+                state.UserPlan = TacticsSaveMigration.MigratePlan(state.UserPlan);
+                state.SaveVersion = CurrentSaveVersion;
+            }
         }
 
         private static uint Fnv1a(string text)

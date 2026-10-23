@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Sim.Core.Tactics;
 
 namespace Sim.Core.Domain
 {
@@ -66,5 +67,15 @@ namespace Sim.Core.Domain
         /// club with Stature 0 that predates this field simply earns no stature-driven revenue.
         /// </summary>
         public int Stature { get; set; }
+
+        /// <summary>
+        /// The shape the club lines up in (R22): chosen at generation by
+        /// <see cref="Tactics.AiStyleChooser"/> among its style's suggestions. Data-level for now;
+        /// additive, an old save reads 4-3-3.
+        /// </summary>
+        public Formation Formation { get; set; } = Formation.F433;
+
+        /// <summary>The club's playing style (R22), chosen alongside <see cref="Formation"/>; an old save reads Balanced.</summary>
+        public PlayingStyle Style { get; set; } = PlayingStyle.Balanced;
     }
 }
