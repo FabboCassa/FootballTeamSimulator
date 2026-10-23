@@ -374,7 +374,7 @@ namespace Fts.Services.Online
         {
             if (!_api.IsSignedIn) return LeagueApiResult<LiveMatchStateDto>.Fail(LeagueApiError.NotSignedIn);
             var (status, text, network) = await _api.SendAuthedAsync(
-                "POST", "/leagues/" + leagueId + "/live/" + fixtureId + "/change", body);
+                "POST", "/leagues/" + leagueId + "/live/" + fixtureId + "/change" + EngineVersionQuery, body);
             return ParseLive(status, text, network);
         }
 

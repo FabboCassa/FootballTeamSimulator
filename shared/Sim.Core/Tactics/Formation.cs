@@ -142,8 +142,8 @@ namespace Sim.Core.Tactics
         public static string OutOfPossession(Formation formation) => Find(formation).OutOfPossession;
 
         /// <summary>
-        /// The six original shapes: the ones the client's pickers and the tactic presets offer
-        /// until the formation UI (#99) opens the <see cref="Catalogue"/>.
+        /// The six original shapes: the ones the ranked lineup picker and the tactic presets offer;
+        /// the Tactics screen (#99) offers the whole <see cref="Catalogue"/>.
         /// </summary>
         public static readonly Formation[] All =
         {
@@ -151,7 +151,7 @@ namespace Sim.Core.Tactics
             Formation.F4231, Formation.F532, Formation.F343
         };
 
-        /// <summary>Every formation of the R1 catalogue, in its table order, for harness sweeps.</summary>
+        /// <summary>Every formation of the R1 catalogue, in its table order, for harness sweeps and the Tactics screen.</summary>
         public static readonly Formation[] Catalogue =
         {
             Formation.F442, Formation.F442Diamond, Formation.F41212, Formation.F4411,

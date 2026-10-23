@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using Sim.Core.Config;
 using Sim.Core.Domain;
 using Sim.Core.Random;
+using Sim.Core.Tactics;
 
 namespace Sim.Core.Generation
 {
@@ -13,6 +14,9 @@ namespace Sim.Core.Generation
     {
         /// <summary>Sequence constant for the stature sub-stream (task: club stature, R4) - arbitrary, just distinct from Pcg32's own default (54).</summary>
         private const ulong StatureSequence = 8_000UL;
+
+        /// <summary>Sequence constant for the manager-profile sub-stream (R22), distinct from the stature one.</summary>
+        private const ulong ManagerProfileSequence = 8_100UL;
 
         private readonly LeagueGenerationOptions _options;
         private readonly GenerationBalance _cfg;
@@ -36,6 +40,7 @@ namespace Sim.Core.Generation
             // draw) so it never perturbs the club/player draws below - existing golden/determinism
             // tests stay byte-identical.
             var statureRng = new Pcg32(rng.GetState().State, StatureSequence);
+            var profileRng = new Pcg32(rng.GetState().State, ManagerProfileSequence);
 
             var playerGenerator = new PlayerGenerator(_cfg);
             string[] clubNames = BuildUniqueClubNames(rng);
@@ -85,6 +90,10 @@ namespace Sim.Core.Generation
 
                 league.Clubs.Add(club);
             }
+
+            foreach (Club club in league.Clubs)
+                club.Coach.Profile = ManagerProfile.Draw(profileRng);
+            AiStyleChooser.AssignLeague(league);
 
             return league;
         }

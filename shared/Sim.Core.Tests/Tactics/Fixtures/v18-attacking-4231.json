@@ -1,0 +1,24 @@
+{
+  "SaveVersion": 18,
+  "Seed": 20260917,
+  "UserClubId": 104,
+  "Difficulty": 1,
+  "CreatedUtc": "2026-09-17T19:42:11Z",
+  "UserLineup": null,
+  "UserTactic": { "Formation": 3, "Mentality": 2, "Pressing": 2, "Tempo": 2, "Width": 1 },
+  "TacticFamiliarity": { "3:2221": 18, "3:2222": 7, "0:1111": 6, "1:0001": 3 },
+  "UserPlan": {
+    "Rules": [
+      { "FromMinute": 60, "When": 2, "Margin": 1, "ChangeInstructions": false, "Mentality": 1, "Pressing": 1, "Tempo": 1, "Width": 1, "SubOutPlayerId": 0, "SubInPlayerId": 0, "Shout": 1 },
+      { "FromMinute": 70, "When": 1, "Margin": 1, "ChangeInstructions": true, "Mentality": 2, "Pressing": 2, "Tempo": 2, "Width": 2, "SubOutPlayerId": 0, "SubInPlayerId": 0, "Shout": 3 },
+      { "FromMinute": 80, "When": 3, "Margin": 2, "ChangeInstructions": true, "Mentality": 0, "Pressing": 0, "Tempo": 0, "Width": 0, "SubOutPlayerId": 0, "SubInPlayerId": 0, "Shout": 2 }
+    ]
+  },
+  "UserTraining": null,
+  "LastTrainingWeek": 7,
+  "StartsSinceTraining": { "1041": 1, "1042": 1 },
+  "UserMatchesSinceTraining": 1,
+  "SupportCooldowns": {},
+  "RestedSinceTraining": [],
+  "TransferNews": []
+}
