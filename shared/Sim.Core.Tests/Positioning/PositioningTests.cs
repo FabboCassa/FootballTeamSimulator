@@ -93,7 +93,7 @@ namespace Sim.Core.Tests.Positioning
             // Every formation preset sits its players on the role anchors, so ZoneRole must
             // map each anchor back to its own role — this is why "reset on formation change"
             // restores the exact preset roles (a clean preset is a fixed point of the map).
-            foreach (Formation f in Formations.All)
+            foreach (Formation f in Formations.Catalogue)
             {
                 PositionRole[] roles = Formations.Roles(f);
                 for (int i = 0; i < roles.Length; i++)
