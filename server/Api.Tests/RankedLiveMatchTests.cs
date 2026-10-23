@@ -252,9 +252,10 @@ public abstract class RankedLiveTestBase : RankedSeasonTestBase
     }
 
     protected async Task<(HttpStatusCode Code, RankedLiveStateDto? State, string Body)> ChangeLive(
-        string token, Guid fixtureId, int minute, TacticPlan? tactic)
+        string token, Guid fixtureId, int minute, TacticPlan? tactic, int? engineVersion = MatchEngine.Version)
     {
-        using var req = Authed(HttpMethod.Post, $"/ranked/live/{fixtureId}/change", token,
+        string version = engineVersion.HasValue ? $"?engineVersion={engineVersion.Value}" : string.Empty;
+        using var req = Authed(HttpMethod.Post, $"/ranked/live/{fixtureId}/change{version}", token,
             new SubmitRankedLiveChangeRequest(minute, null, tactic));
         var resp = await Client.SendAsync(req);
         string body = await resp.Content.ReadAsStringAsync();
@@ -632,6 +633,40 @@ public class RankedLiveGuardTests : RankedLiveTestBase
         var (ok, state, okBody) = await OpenLive(tokens[0], match.Id);
         Assert.That(ok, Is.EqualTo(HttpStatusCode.OK), okBody);
         Assert.That(state!.EngineVersion, Is.EqualTo(MatchEngine.Version), "the state names the report's engine");
+    }
+
+    /// <summary>A change is judged at a minute of the client's own director timeline and re-simulated with the
+    /// server's engine (spec real-match-and-playing-styles R23): a build on another engine, or one that does
+    /// not say, is refused like at open, and the match is left untouched.</summary>
+    [Test]
+    public async Task AChangeFromAClientOnAnotherEngine_IsRefused_AndChangesNothing()
+    {
+        var tokens = await EnrolCohort();
+        await Tick();
+        RankedFixtureDto match = await AdvanceToTheirMatch(tokens[0], tokens[1]);
+        var (code, _, body) = await OpenLive(tokens[0], match.Id);
+        Assert.That(code, Is.EqualTo(HttpStatusCode.OK), body);
+        var attacking = new TacticPlan { Mentality = Mentality.Attacking };
+
+        var (older, _, olderBody) = await ChangeLive(tokens[0], match.Id, 1, attacking, MatchEngine.Version - 1);
+        var (unsaid, _, unsaidBody) = await ChangeLive(tokens[0], match.Id, 1, attacking, engineVersion: null);
+        var (_, after, _) = await GetLive(tokens[0], match.Id);
+
+        using var doc = JsonDocument.Parse(olderBody);
+        string message = doc.RootElement.GetProperty("message").GetString()!;
+        Assert.Multiple(() =>
+        {
+            Assert.That(older, Is.EqualTo(HttpStatusCode.Conflict), olderBody);
+            Assert.That(doc.RootElement.GetProperty("error").GetString(), Is.EqualTo("engine_version_mismatch"));
+            Assert.That(message, Does.Contain($"v{MatchEngine.Version - 1}"), "names the client's engine");
+            Assert.That(message, Does.Contain($"v{MatchEngine.Version}"), "names the match's engine");
+            Assert.That(unsaid, Is.EqualTo(HttpStatusCode.Conflict), "an old build does not say its engine");
+            Assert.That(unsaidBody, Does.Contain("engine_version_mismatch"));
+            Assert.That(after!.Changes, Is.Empty, "a refused change never reached the match");
+        });
+
+        var (ok, _, okBody) = await ChangeLive(tokens[0], match.Id, 1, attacking);
+        Assert.That(ok, Is.EqualTo(HttpStatusCode.OK), "this build's engine still changes the match: " + okBody);
     }
 
     private async Task<DevLiveFastForwardResult> FastForwardLive(Guid fixtureId, int minute)

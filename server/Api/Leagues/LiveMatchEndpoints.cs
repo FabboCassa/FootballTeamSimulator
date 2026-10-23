@@ -48,12 +48,13 @@ public static class LiveMatchEndpoints
         });
 
         // Submit a pause-point change for the caller's own side (sub / instruction change) → re-sim + push.
+        // ?engineVersion= is checked as at open: the change's minute comes off the client's timeline.
         group.MapPost("/change", async (
-            Guid id, Guid fixtureId, SubmitLiveChangeRequest req, ClaimsPrincipal user,
+            Guid id, Guid fixtureId, int? engineVersion, SubmitLiveChangeRequest req, ClaimsPrincipal user,
             ILiveMatchService live, CancellationToken ct) =>
         {
             if (!LeagueEndpoints.TryGetUserIdShared(user, out var userId)) return Results.Unauthorized();
-            var result = await live.SubmitChangeAsync(userId, id, fixtureId, req, ct);
+            var result = await live.SubmitChangeAsync(userId, id, fixtureId, engineVersion, req, ct);
             return result.Success ? Results.Ok(result.Value) : LeagueEndpoints.MapError(result.Error, result.Message);
         });
 

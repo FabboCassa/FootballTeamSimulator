@@ -66,15 +66,18 @@ namespace Sim.Core.Tests.Market
         [Test]
         public void SaveVersion_CompatibilityRule_RefusesPreChangeSaves()
         {
-            const int currentSaveVersion = 18;
+            // Mirrors LocalJsonSaveRepository: v19 is current, v18 loads through the tactics migration (#96).
+            const int currentSaveVersion = 19;
 
-            bool IsCompatible(int version) => version == currentSaveVersion;
+            bool IsCompatible(int version) =>
+                version == currentSaveVersion || version == Sim.Core.Tactics.TacticsSaveMigration.FromSaveVersion;
 
-            Assert.That(IsCompatible(18), Is.True);
+            Assert.That(IsCompatible(19), Is.True);
+            Assert.That(IsCompatible(18), Is.True, "v18 save is migrated, not refused");
             Assert.That(IsCompatible(17), Is.False, "pre-change save v17 must be incompatible");
             Assert.That(IsCompatible(16), Is.False, "pre-change save v16 must be incompatible");
             Assert.That(IsCompatible(1), Is.False, "legacy v1 save must be incompatible");
-            Assert.That(IsCompatible(19), Is.False, "future v19 save must be incompatible");
+            Assert.That(IsCompatible(20), Is.False, "future v20 save must be incompatible");
         }
 
         // ============================================================ 2. World-wide finance & stature seeding
