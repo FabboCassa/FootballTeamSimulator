@@ -283,6 +283,144 @@ namespace Sim.Core.Tests.Match
             count = goalKicks.Count + throwIns.Count;
         }
 
+        // ------------------------------------------------------------ restart shapes (real-match spec R11)
+
+        /// <summary>
+        /// A goal kick played short is played out of a shape: on the frame before the keeper
+        /// kicks it there is a centre-back on each corner of the box and every full-back is out
+        /// wide, within 8 m of his touchline. "On the corner" is within 4 m: the shape counts a man
+        /// in place 2 m from a spot just inside the corner, and the stream lags the kick by a frame.
+        /// </summary>
+        [Test]
+        public void ShortGoalKick_CentreBacksOnTheBoxCorners_FullBacksWide()
+        {
+            MatchBalance cfg = V11();
+            int shortKicks = 0, shaped = 0;
+
+            PositionStream[] streams = PlayMany(cfg, 8, 40_000, null);
+            for (int m = 0; m < streams.Length; m++)
+            {
+                PositionStream s = streams[m];
+                List<BallAction> a = s.Actions;
+                for (int i = 0; i < a.Count; i++)
+                {
+                    if (a[i].Kind != BallActionKind.GoalKick) continue;
+                    int next = NextKick(a, i);
+                    if (next < 0 || a[next].Kind != BallActionKind.Pass || a[next].Home != a[i].Home) continue;
+
+                    shortKicks++;
+                    bool home = a[i].Home;
+                    int before = Math.Max(a[i].Tick, a[next].Tick - 1);
+                    Lineup lineup = LineupOf(m, home);
+                    int goalX = home ? 0 : Pitch.LengthDm;
+                    bool lowCorner = false, highCorner = false, wide = true;
+                    for (int j = 0; j < s.PlayerCount; j++)
+                    {
+                        if (SentOffBy(a, home, j, a[next].Tick)) continue;
+                        Xy(s, home, j, before, out int x, out int y);
+                        PositionRole role = lineup.Slots[j].Role;
+                        if (role == PositionRole.CentreBack)
+                        {
+                            lowCorner |= Dist(x, y, goalX + (home ? 165 : -165), Pitch.CenterY - 201) <= 40;
+                            highCorner |= Dist(x, y, goalX + (home ? 165 : -165), Pitch.CenterY + 201) <= 40;
+                        }
+                        else if (role == PositionRole.FullBack)
+                        {
+                            wide &= Math.Min(y, Pitch.WidthDm - y) <= 80;
+                        }
+                    }
+
+                    if (lowCorner && highCorner && wide) shaped++;
+                }
+            }
+
+            TestContext.Out.WriteLine($"[v11-goal-kick-shape] {shaped}/{shortKicks} short goal kicks played out of the shape");
+            Assert.That(shortKicks, Is.GreaterThan(10), "the sample needs short goal kicks");
+            Assert.That(shaped, Is.EqualTo(shortKicks), "every short goal kick has its centre-backs split and full-backs wide");
+        }
+
+        /// <summary>
+        /// The middle build-up instruction sees both kinds of goal kick in a match: short to a
+        /// free centre-back, long when he is pressed (R11's harness count, on a small sample).
+        /// </summary>
+        [Test]
+        public void GoalKicks_NormalBuildUp_SomeShortSomeLong()
+        {
+            int shortKicks = 0, longKicks = 0;
+            foreach (PositionStream s in PlayMany(V11(), 8, 41_000, null))
+            {
+                List<BallAction> a = s.Actions;
+                for (int i = 0; i < a.Count; i++)
+                {
+                    if (a[i].Kind != BallActionKind.GoalKick) continue;
+                    int next = NextKick(a, i);
+                    if (next < 0 || a[next].Home != a[i].Home) continue;
+                    if (a[next].Kind == BallActionKind.Pass) shortKicks++;
+                    else if (a[next].Kind == BallActionKind.LongBall) longKicks++;
+                }
+            }
+
+            TestContext.Out.WriteLine($"[v11-goal-kicks] {shortKicks} short, {longKicks} long");
+            Assert.That(shortKicks, Is.GreaterThan(0), "some goal kicks are played short");
+            Assert.That(longKicks, Is.GreaterThan(0), "some goal kicks are played long");
+        }
+
+        /// <summary>
+        /// On the frame before every throw-in is taken at least two team-mates of the taker,
+        /// keeper aside, are within 15 m of the ball, offering for it.
+        /// </summary>
+        [Test]
+        public void ThrowIn_TwoTeamMatesOfferWithin15m()
+        {
+            int throwIns = 0, offered = 0;
+            PositionStream[] streams = PlayMany(V11(), 8, 42_000, null);
+            for (int m = 0; m < streams.Length; m++)
+            {
+                PositionStream s = streams[m];
+                List<BallAction> a = s.Actions;
+                for (int i = 0; i < a.Count; i++)
+                {
+                    if (a[i].Kind != BallActionKind.ThrowIn) continue;
+                    int next = NextKick(a, i);
+                    if (next < 0 || a[next].Home != a[i].Home || a[next].Slot != a[i].Slot) continue;
+
+                    throwIns++;
+                    bool home = a[i].Home;
+                    int before = Math.Max(a[i].Tick, a[next].Tick - 1);
+                    int bx = s.BallXY[before * 2], by = s.BallXY[before * 2 + 1];
+                    Lineup lineup = LineupOf(m, home);
+                    int near = 0;
+                    for (int j = 0; j < s.PlayerCount; j++)
+                    {
+                        if (j == a[i].Slot || lineup.Slots[j].Role == PositionRole.Goalkeeper) continue;
+                        if (SentOffBy(a, home, j, a[next].Tick)) continue;
+                        Xy(s, home, j, before, out int x, out int y);
+                        if (Dist(x, y, bx, by) <= 150) near++;
+                    }
+
+                    if (near >= 2) offered++;
+                }
+            }
+
+            TestContext.Out.WriteLine($"[v11-throw-in] {offered}/{throwIns} throw-ins with >= 2 team-mates within 15 m");
+            Assert.That(throwIns, Is.GreaterThan(50), "the sample needs throw-ins");
+            Assert.That(offered, Is.EqualTo(throwIns), "every throw-in has two men offering within 15 m");
+        }
+
+        private static Lineup LineupOf(int match, bool home) =>
+            LineupSelector.BestEleven(_league.Clubs[(2 * match + (home ? 0 : 1)) % _league.Clubs.Count]);
+
+        private static bool SentOffBy(List<BallAction> a, bool home, int slot, int frame)
+        {
+            foreach (BallAction x in a)
+            {
+                if (x.Tick > frame) break;
+                if (x.Kind == BallActionKind.RedCard && x.Home == home && x.Slot == slot) return true;
+            }
+
+            return false;
+        }
+
         // ------------------------------------------------------------ helpers
 
         private static MatchBalance V11() => new BalanceConfig().Match;

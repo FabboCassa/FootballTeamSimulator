@@ -53,10 +53,11 @@ namespace Sim.Core.Tests.Match
         [Test]
         public void BetterFootballers_KeepTheBall_AndGetItForward()
         {
-            SkillEffect effect = Play(seeds: 8, passing: true, dribbling: true);
+            // User decision 2026-10-10, #76: 48 seeds, bar from base mean (52.93).
+            SkillEffect effect = Play(seeds: 48, passing: true, dribbling: true);
             Report("[ball-skill] passing, technique and dribbling", effect);
 
-            Assert.That(effect.GoodPossessionPercent, Is.GreaterThan(53.0),
+            Assert.That(effect.GoodPossessionPercent, Is.GreaterThan(52.5),
                 "the side that can play keeps the ball");
             Assert.That(effect.GoodIntoFinalThird, Is.GreaterThan(effect.BadIntoFinalThird * 1.15),
                 "and gets it into the final third markedly more often");
@@ -115,7 +116,9 @@ namespace Sim.Core.Tests.Match
                 $"[passing] {attempted / 12:F0} passes a match at {accuracy:F1}% accuracy");
 
             Assert.That(accuracy, Is.InRange(76.0, 88.0), "real football completes 76-88% of its passes");
-            Assert.That(played / 12, Is.InRange(700.0, 1200.0), "and plays roughly a thousand of them");
+            // Cap scaled by 81/56: the engine's ball is in play about 81 minutes, real football's
+            // 53-59 (user decision 2026-10-10, #82).
+            Assert.That(played / 12, Is.InRange(700.0, 1750.0), "and plays roughly a thousand of them, per 56 minutes in play");
         }
 
         // ------------------------------------------------------------ the keeper's hands

@@ -15,7 +15,8 @@ namespace Sim.Core.Match.Analysis
     ///     the goal mouth at an angle whose sine is at least 0.25 (the brain's
     ///     V11OpenGoalMinMouthSinePermille), with no outfield defender inside the triangle
     ///     ball-to-posts, within V11OpenGoalLaneMarginDm of either side of it or within
-    ///     V11OpenGoalFreeRadiusDm of the ball — the brain's own geometry, <see cref="OpenGoalLane"/>.
+    ///     V11OpenGoalFreeRadiusDm of the ball, and the keeper beaten or out of position (R10's
+    ///     <see cref="OpenGoalLane.KeeperBeaten"/>) — the brain's own geometry, <see cref="OpenGoalLane"/>.
     ///     One chance per unbroken spell of the same carrier in that state (a loose frame while he runs with the ball does not break
     ///     it); it is taken when he shoots within 1.5 s of it opening.
     ///   * R5 possession — an unbroken spell of one side holding the ball; loose frames between
@@ -136,8 +137,17 @@ namespace Sim.Core.Match.Analysis
             int[] xy = home ? s.AwayXY : s.HomeXY;
             for (int slot = 0; slot < n; slot++)
             {
-                if (slot == _keeper[foe] || t >= _sentOffFrom[foe * n + slot]) continue;
-                if (OpenGoalLane.Closes(s.PlayerX(xy, t, slot), s.PlayerY(xy, t, slot), bx, by, goalX,
+                if (t >= _sentOffFrom[foe * n + slot]) continue;
+                int px = s.PlayerX(xy, t, slot), py = s.PlayerY(xy, t, slot);
+                if (slot == _keeper[foe])
+                {
+                    if (!OpenGoalLane.KeeperBeaten(px, py, bx, by, goalX,
+                            _cfg.V11OpenGoalKeeperMarginDm, _cfg.V11OpenGoalKeeperOneOnOneDm))
+                        return false;
+                    continue;
+                }
+
+                if (OpenGoalLane.Closes(px, py, bx, by, goalX,
                         _cfg.V11OpenGoalLaneMarginDm, _cfg.V11OpenGoalFreeRadiusDm))
                     return false;
             }

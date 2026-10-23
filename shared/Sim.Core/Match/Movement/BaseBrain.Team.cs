@@ -227,15 +227,28 @@ namespace Sim.Core.Match.Movement
                 if (cover >= 0) _duty[side * _n + cover] = DutyCover;
             }
 
+            /// <summary>
+            /// The man who doubles up on the ball. Real-match spec R4: read off where he stands AND
+            /// where his place in the block is (SecondPresserSpotPercent of the second), so it is
+            /// the man whose zone the ball is in who closes it down, not a man the last move left
+            /// nearby and who then stands thirty metres out of the shape doing it.
+            /// </summary>
             private int SecondNearestToBall(int side, int excluded)
             {
                 int best = -1;
                 long bestDistance = long.MaxValue;
+                int spotPercent = _cfg.SecondPresserSpotPercent;
                 for (int i = 0; i < _n; i++)
                 {
                     int k = side * _n + i;
                     if (i == excluded || _keeper[k] || _sentOff[k]) continue;
                     long d = U.DistanceSq(_px[k], _py[k], _ball.X, _ball.Y);
+                    if (spotPercent > 0)
+                    {
+                        HomeSpot(side, i, out int hx, out int hy);
+                        d = (d * (100 - spotPercent) + U.DistanceSq(hx, hy, _ball.X, _ball.Y) * spotPercent) / 100;
+                    }
+
                     if (d < bestDistance) { bestDistance = d; best = i; }
                 }
 

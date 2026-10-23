@@ -15,15 +15,16 @@ namespace Sim.Core.Tests.Match
     /// (<see cref="RealismHarnessTests"/>, <see cref="TacticHarnessTests"/>) and judged with the
     /// user; these are the cheap regressions under them.
     ///
-    /// Fragility: the open-goal bounds are counts over four matches, set far from the harness
-    /// value (about 6 open goals a match over 1,000 matches) so that only a real regression
-    /// trips them; the band sample is flagged where it stands.
+    /// Fragility: the open-goal bounds are counts over twelve matches, set far from the harness
+    /// value (about 0.5 open goals a match over 1,000 matches since R10, issue #81; about 6 before)
+    /// so that only a real regression trips them; the band sample is flagged where it stands.
     /// </summary>
     [TestFixture]
     public class V11RealismTuningTests
     {
         private const ulong FirstSeed = 3400;
         private const int Matches = 4;
+        private const int OpenGoalMatches = 12;
         private const ulong BandSeed = 30_000;   // the realism harness's first seed
 
         private static League _league = null!;
@@ -89,17 +90,62 @@ namespace Sim.Core.Tests.Match
         }
 
         [Test]
+        public void V11_OverASmallSample_ReadsNearTheRealMatchR2Bands()
+        {
+            // STATISTICALLY FRAGILE: sixteen matches, eight per mirror, not the harness's thousand
+            // each. Every R2 band the harness gates and #87 reached is widened by its own width on
+            // either side, so that only a real regression trips it (before #87's tuning goals read
+            // 1.4 and PPDA 3.9).
+            const int PerMirror = 8;
+            const double BandSlack = 1.0;
+            BalanceConfig cfg = Config();
+            var realism = new RealismTally();
+            var shape = new ShapeMovementTally();
+            var shotPass = new ShotPassTally();
+            foreach (Formation formation in new[] { Formation.F442, Formation.F433 })
+            {
+                Lineup a = LineupSelector.BestEleven(_league.Clubs[9], formation);
+                Lineup b = LineupSelector.BestEleven(_league.Clubs[10], formation);
+                var neutral = new TacticContext(new Tactic(formation), cfg.Tactics.FamiliarityMax);
+                var reports = new MatchReport[PerMirror];
+                System.Threading.Tasks.Parallel.For(0, PerMirror, i => reports[i] = i % 2 == 0
+                    ? Engine(cfg).Simulate(a, b, new Pcg32(BandSeed + (ulong)i), new MatchTactics(neutral, neutral))
+                    : Engine(cfg).Simulate(b, a, new Pcg32(BandSeed + (ulong)i), new MatchTactics(neutral, neutral)));
+                foreach (MatchReport r in reports)
+                {
+                    realism.Add(new MatchAnalyzer().Measure(r)!, new RealismAnalyzer(cfg.Match).Measure(r)!, 0);
+                    shape.Add(new ShapeMovementAnalyzer().Measure(r)!);
+                    shotPass.Add(new ShotPassAnalyzer(cfg.Match).Measure(r)!);
+                }
+            }
+
+            foreach ((RealismBand band, double value) in RealismHarnessTests.R2Rows(realism, shape, shotPass))
+            {
+                TestContext.Out.WriteLine($"[V11 R2 sample] {band.Name} {value:F3} (band {band.Describe()})");
+                // Unreached rows are exempt only until #120 decides them (see RealismHarnessTests.Unreached).
+                if (RealismHarnessTests.ReportOnly.ContainsKey(band.Name) || RealismHarnessTests.Unreached.ContainsKey(band.Name))
+                    continue;
+                double slack = (band.Max - band.Min) * BandSlack;
+                Assert.That(value, Is.InRange(band.Min - slack, band.Max + slack), band.Name);
+            }
+        }
+
+        [Test]
         public void OpenGoals_AreRareChances_NotEveryTouchNearTheBox()
         {
             // Before the lane needed the mouth in view and nobody a stride from it, the trigger
             // fired 89-353 times a match and every one of them was a forced shot.
+            // Since R10 (issue #81) the keeper has to be beaten or out of position too, and the
+            // harness reads about 0.5 a match (it was about 6): so twelve of the harness's own
+            // seeds rather than four from FirstSeed (whose first twelve matches have none), and a
+            // floor of 0.1 (two in twelve) — still zero only if the trigger never fires.
             int chances = 0;
-            for (ulong seed = FirstSeed; seed < FirstSeed + Matches; seed++)
+            for (ulong seed = BandSeed; seed < BandSeed + OpenGoalMatches; seed++)
                 chances += RealismAnalyzer.Analyze(Play(Config(), seed))!.OpenGoalChances;
 
-            double perMatch = (double)chances / Matches;
-            TestContext.Out.WriteLine($"[V11 open goals] {perMatch:F1} a match");
-            Assert.That(perMatch, Is.InRange(0.5, 12.0));
+            double perMatch = (double)chances / OpenGoalMatches;
+            TestContext.Out.WriteLine($"[V11 open goals] {perMatch:F2} a match");
+            Assert.That(perMatch, Is.InRange(0.1, 12.0));
         }
 
         [Test]
@@ -190,11 +236,18 @@ namespace Sim.Core.Tests.Match
         [Test]
         public void TheRealismAnalyzer_ReadsTheBrainsOpenGoalGeometry()
         {
-            MatchReport r = Play(Config(), FirstSeed);
+            // R10 (issue #81) made an open goal rare (about 0.5 a match), so the first of the
+            // harness's seeds that has one, rather than FirstSeed's match, which has none.
             var none = new MatchBalance { V11OpenGoalRangeDm = 0 };
+            MatchReport? r = null;
+            for (ulong seed = BandSeed; seed < BandSeed + OpenGoalMatches && r == null; seed++)
+            {
+                MatchReport played = Play(Config(), seed);
+                if (new RealismAnalyzer().Measure(played)!.OpenGoalChances > 0) r = played;
+            }
 
-            Assert.That(new RealismAnalyzer().Measure(r)!.OpenGoalChances, Is.GreaterThan(0));
-            Assert.That(new RealismAnalyzer(none).Measure(r)!.OpenGoalChances, Is.Zero);
+            Assert.That(r, Is.Not.Null, "an open goal in one of the test seeds");
+            Assert.That(new RealismAnalyzer(none).Measure(r!)!.OpenGoalChances, Is.Zero);
         }
     }
 }

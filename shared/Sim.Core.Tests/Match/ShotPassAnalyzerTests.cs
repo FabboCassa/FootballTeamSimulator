@@ -390,15 +390,17 @@ namespace Sim.Core.Tests.Match
         [Test]
         public void OpenGoalShortcut_IsAShotStruckWithTheLaneOpen()
         {
-            PositionStream s = NewStream(40);
-            Ball(s, 10, 950, CY); Act(s, 10, BallActionKind.Shot, true, 9);          // only the keeper ahead: open
+            PositionStream s = NewStream(50);
+            StrandKeeper(s, false, 0, 39);
+            Ball(s, 10, 950, CY); Act(s, 10, BallActionKind.Shot, true, 9);          // the keeper stranded: open
             Ball(s, 20, 950, CY); Put(s, false, 20, 3, 1000, CY); Act(s, 20, BallActionKind.Shot, true, 9);   // a defender in it
             Ball(s, 30, 800, CY); Act(s, 30, BallActionKind.Shot, true, 9);          // 25 m: out of range
+            Ball(s, 45, 950, CY); Act(s, 45, BallActionKind.Shot, true, 9);          // the keeper back on his line
 
             ShotPassMetrics m = Measure(s);
 
             Assert.That(m.OpenGoalShortcutShots, Is.EqualTo(1));
-            Assert.That(m.OpenGoalShortcutPercent, Is.EqualTo(100.0 / 3).Within(1e-9));
+            Assert.That(m.OpenGoalShortcutPercent, Is.EqualTo(100.0 / 4).Within(1e-9));
         }
 
         // ------------------------------------------------------------------ helpers

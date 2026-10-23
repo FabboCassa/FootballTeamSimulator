@@ -13,6 +13,7 @@ namespace Sim.Core.Match.Analysis
         public const string R5 = "spec R5";
         public const string R6 = "spec R6";
         public const string R8 = "spec R8";
+        public const string R11 = "spec R11";
 
         public static readonly RealismBand OwnHalfBlockLengthM =
             new RealismBand("OOP block length, own half m", 25, 40);
@@ -27,6 +28,9 @@ namespace Sim.Core.Match.Analysis
 
         public static readonly RealismBand MedianOffTargetSeconds =
             new RealismBand("off-target s/player (median)", double.NegativeInfinity, 5);
+        /// <summary>The off-target reading without the turnover window, printed beside it for the user to judge the gap.</summary>
+        public const string OffTargetNoWindowName = "off-target s/player, no window";
+
         public static readonly RealismBand StandStillPercent =
             new RealismBand("stand-still % of open play", double.NegativeInfinity, 15);
 
@@ -36,5 +40,15 @@ namespace Sim.Core.Match.Analysis
 
         public static readonly RealismBand KeeperDepthBreakPercent =
             new RealismBand("keeper depth breaks % open play", double.NegativeInfinity, 1);
+
+        /// <summary>Totals over every match: R11 wants both kinds of goal kick to be seen.</summary>
+        public static readonly RealismBand ShortGoalKicks =
+            new RealismBand("goal kicks played short", 1, double.PositiveInfinity);
+        public static readonly RealismBand LongGoalKicks =
+            new RealismBand("goal kicks played long", 1, double.PositiveInfinity);
+
+        /// <summary>R11 asks it of every throw-in; the odd one taken when the wait for the shape ran out is allowed.</summary>
+        public static readonly RealismBand OfferedThrowInPercent =
+            new RealismBand("throw-ins with 2 offers <= 15 m %", 95, 100);
     }
 }
