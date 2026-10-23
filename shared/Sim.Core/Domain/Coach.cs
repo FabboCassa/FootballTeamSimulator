@@ -45,5 +45,8 @@ namespace Sim.Core.Domain
         /// objective and to show career history. 0 = no prior season. Additive — defaults 0, no save bump.
         /// </summary>
         public int LastFinishPosition { get; set; }
+
+        /// <summary>How the coach likes to play (R22); drawn at world generation for AI coaches.</summary>
+        public ManagerProfile Profile { get; set; } = new ManagerProfile();
     }
 }
