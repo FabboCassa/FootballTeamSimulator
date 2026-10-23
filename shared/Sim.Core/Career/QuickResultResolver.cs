@@ -1,6 +1,5 @@
 using Sim.Core.Config;
 using Sim.Core.Domain;
-using Sim.Core.Match.Movement;
 using Sim.Core.Random;
 using Sim.Core.Tactics;
 
@@ -42,18 +41,30 @@ namespace Sim.Core.Career
         /// Plays the fixture and writes the score onto it. <paramref name="homeStrength"/> and
         /// <paramref name="awayStrength"/> are the clubs' generated baselines
         /// (<see cref="Club.Strength"/>), i.e. roughly the overall of an average first-teamer.
-        /// Missing instructions are the neutral set, which is the identity.
+        /// Missing instructions are the neutral set, which is the identity; instructions alone play in 4-3-3.
         /// </summary>
         public static void Resolve(
             Fixture fixture, int homeStrength, int awayStrength, ulong worldSeed, BalanceConfig? config = null,
-            TacticInstructions? homeInstructions = null, TacticInstructions? awayInstructions = null)
+            TacticInstructions? homeInstructions = null, TacticInstructions? awayInstructions = null) =>
+            Resolve(fixture, homeStrength, awayStrength, worldSeed, config,
+                InFourThreeThree(homeInstructions), InFourThreeThree(awayInstructions));
+
+        /// <summary>Plays the fixture with each side's whole tactic: its style's instructions and its formation.</summary>
+        public static void Resolve(
+            Fixture fixture, int homeStrength, int awayStrength, ulong worldSeed, BalanceConfig? config,
+            Tactic homeTactic, Tactic awayTactic)
         {
             BalanceConfig cfg = config ?? new BalanceConfig();
+            Resolve(fixture, QuickSide.Of(homeStrength, homeTactic, cfg.World), QuickSide.Of(awayStrength, awayTactic, cfg.World),
+                worldSeed, cfg);
+        }
+
+        /// <summary>Plays the fixture between two sides already read (<see cref="QuickSide"/>).</summary>
+        internal static void Resolve(Fixture fixture, QuickSide home, QuickSide away, ulong worldSeed, BalanceConfig cfg)
+        {
             Pcg32 rng = FixtureRng(worldSeed, fixture.Id);
 
-            ExpectedGoals(homeStrength, awayStrength, cfg,
-                homeInstructions ?? TacticInstructions.Neutral, awayInstructions ?? TacticInstructions.Neutral,
-                out double homeExpected, out double awayExpected);
+            ExpectedGoals(home, away, cfg, out double homeExpected, out double awayExpected);
 
             int trials = cfg.World.QuickV12GoalTrials;
             fixture.HomeGoals = DrawGoals(homeExpected, trials, rng);
@@ -63,11 +74,22 @@ namespace Sim.Core.Career
 
         /// <summary>
         /// The two clamped expected-goal figures the score is drawn from: strengths through the
-        /// engine v12 calibration, then each side's instruction percentages (its own
-        /// GoalsFor plus the opponent's GoalsAgainst).
+        /// engine v12 calibration, then each side's tactic percentage (<see cref="QuickTacticPercent"/>).
+        /// Instructions alone play in 4-3-3, the identity shape.
         /// </summary>
         public static void ExpectedGoals(
             int homeStrength, int awayStrength, BalanceConfig cfg, TacticInstructions home, TacticInstructions away,
+            out double homeExpected, out double awayExpected) =>
+            ExpectedGoals(homeStrength, awayStrength, cfg, new Tactic(Formation.F433, home), new Tactic(Formation.F433, away),
+                out homeExpected, out awayExpected);
+
+        public static void ExpectedGoals(
+            int homeStrength, int awayStrength, BalanceConfig cfg, Tactic home, Tactic away,
+            out double homeExpected, out double awayExpected) =>
+            ExpectedGoals(QuickSide.Of(homeStrength, home, cfg.World), QuickSide.Of(awayStrength, away, cfg.World), cfg,
+                out homeExpected, out awayExpected);
+
+        private static void ExpectedGoals(QuickSide home, QuickSide away, BalanceConfig cfg,
             out double homeExpected, out double awayExpected)
         {
             WorldBalance w = cfg.World;
@@ -75,24 +97,16 @@ namespace Sim.Core.Career
             double factor = w.QuickV12StrengthFactor;
             int homeBonus = w.QuickV12HomeAdvantageStrength;
 
-            double homeStrengthNow = homeStrength * (100.0 + cfg.Match.HomeAdvantagePercent) / 100.0 + homeBonus;
-            double difference = homeStrengthNow - awayStrength;
+            double homeStrengthNow = home.Strength * (100.0 + cfg.Match.HomeAdvantagePercent) / 100.0 + homeBonus;
+            double difference = homeStrengthNow - away.Strength;
 
             // percent / 100.0 is exactly 1.0 for neutral sides, so they read the calibration alone.
-            homeExpected = Clamp(baseGoals * (1.0 + difference * factor) * (InstructionPercent(home, away, w) / 100.0), w);
-            awayExpected = Clamp(baseGoals * (1.0 - difference * factor) * (InstructionPercent(away, home, w) / 100.0), w);
+            homeExpected = Clamp(baseGoals * (1.0 + difference * factor) * ((100 + home.GoalsFor + away.GoalsAgainst) / 100.0), w);
+            awayExpected = Clamp(baseGoals * (1.0 - difference * factor) * ((100 + away.GoalsFor + home.GoalsAgainst) / 100.0), w);
         }
 
-        private static int InstructionPercent(TacticInstructions own, TacticInstructions opponent, WorldBalance w) =>
-            100
-            + MovementTactics.Pick(w.QuickMentalityGoalsForPercent, (int)own.Mentality)
-            + MovementTactics.Pick(w.QuickPressingGoalsForPercent, (int)own.Pressing)
-            + MovementTactics.Pick(w.QuickTempoGoalsForPercent, (int)own.Tempo)
-            + MovementTactics.Pick(w.QuickWidthGoalsForPercent, (int)own.Width)
-            + MovementTactics.Pick(w.QuickMentalityGoalsAgainstPercent, (int)opponent.Mentality)
-            + MovementTactics.Pick(w.QuickPressingGoalsAgainstPercent, (int)opponent.Pressing)
-            + MovementTactics.Pick(w.QuickTempoGoalsAgainstPercent, (int)opponent.Tempo)
-            + MovementTactics.Pick(w.QuickWidthGoalsAgainstPercent, (int)opponent.Width);
+        private static Tactic InFourThreeThree(TacticInstructions? instructions) =>
+            new Tactic(Formation.F433, instructions ?? TacticInstructions.Neutral);
 
         private static double Clamp(double expected, WorldBalance cfg)
         {
@@ -116,6 +130,30 @@ namespace Sim.Core.Career
             }
 
             return goals;
+        }
+    }
+
+    /// <summary>
+    /// One side as the fast model reads it: its strength and the two percent readings of its tactic
+    /// (<see cref="QuickTacticPercent.Readings"/>).
+    /// </summary>
+    internal readonly struct QuickSide
+    {
+        public readonly int Strength;
+        public readonly int GoalsFor;
+        public readonly int GoalsAgainst;
+
+        private QuickSide(int strength, int goalsFor, int goalsAgainst)
+        {
+            Strength = strength;
+            GoalsFor = goalsFor;
+            GoalsAgainst = goalsAgainst;
+        }
+
+        public static QuickSide Of(int strength, in Tactic tactic, WorldBalance w)
+        {
+            QuickTacticPercent.Readings(tactic, w, out int goalsFor, out int goalsAgainst);
+            return new QuickSide(strength, goalsFor, goalsAgainst);
         }
     }
 }
