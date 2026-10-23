@@ -74,16 +74,44 @@ namespace Sim.Core.Match.Analysis
         /// R14: no preset above <paramref name="maxPointsShare"/> of its points, and every preset that
         /// played under <paramref name="maxWorstMatchupShare"/> against at least one opponent.
         /// </summary>
-        public bool MeetsGate(double maxPointsShare, double maxWorstMatchupShare)
+        public bool MeetsGate(double maxPointsShare, double maxWorstMatchupShare) =>
+            Breaches(maxPointsShare, maxWorstMatchupShare).Count == 0;
+
+        /// <summary>Every check of the <see cref="MeetsGate"/> gate that a preset misses, preset by preset.</summary>
+        public IReadOnlyList<TournamentBreach> Breaches(double maxPointsShare, double maxWorstMatchupShare)
         {
+            var breaches = new List<TournamentBreach>();
             for (int p = 0; p < Presets; p++)
             {
                 int o = WorstOpponent(p);
                 if (o < 0) continue;
-                if (PointsShare(p) > maxPointsShare || ShareAgainst(p, o) >= maxWorstMatchupShare) return false;
+                double share = PointsShare(p);
+                if (share > maxPointsShare)
+                    breaches.Add(new TournamentBreach(p, TournamentCheck.PointsShare, share, maxPointsShare, -1));
+                double worst = ShareAgainst(p, o);
+                if (worst >= maxWorstMatchupShare)
+                    breaches.Add(new TournamentBreach(p, TournamentCheck.WorstMatchup, worst, maxWorstMatchupShare, o));
             }
 
-            return true;
+            return breaches;
+        }
+
+        /// <summary>
+        /// The points check alone, over the given presets that played: the R17 formation sweep, where
+        /// each challenger meets only the reference and the reference itself is not gated.
+        /// </summary>
+        public IReadOnlyList<TournamentBreach> PointsBreaches(double maxPointsShare, IEnumerable<int> presets)
+        {
+            var breaches = new List<TournamentBreach>();
+            foreach (int p in presets)
+            {
+                if (WorstOpponent(p) < 0) continue;
+                double share = PointsShare(p);
+                if (share > maxPointsShare)
+                    breaches.Add(new TournamentBreach(p, TournamentCheck.PointsShare, share, maxPointsShare, -1));
+            }
+
+            return breaches;
         }
 
         /// <summary>The printable table: one line per preset with its mean and per-seed-set shares, the worst matchup, the verdict.</summary>
