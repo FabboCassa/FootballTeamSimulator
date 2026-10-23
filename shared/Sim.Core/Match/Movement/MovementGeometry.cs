@@ -105,41 +105,25 @@ namespace Sim.Core.Match.Movement
         // ---------------------------------------------------------------- integer maths
 
         /// <summary>
-        /// Integer square root (floor). Deterministic on every runtime — no float, no library
-        /// call, so the answer is the same bit for bit on .NET, Mono and IL2CPP.
+        /// Integer square root (floor). Deterministic on every runtime: the same bit for bit on
+        /// .NET, Mono and IL2CPP.
         ///
         /// This is the single hottest routine in the simulation: at 10 Hz the model asks for the
-        /// distance between two of twenty-three moving things some millions of times a match, and
-        /// the Newton iteration this replaced spent an integer DIVISION on every step. The
-        /// digit-by-digit method below uses nothing but shifts, adds and comparisons, which is
-        /// what makes ten times the tick rate affordable rather than ruinous.
+        /// distance between two of twenty-three moving things some millions of times a match.
+        /// The hardware square root gives the answer in a handful of cycles where the old
+        /// digit-by-digit loop took sixteen rounds (engine v12's timing budget, real-match R15).
+        /// It is only a GUESS here: any int is exact in a double and IEEE 754 rounds the root
+        /// correctly, but the integer check below fixes the floor whatever the runtime's rounding,
+        /// so the result never depends on the float.
         /// </summary>
         public static int Sqrt(int value)
         {
             if (value <= 0) return 0;
 
-            uint n = (uint)value;
-            uint result = 0;
-            uint bit = 1u << 30;
-            while (bit > n) bit >>= 2;
-
-            while (bit != 0)
-            {
-                uint step = result + bit;
-                if (n >= step)
-                {
-                    n -= step;
-                    result = (result >> 1) + bit;
-                }
-                else
-                {
-                    result >>= 1;
-                }
-
-                bit >>= 2;
-            }
-
-            return (int)result;
+            long root = (long)System.Math.Sqrt(value);
+            while (root * root > value) root--;
+            while ((root + 1) * (root + 1) <= value) root++;
+            return (int)root;
         }
 
         /// <summary>Euclidean distance between two points, floored to a whole decimetre.</summary>

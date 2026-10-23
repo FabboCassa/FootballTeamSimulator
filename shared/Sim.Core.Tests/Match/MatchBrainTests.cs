@@ -43,7 +43,7 @@ namespace Sim.Core.Tests.Match
             MatchReport report = Play(new BalanceConfig(), home, away, seed);
             MatchReport again = Play(new BalanceConfig(), home, away, seed);
 
-            Assert.That(report.EngineVersion, Is.EqualTo(11));
+            Assert.That(report.EngineVersion, Is.EqualTo(12));
             Assert.That(report.Positions, Is.Not.Null, "A watched match must be played on the pitch.");
             Assert.That(report.Positions!.LastTick, Is.EqualTo(90 * report.Positions.TicksPerMinute), "the whole ninety minutes");
             Assert.That(report.Positions.Actions, Is.Not.Empty);

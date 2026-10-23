@@ -56,24 +56,24 @@ namespace Sim.Core.Config
         /// <summary>Of the foreign players, the percent drawn from the same continent.</summary>
         public int SameContinentForeignPercent { get; set; } = 60;
 
-        // --- Quick resolver (background leagues), fitted to the V11 engine (watchable-match R17) ---
+        // --- Quick resolver (background leagues), fitted to engine v12 (real-match R15, watchable-match R17) ---
         /// <summary>
         /// Expected goals for an evenly-matched side, fitted against the full engine
-        /// (FastModelHarnessTests, 1,000 matches of a generated league): V11 gives 2.81 goals,
-        /// 42.6 / 22.6 / 34.8 home-draw-away and 0.100 goal difference per strength point. The
-        /// names keep their V11 prefix so that a stored balance document's older, engine-v10
-        /// Quick* figures are ignored on load instead of read into this model.
+        /// (FastModelHarnessTests, 1,000 matches of a generated league): v12 gives 3.16 goals,
+        /// 45.3 / 21.1 / 33.6 home-draw-away and 0.119 goal difference per strength point (V11 gave
+        /// 2.81, 42.6 / 22.6 / 34.8 and 0.100). The V12 prefix makes a stored balance document's
+        /// older V11 (or engine-v10) Quick* figures load and be ignored instead of read into this model.
         /// </summary>
-        public double QuickV11BaseGoals { get; set; } = 1.38;
+        public double QuickV12BaseGoals { get; set; } = 1.58;
 
         /// <summary>Expected goals gained per point of strength advantage (as a fraction of the base).</summary>
-        public double QuickV11StrengthFactor { get; set; } = 0.028;
+        public double QuickV12StrengthFactor { get; set; } = 0.031;
 
         /// <summary>
         /// Flat strength points added to the home side, ON TOP of MatchBalance.HomeAdvantagePercent.
-        /// Negative because V11's home edge is smaller than HomeAdvantagePercent alone gives here.
+        /// Negative because the engine's home edge is smaller than HomeAdvantagePercent alone gives here.
         /// </summary>
-        public int QuickV11HomeAdvantageStrength { get; set; } = -3;
+        public int QuickV12HomeAdvantageStrength { get; set; } = -2;
 
         public double QuickMinExpectedGoals { get; set; } = 0.20;
         public double QuickMaxExpectedGoals { get; set; } = 4.0;
@@ -83,22 +83,22 @@ namespace Sim.Core.Config
         /// Deterministic, integer-friendly and free of Math.Exp, which the determinism rules forbid.
         /// Costs two draws per trial per side.
         /// </summary>
-        public int QuickV11GoalTrials { get; set; } = 14;
+        public int QuickV12GoalTrials { get; set; } = 14;
 
         // --- Quick resolver instructions (R17) ---
         // Percent points added to a side's expected goals (GoalsFor) or to its OPPONENT's
         // (GoalsAgainst) by each instruction axis, indexed like the enums (low · neutral · high).
-        // The middle entry is the identity. Each extreme is the V11 engine's own shift against a
+        // The middle entry is the identity. Each extreme is the v12 engine's own shift against a
         // neutral side of the same club (1,000 matches a setting, FastModelHarnessTests) as a
-        // share of a side's ~1.38 goals: e.g. press high concedes +0.28 a match, +20%.
-        public int[] QuickMentalityGoalsForPercent { get; set; } = { -4, 0, 7 };
-        public int[] QuickMentalityGoalsAgainstPercent { get; set; } = { -11, 0, 3 };
-        public int[] QuickPressingGoalsForPercent { get; set; } = { -1, 0, -6 };
-        public int[] QuickPressingGoalsAgainstPercent { get; set; } = { 6, 0, 20 };
-        public int[] QuickTempoGoalsForPercent { get; set; } = { -2, 0, 4 };
-        public int[] QuickTempoGoalsAgainstPercent { get; set; } = { 0, 0, -1 };
-        public int[] QuickWidthGoalsForPercent { get; set; } = { 8, 0, -5 };
-        public int[] QuickWidthGoalsAgainstPercent { get; set; } = { -6, 0, 9 };
+        // share of a side's ~1.58 goals: e.g. attacking concedes +0.62 a match, +39%.
+        public int[] QuickMentalityGoalsForPercent { get; set; } = { -1, 0, 10 };
+        public int[] QuickMentalityGoalsAgainstPercent { get; set; } = { -8, 0, 39 };
+        public int[] QuickPressingGoalsForPercent { get; set; } = { -14, 0, -6 };
+        public int[] QuickPressingGoalsAgainstPercent { get; set; } = { 9, 0, 18 };
+        public int[] QuickTempoGoalsForPercent { get; set; } = { -7, 0, 13 };
+        public int[] QuickTempoGoalsAgainstPercent { get; set; } = { -3, 0, 4 };
+        public int[] QuickWidthGoalsForPercent { get; set; } = { 4, 0, -7 };
+        public int[] QuickWidthGoalsAgainstPercent { get; set; } = { 3, 0, 5 };
     }
 
     /// <summary>
