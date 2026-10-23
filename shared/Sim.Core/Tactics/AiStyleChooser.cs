@@ -36,6 +36,9 @@ namespace Sim.Core.Tactics
         private const int AttackPerLean = 4;
         private const int WidthPerLean = 3;
 
+        /// <summary>Tenths per directness point, so the [-2, 2] trait spans the ideal's [-30, 30].</summary>
+        private const int DirectnessScale = 15;
+
         /// <summary>A coach picks a shape his players know: each one fielded out of his natural role costs this.</summary>
         private const int OutOfPositionPenalty = 10;
 
@@ -52,7 +55,9 @@ namespace Sim.Core.Tactics
             if (style == PlayingStyle.TikiTaka && squad.Passing < TikiTakaMinPassing) return int.MinValue;
 
             TacticInstructions t = PlayingStyles.Get(style).Instructions;
-            int directness = (int)t.PassingDirectness + (int)t.BuildUp + (int)t.Tempo - 3; // [-3, 3]
+            // Tempo is left out: the presets pair a fast tempo with short passing (quick circulation)
+            // and a slow one with the long ball, so it does not mark how direct a style is.
+            int directness = (int)t.PassingDirectness + (int)t.BuildUp - 2;              // [-2, 2]
             int press = (int)t.Pressing + (int)t.LineOfEngagement - 2;                   // [-2, 2]
             int attack = (int)t.Mentality - 1;                                           // [-1, 1]
             int width = (int)t.Width - 1;                                                // [-1, 1]
@@ -67,7 +72,7 @@ namespace Sim.Core.Tactics
                                     + AttackPerLean * profile.Attack, 10);
             int idealWidth = Clamp(2 * (squad.Wide - leagueMean.Wide) + WidthPerLean * profile.Attack, 10);
 
-            return -(Square(10 * directness - idealDirectness)
+            return -(Square(DirectnessScale * directness - idealDirectness)
                      + Square(10 * press - idealPress)
                      + AttackDistanceWeight * Square(10 * attack - idealAttack)
                      + Square(10 * width - idealWidth));
