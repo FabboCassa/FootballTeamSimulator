@@ -338,19 +338,6 @@ namespace Fts.Presenters
         private string FormationName(Formation formation) =>
             _loc.Tr("tactics.formation." + formation.ToString().ToLowerInvariant());
 
-        private static TacticPlan Clone(TacticPlan plan)
-        {
-            if (plan == null)
-                return null;
-
-            return new TacticPlan
-            {
-                Formation = plan.Formation,
-                Mentality = plan.Mentality,
-                Pressing = plan.Pressing,
-                Tempo = plan.Tempo,
-                Width = plan.Width
-            };
-        }
+        private static TacticPlan Clone(TacticPlan plan) => plan?.Copy();
     }
 }

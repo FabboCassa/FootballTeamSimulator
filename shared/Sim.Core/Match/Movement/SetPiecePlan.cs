@@ -53,10 +53,29 @@ namespace Sim.Core.Match.Movement
             int[] table = kind == BallActionKind.GoalKick ? cfg.GoalKickLongByTempo : cfg.ThrowInLongByTempo;
             int i = (int)tempo;
             if (table == null || i < 0 || i >= table.Length) return RestartLength.Short;
-            return table[i] == (int)RestartLength.Long ? RestartLength.Long
-                : table[i] == (int)RestartLength.ShortUnlessPressed ? RestartLength.ShortUnlessPressed
-                : RestartLength.Short;
+            return FromTable(table[i]);
         }
+
+        /// <summary>
+        /// As <see cref="Length(BallActionKind, Tempo, MatchBalance)"/>, with the R16 build-up axis
+        /// deciding a goal kick when its table says so (<see cref="MatchBalance.GoalKickLengthByBuildUp"/>);
+        /// at its middle level, or for a throw-in, Tempo decides as before.
+        /// </summary>
+        public static RestartLength Length(BallActionKind kind, Tempo tempo, BuildUp buildUp, MatchBalance cfg)
+        {
+            if (kind == BallActionKind.GoalKick)
+            {
+                int byBuildUp = MovementTactics.Pick(cfg.GoalKickLengthByBuildUp, (int)buildUp);
+                if (buildUp != BuildUp.Mixed && byBuildUp >= 0) return FromTable(byBuildUp);
+            }
+
+            return Length(kind, tempo, cfg);
+        }
+
+        private static RestartLength FromTable(int value) =>
+            value == (int)RestartLength.Long ? RestartLength.Long
+            : value == (int)RestartLength.ShortUnlessPressed ? RestartLength.ShortUnlessPressed
+            : RestartLength.Short;
 
         /// <summary>
         /// Whether an opponent still on the pitch stands within <paramref name="radius"/> of the man

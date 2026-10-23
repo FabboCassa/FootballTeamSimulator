@@ -74,11 +74,7 @@ public sealed class RankedLiveMatchService : IRankedLiveMatchService
         Guid userId, Guid fixtureId, int? clientEngineVersion, CancellationToken ct = default)
     {
         if (clientEngineVersion != MatchEngine.Version)
-            return Fail(
-                $"Questa partita dal vivo gira sul motore v{MatchEngine.Version}, il tuo gioco su "
-                + (clientEngineVersion.HasValue ? $"v{clientEngineVersion.Value}" : "una versione precedente")
-                + ". Aggiorna il gioco per giocarla dal vivo.",
-                RankedError.EngineVersionMismatch);
+            return EngineMismatch(clientEngineVersion);
 
         var (error, message, ctx) = await LoadAsync(userId, fixtureId, ct);
         if (ctx is null) return Fail(message, error);
@@ -189,8 +185,12 @@ public sealed class RankedLiveMatchService : IRankedLiveMatchService
     // --- pause-point change ------------------------------------------------------------------------
 
     public async Task<RankedResult<RankedLiveStateDto>> SubmitChangeAsync(
-        Guid userId, Guid fixtureId, SubmitRankedLiveChangeRequest request, CancellationToken ct = default)
+        Guid userId, Guid fixtureId, int? clientEngineVersion, SubmitRankedLiveChangeRequest request,
+        CancellationToken ct = default)
     {
+        if (clientEngineVersion != MatchEngine.Version)
+            return EngineMismatch(clientEngineVersion);
+
         var (error, message, ctx) = await LoadAsync(userId, fixtureId, ct);
         if (ctx is null) return Fail(message, error);
         if (!ctx.IsParticipant)
@@ -467,6 +467,12 @@ public sealed class RankedLiveMatchService : IRankedLiveMatchService
         try { await _broadcaster.RankedMatchChangedAsync(fixtureId, state, ct); }
         catch { /* a broadcast failure must not fail the change that already committed */ }
     }
+
+    private static RankedResult<RankedLiveStateDto> EngineMismatch(int? clientEngineVersion) => Fail(
+        $"Questa partita dal vivo gira sul motore v{MatchEngine.Version}, il tuo gioco su "
+        + (clientEngineVersion.HasValue ? $"v{clientEngineVersion.Value}" : "una versione precedente")
+        + ". Aggiorna il gioco per giocarla dal vivo.",
+        RankedError.EngineVersionMismatch);
 
     private static RankedResult<RankedLiveStateDto> Fail(string? message, RankedError error) =>
         RankedResult<RankedLiveStateDto>.Fail(error, message);

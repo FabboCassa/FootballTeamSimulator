@@ -49,12 +49,13 @@ public static class RankedLiveEndpoints
         // A pause-point change for the caller's own side (substitution and/or instructions) → re-sim + push.
         // NOT rate-limited as a "write": a live match is a burst of legitimate taps in three real minutes,
         // and the guards that matter here are the match's own (your side, forward in time, a legal XI).
+        // ?engineVersion= is checked as at open: the change's minute comes off the client's timeline.
         group.MapPost("/change", async (
-            Guid fixtureId, SubmitRankedLiveChangeRequest req, ClaimsPrincipal user,
+            Guid fixtureId, int? engineVersion, SubmitRankedLiveChangeRequest req, ClaimsPrincipal user,
             IRankedLiveMatchService live, CancellationToken ct) =>
         {
             if (!RankedEndpoints.TryGetUserIdShared(user, out var userId)) return Results.Unauthorized();
-            var result = await live.SubmitChangeAsync(userId, fixtureId, req, ct);
+            var result = await live.SubmitChangeAsync(userId, fixtureId, engineVersion, req, ct);
             return result.Success ? Results.Ok(result.Value) : RankedEndpoints.MapErrorShared(result.Error, result.Message);
         });
 
