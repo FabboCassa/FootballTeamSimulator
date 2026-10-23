@@ -75,7 +75,7 @@ namespace Sim.Core.Match.Movement
                 {
                     // R4: the job is done from his place in the block, not wherever it leads him.
                     EndSpell(side, slot);
-                    int leash = U.Units(_sim._cfg.V11JobLeashDm);
+                    int leash = U.Units(JobLeashDm(side, job));
                     if (job == BaseJob.Press && _sim._cfg.V11PressStandOffPercent > 0) PressGoalSide(side, slot, spotX, spotY, leash);
                     else _base.Move(side, slot, job, spotX, spotY, leash);
                     return;
@@ -148,7 +148,7 @@ namespace Sim.Core.Match.Movement
                 int goalX = U.Units(MovementGeometry.OwnGoalX(side == 0));
                 int standOff = _sim._tactics[side].PressStandOffU * _sim._cfg.V11PressStandOffPercent / 100;
                 U.Scaled(goalX - ball.X, U.CenterYU - ball.Y, standOff, out int dx, out int dy);
-                int tx = ball.X + dx, ty = ball.Y + dy;
+                int tx = ball.X + dx, ty = ball.Y + dy + PressTouchlineU(side, ball.Y);
                 Leash(spotX, spotY, leash, ref tx, ref ty);
                 _sim.Steer(k, U.ClampX(tx), _sim._ctx.Inside(ty), sprint: true);
             }

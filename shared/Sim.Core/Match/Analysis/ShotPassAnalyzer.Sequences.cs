@@ -156,13 +156,17 @@ namespace Sim.Core.Match.Analysis
             int x = BallX(_s, kf), y = BallY(_s, kf);
             Touch(side, a.Slot, kf, x, y);
 
-            _m.PassesAttempted++;
-            if (a.Kind == BallActionKind.LongBall) _m.LongBalls++;
+            if (Reads(side))
+            {
+                _m.PassesAttempted++;
+                if (a.Kind == BallActionKind.LongBall) _m.LongBalls++;
+            }
 
             bool delivery = _seq.Passes == 0
                 && (_seq.RestartKind == (int)BallActionKind.Corner || _seq.RestartKind == (int)BallActionKind.ThrowIn);
             _seq.Passes++;
-            if (_seq.OpenPlay && InOwnZone(side, x)) _m.PpdaPasses++;
+            // PPDA belongs to the pressing side: these are the passes it allows.
+            if (_seq.OpenPlay && InOwnZone(side, x) && (_only == None || side != _only)) _m.PpdaPasses++;
 
             _pass = new PendingPass { Active = true, Side = side, Slot = a.Slot, X = x, Y = y, SetPieceDelivery = delivery };
         }
@@ -191,6 +195,12 @@ namespace Sim.Core.Match.Analysis
 
         private void ResolvePass(bool completed, int endX, int endY)
         {
+            if (!Reads(_pass.Side))
+            {
+                _pass = default;
+                return;
+            }
+
             if (completed) _m.PassesCompleted++;
             if (!_pass.SetPieceDelivery && IsCross(_pass.Side == 0, _pass.X, _pass.Y, endX, endY)) _m.Crosses++;
             _pass = default;
@@ -212,7 +222,7 @@ namespace Sim.Core.Match.Analysis
                 FirstFrame = frame, FirstX = x, LastFrame = frame, LastX = x,
             };
 
-            if (_seq.HighTurnover) _m.HighTurnovers++;
+            if (_seq.HighTurnover && Reads(side)) _m.HighTurnovers++;
             _pendingRestart = None;
             if (rebound) _reboundSide = None;
         }
@@ -220,7 +230,7 @@ namespace Sim.Core.Match.Analysis
         private void CloseSequence()
         {
             if (_seq.Side == None) return;
-            if (_seq.OpenPlay)
+            if (_seq.OpenPlay && Reads(_seq.Side))
             {
                 _m.OpenPlaySequences++;
                 _m.OpenPlaySequencePasses += _seq.Passes;
@@ -240,7 +250,7 @@ namespace Sim.Core.Match.Analysis
 
         private void CountOpenPlayShot(int side)
         {
-            if (_seq.Side != side || !_seq.OpenPlay) return;
+            if (_seq.Side != side || !_seq.OpenPlay || !Reads(side)) return;
             _m.OpenPlayShots++;
             if (_seq.Rebound) _m.OpenPlayShotsRebound++;
             if (_seq.HighTurnover) _m.OpenPlayShotsHighTurnover++;
@@ -256,7 +266,7 @@ namespace Sim.Core.Match.Analysis
         /// <summary>PPDA's denominator: the pressing side's action in the passer's zone while he owns an open-play sequence.</summary>
         private void CountDefensiveAction(int side, int frame)
         {
-            if (_seq.Side == None || _seq.Side == side || !_seq.OpenPlay) return;
+            if (_seq.Side == None || _seq.Side == side || !_seq.OpenPlay || !Reads(side)) return;
             if (InOwnZone(_seq.Side, BallX(_s, frame))) _m.PpdaActions++;
         }
 

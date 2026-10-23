@@ -53,6 +53,7 @@ namespace Fts.MatchView
         private static readonly Color CarrierRing = new Color(1f, 0.95f, 0.5f, 0.95f);
         private static readonly Color TrailColor = new Color(1f, 1f, 1f, 0.55f);
         private static readonly Color ShotColor = new Color(1f, 0.85f, 0.35f, 0.9f);
+        private static readonly Color SaveColor = new Color(0.45f, 0.9f, 1f, 1f);
 
         private readonly Color _homeColor;
         private readonly Color _awayColor;
@@ -71,6 +72,9 @@ namespace Fts.MatchView
 
         /// <summary>The director's clock, advanced by the pump unless a shared clock is followed.</summary>
         private readonly BroadcastPlayback _playback;
+
+        /// <summary>Which save to accent now, and the keeper's path to the ball (spec R7).</summary>
+        private readonly SaveHighlight _saves;
 
         /// <summary>The stream position a shared clock shows now; null when the renderer keeps its own time.</summary>
         private Func<double> _sharedClock;
@@ -161,6 +165,7 @@ namespace Fts.MatchView
             _lastTick = _stream.TickCount > 0 ? _stream.TickCount - 1 : 0;
             Timeline = new BroadcastDirector().Build(report);
             _playback = new BroadcastPlayback(Timeline);
+            _saves = new SaveHighlight(_stream);
 
             foreach (BallAction action in _actions)
                 if (action.Kind == BallActionKind.HalfTime)
@@ -597,6 +602,10 @@ namespace Fts.MatchView
             DrawTrail(p, fit, ta);
             DrawFlight(p, fit, ta, scale);
 
+            bool saving = _saves.TryAt(_tickPos, out SaveMoment save);
+            if (saving)
+                DrawDive(p, fit, scale, save);
+
             _stream.TryOwner(_stream.Owner[ta], out bool ownerHome, out int ownerSlot);
             bool owned = _stream.Owner[ta] != PositionStream.NoOwner;
 
@@ -605,7 +614,40 @@ namespace Fts.MatchView
             DrawTeam(p, fit, scale, _stream.AwayXY, ta, tb, f, false,
                 owned && !ownerHome ? ownerSlot : -1);
 
+            if (saving)
+                DrawSaveAccent(p, fit, scale, save, ta, tb, f);
+
             DrawBall(p, fit, scale, ta, tb, f);
+        }
+
+        /// <summary>The keeper's path from the strike to the save, under the tokens, fading with the accent.</summary>
+        private void DrawDive(Painter2D p, Rect fit, float scale, SaveMoment save)
+        {
+            if (save.SaveFrame - save.DiveFrom < 1)
+                return;
+
+            int[] side = save.KeeperHome ? _stream.HomeXY : _stream.AwayXY;
+            p.strokeColor = new Color(SaveColor.r, SaveColor.g, SaveColor.b, 0.7f * save.Strength);
+            p.lineWidth = Mathf.Max(1.5f, 3f * scale);
+            p.BeginPath();
+            p.MoveTo(PlayerPixel(fit, side, save.DiveFrom, save.KeeperSlot));
+            for (int t = save.DiveFrom + 1; t <= save.SaveFrame; t++)
+                p.LineTo(PlayerPixel(fit, side, t, save.KeeperSlot));
+            p.Stroke();
+        }
+
+        /// <summary>A brief ring that opens out from the keeper as the save's accent fades.</summary>
+        private void DrawSaveAccent(Painter2D p, Rect fit, float scale, SaveMoment save, int ta, int tb, float f)
+        {
+            int[] side = save.KeeperHome ? _stream.HomeXY : _stream.AwayXY;
+            float radius = Mathf.Max(4f, TokenRadiusDm * scale);
+            Vector2 pos = Lerp(fit, side, ta, tb, save.KeeperSlot, f);
+
+            p.strokeColor = new Color(SaveColor.r, SaveColor.g, SaveColor.b, save.Strength);
+            p.lineWidth = Mathf.Max(1.5f, radius * 0.3f);
+            p.BeginPath();
+            p.Arc(pos, radius * (1.5f + 0.8f * (1f - save.Strength)), 0f, 360f);
+            p.Stroke();
         }
 
         private void DrawTeam(

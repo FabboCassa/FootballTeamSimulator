@@ -218,12 +218,10 @@ namespace Sim.Core.Tests.Tactics
         [Test]
         public void FromStyle_ThenToStylePlan_KeepsStyleAndOverrides()
         {
-            StylePlan tweaked = StylePlan.FromInstructions(PlayingStyle.Gegenpress, new TacticInstructions(
-                Mentality.Attacking, PassingDirectness.Direct, Tempo.Fast, Width.Wide,
-                BuildUp.Mixed, FinalThirdApproach.Mixed, ShotSelection.Normal, DribbleFrequency.Normal,
-                OnBallLost.CounterPress, OnBallWon.Counter,
-                LineOfEngagement.High, DefensiveLine.VeryHigh, Pressing.High,
-                MarkingScheme.Zonal, PressDirection.ForceInside));
+            TacticInstructions preset = PlayingStyles.Get(PlayingStyle.Gegenpress).Instructions;
+            Assert.That(preset.Width, Is.Not.EqualTo(Width.Wide), "the override must differ from the preset");
+            StylePlan tweaked = StylePlan.FromInstructions(PlayingStyle.Gegenpress,
+                new StyleOverrides { Width = Width.Wide }.ApplyTo(preset));
 
             TacticPlan plan = TacticPlan.FromStyle(Formation.F4231, tweaked);
             StylePlan back = plan.ToStylePlan();

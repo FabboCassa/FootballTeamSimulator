@@ -71,6 +71,7 @@ namespace Sim.Core.Match.Analysis
         private readonly MatchBalance _cfg;
         private readonly int[] _keeper = new int[2];
         private int[] _sentOffFrom = Array.Empty<int>();
+        private int _only = None;   // the side read, None for both
 
         /// <param name="cfg">Whose R4 geometry to read (the brain's V11OpenGoal* values); the shipped one when null.</param>
         public ShotPassAnalyzer(MatchBalance? cfg = null)
@@ -82,9 +83,19 @@ namespace Sim.Core.Match.Analysis
         public static ShotPassMetrics? Analyze(MatchReport report) => new ShotPassAnalyzer().Measure(report);
 
         /// <summary>Measures one match. Returns null when the report carries no position stream.</summary>
-        public ShotPassMetrics? Measure(MatchReport report)
+        public ShotPassMetrics? Measure(MatchReport report) => MeasureFor(report, None);
+
+        /// <summary>
+        /// One side's readings of one match (R19 fingerprints): its shots, passes, sequences and
+        /// high turnovers, and its PPDA as the pressing team (the opponent's passes over its own
+        /// defensive actions). Ball in play is the match's. Null when the report carries no stream.
+        /// </summary>
+        public ShotPassMetrics? MeasureSide(MatchReport report, bool home) => MeasureFor(report, home ? 0 : 1);
+
+        private ShotPassMetrics? MeasureFor(MatchReport report, int only)
         {
             if (report == null) throw new ArgumentNullException(nameof(report));
+            _only = only;
             PositionStream? s = report.Positions;
             if (s == null || s.PlayerCount <= 0 || s.TickCount <= 0) return null;
 
@@ -121,7 +132,7 @@ namespace Sim.Core.Match.Analysis
             for (int i = 0; i < actions.Count; i++)
             {
                 BallAction shot = actions[i];
-                if (shot.Kind != BallActionKind.Shot) continue;
+                if (shot.Kind != BallActionKind.Shot || !Reads(shot.Home ? 0 : 1)) continue;
 
                 int bx = BallX(s, shot.Tick), by = BallY(s, shot.Tick);
                 bool inside = InAttackedBox(shot.Home, bx, by);
@@ -291,6 +302,9 @@ namespace Sim.Core.Match.Analysis
             int across = Math.Abs(y - Pitch.CenterY);
             return deep && across <= MovementGeometry.BoxHalfWidthDm;
         }
+
+        /// <summary>Whether a count of this side's own play is kept.</summary>
+        private bool Reads(int side) => _only == None || side == _only;
 
         private static bool IsStoppage(BallActionKind k) =>
             k == BallActionKind.Goal || k == BallActionKind.Foul || k == BallActionKind.Offside
