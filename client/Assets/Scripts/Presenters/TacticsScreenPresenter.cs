@@ -13,11 +13,12 @@ using UnityEngine.UIElements;
 namespace Fts.Presenters
 {
     /// <summary>
-    /// Tactics screen (task 3.3): pick a formation + instruction set, see how
-    /// familiar the club is with the resulting tactic, and check the next
-    /// opponent. Works on a copy of the saved tactic; Save persists it (the sim
-    /// uses it from the next match day). Changing the formation re-picks the XI
-    /// for the new shape, so the Squad screen and the in-match shape stay in sync.
+    /// Tactics screen (task 3.3, R21): pick a style, a formation and any instruction tweak, see
+    /// how familiar the club is with the resulting tactic. The edits are <see cref="TacticEditor"/>'s:
+    /// a style loads its preset, a tweak keeps the style and marks it custom. Works on a copy of
+    /// the saved tactic; Save persists it (the sim uses it from the next match day). Changing the
+    /// formation re-picks the XI for the new shape, so the Squad screen and the in-match shape
+    /// stay in sync.
     ///
     /// The match plan card (issue #44) edits the user's <see cref="PrematchPlan"/>: a rule
     /// "from minute M, if the score is S, shout X". Adding or removing a rule saves at once — it
@@ -69,11 +70,8 @@ namespace Fts.Presenters
 
         public void Enter()
         {
-            _view.FormationCycleClicked += OnFormation;
-            _view.MentalityCycleClicked += OnMentality;
-            _view.PressingCycleClicked += OnPressing;
-            _view.TempoCycleClicked += OnTempo;
-            _view.WidthCycleClicked += OnWidth;
+            _view.StyleSelected += OnStyleSelected;
+            _view.SuggestedFormationSelected += OnSuggestedFormationSelected;
             _view.FormationSelected += OnFormationSelected;
             _view.InstructionSelected += OnInstructionSelected;
             _view.SaveClicked += OnSave;
@@ -82,10 +80,7 @@ namespace Fts.Presenters
             _view.PlanAddClicked += OnPlanAdd;
             _view.PlanRemoveClicked += OnPlanRemove;
 
-            var formationLabels = new List<string>(Formations.All.Length);
-            for (int i = 0; i < Formations.All.Length; i++)
-                formationLabels.Add(FormationName((Formation)i));
-            _view.SetFormationOptions(formationLabels);
+            SetTacticOptions();
             SetPlanOptions();
 
             _club = _career.GetUserClub();
@@ -98,11 +93,8 @@ namespace Fts.Presenters
 
         public void Exit()
         {
-            _view.FormationCycleClicked -= OnFormation;
-            _view.MentalityCycleClicked -= OnMentality;
-            _view.PressingCycleClicked -= OnPressing;
-            _view.TempoCycleClicked -= OnTempo;
-            _view.WidthCycleClicked -= OnWidth;
+            _view.StyleSelected -= OnStyleSelected;
+            _view.SuggestedFormationSelected -= OnSuggestedFormationSelected;
             _view.FormationSelected -= OnFormationSelected;
             _view.InstructionSelected -= OnInstructionSelected;
             _view.SaveClicked -= OnSave;
@@ -112,54 +104,34 @@ namespace Fts.Presenters
             _view.PlanRemoveClicked -= OnPlanRemove;
         }
 
+        private void OnStyleSelected(int index)
+        {
+            if (index < 0 || index >= PlayingStyles.All.Count) return;
+            _working = TacticEditor.WithStyle(_working, PlayingStyles.All[index].Style);
+            Refresh();
+        }
+
+        private void OnSuggestedFormationSelected(int index)
+        {
+            IReadOnlyList<Formation> suggested = PlayingStyles.Get(_working.Style).SuggestedFormations;
+            if (index < 0 || index >= suggested.Count) return;
+            _working = TacticEditor.WithFormation(_working, suggested[index]);
+            Refresh();
+        }
+
         private void OnFormationSelected(int index)
         {
-            if (index < 0 || index >= Formations.All.Length) return;
-            _working.Formation = (Formation)index;
+            if (index < 0 || index >= Formations.Catalogue.Length) return;
+            _working = TacticEditor.WithFormation(_working, Formations.Catalogue[index]);
             Refresh();
         }
 
-        private void OnInstructionSelected(int axis, int value)
+        private void OnInstructionSelected(int axis, int level)
         {
-            if (value < 0 || value > 2) return;
-            switch (axis)
-            {
-                case 0: _working.Mentality = (Mentality)value; break;
-                case 1: _working.Pressing = (Pressing)value; break;
-                case 2: _working.Tempo = (Tempo)value; break;
-                case 3: _working.Width = (Width)value; break;
-                default: return;
-            }
-            Refresh();
-        }
-
-        private void OnFormation()
-        {
-            _working.Formation = (Formation)(((int)_working.Formation + 1) % Formations.All.Length);
-            Refresh();
-        }
-
-        private void OnMentality()
-        {
-            _working.Mentality = (Mentality)(((int)_working.Mentality + 1) % 3);
-            Refresh();
-        }
-
-        private void OnPressing()
-        {
-            _working.Pressing = (Pressing)(((int)_working.Pressing + 1) % 3);
-            Refresh();
-        }
-
-        private void OnTempo()
-        {
-            _working.Tempo = (Tempo)(((int)_working.Tempo + 1) % 3);
-            Refresh();
-        }
-
-        private void OnWidth()
-        {
-            _working.Width = (Width)(((int)_working.Width + 1) % 3);
+            if (axis < 0 || axis >= TacticEditor.Axes.Count) return;
+            InstructionAxis picked = TacticEditor.Axes[axis];
+            if (level < 0 || level >= TacticEditor.LevelCount(picked)) return;
+            _working = TacticEditor.WithInstruction(_working, picked, level);
             Refresh();
         }
 
@@ -279,10 +251,53 @@ namespace Fts.Presenters
             }
         }
 
+        /// <summary>The fixed option lists: styles, the formation catalogue and the instruction rows.</summary>
+        private void SetTacticOptions()
+        {
+            var styles = new List<string>(PlayingStyles.All.Count);
+            foreach (StyleDefinition def in PlayingStyles.All) styles.Add(_loc.Tr(TacticsLocKeys.StyleName(def.Style)));
+            _view.SetStyleOptions(styles);
+
+            var formations = new List<string>(Formations.Catalogue.Length);
+            foreach (Formation f in Formations.Catalogue) formations.Add(_loc.Tr(TacticsLocKeys.Formation(f)));
+            _view.SetFormationOptions(formations);
+
+            var axes = new List<TacticAxisVm>(TacticEditor.Axes.Count);
+            foreach (InstructionAxis axis in TacticEditor.Axes)
+            {
+                var levels = new List<string>(TacticEditor.LevelCount(axis));
+                for (int level = 0; level < TacticEditor.LevelCount(axis); level++)
+                    levels.Add(_loc.Tr(TacticsLocKeys.Level(axis, level)));
+                axes.Add(new TacticAxisVm
+                {
+                    Phase = _loc.Tr(TacticsLocKeys.Phase(TacticEditor.PhaseOf(axis))),
+                    Caption = _loc.Tr(TacticsLocKeys.AxisName(axis)),
+                    Description = _loc.Tr(TacticsLocKeys.AxisDescription(axis)),
+                    Levels = levels
+                });
+            }
+            _view.SetInstructionAxes(axes);
+        }
+
         private void Refresh()
         {
-            _view.SetSelection((int)_working.Formation, (int)_working.Mentality, (int)_working.Pressing,
-                (int)_working.Tempo, (int)_working.Width);
+            StyleDefinition style = PlayingStyles.Get(_working.Style);
+            string styleName = _loc.Tr(TacticsLocKeys.StyleName(style.Style));
+            var suggested = new List<string>(style.SuggestedFormations.Count);
+            foreach (Formation f in style.SuggestedFormations) suggested.Add(_loc.Tr(TacticsLocKeys.Formation(f)));
+            _view.SetStyle(IndexOfStyle(style.Style),
+                TacticEditor.IsCustom(_working) ? _loc.Tr("tactics.style.custom", styleName) : styleName,
+                _loc.Tr(TacticsLocKeys.StyleDescription(style.Style)),
+                suggested, IndexOf(style.SuggestedFormations, _working.Formation));
+
+            _view.SetFormation(IndexOf(Formations.Catalogue, _working.Formation),
+                _loc.Tr("tactics.formation_shape", Formations.InPossession(_working.Formation),
+                    Formations.OutOfPossession(_working.Formation)));
+
+            var levels = new List<int>(TacticEditor.Axes.Count);
+            foreach (InstructionAxis axis in TacticEditor.Axes) levels.Add(TacticEditor.LevelOf(_working, axis));
+            _view.SetInstructionLevels(levels);
+
             int familiarity = FamiliarityPercent(_working);
             _view.SetFamiliarity(_loc.Tr("tactics.familiarity", familiarity), familiarity);
 
@@ -335,8 +350,19 @@ namespace Fts.Presenters
             return space >= 0 && space < fullName.Length - 1 ? fullName.Substring(space + 1) : fullName;
         }
 
-        private string FormationName(Formation formation) =>
-            _loc.Tr("tactics.formation." + formation.ToString().ToLowerInvariant());
+        private static int IndexOfStyle(PlayingStyle style)
+        {
+            for (int i = 0; i < PlayingStyles.All.Count; i++)
+                if (PlayingStyles.All[i].Style == style) return i;
+            return -1;
+        }
+
+        private static int IndexOf(IReadOnlyList<Formation> formations, Formation formation)
+        {
+            for (int i = 0; i < formations.Count; i++)
+                if (formations[i] == formation) return i;
+            return -1;
+        }
 
         private static TacticPlan Clone(TacticPlan plan) => plan?.Copy();
     }
