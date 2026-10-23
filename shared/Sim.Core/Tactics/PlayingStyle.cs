@@ -47,7 +47,13 @@ namespace Sim.Core.Tactics
         }
     }
 
-    /// <summary>The R18 style catalogue.</summary>
+    /// <summary>
+    /// The R18 style catalogue. Retuned in #95 so no style dominates the R20 tournament while each
+    /// keeps its #94 fingerprint: zonal marking behind a high line, and a very high line, lost most
+    /// games (Positional play, Gegenpress and Vertical tiki-taka mark Mixed, Gegenpress holds High);
+    /// Control possession engages from a mid block, Route one keeps a normal line and shot, and Park
+    /// the bus sits deep rather than very deep, with normal width and patient shooting.
+    /// </summary>
     public static class PlayingStyles
     {
         public static readonly IReadOnlyList<StyleDefinition> All = Array.AsReadOnly(new[]
@@ -70,7 +76,7 @@ namespace Sim.Core.Tactics
                     DribbleFrequency.Less,
                     OnBallLost.CounterPress, OnBallWon.HoldShape,
                     LineOfEngagement.High, DefensiveLine.High, Pressing.High,
-                    MarkingScheme.Zonal, PressDirection.None),
+                    MarkingScheme.Mixed, PressDirection.None),
                 Formation.F433, Formation.F4231, Formation.F343),
 
             new StyleDefinition(PlayingStyle.Gegenpress, "Gegenpress", new TacticInstructions(
@@ -78,8 +84,8 @@ namespace Sim.Core.Tactics
                     BuildUp.Mixed, FinalThirdApproach.Mixed, ShotSelection.Normal,
                     DribbleFrequency.Normal,
                     OnBallLost.CounterPress, OnBallWon.Counter,
-                    LineOfEngagement.High, DefensiveLine.VeryHigh, Pressing.High,
-                    MarkingScheme.Zonal, PressDirection.None),
+                    LineOfEngagement.High, DefensiveLine.High, Pressing.High,
+                    MarkingScheme.Mixed, PressDirection.None),
                 Formation.F433, Formation.F4231, Formation.F442),
 
             new StyleDefinition(PlayingStyle.VerticalTikiTaka, "Vertical tiki-taka", new TacticInstructions(
@@ -88,7 +94,7 @@ namespace Sim.Core.Tactics
                     DribbleFrequency.Normal,
                     OnBallLost.CounterPress, OnBallWon.Normal,
                     LineOfEngagement.High, DefensiveLine.High, Pressing.High,
-                    MarkingScheme.Zonal, PressDirection.None),
+                    MarkingScheme.Mixed, PressDirection.None),
                 Formation.F433, Formation.F4231),
 
             new StyleDefinition(PlayingStyle.ControlPossession, "Control possession", new TacticInstructions(
@@ -96,8 +102,8 @@ namespace Sim.Core.Tactics
                     BuildUp.PlayOutFromBack, FinalThirdApproach.WorkIntoBox, ShotSelection.Patient,
                     DribbleFrequency.Less,
                     OnBallLost.Normal, OnBallWon.HoldShape,
-                    LineOfEngagement.High, DefensiveLine.Normal, Pressing.Medium,
-                    MarkingScheme.Zonal, PressDirection.None),
+                    LineOfEngagement.Mid, DefensiveLine.Normal, Pressing.Medium,
+                    MarkingScheme.Mixed, PressDirection.None),
                 Formation.F433, Formation.F4231, Formation.F352),
 
             new StyleDefinition(PlayingStyle.WingPlay, "Wing play", new TacticInstructions(
@@ -111,10 +117,10 @@ namespace Sim.Core.Tactics
 
             new StyleDefinition(PlayingStyle.RouteOne, "Route one", new TacticInstructions(
                     Mentality.Balanced, PassingDirectness.Direct, Tempo.Fast, Width.Normal,
-                    BuildUp.GoalKickLong, FinalThirdApproach.Mixed, ShotSelection.ShootOnSight,
+                    BuildUp.GoalKickLong, FinalThirdApproach.Mixed, ShotSelection.Normal,
                     DribbleFrequency.More,
                     OnBallLost.Normal, OnBallWon.Counter,
-                    LineOfEngagement.Mid, DefensiveLine.Deep, Pressing.Medium,
+                    LineOfEngagement.Mid, DefensiveLine.Normal, Pressing.Medium,
                     MarkingScheme.Mixed, PressDirection.None),
                 Formation.F442, Formation.F532),
 
@@ -164,11 +170,11 @@ namespace Sim.Core.Tactics
                 Formation.F532, Formation.F352),
 
             new StyleDefinition(PlayingStyle.ParkTheBus, "Park the bus", new TacticInstructions(
-                    Mentality.Defensive, PassingDirectness.Direct, Tempo.Slow, Width.Narrow,
-                    BuildUp.GoalKickLong, FinalThirdApproach.Mixed, ShotSelection.Normal,
+                    Mentality.Defensive, PassingDirectness.Direct, Tempo.Slow, Width.Normal,
+                    BuildUp.GoalKickLong, FinalThirdApproach.Mixed, ShotSelection.Patient,
                     DribbleFrequency.More,
                     OnBallLost.Normal, OnBallWon.Counter,
-                    LineOfEngagement.Low, DefensiveLine.VeryDeep, Pressing.Low,
+                    LineOfEngagement.Low, DefensiveLine.Deep, Pressing.Low,
                     MarkingScheme.Zonal, PressDirection.None),
                 Formation.F532, Formation.F442),
 

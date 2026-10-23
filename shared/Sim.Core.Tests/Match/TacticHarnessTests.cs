@@ -70,7 +70,8 @@ namespace Sim.Core.Tests.Match
             var tables = new List<TournamentTable>();
             foreach (ulong seed in TournamentSeedSets)
             {
-                TournamentTable table = PlayTournament(presets, perPairing, seed);
+                TournamentTable table = PlayTournament(presets.Select(x => x.Tactic).ToList(),
+                    TournamentTable.Pairings(presets.Count), perPairing, seed);
                 TestContext.Out.WriteLine(table.Format($"V11, seed set {seed}, {perPairing}/pairing", names));
                 for (int p = 0; p < presets.Count; p++)
                     Assert.That(table.Games(p), Is.EqualTo((presets.Count - 1) * perPairing), presets[p].Name);
@@ -91,10 +92,15 @@ namespace Sim.Core.Tests.Match
             }
         }
 
-        private static TournamentTable PlayTournament(IReadOnlyList<TacticPreset> presets, int perPairing, ulong firstSeed)
+        /// <summary>
+        /// Plays <paramref name="perPairing"/> matches of each pairing of <paramref name="tactics"/>, all
+        /// pairings in parallel: the same club on both sides, rotating across the league, the venue
+        /// alternating, seeds <paramref name="firstSeed"/> onwards. Shared with the R20 style tournament.
+        /// </summary>
+        internal static TournamentTable PlayTournament(IReadOnlyList<Tactic> tactics,
+            IReadOnlyList<(int A, int B)> pairs, int perPairing, ulong firstSeed)
         {
             List<Club> clubs = Clubs();
-            var pairs = TournamentTable.Pairings(presets.Count);
             int total = pairs.Count * perPairing;
             var aGoals = new int[total];
             var bGoals = new int[total];
@@ -106,9 +112,9 @@ namespace Sim.Core.Tests.Match
                 (int a, int b) = pairs[i / perPairing];
                 Club club = clubs[i % clubs.Count];
                 bool aHome = i % 2 == 0;   // alternate the venue so home advantage cancels out
-                TacticContext ca = new TacticContext(presets[a].Tactic, fam), cb = new TacticContext(presets[b].Tactic, fam);
-                Lineup la = LineupSelector.BestEleven(club, presets[a].Tactic.Formation);
-                Lineup lb = LineupSelector.BestEleven(club, presets[b].Tactic.Formation);
+                TacticContext ca = new TacticContext(tactics[a], fam), cb = new TacticContext(tactics[b], fam);
+                Lineup la = LineupSelector.BestEleven(club, tactics[a].Formation);
+                Lineup lb = LineupSelector.BestEleven(club, tactics[b].Formation);
 
                 MatchReport r = aHome
                     ? Engine(cfg).Simulate(la, lb, new Pcg32(firstSeed + (ulong)i), new MatchTactics(ca, cb))
@@ -117,7 +123,7 @@ namespace Sim.Core.Tests.Match
                 bGoals[i] = aHome ? r.AwayGoals : r.HomeGoals;
             });
 
-            var table = new TournamentTable(presets.Count);
+            var table = new TournamentTable(tactics.Count);
             for (int i = 0; i < total; i++)
             {
                 (int a, int b) = pairs[i / perPairing];

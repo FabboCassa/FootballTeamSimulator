@@ -20,6 +20,35 @@ namespace Sim.Core.Match.Analysis
         }
     }
 
+    /// <summary>The two checks of a tournament gate.</summary>
+    public enum TournamentCheck
+    {
+        /// <summary>The preset's share of all the points it played for, against a maximum.</summary>
+        PointsShare,
+
+        /// <summary>The preset's share against its worst opponent, which must stay under a limit.</summary>
+        WorstMatchup
+    }
+
+    /// <summary>One gate check a preset misses: its mean value, the limit, and for a matchup the opponent (-1 otherwise).</summary>
+    public readonly struct TournamentBreach
+    {
+        public int Preset { get; }
+        public TournamentCheck Check { get; }
+        public double Value { get; }
+        public double Limit { get; }
+        public int Opponent { get; }
+
+        public TournamentBreach(int preset, TournamentCheck check, double value, double limit, int opponent)
+        {
+            Preset = preset;
+            Check = check;
+            Value = value;
+            Limit = limit;
+            Opponent = opponent;
+        }
+    }
+
     /// <summary>
     /// The table of the R8 tactic tournament (watchable-match spec): every preset against every
     /// other, 3 points a win and 1 a draw, read as the share of the points on offer. A REPORT, not a
