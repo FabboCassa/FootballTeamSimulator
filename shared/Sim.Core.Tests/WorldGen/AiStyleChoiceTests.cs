@@ -145,11 +145,11 @@ namespace Sim.Core.Tests.WorldGen
         private static SquadStrengths Squad(int passing, int forwards, int stamina, int defending, int overall) =>
             new SquadStrengths(passing, forwards, stamina, defending, overall, overall);
 
-        /// <summary>How direct a style's possession game is: passing + build-up + tempo, in [-3, 3].</summary>
+        /// <summary>How direct a style's possession game is: passing + build-up, in [-2, 2] (as AiStyleChooser reads it).</summary>
         private static int Directness(PlayingStyle style)
         {
             TacticInstructions t = PlayingStyles.Get(style).Instructions;
-            return (int)t.PassingDirectness + (int)t.BuildUp + (int)t.Tempo - 3;
+            return (int)t.PassingDirectness + (int)t.BuildUp - 2;
         }
 
         private static PlayingStyle Best(SquadStrengths squad, SquadStrengths mean, ManagerProfile profile) =>
