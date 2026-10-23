@@ -325,7 +325,7 @@ namespace Fts.Services.Online
             var body = new SubmitRankedLiveChangeBody
                 { fromMinute = fromMinute, lineup = lineup, tactic = tactic, shout = shout };
             var (status, text, network) = await _api.SendAuthedAsync(
-                "POST", "/ranked/live/" + fixtureId + "/change", body);
+                "POST", "/ranked/live/" + fixtureId + "/change?engineVersion=" + MatchEngine.Version, body);
             return ParseLive(status, text, network);
         }
 

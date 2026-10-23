@@ -51,7 +51,7 @@ namespace Sim.Core.Match.Movement
 
                 if (_ctx.DeadKind == BallActionKind.Corner || _freeKick == FreeKickOption.Cross) AssignRoles(side);
                 if (_ctx.DeadKind == BallActionKind.GoalKick
-                    && SetPiecePlan.Length(BallActionKind.GoalKick, _sim._tempo[side], _cfg) != RestartLength.Long)
+                    && SetPiecePlan.Length(BallActionKind.GoalKick, _sim._tempo[side], _sim._buildUp[side], _cfg) != RestartLength.Long)
                     ShapeGoalKick(side);
                 if (_ctx.DeadKind == BallActionKind.ThrowIn) ShapeThrowIn(side);
             }
@@ -285,7 +285,7 @@ namespace Sim.Core.Match.Movement
                     _eligible[i] = !_sim._keeper[k] && !_sim._sentOff[k] && i != slot;
                 }
 
-                RestartLength length = SetPiecePlan.Length(kind, _sim._tempo[side], _cfg);
+                RestartLength length = SetPiecePlan.Length(kind, _sim._tempo[side], _sim._buildUp[side], _cfg);
                 // A keeper whose back line is not split yet when the wait runs out does not play it short into them.
                 if (kind == BallActionKind.GoalKick && _hasShape && !ShapeInPlace()) length = RestartLength.Long;
                 int reach = kind == BallActionKind.ThrowIn ? U.Units(_cfg.ThrowInMaxDm) : _sim._maxPassRange;

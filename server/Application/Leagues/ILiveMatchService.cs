@@ -32,9 +32,12 @@ public interface ILiveMatchService
         Guid userId, Guid leagueId, Guid fixtureId, CancellationToken ct = default);
 
     /// <summary>Submit a pause-point change for the caller's own side: append it to the authoritative plan,
-    /// re-simulate the 90' from the fixture seed, store the new report and broadcast the state.</summary>
+    /// re-simulate the 90' from the fixture seed, store the new report and broadcast the state. The change's
+    /// minute is read off the client's director timeline, so the engine version is checked as in
+    /// <see cref="OpenAsync"/>.</summary>
     Task<LeagueResult<LiveMatchStateDto>> SubmitChangeAsync(
-        Guid userId, Guid leagueId, Guid fixtureId, SubmitLiveChangeRequest request, CancellationToken ct = default);
+        Guid userId, Guid leagueId, Guid fixtureId, int? clientEngineVersion, SubmitLiveChangeRequest request,
+        CancellationToken ct = default);
 
     /// <summary>Mark the caller absent (disconnect). The match keeps running on the accumulated plan.</summary>
     Task<LeagueResult<LiveMatchStateDto>> LeaveAsync(
