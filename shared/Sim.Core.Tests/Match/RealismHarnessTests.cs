@@ -78,10 +78,11 @@ namespace Sim.Core.Tests.Match
             var shotPass = new ShotPassTally();
             var chances = new ChanceDecisionTally();
             var feel = new MovementFeelTally();
+            var continuity = new BallContinuityTally();
             foreach (Formation formation in Mirrors)
-                Run(a, b, formation, matches, v11, shape, shotPass, chances, feel);
+                Run(a, b, formation, matches, v11, shape, shotPass, chances, feel, continuity);
 
-            Print("V11 both mirrors", v11, shape, shotPass, chances, feel);
+            Print("V11 both mirrors", v11, shape, shotPass, chances, feel, continuity);
             Assert.That(v11.Matches, Is.EqualTo(Mirrors.Length * matches), "Every match must come back with a stream.");
 
             // The gate is the full sample; a quick look at fewer matches only reads.
@@ -145,7 +146,7 @@ namespace Sim.Core.Tests.Match
         }
 
         private static void Print(string label, RealismTally realism, ShapeMovementTally shape, ShotPassTally shotPass,
-            ChanceDecisionTally chances, MovementFeelTally feel)
+            ChanceDecisionTally chances, MovementFeelTally feel, BallContinuityTally continuity)
         {
             CultureInfo inv = CultureInfo.InvariantCulture;
             var sb = new StringBuilder();
@@ -170,12 +171,13 @@ namespace Sim.Core.Tests.Match
             TestContext.Out.WriteLine(shotPass.Format(label));
             TestContext.Out.WriteLine(chances.Format(label));
             TestContext.Out.WriteLine(feel.Format(label));
+            TestContext.Out.WriteLine(continuity.Format(label));
         }
 
         /// <summary>One mirror: printed on its own and added to the totals.</summary>
         private static void Run(Club a, Club b, Formation formation, int matches,
             RealismTally total, ShapeMovementTally totalShape, ShotPassTally totalShotPass, ChanceDecisionTally totalChances,
-            MovementFeelTally totalFeel)
+            MovementFeelTally totalFeel, BallContinuityTally totalContinuity)
         {
             var cfg = new BalanceConfig();
             Lineup la = LineupSelector.BestEleven(a, formation), lb = LineupSelector.BestEleven(b, formation);
@@ -183,6 +185,7 @@ namespace Sim.Core.Tests.Match
             var tactics = new MatchTactics(neutral, neutral);
             var readings = new (MatchMetrics? Match, RealismMetrics? Realism, ShapeMovementMetrics? Shape,
                 ShotPassMetrics? ShotPass, ChanceDecisionMetrics? Chances, MovementFeelMetrics? Feel, double Ms)[matches];
+            var continuityReadings = new BallContinuityMetrics?[matches];
 
             Parallel.For(0, matches, i =>
             {
@@ -199,6 +202,7 @@ namespace Sim.Core.Tests.Match
                     new ShapeMovementAnalyzer().Measure(r), new ShotPassAnalyzer(cfg.Match).Measure(r),
                     new ChanceDecisionAnalyzer().Measure(r), new MovementFeelAnalyzer().Measure(r),
                     clock.Elapsed.TotalMilliseconds);
+                continuityReadings[i] = new BallContinuityAnalyzer().Measure(r);
             });
 
             var tally = new RealismTally();
@@ -206,6 +210,14 @@ namespace Sim.Core.Tests.Match
             var shotPass = new ShotPassTally();
             var chances = new ChanceDecisionTally();
             var feel = new MovementFeelTally();
+            var continuity = new BallContinuityTally();
+            foreach (BallContinuityMetrics? c in continuityReadings)
+            {
+                if (c == null) continue;
+                continuity.Add(c);
+                totalContinuity.Add(c);
+            }
+
             foreach (var x in readings)
             {
                 if (x.Match != null && x.Realism != null)
@@ -239,7 +251,7 @@ namespace Sim.Core.Tests.Match
                 }
             }
 
-            Print($"V11 {(formation == Formation.F442 ? "4-4-2" : "4-3-3")} mirror", tally, shape, shotPass, chances, feel);
+            Print($"V11 {(formation == Formation.F442 ? "4-4-2" : "4-3-3")} mirror", tally, shape, shotPass, chances, feel, continuity);
         }
 
         // ------------------------------------------------------------------ the report itself
