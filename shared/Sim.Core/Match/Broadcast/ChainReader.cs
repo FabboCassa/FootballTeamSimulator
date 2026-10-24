@@ -223,7 +223,7 @@ namespace Sim.Core.Match.Broadcast
         private static CommentaryLine Line(PositionStream s, int frame, CommentaryIcon icon, bool highlight,
             List<CommentaryClause> steps, CommentaryClause? outcome)
         {
-            int minute = CommentaryBuilder.MinuteOf(frame, s.TicksPerMinute);
+            int minute = MatchClock.MinuteOf(frame, s.TicksPerMinute);
             return new CommentaryLine(frame, minute, minute, icon, highlight, steps, outcome);
         }
     }

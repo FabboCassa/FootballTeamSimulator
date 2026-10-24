@@ -1,4 +1,5 @@
 using Sim.Core.Config;
+using Sim.Core.Match.Broadcast;
 
 namespace Sim.Core.Match.Movement
 {
@@ -25,19 +26,12 @@ namespace Sim.Core.Match.Movement
             _lastFrame = lastFrame;
         }
 
-        /// <summary>The minute a tick falls in, as the timeline counts them: 1 to 90.</summary>
-        private int MinuteOf(int tick)
-        {
-            int minute = tick / _cfg.TicksPerMinute + 1;
-            return minute < 1 ? 1 : (minute > 90 ? 90 : minute);
-        }
-
         public void AddEvent(int tick, int side, int slot, MatchEventType type)
         {
             int[] ids = side == 0 ? _stream.HomePlayerIds : _stream.AwayPlayerIds;
             _report.Events.Add(new MatchEvent
             {
-                Minute = MinuteOf(tick),
+                Minute = MatchClock.MinuteOf(tick, _cfg.TicksPerMinute),
                 Type = type,
                 ClubId = side == 0 ? _report.HomeClubId : _report.AwayClubId,
                 PlayerId = slot >= 0 && slot < ids.Length ? ids[slot] : 0
