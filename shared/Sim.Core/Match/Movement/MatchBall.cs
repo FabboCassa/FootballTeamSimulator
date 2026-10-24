@@ -26,7 +26,7 @@ namespace Sim.Core.Match.Movement
     /// cumulative table built in the constructor, not by iterating a recurrence per
     /// opponent per candidate pass. At 10 Hz that difference is the whole cost of a match.
     /// </summary>
-    internal sealed class MatchBall
+    internal sealed partial class MatchBall
     {
         /// <summary>A ball is unreachable at this many ticks: it will never get there.</summary>
         public const int Unreachable = 9999;
@@ -86,6 +86,7 @@ namespace Sim.Core.Match.Movement
             if (_restSpeed < 1) _restSpeed = 1;
 
             _maxFlightTicks = cfg.MaxFlightTicks;
+            InitHeight(cfg.TicksPerSecond);
             _trackedTicks = cfg.BallTrackedSeconds * cfg.TicksPerSecond;
             if (_trackedTicks < _maxFlightTicks) _trackedTicks = _maxFlightTicks;
 
@@ -138,6 +139,7 @@ namespace Sim.Core.Match.Movement
             PrevY = Y;
             Vx = 0;
             Vy = 0;
+            Ground();
         }
 
         /// <summary>
@@ -160,6 +162,7 @@ namespace Sim.Core.Match.Movement
         public void Kick(int side, int slot, int dirX, int dirY, int force)
         {
             U.Scaled(dirX, dirY, force, out Vx, out Vy);
+            Drive();
             OwnerSide = -1;
             OwnerSlot = -1;
             LastTouchSide = side;
@@ -176,11 +179,13 @@ namespace Sim.Core.Match.Movement
             Vx = 0;
             Vy = 0;
             Dead = false;
+            Drive();
         }
 
         /// <summary>Rolls the ball on one tick. Positions are NOT clamped: crossing a line is the point.</summary>
         public void Advance()
         {
+            StepHeight();
             if (Dead || !Free) return;
 
             PrevX = X;

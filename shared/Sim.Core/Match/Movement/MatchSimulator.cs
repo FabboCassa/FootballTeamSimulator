@@ -434,6 +434,7 @@ namespace Sim.Core.Match.Movement
                 PlayerCount = _n,
                 LastTick = _lastFrame,
                 BallXY = new int[frames * 2],
+                BallZ = new int[frames],
                 HomeXY = new int[frames * _n * 2],
                 AwayXY = new int[frames * _n * 2],
                 Owner = new int[frames],
@@ -882,6 +883,7 @@ namespace Sim.Core.Match.Movement
                 // Hit as hard as he can hit it: this is a man getting rid of the ball, and a ball
                 // rolling gently towards the line is a ball his own keeper collects.
                 _ball.Kick(side, slot, targetX - _px[k], targetY - _py[k], _maxPassForce);
+                _ball.Loft(U.Distance(_px[k], _py[k], targetX, targetY), 0);
                 Release(tick, side, slot);
                 _sheet.Record(tick, BallActionKind.Clearance, home, slot, -1);
                 return;
@@ -908,6 +910,7 @@ namespace Sim.Core.Match.Movement
             _ball.Kick(side, slot, targetX - _px[k], targetY - _py[k],
                 _ball.ForceToArrive(
                     distance, _arrivalStepU * _cfg.ClearanceArrivalPercent / 100, _maxPassForce, out int _));
+            _ball.Loft(distance, 0);
             Release(tick, side, slot);
             _sheet.Record(tick, BallActionKind.Clearance, home, slot, -1);
         }
@@ -933,6 +936,7 @@ namespace Sim.Core.Match.Movement
                 int distance = U.Distance(_ball.X, _ball.Y, aimX, U.ClampY(aimY));
                 _ball.Kick(side, slot, aimX - _ball.X, U.ClampY(aimY) - _ball.Y,
                     _ball.ForceForTicks(distance, _cfg.TicksOfMs(1200), _maxPassForce));
+                _ball.Loft(distance, MatchBall.HeadHeightDm);
                 _sheet.Record(tick, BallActionKind.Cross, home, slot, -1);
             }
         }
@@ -981,6 +985,7 @@ namespace Sim.Core.Match.Movement
             // Struck as hard as a shot is struck: it gets there, and it gets there quickly.
             // It leaves from the BALL, so nothing jumps; the striker is on it by construction.
             _ball.Kick(side, slot, goalX - _ball.X, aimY - _ball.Y, _maxShootForce);
+            _ball.LoftShot(U.Distance(_ball.X, _ball.Y, goalX, aimY));
 
             _ctx.ShotLive = true;
             _shotFromX = _ball.X;
@@ -1139,6 +1144,9 @@ namespace Sim.Core.Match.Movement
             BallActionKind kind = distance > U.Units(_cfg.LongBallFromDm)
                 ? BallActionKind.LongBall
                 : IsCross(side, k) ? BallActionKind.Cross : BallActionKind.Pass;
+            if (kind == BallActionKind.LongBall) _ball.Loft(U.Distance(_px[k], _py[k], aimX, aimY), 0);
+            else if (kind == BallActionKind.Cross)
+                _ball.Loft(U.Distance(_px[k], _py[k], aimX, aimY), MatchBall.HeadHeightDm);
             _sheet.Record(tick, kind, home, slot, choice.Slot);
         }
 
@@ -1856,6 +1864,7 @@ namespace Sim.Core.Match.Movement
             int bx = U.ClampX(_ball.X), by = U.ClampY(_ball.Y);
             _stream.BallXY[frame * 2] = U.Dm(bx);
             _stream.BallXY[frame * 2 + 1] = U.Dm(by);
+            _stream.BallZ[frame] = _ball.Z;
 
             int baseIndex = frame * _n * 2;
             for (int i = 0; i < _n; i++)
