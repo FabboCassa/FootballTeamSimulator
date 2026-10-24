@@ -1,243 +1,136 @@
 {
- "spec": "docs/specs/real-match-and-playing-styles.md",
- "base": "main",
- "issues": [
-  {
-   "n": 70,
-   "deps": [],
-   "kind": "feature"
-  },
-  {
-   "n": 71,
-   "deps": [
-    70
-   ],
-   "kind": "feature"
-  },
-  {
-   "n": 72,
-   "deps": [
-    70
-   ],
-   "kind": "feature"
-  },
-  {
-   "n": 73,
-   "deps": [
-    70
-   ],
-   "kind": "feature"
-  },
-  {
-   "n": 74,
-   "deps": [
-    72
-   ],
-   "kind": "feature"
-  },
-  {
-   "n": 75,
-   "deps": [
-    72
-   ],
-   "kind": "feature"
-  },
-  {
-   "n": 76,
-   "deps": [
-    71,
-    75
-   ],
-   "kind": "feature"
-  },
-  {
-   "n": 77,
-   "deps": [
-    72
-   ],
-   "kind": "feature"
-  },
-  {
-   "n": 78,
-   "deps": [
-    72,
-    77
-   ],
-   "kind": "feature"
-  },
-  {
-   "n": 79,
-   "deps": [
-    78
-   ],
-   "kind": "feature"
-  },
-  {
-   "n": 80,
-   "deps": [
-    71
-   ],
-   "kind": "feature"
-  },
-  {
-   "n": 81,
-   "deps": [
-    71,
-    80
-   ],
-   "kind": "feature"
-  },
-  {
-   "n": 82,
-   "deps": [
-    71,
-    78
-   ],
-   "kind": "feature"
-  },
-  {
-   "n": 83,
-   "deps": [
-    73,
-    82
-   ],
-   "kind": "feature"
-  },
-  {
-   "n": 84,
-   "deps": [],
-   "kind": "feature"
-  },
-  {
-   "n": 85,
-   "deps": [
-    84
-   ],
-   "kind": "feature"
-  },
-  {
-   "n": 86,
-   "deps": [
-    76,
-    85
-   ],
-   "kind": "feature"
-  },
-  {
-   "n": 87,
-   "deps": [
-    74,
-    75,
-    76,
-    77,
-    78,
-    79,
-    80,
-    81,
-    82,
-    83
-   ],
-   "kind": "feature"
-  },
-  {
-   "n": 88,
-   "deps": [
-    87
-   ],
-   "kind": "feature"
-  },
-  {
-   "n": 89,
-   "deps": [
-    88
-   ],
-   "kind": "feature"
-  },
-  {
-   "n": 90,
-   "deps": [
-    89
-   ],
-   "kind": "feature"
-  },
-  {
-   "n": 91,
-   "deps": [
-    89
-   ],
-   "kind": "feature"
-  },
-  {
-   "n": 92,
-   "deps": [
-    70,
-    89
-   ],
-   "kind": "feature"
-  },
-  {
-   "n": 93,
-   "deps": [
-    89
-   ],
-   "kind": "feature"
-  },
-  {
-   "n": 94,
-   "deps": [
-    90,
-    91,
-    93
-   ],
-   "kind": "feature"
-  },
-  {
-   "n": 95,
-   "deps": [
-    92,
-    94
-   ],
-   "kind": "feature"
-  },
-  {
-   "n": 96,
-   "deps": [
-    92,
-    93
-   ],
-   "kind": "feature"
-  },
-  {
-   "n": 97,
-   "deps": [
-    88
-   ],
-   "kind": "feature"
-  },
-  {
-   "n": 98,
-   "deps": [
-    92,
-    93
-   ],
-   "kind": "feature"
-  },
-  {
-   "n": 99,
-   "deps": [
-    92,
-    93,
-    96
-   ],
-   "kind": "feature"
-  },
-  {
-   "n": 100,
-   "deps": [
-    94,
-    95
-   ],
-   "kind": "feature"
-  }
- ]
+  "spec": "docs/specs/believable-match.md",
+  "base": "main",
+  "issues": [
+    {
+      "n": 138,
+      "deps": [],
+      "kind": "feature"
+    },
+    {
+      "n": 139,
+      "deps": [
+        138
+      ],
+      "kind": "feature"
+    },
+    {
+      "n": 140,
+      "deps": [
+        138
+      ],
+      "kind": "feature"
+    },
+    {
+      "n": 141,
+      "deps": [],
+      "kind": "feature"
+    },
+    {
+      "n": 142,
+      "deps": [],
+      "kind": "feature"
+    },
+    {
+      "n": 143,
+      "deps": [
+        141,
+        142
+      ],
+      "kind": "feature"
+    },
+    {
+      "n": 144,
+      "deps": [
+        139
+      ],
+      "kind": "feature"
+    },
+    {
+      "n": 145,
+      "deps": [
+        144
+      ],
+      "kind": "feature"
+    },
+    {
+      "n": 146,
+      "deps": [
+        144
+      ],
+      "kind": "feature"
+    },
+    {
+      "n": 147,
+      "deps": [
+        140
+      ],
+      "kind": "feature"
+    },
+    {
+      "n": 148,
+      "deps": [
+        140
+      ],
+      "kind": "feature"
+    },
+    {
+      "n": 149,
+      "deps": [
+        140,
+        148
+      ],
+      "kind": "feature"
+    },
+    {
+      "n": 150,
+      "deps": [],
+      "kind": "feature"
+    },
+    {
+      "n": 151,
+      "deps": [],
+      "kind": "feature"
+    },
+    {
+      "n": 152,
+      "deps": [],
+      "kind": "feature"
+    },
+    {
+      "n": 153,
+      "deps": [
+        148,
+        149,
+        150
+      ],
+      "kind": "feature"
+    },
+    {
+      "n": 154,
+      "deps": [
+        143,
+        145,
+        146,
+        147,
+        148,
+        149
+      ],
+      "kind": "feature"
+    },
+    {
+      "n": 155,
+      "deps": [
+        154
+      ],
+      "kind": "feature"
+    },
+    {
+      "n": 156,
+      "deps": [
+        155
+      ],
+      "kind": "feature"
+    }
+  ]
 }
