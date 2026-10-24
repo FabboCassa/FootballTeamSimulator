@@ -35,6 +35,12 @@ namespace Sim.Core.Match.Movement
         public int OverlapTicks(int side) => _brain.Overlaps(side);
 
         /// <summary>
+        /// Hears every decision on the ball for the explained replay (believable-match spec R13).
+        /// Null in production; attached, it only reads, so the match does not move.
+        /// </summary>
+        public IDecisionSink? DecisionSink { get; set; }
+
+        /// <summary>
         /// The engine v11 brain (watchable-match spec), the only one. The team phase (R1) is read
         /// here once a tick, off the ball alone. It positions every man the base brain has no job
         /// for — his phase target spot, a run in behind, an overlap — and hands every other man

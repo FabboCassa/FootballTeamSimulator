@@ -64,7 +64,7 @@ namespace Sim.Core.Match.Movement
     ///
     /// Pure, integer, draw-free and allocation-free, like <see cref="V11Positioning"/>.
     /// </summary>
-    public sealed class V11ActionValuation
+    public sealed partial class V11ActionValuation
     {
         /// <summary>An option that is not open to him; never chosen.</summary>
         public const int NoOption = int.MinValue / 4;
@@ -380,9 +380,10 @@ namespace Sim.Core.Match.Movement
         /// not priced. The value only rises with the odds, so the odds without the lane, and
         /// without the lane and the receiver, bound it from above, and the dear pitch-control lane
         /// is read only for a ball that could still win. The choice is the same as pricing them all.
-        /// A ball whose odds fall short of <paramref name="minSafety"/> is no option.
+        /// A ball whose odds fall short of <paramref name="minSafety"/> is no option. With
+        /// <paramref name="onlyMate"/> set, only the balls to that team-mate are priced.
         /// </summary>
-        private int PassValue(V11Scene s, int floor, int minSafety, ActionModelBalance models, out V11Choice best)
+        private int PassValue(V11Scene s, int floor, int minSafety, ActionModelBalance models, out V11Choice best, int onlyMate = -1)
         {
             best = new V11Choice { Kind = V11ActionKind.Pass, Mate = -1, ValuePer10k = NoOption };
             int dir = s.AttacksHighX ? 1 : -1;
@@ -390,7 +391,8 @@ namespace Sim.Core.Match.Movement
             bool wide = IsWideChannel(s.BallYDm) && DistanceSq(s.BallXDm, s.BallYDm, GoalX(s), Pitch.CenterY)
                         < (long)(Pitch.LengthDm / 3) * (Pitch.LengthDm / 3);
 
-            for (int m = 0; m < s.MateCount; m++)
+            int end = onlyMate < 0 ? s.MateCount : onlyMate + 1;
+            for (int m = onlyMate < 0 ? 0 : onlyMate; m < end; m++)
             {
                 PitchActor mate = s.Mates[m];
                 if (dir * mate.XDm > dir * s.OffsideLineXDm) continue;

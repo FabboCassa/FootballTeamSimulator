@@ -1,3 +1,4 @@
+using System;
 using Sim.Core.Match.Movement.Models;
 
 namespace Sim.Core.Match.Movement
@@ -69,6 +70,7 @@ namespace Sim.Core.Match.Movement
                 Read(side, slot, raw);
                 TrackOpenGoal(tick, k);
                 V11Choice choice = _valuation.Choose(_scene, holding);
+                if (_sim.DecisionSink != null && choice.Kind != V11ActionKind.Hold) Explain(tick, side, slot, choice);
                 if (choice.Kind != V11ActionKind.Hold)
                 {
                     bool runsWithIt = choice.Kind == V11ActionKind.Carry
@@ -135,6 +137,28 @@ namespace Sim.Core.Match.Movement
                 int toucher = ball.Free ? ball.LastTouchSide * n + ball.LastTouchSlot : ball.OwnerSide * n + ball.OwnerSlot;
                 if (ball.Dead || ball.LastTouchSide < 0 || toucher != _openCarrier) _openCarrier = -1;
             }
+
+            /// <summary>R13: the decision, its three dearest options and the choice, to the sink. Reads only.</summary>
+            private void Explain(int tick, int side, int slot, V11Choice choice)
+            {
+                Span<V11Choice> top = stackalloc V11Choice[V11ActionValuation.ExplainedOptions];
+                int count = _valuation.TopOptions(_scene, top);
+                var record = new DecisionRecord
+                {
+                    Tick = tick, Side = side, Slot = slot, BallXDm = _scene.BallXDm, BallYDm = _scene.BallYDm,
+                    Chosen = Option(choice), OptionCount = count,
+                    First = count > 0 ? Option(top[0]) : default,
+                    Second = count > 1 ? Option(top[1]) : default,
+                    Third = count > 2 ? Option(top[2]) : default
+                };
+                _sim.DecisionSink!.Record(record);
+            }
+
+            private DecisionOption Option(in V11Choice c) => new DecisionOption
+            {
+                Kind = c.Kind, MateSlot = c.Mate >= 0 ? _mateSlot[c.Mate] : -1, XDm = c.XDm, YDm = c.YDm,
+                CompletionPermille = c.SafetyPermille, ValuePer10k = c.ValuePer10k
+            };
 
             private void Pass(int tick, int side, int slot, V11Choice choice, int pressure)
             {

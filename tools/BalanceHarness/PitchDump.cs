@@ -2,6 +2,7 @@
 using Sim.Core.Domain;
 using Sim.Core.Match;
 using Sim.Core.Match.Analysis;
+using Sim.Core.Match.Movement;
 
 namespace Fts.BalanceHarness;
 
@@ -17,11 +18,15 @@ namespace Fts.BalanceHarness;
 ///
 /// Self-contained on purpose: no server, no assets, no network. Positions are embedded as flat
 /// integer arrays, exactly as the stream stores them.
+///
+/// The decisions on the ball (believable-match spec R13) ride along from the attached
+/// <see cref="DecisionLog"/>: each frame shows the carrier's three dearest options with their values
+/// and the one he took, and a filter jumps between the chances (the R2 chance zone).
 /// </summary>
 internal static class PitchDump
 {
     public static void Write(string path, MatchReport report, Lineup home, Lineup away,
-        string homeName, string awayName)
+        string homeName, string awayName, DecisionLog decisions, int ticksPerFrame)
     {
         PositionStream? stream = report.Positions;
         if (stream == null) throw new InvalidOperationException("the match carries no position stream");
@@ -51,7 +56,12 @@ internal static class PitchDump
             .Replace("__HOME_MARKS__", Marks(report.Stats, true, home))
             .Replace("__AWAY_MARKS__", Marks(report.Stats, false, away))
             .Replace("__TEAM_HOME__", Team(report.Stats?.Home))
-            .Replace("__TEAM_AWAY__", Team(report.Stats?.Away));
+            .Replace("__TEAM_AWAY__", Team(report.Stats?.Away))
+            .Replace("__DECISIONS__", Ints(decisions.Flat()))
+            .Replace("__DECISION_STRIDE__", DecisionLog.Stride.ToString())
+            .Replace("__TICKS_PER_FRAME__", Math.Max(1, ticksPerFrame).ToString())
+            .Replace("__CHANCE_RANGE__", DecisionLog.ChanceRangeDm.ToString())
+            .Replace("__CHANCE_HALF_WIDTH__", DecisionLog.ChanceHalfWidthDm.ToString());
 
         string? folder = Path.GetDirectoryName(Path.GetFullPath(path));
         if (!string.IsNullOrEmpty(folder)) Directory.CreateDirectory(folder);
@@ -268,6 +278,10 @@ internal static class PitchDump
   .good { color:#5fd38d; } .bad { color:#e8657f; } .mid { color:#e6e9ef; }
   .teamline { display:flex; gap:26px; flex-wrap:wrap; margin:8px 0 4px;
               font-variant-numeric:tabular-nums; }
+  select { background:#252b38; color:#e6e9ef; border:1px solid #39414f; border-radius:6px;
+           padding:6px 10px; font:inherit; }
+  #decision { display:block; }
+  #decision .chosen { color:#ffd166; font-weight:600; }
   #avg { width:640px; max-width:100%; height:auto; background:#1f6b34; border-radius:8px; }
 </style>
 </head>
@@ -295,7 +309,19 @@ internal static class PitchDump
     <button data-layer="mark" class="on">Within 3 m</button>
     <button data-layer="trail" class="on">Ball trail</button>
     <button data-layer="names">Names</button>
+    <button data-layer="decision" class="on">Decisions</button>
   </div>
+
+  <div class="bar">
+    <select id="dfilter">
+      <option value="all">every decision</option>
+      <option value="chance">chances (&le; 16 m from goal, central)</option>
+    </select>
+    <button id="dprev">&larr; previous</button>
+    <button id="dnext">next &rarr;</button>
+    <span class="muted" id="dcount"></span>
+  </div>
+  <div class="readout" id="decision"></div>
 
   <div class="readout">
     <span><b id="rh">__HOME_NAME__</b> width <span id="hw">-</span> m &middot; depth <span id="hd">-</span> m
@@ -354,7 +380,7 @@ const cv = document.getElementById("pitch"), ctx = cv.getContext("2d");
 const scrub = document.getElementById("scrub");
 scrub.max = TICKS - 1;
 
-const layers = { box:true, line:true, mark:true, trail:true, names:false };
+const layers = { box:true, line:true, mark:true, trail:true, names:false, decision:true };
 let tick = 0, playing = true, speed = 1, last = 0, carry = 0;
 
 // Playback and trail are in match seconds, converted through TPM (stream frames per match minute),
@@ -482,6 +508,106 @@ function caption(t) {
   return slot < 0 ? kind : kind + " - " + NAMES[side][slot];
 }
 
+// ---------------------------------------------------------------- the decisions (R13)
+
+// Per record: tick, side, slot, ball x, ball y, the choice (6), the option count, three options
+// (6 each: kind, mate slot, x, y, completion permille, value in ten-thousandths of a goal).
+const DEC = [__DECISIONS__];
+const DSTRIDE = __DECISION_STRIDE__, TICKS_PER_FRAME = __TICKS_PER_FRAME__;
+const CHANCE_RANGE = __CHANCE_RANGE__, CHANCE_HALF_WIDTH = __CHANCE_HALF_WIDTH__;
+const DKINDS = ["hold","carry","pass","cross","clear","shot","round the keeper","drive in"];
+const DCOUNT = DEC.length / DSTRIDE;
+const dFrame = r => Math.floor(DEC[r*DSTRIDE] / TICKS_PER_FRAME);
+
+// A decision stays on screen this long after it is made, so it can be read at 1x.
+const DECISION_HOLD_FRAMES = Math.max(1, Math.round(1.5 * TPM / 60));
+
+// The R2 chance zone, in the simulation's own coordinates (home attacks the high end all match).
+function isChance(r) {
+  const o = r*DSTRIDE, side = DEC[o+1];
+  const dx = (side === 0 ? LEN : 0) - DEC[o+3], dy = DEC[o+4] - WID/2;
+  return Math.abs(dy) <= CHANCE_HALF_WIDTH && dx*dx + dy*dy <= CHANCE_RANGE*CHANCE_RANGE;
+}
+
+const DEC_AT = new Int32Array(TICKS).fill(-1);
+for (let r = 0; r < DCOUNT; r++) { const f = dFrame(r); if (f < TICKS) DEC_AT[f] = r; }
+
+const shown = r => document.getElementById("dfilter").value !== "chance" || isChance(r);
+
+function decisionAt(t) {
+  for (let f = t; f >= 0 && f > t - DECISION_HOLD_FRAMES; f--) {
+    if (DEC_AT[f] < 0) continue;
+    return shown(DEC_AT[f]) ? DEC_AT[f] : -1;
+  }
+  return -1;
+}
+
+function option(o) {
+  return { kind: DEC[o], mate: DEC[o+1], x: DEC[o+2], y: DEC[o+3], odds: DEC[o+4], value: DEC[o+5] };
+}
+
+function describe(side, op) {
+  const to = op.mate >= 0 ? " to " + SHIRTS[side][op.mate] + " " + NAMES[side][op.mate].split(" (")[0] : "";
+  return (DKINDS[op.kind] || "?") + to + " \u00b7 " + (op.odds / 10).toFixed(0) + "% \u00b7 "
+    + (op.value / 10000).toFixed(4) + " goals";
+}
+
+function same(a, b) { return a.kind === b.kind && a.mate === b.mate && a.x === b.x && a.y === b.y; }
+
+function drawDecision(t, r) {
+  const o = r*DSTRIDE;
+  const fx = sx(mx(t, DEC[o+3])), fy = sy(my(t, DEC[o+4]));
+  const chosen = option(o+5), count = DEC[o+11];
+  const arrow = (op, color, width) => {
+    const tx = sx(mx(t, op.x)), ty = sy(my(t, op.y));
+    ctx.strokeStyle = color; ctx.lineWidth = width;
+    ctx.beginPath(); ctx.moveTo(fx, fy); ctx.lineTo(tx, ty); ctx.stroke();
+    ctx.beginPath(); ctx.arc(tx, ty, 5, 0, 7); ctx.stroke();
+  };
+  ctx.setLineDash([7,5]);
+  for (let i = 0; i < count; i++) {
+    const op = option(o+12+i*6);
+    if (same(op, chosen)) continue;
+    arrow(op, "rgba(255,255,255,.75)", 2);
+    ctx.fillStyle = "#fff"; ctx.font = "bold 12px system-ui"; ctx.textAlign = "center";
+    ctx.fillText(String(i+1), sx(mx(t, op.x)), sy(my(t, op.y)) - 9);
+  }
+  ctx.setLineDash([]);
+  arrow(chosen, "#ffd166", 4);
+}
+
+function decisionPanel(r) {
+  const panel = document.getElementById("decision");
+  if (r < 0) { panel.innerHTML = "<span class='muted'>no decision on the ball on this frame</span>"; return; }
+  const o = r*DSTRIDE, side = DEC[o+1], slot = DEC[o+2];
+  const chosen = option(o+5), count = DEC[o+11];
+  let html = "<b style='color:" + COLOR[side] + "'>" + SHIRTS[side][slot] + " " + NAMES[side][slot] + "</b>"
+    + (isChance(r) ? " <span class='chosen'>in the chance zone</span>" : "") + "<br>";
+  for (let i = 0; i < count; i++) {
+    const op = option(o+12+i*6);
+    html += "<span class='" + (same(op, chosen) ? "chosen" : "") + "'>" + (i+1) + ". " + describe(side, op) + "</span><br>";
+  }
+  html += "<span class='chosen'>chose: " + describe(side, chosen) + "</span>";
+  panel.innerHTML = html;
+}
+
+// Jumps to the next (or previous) decision the filter lets through, and pauses there.
+function jumpDecision(step) {
+  let r = -1;
+  if (step > 0) { for (let k = 0; k < DCOUNT; k++) if (shown(k) && dFrame(k) > tick) { r = k; break; } }
+  else { for (let k = DCOUNT-1; k >= 0; k--) if (shown(k) && dFrame(k) < tick) { r = k; break; } }
+  if (r < 0) return;
+  tick = Math.min(TICKS-1, dFrame(r));
+  if (playing) document.getElementById("play").click();
+  draw();
+}
+
+function countDecisions() {
+  let n = 0;
+  for (let r = 0; r < DCOUNT; r++) if (shown(r)) n++;
+  document.getElementById("dcount").textContent = n + " of " + DCOUNT + " decisions";
+}
+
 function draw() {
   const t = tick;
   pitch();
@@ -551,6 +677,10 @@ function draw() {
       }
     }
 
+  const decision = decisionAt(t);
+  if (layers.decision && decision >= 0) drawDecision(t, decision);
+  decisionPanel(decision);
+
   ctx.fillStyle = "#fff"; ctx.beginPath();
   ctx.arc(sx(bx(t)), sy(by(t)), 6, 0, 7); ctx.fill();
   ctx.strokeStyle = "#222"; ctx.lineWidth = 1.5; ctx.stroke();
@@ -596,6 +726,10 @@ for (const b of document.querySelectorAll("[data-speed]"))
   };
 for (const b of document.querySelectorAll("[data-layer]"))
   b.onclick = () => { layers[b.dataset.layer] = !layers[b.dataset.layer]; b.classList.toggle("on"); draw(); };
+document.getElementById("dprev").onclick = () => jumpDecision(-1);
+document.getElementById("dnext").onclick = () => jumpDecision(1);
+document.getElementById("dfilter").onchange = () => { countDecisions(); draw(); };
+countDecisions();
 document.addEventListener("keydown", e => {
   if (e.key === "ArrowRight") { tick = Math.min(TICKS-1, tick+1); draw(); }
   if (e.key === "ArrowLeft") { tick = Math.max(0, tick-1); draw(); }
