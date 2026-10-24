@@ -35,7 +35,7 @@ namespace Sim.Core.Match.Broadcast
             return InMatchOrder(lines);
         }
 
-        private static CommentaryLine CutLine(CutSummary cut, int fpm)
+        internal static CommentaryLine CutLine(CutSummary cut, int fpm)
         {
             bool home = cut.Possession != PossessionSide.Away;
             string zone = cut.Possession == PossessionSide.None ? CommentaryKeys.CutNobody

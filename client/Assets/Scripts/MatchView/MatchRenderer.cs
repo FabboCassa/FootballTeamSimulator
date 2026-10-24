@@ -31,6 +31,11 @@ namespace Fts.MatchView
     /// whose moment is agreed with another viewer hands the renderer that clock instead
     /// (<see cref="FollowClock"/>), and the renderer then only draws where the clock says.
     ///
+    /// CUTS (spec believable-match R11). The jump over a cut happens under a curtain that dips to
+    /// black around it (<see cref="BroadcastPlayback.Curtain"/>), and the cut's summary, when the
+    /// director filed one, stays on as a caption (<see cref="SetCutCaptions"/>). The ball's trail and
+    /// a shot's line never reach back past the last cut, so nothing drawn spans one.
+    ///
     /// Shirt numbers are real <see cref="Label"/> children rather than painter text: a label
     /// centres itself in the token's own box, which is the only way a two-digit number stays
     /// inside its circle at every pitch size.
@@ -46,6 +51,9 @@ namespace Fts.MatchView
         private const float TokenRadiusDm = 15f;
         private const float BallRadiusDm = 7f;
         private const int TrailSeconds = 4;
+
+        /// <summary>Wall seconds a cut caption stays up: long enough to read one line at any speed.</summary>
+        private const float CaptionSeconds = 2.5f;
 
         private static readonly Color BallColor = new Color(0.98f, 0.98f, 0.98f);
         private static readonly Color BallOutline = new Color(0.1f, 0.1f, 0.1f, 0.9f);
@@ -79,6 +87,18 @@ namespace Fts.MatchView
 
         /// <summary>The stream position a shared clock shows now; null when the renderer keeps its own time.</summary>
         private Func<double> _sharedClock;
+
+        // The cut overlay: a curtain over the pitch and the summary line over the curtain.
+        private readonly VisualElement _curtain;
+        private readonly Label _caption;
+        private float _curtainShown = -1f;
+        private float _captionLeft;
+
+        /// <summary>Caption text by the start frame of its cut; null until a screen supplies it.</summary>
+        private Dictionary<int, string> _captions;
+
+        /// <summary>The first frame shown since the last jump: the trail and a shot's line start no earlier.</summary>
+        private int _shownFrom;
 
         // Shirt numbers, one label a man. Kept as children so the text centres itself.
         private readonly Label[] _homeNumbers;
@@ -178,6 +198,17 @@ namespace Fts.MatchView
             _homeNumbers = BuildNumbers(_stream.HomeShirts, _homeNumberColor, _homeColor, _homeKeeperColor);
             _awayNumbers = BuildNumbers(_stream.AwayShirts, _awayNumberColor, _awayColor, _awayKeeperColor);
 
+            // Added after the numbers so both draw over them.
+            _curtain = new VisualElement { pickingMode = PickingMode.Ignore };
+            _curtain.AddToClassList("fts-cutfade");
+            Add(_curtain);
+            _caption = new Label(string.Empty) { pickingMode = PickingMode.Ignore };
+            _caption.AddToClassList("fts-cutcaption");
+            _caption.style.display = DisplayStyle.None;
+            Add(_caption);
+            _playback.CutCrossed += OnCutCrossed;
+            ShowCurtain();
+
             // Fill the host container (its alignItems must not shrink us to content).
             style.position = Position.Absolute;
             style.left = 0;
@@ -206,6 +237,17 @@ namespace Fts.MatchView
         /// Speed and Skip no longer apply.
         /// </summary>
         public void FollowClock(Func<double> framePosition) => _sharedClock = framePosition;
+
+        /// <summary>
+        /// Writes every cut summary out once, as the caption its cut fades with; without it a cut
+        /// still fades, uncaptioned. The renderer names no club, so the screen supplies the words.
+        /// </summary>
+        public void SetCutCaptions(Func<CutSummary, string> captionOf)
+        {
+            _captions = new Dictionary<int, string>(Timeline.Summaries.Count);
+            foreach (CutSummary cut in Timeline.Summaries)
+                _captions[cut.StartFrame] = captionOf(cut);
+        }
 
         private static int PlaybackSpeed(float speed) => Mathf.Max(1, Mathf.RoundToInt(speed));
 
@@ -248,6 +290,9 @@ namespace Fts.MatchView
 
             _lastMinute = m;
             _finished = false;
+            _shownFrom = Mathf.FloorToInt(_tickPos);
+            HideCaption();
+            ShowCurtain();
             RecountStats();
             LayoutNumbers();
             MarkDirtyRepaint();
@@ -279,6 +324,8 @@ namespace Fts.MatchView
             _nextEvent = _moments.Length;
             _nextAction = _actions.Count;
             SetMinute(90);
+            HideCaption();
+            ShowCurtain();
             RecountStats();
             LayoutNumbers();
             MarkDirtyRepaint();
@@ -291,16 +338,14 @@ namespace Fts.MatchView
             if (_finished)
                 return;
 
+            float dt = Mathf.Min(ts.deltaTime / 1000f, 0.1f); // clamp long stalls
             if (_sharedClock != null)
-            {
-                _tickPos = Mathf.Clamp((float)_sharedClock(), 0f, _lastTick);
-            }
+                _playback.Follow(_sharedClock());
             else
-            {
-                float dt = Mathf.Min(ts.deltaTime / 1000f, 0.1f); // clamp long stalls
                 _playback.Advance(dt);
-                _tickPos = (float)_playback.Position;
-            }
+            _tickPos = (float)_playback.Position;
+            ShowCurtain();
+            TickCaption(dt);
 
             bool statsMoved = AdvancePossession();
 
@@ -347,6 +392,44 @@ namespace Fts.MatchView
             _finished = true;
             _pump?.Pause();
             Finished?.Invoke();
+        }
+
+        // ------------------------------------------------------------- cut transitions
+
+        private void OnCutCrossed(CutTransition cut)
+        {
+            _shownFrom = cut.ToFrame;
+            if (_captions == null || !cut.Summary.HasValue || !_captions.TryGetValue(cut.FromFrame, out string text))
+                return;
+
+            _caption.text = text;
+            _caption.style.display = DisplayStyle.Flex;
+            _captionLeft = CaptionSeconds;
+        }
+
+        /// <summary>Writes the curtain's opacity only when it moves, so a clear pitch costs nothing.</summary>
+        private void ShowCurtain()
+        {
+            float level = (float)_playback.Curtain;
+            if (Mathf.Approximately(level, _curtainShown))
+                return;
+            _curtainShown = level;
+            _curtain.style.opacity = level;
+        }
+
+        private void TickCaption(float dt)
+        {
+            if (_captionLeft <= 0f)
+                return;
+            _captionLeft -= dt;
+            if (_captionLeft <= 0f)
+                HideCaption();
+        }
+
+        private void HideCaption()
+        {
+            _captionLeft = 0f;
+            _caption.style.display = DisplayStyle.None;
         }
 
         // ------------------------------------------------------------- live figures
@@ -700,7 +783,9 @@ namespace Fts.MatchView
         /// <summary>A short fading tail behind the ball, so a pass reads as a pass.</summary>
         private void DrawTrail(Painter2D p, Rect fit, int ta)
         {
-            int from = Mathf.Max(0, ta - _trailFrames);
+            // Not back past the last cut: those frames were never shown. A shared clock that stepped
+            // back before the jump leaves nothing to clip.
+            int from = Mathf.Max(_shownFrom <= ta ? _shownFrom : 0, ta - _trailFrames);
 
             // A trail drawn across the change of ends is a stripe across the pitch: it is the
             // mirror, not the ball.
@@ -740,6 +825,8 @@ namespace Fts.MatchView
 
             if (a.Kind == BallActionKind.Shot)
             {
+                if (a.Tick < _shownFrom)
+                    return; // struck inside a cut: the shooter was never on screen there
                 p.strokeColor = ShotColor;
                 p.lineWidth = Mathf.Max(1.5f, 4f * scale);
                 p.BeginPath();

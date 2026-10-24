@@ -52,6 +52,10 @@ namespace Sim.Core.Match.Broadcast
             return Capitalised(body);
         }
 
+        /// <summary>The caption of a director cut (spec believable-match R11): its summary line's sentence.</summary>
+        public static string Caption(CutSummary cut, Func<string, object[], string> tr, Func<bool, string> clubOf) =>
+            Sentence(CommentaryBuilder.CutLine(cut, 1), tr, (home, slot) => string.Empty, clubOf); // a sentence carries no minute
+
         private static string Substitution(SlotChange c, Func<string, object[], string> tr,
             Func<bool, string> clubOf, Func<bool, int, string>? playerOf)
         {

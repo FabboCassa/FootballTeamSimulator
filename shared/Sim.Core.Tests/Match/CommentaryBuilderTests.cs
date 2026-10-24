@@ -371,6 +371,17 @@ namespace Sim.Core.Tests.Match
         }
 
         [Test]
+        public void ACutCaption_IsTheSentenceOfItsSummaryLine_WithoutTheMinute()
+        {
+            var foul = new CutSummary(At(23), At(28), PossessionSide.Home, CutZone.Middle, BallActionKind.Foul);
+            var scrappy = new CutSummary(At(46), At(48), PossessionSide.None, CutZone.Attacking, BallActionKind.ThrowIn);
+
+            Assert.That(CommentaryText.Caption(foul, Tr(En), ClubOf), Is.EqualTo("Ulivara keep the ball in midfield, then a foul"));
+            Assert.That(CommentaryText.Caption(scrappy, Tr(It), ClubOf),
+                Is.EqualTo("Fase spezzettata, nessuno tiene palla, poi una rimessa laterale"));
+        }
+
+        [Test]
         public void EveryShout_GivesOneSentence_NamingTheBench()
         {
             MatchReport report = Report(Stream());

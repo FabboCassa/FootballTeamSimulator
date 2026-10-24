@@ -422,6 +422,7 @@ namespace Fts.Presenters
             DetachRenderer();
 
             _renderer = new MatchRenderer(report, _homeColor, _awayColor);
+            _renderer.SetCutCaptions(cut => CommentaryText.Caption(cut, _loc.Tr, ClubOfSide));
             _renderer.MinuteChanged += OnMinuteChanged;
             _renderer.MomentReached += OnMomentReached;
             _renderer.Finished += OnFinished;

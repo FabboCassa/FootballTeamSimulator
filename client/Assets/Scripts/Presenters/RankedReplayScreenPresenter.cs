@@ -97,6 +97,7 @@ namespace Fts.Presenters
             UpdateScore();
 
             _renderer = new MatchRenderer(report, HomeColor, AwayColor);
+            _renderer.SetCutCaptions(cut => CommentaryText.Caption(cut, _loc.Tr, home => (home ? _target.HomeName : _target.AwayName) ?? "?"));
             _renderer.MinuteChanged += OnMinuteChanged;
             _renderer.MomentReached += OnMomentReached;
             _renderer.Finished += OnFinished;
