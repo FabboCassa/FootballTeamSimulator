@@ -4,6 +4,7 @@ using Sim.Core.Domain;
 using Sim.Core.Generation;
 using Sim.Core.Match;
 using Sim.Core.Match.Analysis;
+using Sim.Core.Match.Movement;
 using Sim.Core.Random;
 
 namespace Fts.BalanceHarness;
@@ -61,11 +62,16 @@ internal static class PitchScenario
 
             Lineup homeXI = LineupSelector.BestEleven(home);
             Lineup awayXI = LineupSelector.BestEleven(away);
+            bool dump = opt.PitchDump != null && i == opt.PitchDumpMatch;
+            var decisions = dump ? new DecisionLog() : null;
+            engine.DecisionSink = decisions;
             MatchReport report = engine.Simulate(homeXI, awayXI, new Pcg32(opt.Seed + 31_000 + (ulong)i));
+            engine.DecisionSink = null;
 
-            if (opt.PitchDump != null && i == opt.PitchDumpMatch && report.Positions != null)
+            if (dump && report.Positions != null)
             {
-                PitchDump.Write(opt.PitchDump, report, homeXI, awayXI, home.Name, away.Name);
+                PitchDump.Write(opt.PitchDump!, report, homeXI, awayXI, home.Name, away.Name,
+                    decisions!, cfg.Match.StreamTicksPerFrame);
                 Console.WriteLine($"[balance-pitch] match {i} written to {opt.PitchDump} - open it in a browser");
             }
 

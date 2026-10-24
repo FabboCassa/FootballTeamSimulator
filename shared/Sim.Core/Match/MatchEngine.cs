@@ -142,6 +142,12 @@ namespace Sim.Core.Match
         }
 
         /// <summary>
+        /// Hears every decision on the ball of a played match, for the explained replay
+        /// (believable-match spec R13). Null in production; attached, it moves no bit of the result.
+        /// </summary>
+        public IDecisionSink? DecisionSink { get; set; }
+
+        /// <summary>
         /// Simulates a match. When <paramref name="tactics"/> is null the engine
         /// runs exactly as before the tactics system (task 3.2): same score/events
         /// per seed, so existing golden masters and replays are unaffected.
@@ -202,6 +208,9 @@ namespace Sim.Core.Match
             if (_generatePositions)
             {
                 report.Positions = new MatchSimulator(_cfg, _condition, _applyCondition, _applyMatchFatigue)
+                    {
+                        DecisionSink = DecisionSink
+                    }
                     .Generate(feed, report, rng);
 
                 // ENGINE PHASE 7. The match is over and the report is final; what follows only
