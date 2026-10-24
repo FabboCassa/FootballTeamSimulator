@@ -21,6 +21,7 @@ public class ReplayPayloadBudgetTests
     private const double MaxGrowth = 2.6;
     private const ulong FirstSeed = 8400;
     private const int Matches = 3;
+    private const double MaxHeightGrowth = 1.15;
 
     [Test]
     public void FullReport_AtFiveFramesPerSecond_StaysWithinGrowthAndPayloadLimit()
@@ -56,6 +57,43 @@ public class ReplayPayloadBudgetTests
             $"ratio {ratio:F2} · largest {largest / 1024} KB · limit {limit / 1024} KB");
 
         Assert.That(ratio, Is.LessThanOrEqualTo(MaxGrowth), "the denser stream may cost at most 2.6x the v11 report");
+        Assert.That(largest, Is.LessThanOrEqualTo(limit), "a full report must fit the online payload limit");
+    }
+
+    /// <summary>
+    /// R7 of believable-match (issue #150): the ball's height may cost at most 15% over the v12
+    /// report, which is the same match written without it, and must still fit the payload limit.
+    /// </summary>
+    [Test]
+    public void FullReport_WithBallHeight_StaysWithinFifteenPercentOfV12AndThePayloadLimit()
+    {
+        League league = new LeagueGenerator().Generate(new Pcg32(DeterminismCheck.DefaultWorldSeed));
+        Lineup home = LineupSelector.BestEleven(league.Clubs[2]);
+        Lineup away = LineupSelector.BestEleven(league.Clubs[5]);
+        var engine = new MatchEngine(new BalanceConfig());
+        long limit = new KestrelServerOptions().Limits.MaxRequestBodySize!.Value;
+
+        long nowBytes = 0, v12Bytes = 0, largest = 0;
+        for (ulong seed = FirstSeed; seed < FirstSeed + Matches; seed++)
+        {
+            MatchReport report = engine.Simulate(home, away, new Pcg32(seed));
+            Assert.That(report.Positions!.BallZ.Max(), Is.GreaterThan(0), "the ball leaves the ground");
+
+            long size = ReplayStore.Write(report).Length;
+            nowBytes += size;
+            largest = Math.Max(largest, size);
+
+            MatchReport v12 = engine.Simulate(home, away, new Pcg32(seed));
+            v12.Positions!.BallZ = Array.Empty<int>();
+            v12Bytes += ReplayStore.Write(v12).Length;
+        }
+
+        double ratio = (double)nowBytes / v12Bytes;
+        TestContext.Out.WriteLine(
+            $"[replay-size] v12 {v12Bytes / Matches / 1024} KB · with height {nowBytes / Matches / 1024} KB · " +
+            $"ratio {ratio:F3} · largest {largest / 1024} KB · limit {limit / 1024} KB");
+
+        Assert.That(ratio, Is.LessThanOrEqualTo(MaxHeightGrowth), "the height may cost at most 15% over v12");
         Assert.That(largest, Is.LessThanOrEqualTo(limit), "a full report must fit the online payload limit");
     }
 }

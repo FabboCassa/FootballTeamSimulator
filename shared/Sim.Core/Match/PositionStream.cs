@@ -166,6 +166,13 @@ namespace Sim.Core.Match
         public int[] AwayXY { get; set; } = Array.Empty<int>();
 
         /// <summary>
+        /// The ball's height above the grass at each frame, in decimetres (R7 of believable-match).
+        /// Presentation only, and outside the hash: empty in a replay stored before it existed,
+        /// which reads as a ball that never left the ground.
+        /// </summary>
+        public int[] BallZ { get; set; } = Array.Empty<int>();
+
+        /// <summary>
         /// Who holds the ball at each tick: 0 = loose/in flight/dead, 1..PlayerCount the
         /// home slot, PlayerCount+1..2*PlayerCount the away slot. Lets the renderer ring
         /// the carrier without re-deriving possession from the action list.
@@ -222,28 +229,32 @@ namespace Sim.Core.Match
         public string HomePacked { get; set; } = "";
         public string AwayPacked { get; set; } = "";
         public string OwnerPacked { get; set; } = "";
+        public string BallZPacked { get; set; } = "";
 
         /// <summary>Lanes in each track: the ball has X and Y, a side has both per player.</summary>
         private int SideStride => PlayerCount * 2;
 
         /// <summary>
-        /// Moves the four integer tracks into their packed form, leaving the arrays empty. Call
+        /// Moves the five integer tracks into their packed form, leaving the arrays empty. Call
         /// it immediately before serializing a report for storage or for the wire.
         /// </summary>
         public PositionStream Pack()
         {
-            if (BallXY.Length == 0 && HomeXY.Length == 0 && AwayXY.Length == 0 && Owner.Length == 0)
+            if (BallXY.Length == 0 && HomeXY.Length == 0 && AwayXY.Length == 0 && Owner.Length == 0
+                && BallZ.Length == 0)
                 return this;
 
             BallPacked = Encode(BallXY, 2);
             HomePacked = Encode(HomeXY, SideStride);
             AwayPacked = Encode(AwayXY, SideStride);
             OwnerPacked = Encode(Owner, 1);
+            BallZPacked = Encode(BallZ, 1);
 
             BallXY = Array.Empty<int>();
             HomeXY = Array.Empty<int>();
             AwayXY = Array.Empty<int>();
             Owner = Array.Empty<int>();
+            BallZ = Array.Empty<int>();
             return this;
         }
 
@@ -255,18 +266,20 @@ namespace Sim.Core.Match
         public PositionStream Unpack()
         {
             if (BallPacked.Length == 0 && HomePacked.Length == 0
-                && AwayPacked.Length == 0 && OwnerPacked.Length == 0)
+                && AwayPacked.Length == 0 && OwnerPacked.Length == 0 && BallZPacked.Length == 0)
                 return this;
 
             BallXY = Decode(BallPacked, 2);
             HomeXY = Decode(HomePacked, SideStride);
             AwayXY = Decode(AwayPacked, SideStride);
             Owner = Decode(OwnerPacked, 1);
+            BallZ = Decode(BallZPacked, 1);
 
             BallPacked = "";
             HomePacked = "";
             AwayPacked = "";
             OwnerPacked = "";
+            BallZPacked = "";
             return this;
         }
 
@@ -346,6 +359,13 @@ namespace Sim.Core.Match
         {
             int[] ball = Unpack().BallXY;
             return new PitchPoint(ball[tick * 2], ball[tick * 2 + 1]);
+        }
+
+        /// <summary>The ball's height in decimetres; 0 when the stream carries none.</summary>
+        public int BallZAt(int tick)
+        {
+            int[] z = Unpack().BallZ;
+            return tick < z.Length ? z[tick] : 0;
         }
 
         public PitchPoint HomeAt(int tick, int slot) => PlayerAt(Unpack().HomeXY, tick, slot);

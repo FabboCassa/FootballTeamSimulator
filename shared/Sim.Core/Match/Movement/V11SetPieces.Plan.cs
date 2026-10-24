@@ -254,6 +254,7 @@ namespace Sim.Core.Match.Movement
                 int flight = U.Distance(_ball.X, _ball.Y, aimX, aimY);
                 _ball.Kick(side, slot, aimX - _ball.X, aimY - _ball.Y,
                     _ball.ForceForTicks(flight, _cfg.TicksOfMs(1200), _sim._maxPassForce));
+                _ball.Loft(flight, MatchBall.HeadHeightDm);
                 _sim.Release(tick, side, slot);
 
                 _sim._offside.ClearFlags();
