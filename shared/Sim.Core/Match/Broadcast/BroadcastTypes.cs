@@ -109,4 +109,35 @@ namespace Sim.Core.Match.Broadcast
 
         public override string ToString() => $"[{StartFrame},{EndFrame}) {Possession} {Zone} {Stoppage}";
     }
+
+    /// <summary>
+    /// A cut boundary as playback crosses it (spec believable-match R11): the frames jumped, the
+    /// summary to caption it with (null when the director filed none, a cut under a match minute) and
+    /// the wall seconds its fade lasts at the speed it was crossed at.
+    /// </summary>
+    public readonly struct CutTransition : IEquatable<CutTransition>
+    {
+        public int FromFrame { get; }
+        public int ToFrame { get; }
+        public CutSummary? Summary { get; }
+        public double Seconds { get; }
+
+        public CutTransition(int fromFrame, int toFrame, CutSummary? summary, double seconds)
+        {
+            FromFrame = fromFrame;
+            ToFrame = toFrame;
+            Summary = summary;
+            Seconds = seconds;
+        }
+
+        public bool Equals(CutTransition other) =>
+            FromFrame == other.FromFrame && ToFrame == other.ToFrame && Nullable.Equals(Summary, other.Summary)
+            && Seconds.Equals(other.Seconds);
+
+        public override bool Equals(object? obj) => obj is CutTransition other && Equals(other);
+
+        public override int GetHashCode() => FromFrame * 397 ^ ToFrame;
+
+        public override string ToString() => $"[{FromFrame},{ToFrame}) {Summary} {Seconds:F3}s";
+    }
 }

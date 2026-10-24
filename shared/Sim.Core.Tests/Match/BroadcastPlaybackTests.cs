@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using NUnit.Framework;
 using Sim.Core.Config;
@@ -302,6 +303,163 @@ namespace Sim.Core.Tests.Match
 
             p.Advance(6.0);
             Assert.That(p.Position, Is.EqualTo(144.0).Within(1e-9), "5 s of live to frame 26, the cut, then 1 s of dead time");
+        }
+
+        // ------------------------------------------------------------------ believable-match R11: a fade at every cut
+
+        private static readonly CutSummary LongCut = new CutSummary(26, 140, PossessionSide.Home, CutZone.Middle, BallActionKind.Foul);
+
+        /// <summary>Live [0,26), cut [26,140) with a summary, dead time [140,180), cut [180,190) without one, live [190,217).</summary>
+        private static BroadcastTimeline TwoCuts() => new BroadcastTimeline(Fpm, 217, 100,
+            new[]
+            {
+                new BroadcastSegment(0, 26, PlaybackRate.Live),
+                new BroadcastSegment(26, 140, PlaybackRate.Cut),
+                new BroadcastSegment(140, 180, PlaybackRate.DeadTime),
+                new BroadcastSegment(180, 190, PlaybackRate.Cut),
+                new BroadcastSegment(190, 217, PlaybackRate.Live)
+            },
+            new[] { LongCut });
+
+        private static List<CutTransition> PlayThrough(BroadcastPlayback p, double step)
+        {
+            var seen = new List<CutTransition>();
+            p.CutCrossed += seen.Add;
+            while (!p.Finished)
+                p.Advance(step);
+            return seen;
+        }
+
+        [TestCase(1)]
+        [TestCase(2)]
+        [TestCase(4)]
+        public void EveryCutBoundary_EmitsOneTransition_WithItsSummaryAndTheFadeAtThatSpeed(int speed)
+        {
+            var p = new BroadcastPlayback(TwoCuts());
+            p.SetSpeed(speed);
+
+            List<CutTransition> seen = PlayThrough(p, Step);
+
+            Assert.That(seen.Select(x => (x.FromFrame, x.ToFrame)), Is.EqualTo(new[] { (26, 140), (180, 190) }));
+            Assert.That(seen[0].Summary, Is.EqualTo(LongCut), "the cut's one-line summary is the caption");
+            Assert.That(seen[1].Summary, Is.Null, "a cut the director filed no summary for fades without a caption");
+            Assert.That(seen.Select(x => x.Seconds), Is.All.EqualTo(BroadcastPlayback.FadeSeconds / speed).Within(1e-12));
+            Assert.That(BroadcastPlayback.FadeSeconds, Is.GreaterThanOrEqualTo(0.3));
+        }
+
+        [TestCase(1)]
+        [TestCase(4)]
+        public void EveryCutBoundary_EmitsATransition_OnARealMatch(int speed)
+        {
+            BroadcastTimeline t = new BroadcastDirector().Build(Match);
+            List<BroadcastSegment> cuts = t.Segments.Where(s => s.Rate == PlaybackRate.Cut).ToList();
+            Assert.That(cuts, Is.Not.Empty);
+
+            var p = new BroadcastPlayback(t);
+            p.SetSpeed(speed);
+            List<CutTransition> seen = PlayThrough(p, Step);
+
+            Assert.That(seen.Select(x => (x.FromFrame, x.ToFrame)), Is.EqualTo(cuts.Select(c => (c.StartFrame, c.EndFrame))));
+            foreach (CutTransition x in seen)
+            {
+                CutSummary[] filed = t.Summaries.Where(c => c.StartFrame == x.FromFrame).ToArray();
+                Assert.That(x.Summary, Is.EqualTo(filed.Length == 1 ? filed[0] : (CutSummary?)null), $"cut [{x.FromFrame},{x.ToFrame})");
+            }
+
+            Assert.That(seen.Count(x => x.Summary.HasValue), Is.EqualTo(t.Summaries.Count), "every summary is captioned once");
+        }
+
+        [TestCase(1)]
+        [TestCase(2)]
+        [TestCase(4)]
+        public void TheFade_LastsPointThreeSecondsOfWallAtOneX_ScaledBySpeed(int speed)
+        {
+            const double fine = 1.0 / 2400.0;
+            var p = new BroadcastPlayback(HandBuilt());
+            p.SetSpeed(speed);
+
+            double covered = 0.0;
+            while (!p.Finished)
+            {
+                p.Advance(fine);
+                if (p.Curtain > 0.0) covered += fine;
+            }
+
+            Assert.That(covered, Is.EqualTo(BroadcastPlayback.FadeSeconds / speed).Within(2 * fine));
+        }
+
+        [Test]
+        public void TheCurtain_IsShutAcrossTheJump_AndOpenAwayFromAnyCut()
+        {
+            var p = new BroadcastPlayback(HandBuilt());
+
+            Assert.That(p.Curtain, Is.EqualTo(0.0), "kickoff with no cut behind it");
+            p.Seek(13);
+            Assert.That(p.Curtain, Is.EqualTo(0.0), "mid-stretch, seconds from any cut");
+            p.Seek(60);
+            Assert.That(p.Curtain, Is.EqualTo(1.0), "a cut frame is never shown");
+            p.Seek(140);
+            Assert.That(p.Curtain, Is.EqualTo(1.0), "the first frame after the jump is fully covered");
+
+            p.Seek(0);
+            p.Advance(10.0 - 0.075);
+            Assert.That(p.Curtain, Is.EqualTo(0.5).Within(1e-6), "half-way down, 0.075 s before the cut");
+        }
+
+        [TestCase(1)]
+        [TestCase(2)]
+        [TestCase(4)]
+        public void NoShownFrame_JumpsAcrossACutUncovered_OnARealMatch(int speed)
+        {
+            BroadcastTimeline t = new BroadcastDirector().Build(Match);
+            var p = new BroadcastPlayback(t);
+            p.SetSpeed(speed);
+            int crossed = 0;
+            p.CutCrossed += _ => crossed++;
+
+            // Each side of a jump is within one pump of the boundary, so at most one pump's worth off black.
+            double floor = 1.0 - Step * speed / (BroadcastPlayback.FadeSeconds / 2) - 1e-9;
+            double before = p.Curtain;
+            int pumps = 0;
+            while (!p.Finished)
+            {
+                int was = crossed;
+                p.Advance(Step);
+                pumps++;
+                if (crossed == was || p.Finished) { before = p.Curtain; continue; }
+
+                Assert.That(p.Curtain, Is.GreaterThanOrEqualTo(floor), $"pump {pumps}: frame {p.Frame} after the jump");
+                if (pumps > 1)
+                    Assert.That(before, Is.GreaterThanOrEqualTo(floor), $"pump {pumps}: the frame before the jump");
+                before = p.Curtain;
+            }
+        }
+
+        [Test]
+        public void FollowingASharedPosition_CrossesTheSameCuts_AsPlayingIt()
+        {
+            BroadcastTimeline t = new BroadcastDirector().Build(Match);
+            var played = new BroadcastPlayback(t);
+            var follower = new BroadcastPlayback(t);
+            var expected = new List<CutTransition>();
+            var seen = new List<CutTransition>();
+            played.CutCrossed += expected.Add;
+            follower.CutCrossed += seen.Add;
+
+            while (!played.Finished)
+            {
+                played.Advance(0.25);
+                follower.Follow(played.Position);
+                Assert.That(follower.Position, Is.EqualTo(played.Position));
+                Assert.That(follower.Curtain, Is.EqualTo(played.Curtain));
+            }
+
+            Assert.That(seen, Is.EqualTo(expected));
+
+            int before = seen.Count;
+            follower.Follow(t.FramesPerMinute * 10);
+            Assert.That(seen, Has.Count.EqualTo(before), "a clock stepping back replays no transition");
+            Assert.That(follower.Position, Is.EqualTo(t.FramesPerMinute * 10));
         }
     }
 }

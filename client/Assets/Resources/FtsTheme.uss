@@ -1698,6 +1698,12 @@ TextField {
 .fts-commentary__icon--shout { background-color: var(--fts-text-2); border-radius: 2px; }
 .fts-commentary__icon--sub { background-color: var(--fts-accent-dark); border-radius: 2px; }
 
+/* ---- director cuts (spec believable-match R11): the renderer dips this curtain to
+   black across the jump (opacity driven per frame) and shows the cut's summary as
+   a lower-third caption over it. */
+.fts-cutfade { position: absolute; left: 0; top: 0; right: 0; bottom: 0; background-color: var(--fts-bg); opacity: 0; }
+.fts-cutcaption { position: absolute; left: 0; right: 0; bottom: 16px; padding: 8px 16px; font-size: 19px; color: var(--fts-text); background-color: rgba(8, 13, 24, 0.8); -unity-text-align: middle-center; -unity-font-style: bold; white-space: normal; }
+
 /* ---- touchline shouts (in-match panel, issue #44) */
 .fts-shouts { flex-direction: row; flex-wrap: wrap; }
 .fts-shouts__chip { min-height: 48px; min-width: 104px; margin: 0 6px 6px 0; }
@@ -1754,6 +1760,7 @@ TextField {
 .fts--mobile .fts-commentary__icon--red { width: 18px; height: 26px; border-radius: 4px; margin-top: 5px; }
 .fts--mobile .fts-commentary__icon--shout,
 .fts--mobile .fts-commentary__icon--sub { border-radius: 4px; }
+.fts--mobile .fts-cutcaption { bottom: 28px; padding: 16px 28px; font-size: 32px; }
 .fts--mobile .fts-shouts__chip { min-height: 96px; min-width: 180px; margin: 0 10px 10px 0; }
 .fts--mobile .fts-shouts__status { font-size: 28px; margin-top: 4px; }
 

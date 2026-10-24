@@ -253,6 +253,7 @@ namespace Fts.Presenters
 
             _report = report;
             _renderer = new MatchRenderer(report, HomeColor, AwayColor);
+            _renderer.SetCutCaptions(cut => CommentaryText.Caption(cut, _loc.Tr, home => home ? HomeName() : AwayName()));
             _clock = _kickoff.HasValue ? new LiveBroadcastClock(_renderer.Timeline, _kickoff.Value) : null;
             if (_clock != null) _renderer.FollowClock(SharedFrame);
             int seekMinute = LiveMinute();
