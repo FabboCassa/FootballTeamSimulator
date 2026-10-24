@@ -28,9 +28,19 @@ namespace Sim.Core.Career
         /// Resolves every unplayed background fixture due on or before <paramref name="day"/>.
         /// Idempotent: calling it twice for the same day is a no-op. Returns how many were played.
         /// <paramref name="instructions"/> holds a club's instruction set by club id; a club without
-        /// one plays neutral, the identity.
+        /// one plays neutral, the identity. Instructions alone play in 4-3-3.
         /// </summary>
-        public int AdvanceTo(World world, int day, ulong worldSeed, IReadOnlyDictionary<int, TacticInstructions>? instructions = null)
+        public int AdvanceTo(World world, int day, ulong worldSeed, IReadOnlyDictionary<int, TacticInstructions>? instructions = null) =>
+            AdvanceTo(world, day, worldSeed, clubId => new Tactic(Formation.F433, InstructionsOf(instructions, clubId)));
+
+        /// <summary>
+        /// As above, with each club's whole tactic (style instructions and formation) by club id; a club
+        /// without one plays Balanced 4-3-3, the identity.
+        /// </summary>
+        public int AdvanceTo(World world, int day, ulong worldSeed, IReadOnlyDictionary<int, Tactic> tactics) =>
+            AdvanceTo(world, day, worldSeed, clubId => tactics.TryGetValue(clubId, out Tactic t) ? t : Tactic.Neutral);
+
+        private int AdvanceTo(World world, int day, ulong worldSeed, System.Func<int, Tactic> tacticOf)
         {
             Season season = world.BackgroundSeason;
             if (season.Fixtures.Count == 0)
@@ -40,19 +50,19 @@ namespace Sim.Core.Career
             }
 
             int resolved = 0;
+            var sides = new Dictionary<int, QuickSide?>();
 
             foreach (Fixture fixture in season.Fixtures)
             {
                 if (fixture.Played || fixture.Day > day)
                     continue;
 
-                Club? home = world.FindClub(fixture.HomeClubId);
-                Club? away = world.FindClub(fixture.AwayClubId);
+                QuickSide? home = SideOf(world, fixture.HomeClubId, tacticOf, sides);
+                QuickSide? away = SideOf(world, fixture.AwayClubId, tacticOf, sides);
                 if (home == null || away == null)
                     continue;
 
-                QuickResultResolver.Resolve(fixture, StrengthOf(home), StrengthOf(away), worldSeed, _config,
-                    InstructionsOf(instructions, home.Id), InstructionsOf(instructions, away.Id));
+                QuickResultResolver.Resolve(fixture, home.Value, away.Value, worldSeed, _config);
                 resolved++;
             }
 
@@ -60,8 +70,23 @@ namespace Sim.Core.Career
             return resolved;
         }
 
-        private static TacticInstructions? InstructionsOf(IReadOnlyDictionary<int, TacticInstructions>? instructions, int clubId) =>
-            instructions != null && instructions.TryGetValue(clubId, out TacticInstructions set) ? set : (TacticInstructions?)null;
+        /// <summary>
+        /// A club as the fast model reads it (strength and tactic readings), read once per call: a catch-up
+        /// over a whole season meets each club dozens of times. Null when the world has no such club.
+        /// </summary>
+        private QuickSide? SideOf(World world, int clubId, System.Func<int, Tactic> tacticOf, Dictionary<int, QuickSide?> sides)
+        {
+            if (sides.TryGetValue(clubId, out QuickSide? side))
+                return side;
+
+            Club? club = world.FindClub(clubId);
+            side = club == null ? (QuickSide?)null : QuickSide.Of(StrengthOf(club), tacticOf(clubId), _config.World);
+            sides[clubId] = side;
+            return side;
+        }
+
+        private static TacticInstructions InstructionsOf(IReadOnlyDictionary<int, TacticInstructions>? instructions, int clubId) =>
+            instructions != null && instructions.TryGetValue(clubId, out TacticInstructions set) ? set : TacticInstructions.Neutral;
 
         /// <summary>
         /// The last day any background league plays on. Bigger divisions play more rounds than the

@@ -99,6 +99,53 @@ namespace Sim.Core.Config
         public int[] QuickTempoGoalsAgainstPercent { get; set; } = { -3, 0, 4 };
         public int[] QuickWidthGoalsForPercent { get; set; } = { 4, 0, -7 };
         public int[] QuickWidthGoalsAgainstPercent { get; set; } = { 3, 0, 5 };
+
+        // --- Quick resolver styles and formations (real-match R24) ---
+        // The other R16 axes read the same way, each extreme the v12 engine's single-axis shift
+        // against a neutral side of the same club (1,000 matches a setting, FastModelHarnessTests).
+        // DefensiveLine has five levels, Normal (index 2) the identity. Single axes do not add up to
+        // a style (the axes interact: Man-oriented press concedes +156%, far more than its parts),
+        // so a side whose instructions are nearest a catalogue style reads that style's own entry
+        // below, plus the single-axis difference of any axis it changed from the preset.
+        public int[] QuickPassingDirectnessGoalsForPercent { get; set; } = { -3, 0, 6 };
+        public int[] QuickPassingDirectnessGoalsAgainstPercent { get; set; } = { 1, 0, 5 };
+        public int[] QuickBuildUpGoalsForPercent { get; set; } = { -5, 0, 0 };
+        public int[] QuickBuildUpGoalsAgainstPercent { get; set; } = { 4, 0, 3 };
+        public int[] QuickFinalThirdGoalsForPercent { get; set; } = { 4, 0, 4 };
+        public int[] QuickFinalThirdGoalsAgainstPercent { get; set; } = { 0, 0, -2 };
+        public int[] QuickShotSelectionGoalsForPercent { get; set; } = { -11, 0, 11 };
+        public int[] QuickShotSelectionGoalsAgainstPercent { get; set; } = { -3, 0, -2 };
+        public int[] QuickDribbleGoalsForPercent { get; set; } = { 5, 0, -6 };
+        public int[] QuickDribbleGoalsAgainstPercent { get; set; } = { 8, 0, 6 };
+        public int[] QuickOnBallLostGoalsForPercent { get; set; } = { 5, 0, 3 };
+        public int[] QuickOnBallLostGoalsAgainstPercent { get; set; } = { 11, 0, 68 };
+        public int[] QuickOnBallWonGoalsForPercent { get; set; } = { 0, 0, 4 };
+        public int[] QuickOnBallWonGoalsAgainstPercent { get; set; } = { 18, 0, -7 };
+        public int[] QuickLineOfEngagementGoalsForPercent { get; set; } = { -1, 0, 0 };
+        public int[] QuickLineOfEngagementGoalsAgainstPercent { get; set; } = { 23, 0, -11 };
+        public int[] QuickDefensiveLineGoalsForPercent { get; set; } = { 0, -4, 0, -3, 1 };
+        public int[] QuickDefensiveLineGoalsAgainstPercent { get; set; } = { -32, -18, 0, 52, 97 };
+        public int[] QuickMarkingSchemeGoalsForPercent { get; set; } = { -2, 0, -5 };
+        public int[] QuickMarkingSchemeGoalsAgainstPercent { get; set; } = { -26, 0, 38 };
+        public int[] QuickPressDirectionGoalsForPercent { get; set; } = { 13, 0, -8 };
+        public int[] QuickPressDirectionGoalsAgainstPercent { get; set; } = { 204, 0, -5 };
+
+        /// <summary>
+        /// Indexed by <see cref="Tactics.PlayingStyle"/> value; Balanced (0) is the identity. Each style in
+        /// its first suggested formation against Balanced 4-3-3 (2,000 matches, FastModelStyleHarnessTests),
+        /// as a share of a side's goals, less that formation's own entry so the two add back up.
+        /// </summary>
+        public int[] QuickStyleGoalsForPercent { get; set; } = { 0, -18, 22, 51, 23, -2, 2, 3, 24, -2, -13, -12, -5, -11, 29 };
+        public int[] QuickStyleGoalsAgainstPercent { get; set; } = { 0, 3, 69, 100, 44, -10, 17, 25, 69, 43, -18, 20, 13, -21, 138 };
+
+        /// <summary>
+        /// Indexed by <see cref="Tactics.Formation"/> value; 4-3-3 (index 0, the engine-identity shape) is 0.
+        /// A Balanced side in each shape against Balanced 4-3-3 (1,000 matches, FastModelStyleHarnessTests).
+        /// </summary>
+        public int[] QuickFormationGoalsForPercent { get; set; } =
+            { 0, 9, 7, -1, 16, 2, -19, -19, 11, -5, 5, 5, -5, -17, -10, 4, 2, 6, -5, -7, -5, 22, 25, 4, -23, 3, -15 };
+        public int[] QuickFormationGoalsAgainstPercent { get; set; } =
+            { 0, -4, 19, -19, -17, 18, -20, -20, -10, -16, -2, -4, -24, -11, -26, 0, -5, -20, -5, -3, 4, -8, -9, -10, -24, 8, -19 };
     }
 
     /// <summary>

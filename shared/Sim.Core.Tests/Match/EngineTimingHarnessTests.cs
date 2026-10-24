@@ -39,6 +39,9 @@ namespace Sim.Core.Tests.Match
         private const int AwayClub = 10;
         private const int ReferenceVersion = 11;
         private const double MaxCostRatio = 1.25;
+        private const int Seasons = 100;
+        // With 5 warm-up seasons the build timed first read up to 1.4x the other: JIT tiering, not the model.
+        private const int SeasonWarmUp = 30;
 
         [Test, Explicit("Harness: a thousand matches on two engine builds."), Category("EngineTimingHarness")]
         public void Harness_V12GenerationTime_IsWithin25PercentOfV11()
@@ -61,6 +64,58 @@ namespace Sim.Core.Tests.Match
             TestContext.Out.WriteLine(sb.ToString());
 
             Assert.That(watchedInside && unwatchedInside, Is.True, "R15 generation time");
+        }
+
+        /// <summary>
+        /// R25 for the fast model: whole Large-world background seasons resolved on the v11 build and on this
+        /// one, alternating, per fixture. Two worlds: a neutral one (no club has instructions: today's host
+        /// path) and a styled one (every club a catalogue style; the v11 build gets the style's four v11
+        /// axes, this one the whole style and its formation). Same reference DLL and parameter as above.
+        /// </summary>
+        [Test, Explicit("Harness: whole background seasons on two builds."), Category("EngineTimingHarness")]
+        public void Harness_FastModelGenerationTime_IsWithin25PercentOfV11()
+        {
+            string? path = TestContext.Parameters.Get("v11SimCore");
+            if (string.IsNullOrEmpty(path))
+                Assert.Fail("Pass the v11 Sim.Core.dll: -- TestRunParameters.Parameter(name=\"v11SimCore\", value=\"PATH\")");
+            int seasons = TestContext.Parameters.Get("timingSeasons", Seasons);
+
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine(Inv($"[fast-model-timing] v11 reference {path} vs v{MatchEngine.Version}, Large world, {seasons} background seasons each, same run"));
+            sb.AppendLine("  world        fixtures   v11 us   now us   ratio   limit");
+            bool neutralInside = MeasureSeasons(sb, "neutral", path!, styled: false, seasons);
+            bool styledInside = MeasureSeasons(sb, "styled", path!, styled: true, seasons);
+            TestContext.Out.WriteLine(sb.ToString());
+
+            Assert.That(neutralInside && styledInside, Is.True, "R25 fast-model generation time");
+        }
+
+        private static bool MeasureSeasons(System.Text.StringBuilder sb, string kind, string path, bool styled, int seasons)
+        {
+            BackgroundWorldHandle v11 = BackgroundWorldHandle.Load(path, styled);
+            BackgroundWorldHandle now = BackgroundWorldHandle.Of(typeof(MatchEngine).Assembly, styled);
+            for (int i = 0; i < SeasonWarmUp; i++) { v11.ResolveSeason(); now.ResolveSeason(); }
+
+            double oldMs = 0, newMs = 0;
+            for (int i = 0; i < seasons; i++)
+            {
+                if (i % 2 == 0) { oldMs += v11.ResolveSeason(); newMs += now.ResolveSeason(); }
+                else { newMs += now.ResolveSeason(); oldMs += v11.ResolveSeason(); }
+            }
+
+            double oldUs = 1000 * oldMs / seasons / v11.Fixtures, newUs = 1000 * newMs / seasons / now.Fixtures;
+            bool inside = WithinLimit(oldUs, newUs);
+            sb.AppendLine(Inv($"  {kind,-10} {now.Fixtures,9}  {oldUs,7:F3}  {newUs,7:F3}   {newUs / oldUs,5:F2}   ≤{MaxCostRatio:F2}  {(inside ? "IN" : "OUT")}"));
+            return inside;
+        }
+
+        [Test]
+        public void BackgroundHandle_ResolvesTheWholeStyledSeason()
+        {
+            BackgroundWorldHandle now = BackgroundWorldHandle.Of(typeof(MatchEngine).Assembly, styled: true);
+            Assert.That(now.Fixtures, Is.GreaterThan(1000));
+            Assert.That(now.ResolveSeason(), Is.GreaterThan(0.0), "and again after the reset");
+            Assert.That(now.ResolveSeason(), Is.GreaterThan(0.0));
         }
 
         [Test]
