@@ -206,19 +206,21 @@ namespace Fts.Presenters
         private void OnMinuteChanged(int minute)
         {
             _shownMinute = minute;
-            _view.SetClock(_loc.Tr("match.clock", minute));
+            _view.SetClock(_loc.Tr("match.clock", MatchClock.InProgress(minute)));
         }
 
-        private void OnEventReached(MatchEvent e)
+        private void OnMomentReached(MatchMoment m)
         {
-            if (e.Type == MatchEventType.Goal)
+            int clubId = m.Home ? _context.Fixture.HomeClubId : _context.Fixture.AwayClubId;
+            if (m.Kind == MomentKind.Goal)
             {
-                if (e.ClubId == _context.Fixture.HomeClubId) _homeGoals++;
+                if (m.Home) _homeGoals++;
                 else _awayGoals++;
                 UpdateScore();
             }
 
-            _view.ShowToast(_loc.Tr(MatchEventKeys.For(e), e.Minute, PlayerName(e.ClubId, e.PlayerId), ClubName(e.ClubId)));
+            string off = m.Kind == MomentKind.Substitution ? PlayerName(clubId, m.Change.OffPlayerId) : string.Empty;
+            _view.ShowToast(_loc.Tr(MatchEventKeys.For(m), m.Minute, PlayerName(clubId, m.PlayerId), ClubName(clubId), off));
         }
 
         private void OnFinished()
@@ -421,7 +423,7 @@ namespace Fts.Presenters
 
             _renderer = new MatchRenderer(report, _homeColor, _awayColor);
             _renderer.MinuteChanged += OnMinuteChanged;
-            _renderer.EventReached += OnEventReached;
+            _renderer.MomentReached += OnMomentReached;
             _renderer.Finished += OnFinished;
             _renderer.FrameReached += OnFrameReached;
             _renderer.StatsChanged += OnStatsChanged;
@@ -436,7 +438,7 @@ namespace Fts.Presenters
 
             RecomputeScoreUpTo(report, seekToMinute);
             UpdateScore();
-            _view.SetClock(_loc.Tr("match.clock", seekToMinute));
+            _view.SetClock(_loc.Tr("match.clock", MatchClock.InProgress(seekToMinute)));
             _shownMinute = seekToMinute;
 
             _renderer.Play();
@@ -449,7 +451,7 @@ namespace Fts.Presenters
 
             _renderer.Stop();
             _renderer.MinuteChanged -= OnMinuteChanged;
-            _renderer.EventReached -= OnEventReached;
+            _renderer.MomentReached -= OnMomentReached;
             _renderer.Finished -= OnFinished;
             _renderer.FrameReached -= OnFrameReached;
             _renderer.StatsChanged -= OnStatsChanged;
@@ -579,7 +581,7 @@ namespace Fts.Presenters
 
         private void RefreshPanel()
         {
-            _panel.SetTitle(_loc.Tr("inmatch.paused_at", _shownMinute));
+            _panel.SetTitle(_loc.Tr("inmatch.paused_at", MatchClock.InProgress(_shownMinute)));
             _panel.SetSubsRemaining(_loc.Tr("inmatch.subs_remaining", MaxSubstitutions - _subsUsed));
 
             var pitch = new List<InMatchRowVm>(_workingLineup.Slots.Count);

@@ -35,13 +35,6 @@ namespace Sim.Core.Match.Broadcast
             return InMatchOrder(lines);
         }
 
-        /// <summary>Match minute of a frame, as the scoresheet counts it: frames 0 to fpm-1 are minute 1.</summary>
-        internal static int MinuteOf(int frame, int framesPerMinute)
-        {
-            int minute = framesPerMinute > 0 ? frame / framesPerMinute + 1 : 1;
-            return Math.Max(1, Math.Min(90, minute));
-        }
-
         private static CommentaryLine CutLine(CutSummary cut, int fpm)
         {
             bool home = cut.Possession != PossessionSide.Away;
@@ -54,8 +47,8 @@ namespace Sim.Core.Match.Broadcast
             string? stop = cut.Stoppage.HasValue ? StoppageKey(cut.Stoppage.Value) : null;
             if (stop != null) steps.Add(new CommentaryClause(stop, home));
 
-            return new CommentaryLine(cut.StartFrame, MinuteOf(cut.StartFrame, fpm),
-                MinuteOf(cut.EndFrame - 1, fpm), CommentaryIcon.Cut, false, steps, null);
+            return new CommentaryLine(cut.StartFrame, MatchClock.MinuteOf(cut.StartFrame, fpm),
+                MatchClock.MinuteOf(cut.EndFrame - 1, fpm), CommentaryIcon.Cut, false, steps, null);
         }
 
         private static string? StoppageKey(BallActionKind kind)
@@ -80,7 +73,7 @@ namespace Sim.Core.Match.Broadcast
 
             foreach (SlotChange c in s.Changes)
             {
-                int minute = MinuteOf(c.Frame, s.TicksPerMinute);
+                int minute = MatchClock.MinuteOf(c.Frame, s.TicksPerMinute);
                 lines.Add(new CommentaryLine(c.Frame, minute, minute, CommentaryIcon.Substitution, true,
                     Array.Empty<CommentaryClause>(), null, c));
             }
@@ -94,7 +87,7 @@ namespace Sim.Core.Match.Broadcast
 
                 bool home = e.ClubId == report.HomeClubId;
                 var clause = new CommentaryClause(ShoutKey(e.Shout), home);
-                lines.Add(new CommentaryLine((e.Minute - 1) * fpm, e.Minute, e.Minute, CommentaryIcon.Shout, false,
+                lines.Add(new CommentaryLine(MatchClock.FirstFrameOf(e.Minute, fpm), e.Minute, e.Minute, CommentaryIcon.Shout, false,
                     new[] { clause }, null));
             }
         }

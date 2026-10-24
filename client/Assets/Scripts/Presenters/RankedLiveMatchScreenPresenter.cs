@@ -278,7 +278,7 @@ namespace Fts.Presenters
             int seekMinute = LiveMinute();
 
             _renderer.MinuteChanged += OnMinuteChanged;
-            _renderer.EventReached += OnEventReached;
+            _renderer.MomentReached += OnMomentReached;
             _renderer.Finished += OnFinished;
             _renderer.ActionReached += OnActionReached;
             _view.PitchContainer.Insert(0, _renderer); // behind the toast overlay
@@ -289,7 +289,7 @@ namespace Fts.Presenters
 
             RecomputeScoreUpTo(report, seekMinute);
             UpdateScore();
-            _view.SetClock(_loc.Tr("match.clock", seekMinute));
+            _view.SetClock(_loc.Tr("match.clock", MatchClock.InProgress(seekMinute)));
 
             _renderer.Play();
         }
@@ -299,7 +299,7 @@ namespace Fts.Presenters
             if (_renderer == null) return;
             _renderer.Stop();
             _renderer.MinuteChanged -= OnMinuteChanged;
-            _renderer.EventReached -= OnEventReached;
+            _renderer.MomentReached -= OnMomentReached;
             _renderer.Finished -= OnFinished;
             _renderer.ActionReached -= OnActionReached;
             if (_renderer.parent != null) _renderer.RemoveFromHierarchy();
@@ -322,16 +322,18 @@ namespace Fts.Presenters
             return slot >= 0 && slot < shirts.Length ? "#" + shirts[slot] : string.Empty;
         }
 
-        private void OnMinuteChanged(int minute) => _view.SetClock(_loc.Tr("match.clock", minute));
+        private void OnMinuteChanged(int minute) => _view.SetClock(_loc.Tr("match.clock", MatchClock.InProgress(minute)));
 
-        private void OnEventReached(MatchEvent e)
+        private void OnMomentReached(MatchMoment m)
         {
+            MatchEvent e = m.Event;
+            if (e == null) return;
             if (e.Type == MatchEventType.Shout) PushShout(e);
             if (e.Type != MatchEventType.Goal) return;
             if (e.ClubId == _homeClubId) _homeGoals++; else _awayGoals++;
             UpdateScore();
             string club = e.ClubId == _homeClubId ? HomeName() : AwayName();
-            _view.ShowToast(_loc.Tr("replay.goal", e.Minute, club));
+            _view.ShowToast(_loc.Tr("replay.goal", m.Minute, club));
         }
 
         /// <summary>A shout either bench called goes into the running commentary, like the watched match's panel.</summary>
@@ -441,7 +443,7 @@ namespace Fts.Presenters
 
         private void RefreshPanel()
         {
-            _panel.SetTitle(_loc.Tr("inmatch.paused_at", LiveMinute()));
+            _panel.SetTitle(_loc.Tr("inmatch.paused_at", MatchClock.InProgress(LiveMinute())));
             _panel.SetSubsRemaining(_loc.Tr("inmatch.subs_remaining", MaxSubstitutions - _subsUsed));
             _panel.SetFamiliarity(string.Empty); // online tactics run at full familiarity (server-side, 8.4)
 

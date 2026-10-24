@@ -62,7 +62,8 @@ namespace Fts.MatchView
         private readonly Color _homeNumberColor;
         private readonly Color _awayNumberColor;
 
-        private readonly List<MatchEvent> _events;
+        /// <summary>The toast schedule: every key moment on the frame it happens on (spec believable-match R10).</summary>
+        private readonly MatchMoment[] _moments;
         private readonly PositionStream _stream;
         private readonly List<BallAction> _actions;
         private readonly int _players;
@@ -116,11 +117,11 @@ namespace Fts.MatchView
         private int _lastMinute = -1;
         private bool _finished;
 
-        /// <summary>Fired when the displayed clock minute changes (0..90).</summary>
+        /// <summary>Fired when the whole minutes played change (0..90); the clock shows <see cref="MatchClock.InProgress"/> of it.</summary>
         public event Action<int> MinuteChanged;
 
-        /// <summary>Fired as playback crosses an event's tick (for toasts/score).</summary>
-        public event Action<MatchEvent> EventReached;
+        /// <summary>Fired as playback crosses a key moment's frame (for toasts/score).</summary>
+        public event Action<MatchMoment> MomentReached;
 
         /// <summary>Fired as playback crosses a ball action — the commentary feed (13.1).</summary>
         public event Action<BallAction> ActionReached;
@@ -155,7 +156,7 @@ namespace Fts.MatchView
             _homeNumberColor = ReadableOn(homeColor);
             _awayNumberColor = ReadableOn(awayColor);
 
-            _events = report?.Events ?? new List<MatchEvent>();
+            _moments = MatchMoments.Of(report);
             _stream = report?.Positions ?? new PositionStream();
             _actions = _stream.Actions ?? new List<BallAction>();
             _players = _stream.PlayerCount;
@@ -238,7 +239,7 @@ namespace Fts.MatchView
             _playback.Seek(Mathf.FloorToInt(_tickPos));
 
             _nextEvent = 0;
-            while (_nextEvent < _events.Count && _events[_nextEvent].Minute <= m)
+            while (_nextEvent < _moments.Length && AlreadyShown(_moments[_nextEvent], m))
                 _nextEvent++;
 
             _nextAction = 0;
@@ -252,6 +253,13 @@ namespace Fts.MatchView
             MarkDirtyRepaint();
             FrameReached?.Invoke(Mathf.FloorToInt(_tickPos));
         }
+
+        /// <summary>
+        /// Before a seek to <paramref name="minute"/> whole minutes: a timeline entry by its recorded
+        /// minute, which is how a screen recounts the score up to the seek, and anything else by frame.
+        /// </summary>
+        private bool AlreadyShown(MatchMoment moment, int minute) =>
+            moment.Event != null ? moment.Event.Minute <= minute : moment.Frame < minute * _ticksPerMinute;
 
         /// <summary>1x / 2x / 4x.</summary>
         public void SetSpeed(float speed)
@@ -268,7 +276,7 @@ namespace Fts.MatchView
 
             _tickPos = _lastTick;
             _playback.Skip();
-            _nextEvent = _events.Count;
+            _nextEvent = _moments.Length;
             _nextAction = _actions.Count;
             SetMinute(90);
             RecountStats();
@@ -296,8 +304,8 @@ namespace Fts.MatchView
 
             bool statsMoved = AdvancePossession();
 
-            while (_nextEvent < _events.Count && _events[_nextEvent].Minute * _ticksPerMinute <= _tickPos)
-                EventReached?.Invoke(_events[_nextEvent++]);
+            while (_nextEvent < _moments.Length && _moments[_nextEvent].Frame <= _tickPos)
+                MomentReached?.Invoke(_moments[_nextEvent++]);
 
             while (_nextAction < _actions.Count && _actions[_nextAction].Tick <= _tickPos)
             {
