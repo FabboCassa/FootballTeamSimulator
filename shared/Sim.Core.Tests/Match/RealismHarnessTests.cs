@@ -77,10 +77,11 @@ namespace Sim.Core.Tests.Match
             var shape = new ShapeMovementTally();
             var shotPass = new ShotPassTally();
             var chances = new ChanceDecisionTally();
+            var feel = new MovementFeelTally();
             foreach (Formation formation in Mirrors)
-                Run(a, b, formation, matches, v11, shape, shotPass, chances);
+                Run(a, b, formation, matches, v11, shape, shotPass, chances, feel);
 
-            Print("V11 both mirrors", v11, shape, shotPass, chances);
+            Print("V11 both mirrors", v11, shape, shotPass, chances, feel);
             Assert.That(v11.Matches, Is.EqualTo(Mirrors.Length * matches), "Every match must come back with a stream.");
 
             // The gate is the full sample; a quick look at fewer matches only reads.
@@ -144,7 +145,7 @@ namespace Sim.Core.Tests.Match
         }
 
         private static void Print(string label, RealismTally realism, ShapeMovementTally shape, ShotPassTally shotPass,
-            ChanceDecisionTally chances)
+            ChanceDecisionTally chances, MovementFeelTally feel)
         {
             CultureInfo inv = CultureInfo.InvariantCulture;
             var sb = new StringBuilder();
@@ -168,18 +169,20 @@ namespace Sim.Core.Tests.Match
             TestContext.Out.WriteLine(shape.Format(label));
             TestContext.Out.WriteLine(shotPass.Format(label));
             TestContext.Out.WriteLine(chances.Format(label));
+            TestContext.Out.WriteLine(feel.Format(label));
         }
 
         /// <summary>One mirror: printed on its own and added to the totals.</summary>
         private static void Run(Club a, Club b, Formation formation, int matches,
-            RealismTally total, ShapeMovementTally totalShape, ShotPassTally totalShotPass, ChanceDecisionTally totalChances)
+            RealismTally total, ShapeMovementTally totalShape, ShotPassTally totalShotPass, ChanceDecisionTally totalChances,
+            MovementFeelTally totalFeel)
         {
             var cfg = new BalanceConfig();
             Lineup la = LineupSelector.BestEleven(a, formation), lb = LineupSelector.BestEleven(b, formation);
             var neutral = new TacticContext(new Tactic(formation), cfg.Tactics.FamiliarityMax);
             var tactics = new MatchTactics(neutral, neutral);
             var readings = new (MatchMetrics? Match, RealismMetrics? Realism, ShapeMovementMetrics? Shape,
-                ShotPassMetrics? ShotPass, ChanceDecisionMetrics? Chances, double Ms)[matches];
+                ShotPassMetrics? ShotPass, ChanceDecisionMetrics? Chances, MovementFeelMetrics? Feel, double Ms)[matches];
 
             Parallel.For(0, matches, i =>
             {
@@ -194,13 +197,15 @@ namespace Sim.Core.Tests.Match
                 clock.Stop();
                 readings[i] = (new MatchAnalyzer().Measure(r), new RealismAnalyzer(cfg.Match).Measure(r),
                     new ShapeMovementAnalyzer().Measure(r), new ShotPassAnalyzer(cfg.Match).Measure(r),
-                    new ChanceDecisionAnalyzer().Measure(r), clock.Elapsed.TotalMilliseconds);
+                    new ChanceDecisionAnalyzer().Measure(r), new MovementFeelAnalyzer().Measure(r),
+                    clock.Elapsed.TotalMilliseconds);
             });
 
             var tally = new RealismTally();
             var shape = new ShapeMovementTally();
             var shotPass = new ShotPassTally();
             var chances = new ChanceDecisionTally();
+            var feel = new MovementFeelTally();
             foreach (var x in readings)
             {
                 if (x.Match != null && x.Realism != null)
@@ -226,9 +231,15 @@ namespace Sim.Core.Tests.Match
                     chances.Add(x.Chances);
                     totalChances.Add(x.Chances);
                 }
+
+                if (x.Feel != null)
+                {
+                    feel.Add(x.Feel);
+                    totalFeel.Add(x.Feel);
+                }
             }
 
-            Print($"V11 {(formation == Formation.F442 ? "4-4-2" : "4-3-3")} mirror", tally, shape, shotPass, chances);
+            Print($"V11 {(formation == Formation.F442 ? "4-4-2" : "4-3-3")} mirror", tally, shape, shotPass, chances, feel);
         }
 
         // ------------------------------------------------------------------ the report itself
