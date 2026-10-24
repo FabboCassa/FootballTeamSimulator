@@ -76,10 +76,11 @@ namespace Sim.Core.Tests.Match
             var v11 = new RealismTally();
             var shape = new ShapeMovementTally();
             var shotPass = new ShotPassTally();
+            var chances = new ChanceDecisionTally();
             foreach (Formation formation in Mirrors)
-                Run(a, b, formation, matches, v11, shape, shotPass);
+                Run(a, b, formation, matches, v11, shape, shotPass, chances);
 
-            Print("V11 both mirrors", v11, shape, shotPass);
+            Print("V11 both mirrors", v11, shape, shotPass, chances);
             Assert.That(v11.Matches, Is.EqualTo(Mirrors.Length * matches), "Every match must come back with a stream.");
 
             // The gate is the full sample; a quick look at fewer matches only reads.
@@ -142,7 +143,8 @@ namespace Sim.Core.Tests.Match
             return RealismReference.All.Select(band => rows[band.Name]).ToList();
         }
 
-        private static void Print(string label, RealismTally realism, ShapeMovementTally shape, ShotPassTally shotPass)
+        private static void Print(string label, RealismTally realism, ShapeMovementTally shape, ShotPassTally shotPass,
+            ChanceDecisionTally chances)
         {
             CultureInfo inv = CultureInfo.InvariantCulture;
             var sb = new StringBuilder();
@@ -165,18 +167,19 @@ namespace Sim.Core.Tests.Match
             TestContext.Out.WriteLine(realism.Format(label));
             TestContext.Out.WriteLine(shape.Format(label));
             TestContext.Out.WriteLine(shotPass.Format(label));
+            TestContext.Out.WriteLine(chances.Format(label));
         }
 
         /// <summary>One mirror: printed on its own and added to the totals.</summary>
         private static void Run(Club a, Club b, Formation formation, int matches,
-            RealismTally total, ShapeMovementTally totalShape, ShotPassTally totalShotPass)
+            RealismTally total, ShapeMovementTally totalShape, ShotPassTally totalShotPass, ChanceDecisionTally totalChances)
         {
             var cfg = new BalanceConfig();
             Lineup la = LineupSelector.BestEleven(a, formation), lb = LineupSelector.BestEleven(b, formation);
             var neutral = new TacticContext(new Tactic(formation), cfg.Tactics.FamiliarityMax);
             var tactics = new MatchTactics(neutral, neutral);
             var readings = new (MatchMetrics? Match, RealismMetrics? Realism, ShapeMovementMetrics? Shape,
-                ShotPassMetrics? ShotPass, double Ms)[matches];
+                ShotPassMetrics? ShotPass, ChanceDecisionMetrics? Chances, double Ms)[matches];
 
             Parallel.For(0, matches, i =>
             {
@@ -191,12 +194,13 @@ namespace Sim.Core.Tests.Match
                 clock.Stop();
                 readings[i] = (new MatchAnalyzer().Measure(r), new RealismAnalyzer(cfg.Match).Measure(r),
                     new ShapeMovementAnalyzer().Measure(r), new ShotPassAnalyzer(cfg.Match).Measure(r),
-                    clock.Elapsed.TotalMilliseconds);
+                    new ChanceDecisionAnalyzer().Measure(r), clock.Elapsed.TotalMilliseconds);
             });
 
             var tally = new RealismTally();
             var shape = new ShapeMovementTally();
             var shotPass = new ShotPassTally();
+            var chances = new ChanceDecisionTally();
             foreach (var x in readings)
             {
                 if (x.Match != null && x.Realism != null)
@@ -216,9 +220,15 @@ namespace Sim.Core.Tests.Match
                     shotPass.Add(x.ShotPass);
                     totalShotPass.Add(x.ShotPass);
                 }
+
+                if (x.Chances != null)
+                {
+                    chances.Add(x.Chances);
+                    totalChances.Add(x.Chances);
+                }
             }
 
-            Print($"V11 {(formation == Formation.F442 ? "4-4-2" : "4-3-3")} mirror", tally, shape, shotPass);
+            Print($"V11 {(formation == Formation.F442 ? "4-4-2" : "4-3-3")} mirror", tally, shape, shotPass, chances);
         }
 
         // ------------------------------------------------------------------ the report itself
