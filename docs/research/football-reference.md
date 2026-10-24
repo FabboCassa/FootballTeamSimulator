@@ -2,7 +2,8 @@
 
 Reference for `docs/specs/real-match-and-playing-styles.md` (R1). It backs the R2 neutral realism
 bands held in `shared/Sim.Core/Match/Analysis/RealismReference.cs`, the R3 tier gap, the R9 passing
-chains, the R17 formation catalogue and the R18/R19 style catalogue.
+chains, the R17 formation catalogue and the R18/R19 style catalogue. §9 backs the R1 movement
+bands of `docs/specs/believable-match.md`.
 
 Rules:
 - Every figure has a source `[n]`, a link to the URL in [Sources](#sources).
@@ -807,6 +808,100 @@ Considered and kept at the R2 starting value:
 - **R19 directions per style.** #94 reads them from §3.1 into §3.3; the table and its minimums
   are to be judged with the user.
 
+## 9. Movement reference
+
+Backs R1 of `docs/specs/believable-match.md` and the `RealismReference.Movement` bands in
+`shared/Sim.Core/Match/Analysis/RealismReference.cs`. Every figure is my computation [48], printed
+by `tools/movement_reference.py` (run from the repo root: `python -I tools/movement_reference.py`;
+needs numpy). The script downloads the raw files into `tools/.tracking-data/` (git-ignored) and
+prints the §9.4 table as it stands; only these aggregates are committed.
+
+### 9.1 Source and licence
+
+- **Data:** Metrica Sports sample data, Sample Games 1, 2 and 3 [48]: anonymised matches (no
+  team, player or competition names), optical tracking at 25 fps of all 22 players and the ball,
+  synchronised event data. Coordinates are normalised 0-1 on both axes and scaled here to the
+  stated 105 × 68 m pitch. Games 1-2 are in Metrica's CSV format, game 3 in FIFA EPTS (tracking
+  and metadata) plus JSON events; the script reads both.
+- **Commit:** `e706dd506b360d69d9d123d5b8026e7294b13996` (2021-04-15), pinned in the script.
+- **Licence:** the repository has no LICENCE file. Its README "Legal stuff" asks to "be
+  responsible with the use of this data" and, "if you use it for anything public, please
+  acknowledge the source". It does not forbid publishing derived figures, so Metrica is used and
+  credited here and in [48]; the SkillCorner fallback of R1 was not needed.
+- **Limits:** three matches of unknown level, so the bands are narrow by construction; the ball is
+  tracked in 2D only, so a lofted ball's speed is its ground-projected speed.
+
+### 9.2 Definitions
+
+- **Open play:** frames inside a period, minus (a) the period start to its first event and its
+  last event to the period end; (b) from the end of a stoppage event to the start of the next
+  event: ball out, shot with outcome out or goal, any challenge flagged foul, ball lost to offside,
+  hand ball or end of half (cards and "fault received" are ignored); (c) every run of ≥ 3 s with
+  no ball position, because Metrica blanks the ball while it is out of play and some stoppages are
+  not tagged in the events. Restart deliveries are in open play. Result: 56.3, 55.3 and 65.2 min
+  of open play in games 1-3.
+- **Outfielders:** per team and period, the goalkeeper is the player (tracked ≥ 25% of the
+  period) furthest from the halfway line on average; it matches game 3's metadata. Everyone else
+  on the pitch is an outfielder.
+- **Player-minute:** one minute of open play of one outfielder with a valid speed (1,125, 1,105
+  and 1,305 player-minutes in games 1-3).
+- **1 s steps:** per period, a grid of non-overlapping 25-frame steps from the first frame; a step
+  is used only when all its frames are open play. A player's step is the displacement of his
+  smoothed position across it.
+- **Direction agreement R:** per team and step, the outfielders whose step exceeds 1 m (moving
+  > 1 m/s); with ≥ 6 of them, R = |Σ unit step vectors| ÷ their count (1 = all run the same way).
+  Pooled over both teams' steps: the median, and the share of steps with R > 0.9.
+- **Heading reversal:** two consecutive steps of one outfielder, both > 0.5 m, at more than 120°
+  to each other (cosine < −0.5). Count ÷ player-minutes.
+- **Speed bands:** share of outfielder open-play frames by smoothed speed, bands < 0.2, 0.2-2,
+  2-4, 4-5.5, 5.5-7 and > 7 m/s (lower bound inclusive).
+- **Acceleration:** one effort per run of ≥ 13 frames (≥ 0.5 s) of open play with the rate of
+  change of smoothed speed > 2 m/s². Count ÷ player-minutes.
+- **Ball speed:** smoothed 2D ball speed pooled over every frame from an event's start frame to
+  the frame before its end frame, for every PASS (any subtype, crosses, headers and goal kicks
+  included) and every SHOT that starts in open play and has an end frame after its start (a shot
+  blocked at the boot has none). p50, p90 and p99 of those frames.
+
+### 9.3 Filter and band rule
+
+- **Filter:** Savitzky-Golay, 13-frame window (0.52 s), quadratic fit, applied per player to x
+  and y on each run of tracked frames; position (derivative 0) and velocity (derivative 1) come
+  from the same fit, and acceleration is the same filter's derivative of speed. Frames within 6 of
+  a tracking gap get no value. Raw frame-to-frame differences multiply position noise by 25
+  (1 cm of jitter reads as 0.25 m/s), which would add reversals and accelerations that never
+  happened; the 0.52 s window removes that jitter while keeping a sprint's start.
+- **Ball glitches:** a ball sample on either side of a frame-to-frame jump faster than 45 m/s is
+  dropped before smoothing. Such jumps are tracking errors (the raw stream has up to 96 m/s), and
+  without the rule one of them set game 1's shot p99 at 52.9 m/s.
+- **Band:** the min-max of the three per-match values, each bound moved out by 10% of the range
+  (by 5% of the value when the range is 0), rounded outward at the table's precision; a lower
+  bound is floored at 0 and a share's upper bound capped at 100 (R at 1).
+
+### 9.4 Movement bands
+
+| Metric (constant) | Game 1 | Game 2 | Game 3 | Band |
+|---|---|---|---|---|
+| Direction agreement R, median (`AgreementMedian`) | 0.870 | 0.875 | 0.842 | 0.838-0.879 |
+| Direction agreement R > 0.9, % of windows (`AgreementAbove09Percent`) | 41.41 | 42.00 | 33.30 | 32.42-42.87 |
+| Heading reversals per player-minute (`ReversalsPerPlayerMinute`) | 0.855 | 0.906 | 1.014 | 0.839-1.030 |
+| Speed < 0.2 m/s, % of frames (`SpeedBelow02Percent`) | 1.47 | 1.05 | 0.87 | 0.81-1.53 |
+| Speed 0.2-2 m/s, % of frames (`Speed02To2Percent`) | 47.87 | 48.98 | 45.13 | 44.74-49.37 |
+| Speed 2-4 m/s, % of frames (`Speed2To4Percent`) | 37.13 | 37.96 | 40.80 | 36.76-41.17 |
+| Speed 4-5.5 m/s, % of frames (`Speed4To55Percent`) | 9.92 | 9.02 | 10.47 | 8.87-10.62 |
+| Speed 5.5-7 m/s, % of frames (`Speed55To7Percent`) | 2.83 | 2.49 | 2.28 | 2.22-2.89 |
+| Speed > 7 m/s, % of frames (`SpeedAbove7Percent`) | 0.78 | 0.50 | 0.45 | 0.42-0.82 |
+| Accelerations > 2 m/s2 per player-minute (`AccelerationsPerPlayerMinute`) | 1.340 | 1.326 | 1.447 | 1.314-1.459 |
+| Pass ball speed p50, m/s (`PassSpeedP50`) | 10.89 | 10.39 | 10.25 | 10.18-10.96 |
+| Pass ball speed p90, m/s (`PassSpeedP90`) | 16.94 | 16.08 | 15.76 | 15.64-17.06 |
+| Pass ball speed p99, m/s (`PassSpeedP99`) | 22.11 | 22.52 | 19.90 | 19.64-22.78 |
+| Shot ball speed p50, m/s (`ShotSpeedP50`) | 13.91 | 17.78 | 16.54 | 13.52-18.17 |
+| Shot ball speed p90, m/s (`ShotSpeedP90`) | 23.74 | 22.33 | 22.99 | 22.19-23.88 |
+| Shot ball speed p99, m/s (`ShotSpeedP99`) | 27.69 | 26.92 | 29.74 | 26.63-30.03 |
+
+The shot rows rest on 20-25 shots per match, so they move most from match to match. The test
+`RealismReferenceTests.MovementBands_MatchDocTable` asserts that every `RealismReference.Movement`
+constant equals the Band column above.
+
 ## Sources
 
 - [1] football-data.co.uk match files 2024-25 and 2025-26 (also `I1, SP1, D1, F1, N1, P1, I2, E1, D2` and `/2526/`): https://www.football-data.co.uk/mmz4281/2425/E0.csv ; column notes: https://www.football-data.co.uk/notes.txt
@@ -849,6 +944,7 @@ Considered and kept at the R2 starting value:
 - [45] Bloomfield, Polman, O'Donoghue 2007, J Sports Sci Med 6:63-70: https://www.jssm.org/hf.php?id=jssm-06-63.xml
 - [46] Opta Analyst, "Gian Piero Gasperini Leaves Atalanta: A Nine-Year Legacy" (4 Jun 2025): https://theanalyst.com/articles/gian-piero-gasperini-leaves-atalanta-stats
 - [47] Coaches' Voice, "The 4-5-1 formation: football tactics explained": https://learning.coachesvoice.com/cv/4-5-1-formation-football-tactics/
+- [48] Metrica Sports sample data (my computation, `tools/movement_reference.py`; Sample Games 1-3 at commit `e706dd506b360d69d9d123d5b8026e7294b13996`): https://github.com/metrica-sports/sample-data
 
 [1]: https://www.football-data.co.uk/mmz4281/2425/E0.csv
 [2]: https://understat.com/league/EPL/2024
@@ -890,3 +986,4 @@ Considered and kept at the R2 starting value:
 [45]: https://www.jssm.org/hf.php?id=jssm-06-63.xml
 [46]: https://theanalyst.com/articles/gian-piero-gasperini-leaves-atalanta-stats
 [47]: https://learning.coachesvoice.com/cv/4-5-1-formation-football-tactics/
+[48]: https://github.com/metrica-sports/sample-data

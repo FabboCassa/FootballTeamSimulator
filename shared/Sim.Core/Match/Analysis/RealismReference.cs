@@ -120,5 +120,65 @@ namespace Sim.Core.Match.Analysis
             DirectSpeed, Ppda, CrossesPerTeam, Corners, Fouls, BallInPlayMinutes,
             DistancePerOutfieldPlayerKm,
         };
+
+        /// <summary>
+        /// The R1 movement bands of docs/specs/believable-match.md, from Metrica Sports tracking data
+        /// (doc §9, printed by tools/movement_reference.py). Open play only, outfielders only; the
+        /// definitions, the smoothing filter and the band rule are in doc §9.1-§9.3.
+        /// </summary>
+        public static class Movement
+        {
+            // doc §9.4 Movement bands
+            public static readonly RealismBand AgreementMedian =
+                new RealismBand("direction agreement R (median)", 0.838, 0.879);
+            // doc §9.4 Movement bands
+            public static readonly RealismBand AgreementAbove09Percent =
+                new RealismBand("direction agreement R > 0.9 % of windows", 32.42, 42.87);
+            // doc §9.4 Movement bands
+            public static readonly RealismBand ReversalsPerPlayerMinute =
+                new RealismBand("heading reversals/player-minute", 0.839, 1.030);
+            // doc §9.4 Movement bands
+            public static readonly RealismBand SpeedBelow02Percent =
+                new RealismBand("speed < 0.2 m/s % of frames", 0.81, 1.53);
+            // doc §9.4 Movement bands
+            public static readonly RealismBand Speed02To2Percent =
+                new RealismBand("speed 0.2-2 m/s % of frames", 44.74, 49.37);
+            // doc §9.4 Movement bands
+            public static readonly RealismBand Speed2To4Percent =
+                new RealismBand("speed 2-4 m/s % of frames", 36.76, 41.17);
+            // doc §9.4 Movement bands
+            public static readonly RealismBand Speed4To55Percent =
+                new RealismBand("speed 4-5.5 m/s % of frames", 8.87, 10.62);
+            // doc §9.4 Movement bands
+            public static readonly RealismBand Speed55To7Percent =
+                new RealismBand("speed 5.5-7 m/s % of frames", 2.22, 2.89);
+            // doc §9.4 Movement bands
+            public static readonly RealismBand SpeedAbove7Percent =
+                new RealismBand("speed > 7 m/s % of frames", 0.42, 0.82);
+            // doc §9.4 Movement bands
+            public static readonly RealismBand AccelerationsPerPlayerMinute =
+                new RealismBand("accelerations > 2 m/s2/player-minute", 1.314, 1.459);
+            // doc §9.4 Movement bands
+            public static readonly RealismBand PassSpeedP50 = new RealismBand("pass ball speed p50 m/s", 10.18, 10.96);
+            // doc §9.4 Movement bands
+            public static readonly RealismBand PassSpeedP90 = new RealismBand("pass ball speed p90 m/s", 15.64, 17.06);
+            // doc §9.4 Movement bands
+            public static readonly RealismBand PassSpeedP99 = new RealismBand("pass ball speed p99 m/s", 19.64, 22.78);
+            // doc §9.4 Movement bands
+            public static readonly RealismBand ShotSpeedP50 = new RealismBand("shot ball speed p50 m/s", 13.52, 18.17);
+            // doc §9.4 Movement bands
+            public static readonly RealismBand ShotSpeedP90 = new RealismBand("shot ball speed p90 m/s", 22.19, 23.88);
+            // doc §9.4 Movement bands
+            public static readonly RealismBand ShotSpeedP99 = new RealismBand("shot ball speed p99 m/s", 26.63, 30.03);
+
+            /// <summary>Every movement band above, in doc §9.4 table order.</summary>
+            public static readonly IReadOnlyList<RealismBand> All = new[]
+            {
+                AgreementMedian, AgreementAbove09Percent, ReversalsPerPlayerMinute,
+                SpeedBelow02Percent, Speed02To2Percent, Speed2To4Percent, Speed4To55Percent,
+                Speed55To7Percent, SpeedAbove7Percent, AccelerationsPerPlayerMinute,
+                PassSpeedP50, PassSpeedP90, PassSpeedP99, ShotSpeedP50, ShotSpeedP90, ShotSpeedP99,
+            };
+        }
     }
 }

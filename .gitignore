@@ -69,3 +69,7 @@ test-output.txt
 .ba/auto.waiting
 .ba/cache/
 .ba/security/
+
+# ===== Reference data (believable-match R1) =====
+# Public tracking data downloaded by tools/movement_reference.py. Only aggregates are committed.
+tools/.tracking-data/
