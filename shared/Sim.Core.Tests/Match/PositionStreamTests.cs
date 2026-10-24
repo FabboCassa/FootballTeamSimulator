@@ -6,6 +6,7 @@ using Sim.Core.Config;
 using Sim.Core.Domain;
 using Sim.Core.Generation;
 using Sim.Core.Match;
+using Sim.Core.Match.Analysis;
 using Sim.Core.Random;
 
 namespace Sim.Core.Tests.Match
@@ -327,6 +328,18 @@ namespace Sim.Core.Tests.Match
             TestContext.Out.WriteLine($"[movement] worst single-tick step {worst}dm (cap {MaxStepDm}dm)");
             Assert.That(worst, Is.LessThanOrEqualTo(MaxStepDm + 4),
                 "A player must never cover more ground in one tick than his sprint allows");
+        }
+
+        [Test]
+        public void NoOutfieldManLeavesThePitch()
+        {
+            // R5: more than 1 m over a line is allowed only to the throw-in or corner taker, or to a
+            // man carried there by the ball for under 2 s; the harness holds it over 1,000 matches.
+            long offPitch = 0;
+            for (ulong seed = 400; seed < 404; seed++)
+                offPitch += ShapeMovementAnalyzer.Analyze(Play(seed))!.OffPitchFrames;
+
+            Assert.That(offPitch, Is.Zero);
         }
 
         private static int Step(PitchPoint a, PitchPoint b)

@@ -99,12 +99,15 @@ namespace Sim.Core.Match.Movement
         /// <summary>A shout's push on the whole block, in decimetres (V11 reads it on top of its shape).</summary>
         public readonly int ShoutLinePushDm;
 
+        /// <summary>Percent on how close this side's pressers get before they challenge (V11).</summary>
+        public readonly int ChallengePercent;
+
         private MovementTactics(
             int linePushDm, int frontLineGapDm, int widthPercent,
             int pressReachU, int pressTriggerDepthDm, int secondPressDepthDm, int pressStandOffU,
             int supporters, int holdMin, int holdMax, int shotAppetitePercent,
             TacticInstructions instructions,
-            ShoutEffect shout, int fatiguePercent)
+            ShoutEffect shout, int fatiguePercent, int challengePercent)
         {
             LinePushDm = linePushDm;
             FrontLineGapDm = frontLineGapDm;
@@ -126,6 +129,7 @@ namespace Sim.Core.Match.Movement
             DuelLossPercent = shout.DuelLossPercent;
             ShoutLinePushDm = shout.LinePushDm;
             OwnHalfDuelLossPercent = shout.OwnHalfDuelLossPercent;
+            ChallengePercent = challengePercent;
         }
 
         public static MovementTactics From(TacticContext? context, MatchBalance cfg, ShoutEffect shout)
@@ -150,7 +154,8 @@ namespace Sim.Core.Match.Movement
             int appetite =
                 InstructionTable.Percent(cfg.MentalityShotAppetitePercent, mentality, cfg.V11ShotAppetiteSpreadPercent)
                 * InstructionTable.Percent(cfg.TempoShotAppetitePercent, tempo, cfg.V11ShotAppetiteSpreadPercent) / 100
-                * shout.ShotAppetitePercent / 100;
+                * shout.ShotAppetitePercent / 100
+                * Percent(cfg.ShotSelectionAppetitePercent, (int)i.ShotSelection) / 100;
 
             // A shout's hold is a tempo too, read at the Tempo axis spread (ts), not the hold tables'.
             int hold = 100 + (shout.HoldPercent - 100) * ts / 100;
@@ -178,7 +183,8 @@ namespace Sim.Core.Match.Movement
                 shotAppetitePercent: appetite,
                 instructions: i,
                 shout: shout,
-                fatiguePercent: shout.FatiguePercent * Percent(cfg.V11PressingFatiguePercent, pressing) / 100);
+                fatiguePercent: shout.FatiguePercent * Percent(cfg.V11PressingFatiguePercent, pressing) / 100,
+                challengePercent: Percent(cfg.V11PressingChallengePercent, pressing) * shout.ChallengePercent / 100);
         }
 
         internal static int Pick(int[] table, int index) =>

@@ -85,7 +85,10 @@ namespace Fts.Services
         /// and the ranges a v16 career had are all preserved exactly.
         /// v18 (realistic club economy): world-wide finance and stature seeding, stature evolution at season
         /// end, world-wide background and data-only weekly accrual. Older saves are incompatible.
-        public int SaveVersion { get; set; } = 18;
+        /// v19 (real-match spec R23): tactics carry a playing style. A v18 save is migrated by
+        /// <see cref="Sim.Core.Tactics.TacticsSaveMigration"/>: its v11 tactic becomes Balanced with the
+        /// v11 axes as overrides on the same formation, familiarity is re-keyed, the prematch plan is kept.
+        public int SaveVersion { get; set; } = 19;
 
         /// <summary>Seed used to generate the world (kept for debugging/replays).</summary>
         public ulong Seed { get; set; }

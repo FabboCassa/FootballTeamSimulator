@@ -20,7 +20,8 @@ namespace Sim.Core.Tests.Match
     /// <see cref="InstructionsTests"/> and <see cref="RealismHarnessTests"/>: watched matches played
     /// with the shipped flags, equal squads on both sides (the same club, rotating across the league),
     /// and readings PRINTED for the user to judge. It is also the gate of R8-R11, asserted at the
-    /// full sample (a smaller one only reads).
+    /// full sample (a smaller one only reads). The tournament gate is R14 of the real-match spec:
+    /// R8 read on the mean of three seed sets (<see cref="TournamentMean"/>).
     ///
     /// Explicit, because each run is thousands of watched matches. Run it with:
     ///   dotnet test shared/Sim.Core.Tests/Sim.Core.Tests.csproj -c Release
@@ -36,7 +37,8 @@ namespace Sim.Core.Tests.Match
         private const string Reason = "Report-only harness: thousands of watched matches.";
         private const int MatchesPerPairing = 200;
         private const int EffectMatches = 400;
-        private const ulong TournamentSeed = 37_000;
+        // Disjoint at the full sample (3,000 seeds each); at 50,000 and 60,000 #66 saw the base fail R8 alone.
+        private static readonly ulong[] TournamentSeedSets = { 37_000, 50_000, 60_000 };
         private const ulong EffectSeed = 38_000;
         private const int SubMinute = 60;
         private const int TiredSubs = 3;
@@ -61,54 +63,74 @@ namespace Sim.Core.Tests.Match
         public void Harness_TacticTournament()
         {
             IReadOnlyList<TacticPreset> presets = TacticPresets.All;
-            List<Club> clubs = Clubs();
-            var pairs = TournamentTable.Pairings(presets.Count);
+            List<string> names = presets.Select(p => p.Name).ToList();
             int perPairing = TestContext.Parameters.Get("perPairing", MatchesPerPairing);
+            var clock = Stopwatch.StartNew();
+
+            var tables = new List<TournamentTable>();
+            foreach (ulong seed in TournamentSeedSets)
+            {
+                TournamentTable table = PlayTournament(presets.Select(x => x.Tactic).ToList(),
+                    TournamentTable.Pairings(presets.Count), perPairing, seed);
+                TestContext.Out.WriteLine(table.Format($"V11, seed set {seed}, {perPairing}/pairing", names));
+                for (int p = 0; p < presets.Count; p++)
+                    Assert.That(table.Games(p), Is.EqualTo((presets.Count - 1) * perPairing), presets[p].Name);
+                tables.Add(table);
+            }
+
+            var mean = new TournamentMean(tables);
+            TestContext.Out.WriteLine(mean.Format(
+                $"V11, {perPairing}/pairing, {clock.Elapsed.TotalSeconds:F0} s", names, MaxPointsShare, MaxWorstMatchupShare));
+
+            // R14 is the gate at the full sample; a quick look at fewer matches only reads.
+            if (perPairing < MatchesPerPairing) return;
+            for (int p = 0; p < presets.Count; p++)
+            {
+                Assert.That(mean.PointsShare(p), Is.LessThanOrEqualTo(MaxPointsShare), $"{presets[p].Name}: mean points share");
+                Assert.That(mean.ShareAgainst(p, mean.WorstOpponent(p)), Is.LessThan(MaxWorstMatchupShare),
+                    $"{presets[p].Name}: its worst matchup, on the mean");
+            }
+        }
+
+        /// <summary>
+        /// Plays <paramref name="perPairing"/> matches of each pairing of <paramref name="tactics"/>, all
+        /// pairings in parallel: the same club on both sides, rotating across the league, the venue
+        /// alternating, seeds <paramref name="firstSeed"/> onwards. Shared with the R20 style tournament.
+        /// </summary>
+        internal static TournamentTable PlayTournament(IReadOnlyList<Tactic> tactics,
+            IReadOnlyList<(int A, int B)> pairs, int perPairing, ulong firstSeed)
+        {
+            List<Club> clubs = Clubs();
             int total = pairs.Count * perPairing;
             var aGoals = new int[total];
             var bGoals = new int[total];
             var cfg = new BalanceConfig();
             int fam = cfg.Tactics.FamiliarityMax;
-            var clock = Stopwatch.StartNew();
 
             Parallel.For(0, total, i =>
             {
                 (int a, int b) = pairs[i / perPairing];
                 Club club = clubs[i % clubs.Count];
                 bool aHome = i % 2 == 0;   // alternate the venue so home advantage cancels out
-                TacticContext ca = new TacticContext(presets[a].Tactic, fam), cb = new TacticContext(presets[b].Tactic, fam);
-                Lineup la = LineupSelector.BestEleven(club, presets[a].Tactic.Formation);
-                Lineup lb = LineupSelector.BestEleven(club, presets[b].Tactic.Formation);
+                TacticContext ca = new TacticContext(tactics[a], fam), cb = new TacticContext(tactics[b], fam);
+                Lineup la = LineupSelector.BestEleven(club, tactics[a].Formation);
+                Lineup lb = LineupSelector.BestEleven(club, tactics[b].Formation);
 
                 MatchReport r = aHome
-                    ? Engine(cfg).Simulate(la, lb, new Pcg32(TournamentSeed + (ulong)i), new MatchTactics(ca, cb))
-                    : Engine(cfg).Simulate(lb, la, new Pcg32(TournamentSeed + (ulong)i), new MatchTactics(cb, ca));
+                    ? Engine(cfg).Simulate(la, lb, new Pcg32(firstSeed + (ulong)i), new MatchTactics(ca, cb))
+                    : Engine(cfg).Simulate(lb, la, new Pcg32(firstSeed + (ulong)i), new MatchTactics(cb, ca));
                 aGoals[i] = aHome ? r.HomeGoals : r.AwayGoals;
                 bGoals[i] = aHome ? r.AwayGoals : r.HomeGoals;
             });
 
-            var table = new TournamentTable(presets.Count);
+            var table = new TournamentTable(tactics.Count);
             for (int i = 0; i < total; i++)
             {
                 (int a, int b) = pairs[i / perPairing];
                 table.Add(a, b, aGoals[i], bGoals[i]);
             }
 
-            TestContext.Out.WriteLine(table.Format(
-                $"V11, {perPairing}/pairing, {total} matches, {clock.Elapsed.TotalSeconds:F0} s",
-                presets.Select(p => p.Name).ToList()));
-
-            for (int p = 0; p < presets.Count; p++)
-                Assert.That(table.Games(p), Is.EqualTo((presets.Count - 1) * perPairing), presets[p].Name);
-
-            // R8 is the gate at the full sample; a quick look at fewer matches only reads.
-            if (perPairing < MatchesPerPairing) return;
-            for (int p = 0; p < presets.Count; p++)
-            {
-                Assert.That(table.PointsShare(p), Is.LessThanOrEqualTo(MaxPointsShare), $"{presets[p].Name}: points share");
-                Assert.That(table.ShareAgainst(p, table.WorstOpponent(p)), Is.LessThan(MaxWorstMatchupShare),
-                    $"{presets[p].Name}: its worst matchup");
-            }
+            return table;
         }
 
         [Test, Explicit(Reason), Category("TacticHarness")]

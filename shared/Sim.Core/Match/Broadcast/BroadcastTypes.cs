@@ -3,14 +3,36 @@ using System;
 namespace Sim.Core.Match.Broadcast
 {
     /// <summary>
-    /// How a stretch of the stream is played back. The value IS the speed factor over real time,
-    /// so nothing here can be slower than real time; <see cref="Cut"/> is skipped entirely.
+    /// How a stretch of the stream is played back at 1x (spec R12). The value IS the speed factor
+    /// over real time in tenths, so nothing here is slower than 1.3x real time; <see cref="Cut"/>
+    /// is skipped entirely.
     /// </summary>
     public enum PlaybackRate
     {
         Cut = 0,
-        RealTime = 1,
-        Double = 2
+
+        /// <summary>Open play: 1.3x real time.</summary>
+        Live = 13,
+
+        /// <summary>Dead time (ball out, a restart being set up, a celebration, a change): 2x real time.</summary>
+        DeadTime = 20
+    }
+
+    public static class PlaybackRates
+    {
+        /// <summary>
+        /// The playback cost of one frame at 1x is <see cref="CostOf"/> units, where a real-time frame
+        /// is <see cref="UnitsPerRealFrame"/> units: 260 is the least multiple of 13 and 20, so every
+        /// rate costs a whole number and sums of playback time stay exact.
+        /// </summary>
+        internal const int UnitsPerRealFrame = 26;
+
+        private const int CommonTenths = 260;
+
+        /// <summary>The speed factor over real time at 1x (0 for a cut).</summary>
+        public static double Factor(this PlaybackRate rate) => (int)rate / 10.0;
+
+        internal static int CostOf(PlaybackRate rate) => rate == PlaybackRate.Cut ? 0 : CommonTenths / (int)rate;
     }
 
     /// <summary>Who had the ball through a cut span.</summary>

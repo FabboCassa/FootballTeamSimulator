@@ -1335,6 +1335,9 @@ TextField {
 .fts-tac__seg { margin-bottom: 6px; }
 .fts-tac__module { min-height: 60px; }
 .fts-tac__famvalue { font-size: 18px; color: var(--fts-text-2); margin-bottom: 10px; }
+.fts-tac__style { min-height: 52px; }
+.fts-tac__stylename { font-size: 20px; -unity-font-style: bold; color: var(--fts-text); margin-top: 6px; margin-bottom: 4px; }
+.fts-tac__seg--wide .fts-segchip { font-size: 15px; padding: 12px 4px; }
 .fts-plan__rule { flex-direction: row; align-items: center; padding: 8px 10px; margin-bottom: 6px; border-radius: 10px; background-color: var(--fts-surface-alt); }
 .fts-plan__ruletext { flex-grow: 1; flex-shrink: 1; font-size: 17px; color: var(--fts-text-2); white-space: normal; }
 .fts-plan__empty { font-size: 16px; color: var(--fts-text-label); margin-bottom: 8px; white-space: normal; }
@@ -1426,6 +1429,9 @@ TextField {
 .fts--mobile .fts-tac__axis { font-size: 28px; margin-top: 18px; margin-bottom: 12px; }
 .fts--mobile .fts-tac__module { min-height: 110px; }
 .fts--mobile .fts-tac__famvalue { font-size: 30px; margin-bottom: 16px; }
+.fts--mobile .fts-tac__style { min-height: 96px; }
+.fts--mobile .fts-tac__stylename { font-size: 34px; margin-top: 10px; margin-bottom: 8px; }
+.fts--mobile .fts-tac__seg--wide .fts-segchip { font-size: 24px; padding: 20px 4px; }
 .fts--mobile .fts-plan__rule { padding: 14px 16px; margin-bottom: 10px; border-radius: 18px; }
 .fts--mobile .fts-plan__ruletext { font-size: 30px; }
 .fts--mobile .fts-plan__empty { font-size: 28px; margin-bottom: 14px; }

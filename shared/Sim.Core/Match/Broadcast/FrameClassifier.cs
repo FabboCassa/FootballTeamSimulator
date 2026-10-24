@@ -11,7 +11,6 @@ namespace Sim.Core.Match.Broadcast
     internal static class FrameClassifier
     {
         private const int HalfwayDm = Pitch.LengthDm / 2;
-        private const int FinalThirdDm = Pitch.LengthDm * 2 / 3;
 
         public static FrameReading Read(PositionStream s, BroadcastSettings settings)
         {
@@ -22,9 +21,8 @@ namespace Sim.Core.Match.Broadcast
 
             var reading = new FrameReading(n, SecondHalfStart(actions, n, s.TicksPerMinute));
             int[] side = Sides(s, actions);
-            bool[] dead = ReadDeadBalls(s, actions, reading);
+            bool[] dead = ReadDeadBalls(actions, reading, settings.DeadTimeShownSeconds * framesPerSecond);
             ReadOpenPlay(s, side, dead, reading);
-            ReadCounters(s, side, dead, reading, settings.CounterWindowSeconds * framesPerSecond);
             ReadKeyEvents(s, actions, reading, after);
             return reading;
         }
@@ -60,54 +58,45 @@ namespace Sim.Core.Match.Broadcast
 
         /// <summary>
         /// A dead ball runs from the whistle (the restart, or the goal) to the first touch that puts
-        /// it back in play. In the attacking half of the side restarting it is a set piece (hot);
-        /// anywhere else it is cut.
+        /// it back in play. Its last <paramref name="shown"/> frames are the set-up, shown at dead
+        /// time; everything before them is idle and cut.
         /// </summary>
-        private static bool[] ReadDeadBalls(PositionStream s, List<BallAction> actions, FrameReading r)
+        private static bool[] ReadDeadBalls(List<BallAction> actions, FrameReading r, int shown)
         {
             var dead = new bool[r.Classes.Length];
             bool open = false;
             int start = 0;
-            BallAction last = default;
             foreach (BallAction a in actions)
             {
                 if (IsRestart(a.Kind) || a.Kind == BallActionKind.Goal || a.Kind == BallActionKind.HalfTime)
                 {
                     if (!open) start = a.Tick;
                     open = true;
-                    last = a;
                 }
                 else if (open && IsPlay(a.Kind))
                 {
-                    CloseDeadBall(s, r, dead, start, a.Tick, last);
+                    CloseDeadBall(r, dead, start, a.Tick, shown);
                     open = false;
                 }
             }
 
-            if (open) CloseDeadBall(s, r, dead, start, r.Classes.Length, last);
+            if (open) CloseDeadBall(r, dead, start, r.Classes.Length, shown);
             return dead;
         }
 
-        private static void CloseDeadBall(PositionStream s, FrameReading r, bool[] dead, int start, int end, BallAction restart)
+        private static void CloseDeadBall(FrameReading r, bool[] dead, int start, int end, int shown)
         {
-            int n = r.Classes.Length;
-            if (end > n) end = n;
-            if (start >= end) return;
-
-            // The last frame before the touch: actions land on the first frame at or after their
-            // tick, so by frame `end` the ball may already have left the spot.
-            int taking = end - 1;
-            bool setPiece = IsSetPiece(restart.Kind) && Progress(s.BallXY[taking * 2], restart.Home) > HalfwayDm;
+            if (end > r.Classes.Length) end = r.Classes.Length;
             for (int f = start; f < end; f++)
             {
                 dead[f] = true;
-                r.Classes[f] = setPiece ? FrameClass.Hot : FrameClass.Dead;
+                r.Classes[f] = f >= end - shown ? FrameClass.DeadTime : FrameClass.Idle;
             }
         }
 
         /// <summary>
-        /// Open play by where the side on the ball has it, except a spell that never crossed
-        /// halfway, which is sterile possession however long it lasted.
+        /// Open play, except a spell that never crossed halfway, which is sterile possession however
+        /// long it lasted.
         /// </summary>
         private static void ReadOpenPlay(PositionStream s, int[] side, bool[] dead, FrameReading r)
         {
@@ -124,37 +113,14 @@ namespace Sim.Core.Match.Broadcast
 
                 bool sterile = side[spellStart] != 0 && furthest <= HalfwayDm;
                 for (int g = spellStart; g < f; g++)
-                {
-                    if (dead[g]) continue;
-                    r.Classes[g] = sterile ? FrameClass.Sterile
-                        : Progress(s.BallXY[g * 2], home) >= FinalThirdDm ? FrameClass.Hot
-                        : FrameClass.Warm;
-                }
+                    if (!dead[g])
+                        r.Classes[g] = sterile ? FrameClass.Sterile : FrameClass.Open;
 
                 spellStart = f;
             }
         }
 
-        /// <summary>A ball won in the own half and carried into the final third inside the window is a counter.</summary>
-        private static void ReadCounters(PositionStream s, int[] side, bool[] dead, FrameReading r, int window)
-        {
-            for (int f = 1; f < side.Length; f++)
-            {
-                if (dead[f] || side[f] == 0 || side[f] == side[f - 1]) continue;
-                bool home = side[f] == 1;
-                if (Progress(s.BallXY[f * 2], home) >= HalfwayDm) continue;
-
-                int last = Math.Min(f + window, r.HalfEnd(f) - 1);
-                for (int g = f + 1; g <= last && !dead[g] && side[g] == side[f]; g++)
-                {
-                    if (Progress(s.BallXY[g * 2], home) < FinalThirdDm) continue;
-                    for (int h = f; h <= g; h++) r.Classes[h] = FrameClass.Hot;
-                    break;
-                }
-            }
-        }
-
-        /// <summary>Shots, goals, cards, penalties and substitutions, each with its aftermath, at 1x.</summary>
+        /// <summary>Shots, goals, cards, penalties and substitutions, each with its aftermath, always shown.</summary>
         private static void ReadKeyEvents(PositionStream s, List<BallAction> actions, FrameReading r, int after)
         {
             for (int i = 0; i < actions.Count; i++)
@@ -198,10 +164,6 @@ namespace Sim.Core.Match.Broadcast
         private static bool IsRestart(BallActionKind kind) =>
             kind == BallActionKind.Kickoff || kind == BallActionKind.ThrowIn || kind == BallActionKind.GoalKick
             || kind == BallActionKind.FreeKick || kind == BallActionKind.Corner || kind == BallActionKind.Penalty;
-
-        private static bool IsSetPiece(BallActionKind kind) =>
-            kind == BallActionKind.Corner || kind == BallActionKind.FreeKick
-            || kind == BallActionKind.ThrowIn || kind == BallActionKind.Penalty;
 
         private static bool IsPlay(BallActionKind kind) =>
             kind == BallActionKind.Pass || kind == BallActionKind.LongBall || kind == BallActionKind.Cross

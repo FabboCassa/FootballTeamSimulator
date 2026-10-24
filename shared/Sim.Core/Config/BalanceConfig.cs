@@ -56,24 +56,24 @@ namespace Sim.Core.Config
         /// <summary>Of the foreign players, the percent drawn from the same continent.</summary>
         public int SameContinentForeignPercent { get; set; } = 60;
 
-        // --- Quick resolver (background leagues), fitted to the V11 engine (watchable-match R17) ---
+        // --- Quick resolver (background leagues), fitted to engine v12 (real-match R15, watchable-match R17) ---
         /// <summary>
         /// Expected goals for an evenly-matched side, fitted against the full engine
-        /// (FastModelHarnessTests, 1,000 matches of a generated league): V11 gives 2.81 goals,
-        /// 42.6 / 22.6 / 34.8 home-draw-away and 0.100 goal difference per strength point. The
-        /// names keep their V11 prefix so that a stored balance document's older, engine-v10
-        /// Quick* figures are ignored on load instead of read into this model.
+        /// (FastModelHarnessTests, 1,000 matches of a generated league): v12 gives 3.16 goals,
+        /// 45.3 / 21.1 / 33.6 home-draw-away and 0.119 goal difference per strength point (V11 gave
+        /// 2.81, 42.6 / 22.6 / 34.8 and 0.100). The V12 prefix makes a stored balance document's
+        /// older V11 (or engine-v10) Quick* figures load and be ignored instead of read into this model.
         /// </summary>
-        public double QuickV11BaseGoals { get; set; } = 1.38;
+        public double QuickV12BaseGoals { get; set; } = 1.58;
 
         /// <summary>Expected goals gained per point of strength advantage (as a fraction of the base).</summary>
-        public double QuickV11StrengthFactor { get; set; } = 0.028;
+        public double QuickV12StrengthFactor { get; set; } = 0.031;
 
         /// <summary>
         /// Flat strength points added to the home side, ON TOP of MatchBalance.HomeAdvantagePercent.
-        /// Negative because V11's home edge is smaller than HomeAdvantagePercent alone gives here.
+        /// Negative because the engine's home edge is smaller than HomeAdvantagePercent alone gives here.
         /// </summary>
-        public int QuickV11HomeAdvantageStrength { get; set; } = -3;
+        public int QuickV12HomeAdvantageStrength { get; set; } = -2;
 
         public double QuickMinExpectedGoals { get; set; } = 0.20;
         public double QuickMaxExpectedGoals { get; set; } = 4.0;
@@ -83,22 +83,69 @@ namespace Sim.Core.Config
         /// Deterministic, integer-friendly and free of Math.Exp, which the determinism rules forbid.
         /// Costs two draws per trial per side.
         /// </summary>
-        public int QuickV11GoalTrials { get; set; } = 14;
+        public int QuickV12GoalTrials { get; set; } = 14;
 
         // --- Quick resolver instructions (R17) ---
         // Percent points added to a side's expected goals (GoalsFor) or to its OPPONENT's
         // (GoalsAgainst) by each instruction axis, indexed like the enums (low · neutral · high).
-        // The middle entry is the identity. Each extreme is the V11 engine's own shift against a
+        // The middle entry is the identity. Each extreme is the v12 engine's own shift against a
         // neutral side of the same club (1,000 matches a setting, FastModelHarnessTests) as a
-        // share of a side's ~1.38 goals: e.g. press high concedes +0.28 a match, +20%.
-        public int[] QuickMentalityGoalsForPercent { get; set; } = { -4, 0, 7 };
-        public int[] QuickMentalityGoalsAgainstPercent { get; set; } = { -11, 0, 3 };
-        public int[] QuickPressingGoalsForPercent { get; set; } = { -1, 0, -6 };
-        public int[] QuickPressingGoalsAgainstPercent { get; set; } = { 6, 0, 20 };
-        public int[] QuickTempoGoalsForPercent { get; set; } = { -2, 0, 4 };
-        public int[] QuickTempoGoalsAgainstPercent { get; set; } = { 0, 0, -1 };
-        public int[] QuickWidthGoalsForPercent { get; set; } = { 8, 0, -5 };
-        public int[] QuickWidthGoalsAgainstPercent { get; set; } = { -6, 0, 9 };
+        // share of a side's ~1.58 goals: e.g. attacking concedes +0.62 a match, +39%.
+        public int[] QuickMentalityGoalsForPercent { get; set; } = { -1, 0, 10 };
+        public int[] QuickMentalityGoalsAgainstPercent { get; set; } = { -8, 0, 39 };
+        public int[] QuickPressingGoalsForPercent { get; set; } = { -14, 0, -6 };
+        public int[] QuickPressingGoalsAgainstPercent { get; set; } = { 9, 0, 18 };
+        public int[] QuickTempoGoalsForPercent { get; set; } = { -7, 0, 13 };
+        public int[] QuickTempoGoalsAgainstPercent { get; set; } = { -3, 0, 4 };
+        public int[] QuickWidthGoalsForPercent { get; set; } = { 4, 0, -7 };
+        public int[] QuickWidthGoalsAgainstPercent { get; set; } = { 3, 0, 5 };
+
+        // --- Quick resolver styles and formations (real-match R24) ---
+        // The other R16 axes read the same way, each extreme the v12 engine's single-axis shift
+        // against a neutral side of the same club (1,000 matches a setting, FastModelHarnessTests).
+        // DefensiveLine has five levels, Normal (index 2) the identity. Single axes do not add up to
+        // a style (the axes interact: Man-oriented press concedes +156%, far more than its parts),
+        // so a side whose instructions are nearest a catalogue style reads that style's own entry
+        // below, plus the single-axis difference of any axis it changed from the preset.
+        public int[] QuickPassingDirectnessGoalsForPercent { get; set; } = { -3, 0, 6 };
+        public int[] QuickPassingDirectnessGoalsAgainstPercent { get; set; } = { 1, 0, 5 };
+        public int[] QuickBuildUpGoalsForPercent { get; set; } = { -5, 0, 0 };
+        public int[] QuickBuildUpGoalsAgainstPercent { get; set; } = { 4, 0, 3 };
+        public int[] QuickFinalThirdGoalsForPercent { get; set; } = { 4, 0, 4 };
+        public int[] QuickFinalThirdGoalsAgainstPercent { get; set; } = { 0, 0, -2 };
+        public int[] QuickShotSelectionGoalsForPercent { get; set; } = { -11, 0, 11 };
+        public int[] QuickShotSelectionGoalsAgainstPercent { get; set; } = { -3, 0, -2 };
+        public int[] QuickDribbleGoalsForPercent { get; set; } = { 5, 0, -6 };
+        public int[] QuickDribbleGoalsAgainstPercent { get; set; } = { 8, 0, 6 };
+        public int[] QuickOnBallLostGoalsForPercent { get; set; } = { 5, 0, 3 };
+        public int[] QuickOnBallLostGoalsAgainstPercent { get; set; } = { 11, 0, 68 };
+        public int[] QuickOnBallWonGoalsForPercent { get; set; } = { 0, 0, 4 };
+        public int[] QuickOnBallWonGoalsAgainstPercent { get; set; } = { 18, 0, -7 };
+        public int[] QuickLineOfEngagementGoalsForPercent { get; set; } = { -1, 0, 0 };
+        public int[] QuickLineOfEngagementGoalsAgainstPercent { get; set; } = { 23, 0, -11 };
+        public int[] QuickDefensiveLineGoalsForPercent { get; set; } = { 0, -4, 0, -3, 1 };
+        public int[] QuickDefensiveLineGoalsAgainstPercent { get; set; } = { -32, -18, 0, 52, 97 };
+        public int[] QuickMarkingSchemeGoalsForPercent { get; set; } = { -2, 0, -5 };
+        public int[] QuickMarkingSchemeGoalsAgainstPercent { get; set; } = { -26, 0, 38 };
+        public int[] QuickPressDirectionGoalsForPercent { get; set; } = { 13, 0, -8 };
+        public int[] QuickPressDirectionGoalsAgainstPercent { get; set; } = { 204, 0, -5 };
+
+        /// <summary>
+        /// Indexed by <see cref="Tactics.PlayingStyle"/> value; Balanced (0) is the identity. Each style in
+        /// its first suggested formation against Balanced 4-3-3 (2,000 matches, FastModelStyleHarnessTests),
+        /// as a share of a side's goals, less that formation's own entry so the two add back up.
+        /// </summary>
+        public int[] QuickStyleGoalsForPercent { get; set; } = { 0, -18, 22, 51, 23, -2, 2, 3, 24, -2, -13, -12, -5, -11, 29 };
+        public int[] QuickStyleGoalsAgainstPercent { get; set; } = { 0, 3, 69, 100, 44, -10, 17, 25, 69, 43, -18, 20, 13, -21, 138 };
+
+        /// <summary>
+        /// Indexed by <see cref="Tactics.Formation"/> value; 4-3-3 (index 0, the engine-identity shape) is 0.
+        /// A Balanced side in each shape against Balanced 4-3-3 (1,000 matches, FastModelStyleHarnessTests).
+        /// </summary>
+        public int[] QuickFormationGoalsForPercent { get; set; } =
+            { 0, 9, 7, -1, 16, 2, -19, -19, 11, -5, 5, 5, -5, -17, -10, 4, 2, 6, -5, -7, -5, 22, 25, 4, -23, 3, -15 };
+        public int[] QuickFormationGoalsAgainstPercent { get; set; } =
+            { 0, -4, 19, -19, -17, 18, -20, -20, -10, -16, -2, -4, -24, -11, -26, 0, -5, -20, -5, -3, 4, -8, -9, -10, -24, 8, -19 };
     }
 
     /// <summary>
@@ -1199,12 +1246,26 @@ namespace Sim.Core.Config
         /// <summary>
         /// What pressing costs the legs, by Pressing (low · medium · high): percent on the match
         /// fatigue a side carries. A side that hunts the ball all match has less left in the last
-        /// half hour than one that sits.
+        /// half hour than one that sits. A low block's legs are a medium one's since issue #87
+        /// (was 85): fresher in the last half hour, the 5-3-2 low block took 55% of the tactic
+        /// tournament's points (R14: at most 55%).
         /// </summary>
-        public int[] V11PressingFatiguePercent { get; set; } = { 85, 100, 160 };
+        public int[] V11PressingFatiguePercent { get; set; } = { 100, 100, 160 };
 
-        /// <summary>Line height out of possession, by Pressing (low · medium · high), in dm.</summary>
-        public int[] V11PressingLinePushDm { get; set; } = { -35, 0, 35 };
+        /// <summary>
+        /// How close a presser gets before he challenges, by Pressing (low · medium · high): percent
+        /// of ChallengeRadiusDm, read in full. A high press goes in for the ball; a low block
+        /// contains and lets the man on the ball come to it (issue #87).
+        /// </summary>
+        public int[] V11PressingChallengePercent { get; set; } = { 70, 100, 140 };
+
+        /// <summary>
+        /// Line height out of possession, by Pressing (low · medium · high), in dm. -10 since issue
+        /// #87 (was -35): with fewer turnovers, and the mentality spread back at 22, a low block
+        /// 3.5 m deeper was the tactic tournament's strongest preset with no matchup it lost
+        /// (5-3-2 low block 54-58%, 45-49% at worst; R14).
+        /// </summary>
+        public int[] V11PressingLinePushDm { get; set; } = { -10, 0, 35 };
 
         /// <summary>
         /// R2's "off target": a man further than this from his phase target spot (25 m), while he is
@@ -1225,10 +1286,18 @@ namespace Sim.Core.Config
         /// 118/60: every turnover moves the whole shape from one to the other, and the further
         /// apart they are the longer the front men are stranded off target (R2). The block's 60
         /// stands it about 40 m wide, inside real football's 28-42 m; at 80 it stood 46 m wide.
+        /// Without the ball the lines stand at 84% of the spacing: a block 25 m long on its spots
+        /// and 33 m in play in its own half (real-match spec R4, 25-40 m), with less room between
+        /// its lines. With the ball, 130 puts the wide men within 8 m of both touchlines in the
+        /// opposition half (real-match spec R4); at 110 the shape stood 48 m wide with both touchline zones
+        /// manned one frame in twenty.
+        /// #87: 140 and 120 (were 100 and 130). With the ball the lines stand wider apart, so
+        /// the shape moves up with its centre instead of the back line being left behind it
+        /// (R4 off-target); 120 still mans both touchline zones (TeamShapeR4Tests), 115 does not.
         /// </summary>
-        public int V11AttackLineSpacingPercent { get; set; } = 100;
-        public int V11DefendLineSpacingPercent { get; set; } = 100;
-        public int V11AttackWidthPercent { get; set; } = 110;
+        public int V11AttackLineSpacingPercent { get; set; } = 140;
+        public int V11DefendLineSpacingPercent { get; set; } = 84;
+        public int V11AttackWidthPercent { get; set; } = 120;
         public int V11DefendWidthPercent { get; set; } = 60;
 
         /// <summary>
@@ -1244,10 +1313,15 @@ namespace Sim.Core.Config
         /// The tables were tuned for engine v10's brain; read in full by V11 a high line or a quick
         /// release swung a match between equal sides by more than a goal, and a wide side stood
         /// its block so far apart that it took a third of the points. The middle entry is the
-        /// identity at any spread.
+        /// identity at any spread. Issue #87 (R14): mentality 25 -> 22 and pressing 15 -> 30. With
+        /// the ball changing hands a third as often a defensive side's deep block was the strongest
+        /// preset (5-3-2 low block 68% of the tournament's points) and a pressing side could not win
+        /// the ball back (4-2-3-1 high press 37%); the low block also stands higher
+        /// (V11PressingLinePushDm). Below about 18 an attacking line stood less than 3 m above a
+        /// defensive one (InstructionsTests; 1.8 m at 12).
         /// </summary>
-        public int V11MentalitySpreadPercent { get; set; } = 25;
-        public int V11PressingSpreadPercent { get; set; } = 15;
+        public int V11MentalitySpreadPercent { get; set; } = 22;
+        public int V11PressingSpreadPercent { get; set; } = 30;
         public int V11TempoSpreadPercent { get; set; } = 12;
         public int V11WidthSpreadPercent { get; set; } = 30;
 
@@ -1256,16 +1330,27 @@ namespace Sim.Core.Config
         /// spreads the shot appetite (Mentality times Tempo) and the release hold (Tempo) moved the
         /// game by well under the instruction tests' margins: eager over patient +1.1 shots a match
         /// (margin +2.5), fast over slow +15 passes, 525 / 540 (margin +30).
+        /// Issue #87: 250 and 30 (were 200 and 20). With a third of the challenges the ball is
+        /// held longer whatever the instruction, and at 200 / 20 eager over patient read +1.6 shots
+        /// and fast over slow +18 passes (InstructionsTests: +2.5 and +30).
         /// </summary>
-        public int V11ShotAppetiteSpreadPercent { get; set; } = 200;
-        public int V11TempoHoldSpreadPercent { get; set; } = 20;
+        public int V11ShotAppetiteSpreadPercent { get; set; } = 250;
+        public int V11TempoHoldSpreadPercent { get; set; } = 30;
 
-        /// <summary>How long a side takes to open from its block into its attacking shape.</summary>
-        public int V11ShapeExpandMs { get; set; } = 4000;
+        /// <summary>
+        /// How long a side takes to open from its block into its attacking shape. 8 s since issue
+        /// #87 (was 4 s): with fewer turnovers the attacking shape is a settled one, and opening it
+        /// at a run left the full-backs and wingers off target (R4, at most 5 s a match).
+        /// </summary>
+        public int V11ShapeExpandMs { get; set; } = 8000;
         public int V11ShapeExpandTicks => TicksOfMs(V11ShapeExpandMs);
 
-        /// <summary>How long a side takes to drop from its attacking shape into its block.</summary>
-        public int V11ShapeCollapseMs { get; set; } = 5000;
+        /// <summary>
+        /// How long a side takes to drop from its attacking shape into its block. 4 s rather than
+        /// 5 s since the attacking shape went to 130% width (R4): dropping from it at the old pace
+        /// left the block more than 42 m wide. 3.5 s since issue #87, with the slower opening.
+        /// </summary>
+        public int V11ShapeCollapseMs { get; set; } = 3500;
         public int V11ShapeCollapseTicks => TicksOfMs(V11ShapeCollapseMs);
 
         /// <summary>Top speed of a man running with the ball, in percent of his own (see MatchSimulator.CarrierTop).</summary>
@@ -1281,9 +1366,13 @@ namespace Sim.Core.Config
         /// <summary>
         /// How wide a V11 strike can go, in percent of ShotSpreadDm. That spread was sized for the
         /// close-range shots engine v10 took; V11 shoots at the open goal from the edge of the box
-        /// too, and from there the full spread put three strikes in four off target.
+        /// too, and from there the full spread put three strikes in four off target. 45 since R6: with
+        /// the keeper claiming balls in his box, fewer close-range rebounds land on target, and at
+        /// 56 on-target fell under 30%.
+        /// 41 since issue #87 (was 45): with the keeper on his line and blocks in the lane,
+        /// 45 left 27% of shots on target (R2: 30-38%) and goals at 1.4 a match.
         /// </summary>
-        public int V11ShotSpreadPercent { get; set; } = 56;
+        public int V11ShotSpreadPercent { get; set; } = 41;
 
         /// <summary>
         /// R9 on V11: what a side's skills lose at zero familiarity with its tactic, in permille,
@@ -1307,14 +1396,91 @@ namespace Sim.Core.Config
         public int V11MatchFatigueAt90Permille { get; set; } = 850;
         public int V11HalfTimeRecoveryPermille { get; set; } = 40;
 
-        /// <summary>The foul odds of a won challenge, in percent of the FoulPermille figures (see Referee).</summary>
-        public int V11FoulPercent { get; set; } = 55;
+        /// <summary>
+        /// The foul odds of a won challenge, in percent of the FoulPermille figures (see Referee).
+        /// 200 since issue #87 (was 55): ChallengeRadiusDm cut the challenges by about two thirds,
+        /// and the foul share of the rest rises with it to keep R2's 20-27 fouls a match.
+        /// </summary>
+        public int V11FoulPercent { get; set; } = 200;
 
         /// <summary>A man further than this from where he is going sprints there, with or without the ball.</summary>
         public int V11CatchUpSprintDm { get; set; } = 100;
 
         /// <summary>A supporting run or an overlap goes no further than this from the man's phase target spot.</summary>
         public int V11SupportLeashDm { get; set; } = 200;
+
+        /// <summary>
+        /// Real-match spec R9, the short option (see V11SupportAngles): in the build-up and the
+        /// progression this many of the men nearest the ball offer themselves on a ring of
+        /// <see cref="V11SupportOfferDm"/> round it, one on each side. The angle is scored on the
+        /// lane (an opponent nearer than <see cref="V11SupportOfferLaneDm"/> to it cuts it), the
+        /// room at the spot, the ground it gains and the ground he has to cover to get there.
+        /// Two men, ten metres, one either side: the triangle a build-up side makes round the ball,
+        /// a pass short enough to play first time under pressure.
+        /// </summary>
+        public int V11SupportOffers { get; set; } = 2;
+        public int V11SupportOfferDm { get; set; } = 100;
+        public int V11SupportOfferLaneDm { get; set; } = 70;
+        public int V11SupportOfferGainPercent { get; set; } = 30;
+        public int V11SupportOfferTravelPercent { get; set; } = 25;
+
+        /// <summary>
+        /// R9: who offers is read this share (percent) off where his place in the shape is and the
+        /// rest off where he stands; the offer goes no further than <see cref="V11SupportOfferLeashDm"/>
+        /// from that place. The man whose zone the ball is in comes short, not whoever the last
+        /// move left near it, and twelve metres off his place still leaves it covered.
+        /// 90 since issue #87 (was 120): the short offer is made from nearer his place, as
+        /// settled possession made the offering man R4's most off-target outfielder.
+        /// </summary>
+        public int V11SupportOfferSpotPercent { get; set; } = 50;
+        public int V11SupportOfferLeashDm { get; set; } = 90;
+
+        /// <summary>
+        /// Real-match spec R9: a man on the ball pressed at least this hard (permille, see
+        /// PressureRadiusDm) does not sit out the tempo's hold, nor run with it, when he has a pass
+        /// whose odds are at least <see cref="V11PressedReleaseSafetyPermille"/> — in his own third
+        /// <see cref="V11PressedReleaseDeepSafetyPermille"/>, where a ball cut out is a chance for
+        /// the other side: he gives it to the free man once he has had it
+        /// <see cref="V11ReleaseSettleMs"/>.
+        /// 700 is a man on him from under a metre and a half, inside challenge range: the one making
+        /// the challenge, not the one still coming. Odds of 85% (90% in front of his own goal, where
+        /// a ball cut out is a chance against) are met when that man has committed and his momentum
+        /// carries him away from the lane. 300 ms is the touch that controls it and a look up: the
+        /// free man is found on the second touch, as footballers under a press do. Every looser
+        /// reading tried (550-675, odds of 80-82.5% or 95% deep, a first-time release) breaks a
+        /// bar of the suite: goals past R7's 3.0, fouls under football's 18-20, the poor tacklers'
+        /// cards, R4's off-target seconds, the better passers' share of the ball or the width
+        /// instruction's crosses (issue #82, tuned under the user decision of 2026-10-10: a
+        /// 1,750-pass cap for an 81-minute ball in play).
+        /// </summary>
+        public int V11PressedReleasePermille { get; set; } = 700;
+        public int V11PressedReleaseSafetyPermille { get; set; } = 850;
+        public int V11PressedReleaseDeepSafetyPermille { get; set; } = 900;
+        public int V11ReleaseSettleMs { get; set; } = 300;
+
+        /// <summary>
+        /// R9: the release is read with pitch control at this reach and reaction, nearer the engine's
+        /// ControlRadiusDm and pass reaction than ActionModels' figures: a ball played under
+        /// pressure that a defender near its path can touch is no release.
+        /// </summary>
+        public int V11PressedReleaseReachDm { get; set; } = 16;
+        public int V11PressedReleaseReactionMs { get; set; } = 215;
+
+        /// <summary>
+        /// Real-match spec R4: a press, a cover or a mark goes no further than this from the man's
+        /// phase target spot. Unleashed, a man followed the ball or his opponent across half the
+        /// pitch and then spent seconds sprinting back to his place, which put the median
+        /// outfielder 29 s a match more than 25 m off it.
+        /// 190 since issue #87 (was 220): with longer possessions the settled frames counted by
+        /// R4's off-target meter rose, and the presser 22 m off his spot read 6-7 s a match.
+        /// </summary>
+        public int V11JobLeashDm { get; set; } = 190;
+
+        /// <summary>
+        /// Real-match spec R4: with a pass on its way to somebody else, a man chases it only where
+        /// he would meet it within this of his phase target spot (see V11Brain.ChasesAPassOutOfReach).
+        /// </summary>
+        public int V11PassChaseLeashDm { get; set; } = 220;
 
         /// <summary>How far short of the offside line a man in possession holds when he is not running.</summary>
         public int V11OnsideHoldDm { get; set; } = 16;
@@ -1384,10 +1550,14 @@ namespace Sim.Core.Config
         public int V11OpenGoalRangeDm { get; set; } = 200;
 
         /// <summary>
-        /// How much of a shot appetite above 100 stretches <see cref="V11OpenGoalRangeDm"/>, in
-        /// percent: at 100 a side with an appetite of 125 has a go at a clear sight from 25 m.
+        /// How much of a shot appetite above 100 adds to <see cref="V11ShotFromDistancePercent"/>'s
+        /// credit for a clear sight from outside the box, in percent: at 400 a side with an appetite
+        /// of 125 credits it twice over. Until issue #81 it stretched <see cref="V11OpenGoalRangeDm"/>
+        /// (a keen side's shortcut from 25 m); R10 holds the shortcut to 20 m, so a keen side's long
+        /// sight is now a priced shot. 400: at 100 eager sides took 6.6 shots a match from outside
+        /// the box against patient ones' 4.8 (InstructionsTests wants 2 more), at 400 7.8.
         /// </summary>
-        public int V11ShotAppetiteRangePercent { get; set; } = 100;
+        public int V11ShotAppetiteRangePercent { get; set; } = 400;
 
         /// <summary>
         /// ...and with the goal mouth in view: the sine of the angle between the lines to the two
@@ -1409,14 +1579,30 @@ namespace Sim.Core.Config
         public int V11OpenGoalFreeRadiusDm { get; set; } = 50;
         public int V11OpenGoalLaneMarginDm { get; set; } = 60;
 
+        /// <summary>
+        /// ...and the keeper beaten or out of position (R10): not in the lane nor within this of
+        /// its sides — a keeper between ball and goal saves the shot a striker would walk in, two
+        /// metres being about the reach of his dive — unless he has come right out onto the ball,
+        /// within <see cref="V11OpenGoalKeeperOneOnOneDm"/>, committed: the striker goes round or
+        /// past him. Without it two shots in three were taken on sight at a keeper in the way.
+        /// 35 (issue #81): at 40 the keeper rushing out made 16-18% of shots shortcuts (R10: at
+        /// most 15%), at 25 the rounding spell outlived R4's 1.5 s and openGoalShotRate fell to 0.57.
+        /// </summary>
+        public int V11OpenGoalKeeperMarginDm { get; set; } = 20;
+        public int V11OpenGoalKeeperOneOnOneDm { get; set; } = 35;
+
         /// <summary>Inside this distance an open goal is shot at on sight; beyond it he takes one touch in first.</summary>
         public int V11OpenGoalShootNowDm { get; set; } = 120;
 
         /// <summary>The touch in toward the goal centre before the shot at an open goal from the edge of range.</summary>
         public int V11OpenGoalDriveDm { get; set; } = 50;
 
-        /// <summary>In a 1v1, a keeper in the triangle this close to the ball is dribbled round rather than shot at.</summary>
-        public int V11RoundKeeperDm { get; set; } = 25;
+        /// <summary>
+        /// In a 1v1, a keeper in the triangle this close to the ball is dribbled round rather than shot at.
+        /// 15 since issue #81 (was 25): with the keeper no longer ignored, the dribble round a man
+        /// 2-2.5 m off lost one open goal in eleven to him (openGoalShotRate 0.92 -> 0.97).
+        /// </summary>
+        public int V11RoundKeeperDm { get; set; } = 15;
 
         /// <summary>How far to the side of the keeper the dribble round him goes.</summary>
         public int V11RoundKeeperSideDm { get; set; } = 30;
@@ -1426,27 +1612,61 @@ namespace Sim.Core.Config
         /// table stays a real-scale model; the simulator's keeper and blocks turn a real-scale
         /// chance into a goal less often than that, and at the full xG every touch in the box
         /// was a strike.
+        /// 105 since issue #81 (was 10): with the open-goal shortcut only for a genuinely open goal
+        /// the priced shot is where shots come from, and the man on the shooter square in the lane
+        /// now vetoes it (V11ShotCloseBlocker*); at 10 a match had 10.6 shots and 1.2 goals.
+        /// 75 since issue #87 (was 105): with the merged v12 mechanisms the side keeps the ball
+        /// and reaches the box far more often, and at 105 a match had 29 shots.
         /// </summary>
-        public int V11ShotValuePercent { get; set; } = 10;
+        public int V11ShotValuePercent { get; set; } = 75;
 
         /// <summary>
         /// What each outfield defender in the way of a shot leaves of its value, in percent: in the
         /// ball-to-posts triangle or within V11ShotBlockerMarginDm of it, where he blocks it. The
-        /// man on the shooter is not counted: he is the pressure the xG already reads.
+        /// man on the shooter is priced by V11ShotCloseBlocker* instead.
+        /// 25 since issue #80 (was 20): a real striker also hits it through a crowded box, which is
+        /// where a quarter of real shots hit a defender; at 20 one body all but vetoed the shot.
+        /// Much higher pushes shots/match past R7's 28 (40: 28.8).
+        /// 30 since issue #87: against a deep five-man block nothing was ever on, and the 5-3-2 low
+        /// block took 68% of the tactic tournament's points (R14: at most 55%).
         /// </summary>
-        public int V11ShotBlockerPercent { get; set; } = 20;
+        public int V11ShotBlockerPercent { get; set; } = 30;
         public int V11ShotBlockerMarginDm { get; set; } = 80;
 
         /// <summary>
-        /// The keeper on V11, in percent of the base Keeper* figures: how far he dives, the odds he
-        /// stops a shot on target he reaches, that he holds one he stops rather than parrying it,
-        /// and that a parry goes behind (a corner). The base figures were sized for engine v10's
-        /// chances, most of them from inside six yards.
+        /// The man on the shooter (within PressureRadiusDm) in the ball-to-posts triangle or within
+        /// V11ShotCloseBlockerMarginDm of it leaves the shot this much of its value (issue #81): he
+        /// charges a strike down nearly every time (ShotBlock's close range), so a striker with a
+        /// man square in front of him seldom shoots into him. Uncounted, he made three blocks in
+        /// four of R2's blocked share (42% of shots); at 0 the share fell under R2's 20% floor.
         /// </summary>
-        public int V11KeeperDivePercent { get; set; } = 130;
-        public int V11KeeperStopPercent { get; set; } = 125;
+        public int V11ShotCloseBlockerMarginDm { get; set; } = 35;
+        public int V11ShotCloseBlockerPercent { get; set; } = 10;
+
+        /// <summary>
+        /// A shot from outside the box at a clear sight — no outfield defender in the ball-to-posts
+        /// triangle or within V11ShotClearSightMarginDm of it — is credited this percent of its
+        /// value (issue #81, R10 shot selection). The xG table is real-scale, but a ball into this
+        /// engine's box is completed far more often than football's, so at the plain xG the shot
+        /// from distance never beat the ball in: with the shortcut gone 87% of shots came from
+        /// inside the box (R2: 60-72%). Only at a clear sight, so that a man in the lane still
+        /// sends the ball to the team-mate free in the box (R10's scripted case); the 8 m blocker
+        /// margin is wider than any block's reach, so the sight uses ShotBlock's own 3 m.
+        /// 4200 since issue #87 (was 900): longer possession puts the ball in the box
+        /// more often, and at 900 three shots in four came from inside it (R2: 60-72%).
+        /// </summary>
+        public int V11ShotFromDistancePercent { get; set; } = 4200;
+        public int V11ShotClearSightMarginDm { get; set; } = 30;
+
+        /// <summary>
+        /// The keeper on V11, in percent of the base Keeper* figures: the odds he holds a strike he
+        /// saves rather than parrying it, and that a parry goes behind (a corner). Whether he saves
+        /// it at all is the zone model's (Save*, R7). Parry-behind fell from 180 to 100 in R7: the
+        /// keeper used to take his own parry straight back, so nearly every parry that counted went
+        /// behind; with the parry leaving his hands, 180 put corners over the band.
+        /// </summary>
         public int V11KeeperHoldPercent { get; set; } = 90;
-        public int V11KeeperParryBehindPercent { get; set; } = 180;
+        public int V11KeeperParryBehindPercent { get; set; } = 100;
 
         /// <summary>
         /// The odds a ball a defender gets to comes off him rather than being controlled, on V11,
@@ -1479,6 +1699,22 @@ namespace Sim.Core.Config
         public int[] V11DirectnessPercent { get; set; } = { 75, 100, 135 };
 
         /// <summary>
+        /// Directness by the passer's own ball skill (real-match spec R3): below this passing mix
+        /// (Passing and Technique, weighted as for the pass error) a man trusts his short game
+        /// less. About the top flight's median outfielder, so its football is touched only at
+        /// the back.
+        /// </summary>
+        public int V11ShortGameTrustSkill { get; set; } = 78;
+
+        /// <summary>
+        /// The extra weight on a long forward ball's gain per point of passing mix under
+        /// <see cref="V11ShortGameTrustSkill"/>: lower-league sides that cannot keep it on the
+        /// ground under pressure get it up to the big man early. With 75 a second-tier side
+        /// goes long about twice as often as a top-flight one (R3 tier harness).
+        /// </summary>
+        public int V11LowSkillDirectnessPercentPerPoint { get; set; } = 75;
+
+        /// <summary>
         /// Risk, by Mentality (defensive · balanced · attacking): the weight on what the other side
         /// is given when the ball is lost. A defensive side takes no chances; an attacking one does.
         /// </summary>
@@ -1489,8 +1725,10 @@ namespace Sim.Core.Config
         /// Mentality's. The threat grid prices a ball lost by where it is lost, so this costs a
         /// gamble in his own half far more than one in the final third; at 100 every forward ball
         /// in midfield was worth its gamble and the match turned over six hundred times.
+        /// 150 since issue #87 (was 200): with passes cut out from closer (PassCutOutReachDm)
+        /// the forward ball is less of a gamble, and 200 left the ball in the back line.
         /// </summary>
-        public int V11LossWeightPercent { get; set; } = 200;
+        public int V11LossWeightPercent { get; set; } = 150;
 
         /// <summary>Cross appetite, by Width (narrow · normal · wide): the weight on a cross's gain.</summary>
         public int[] V11WidthCrossPercent { get; set; } = { 35, 100, 220 };
@@ -1501,6 +1739,40 @@ namespace Sim.Core.Config
         /// side looks for the man out there; a narrow one keeps it through the middle.
         /// </summary>
         public int[] V11WidthChannelPercent { get; set; } = { 40, 100, 250 };
+
+        // --- R16 in-possession axes (issue #90). Each table is read low · middle · high and its
+        // middle entry is the identity, so a v11 tactic (every expanded axis at its middle) plays
+        // as in v12. Measured shifts against neutral are in InPossessionInstructionsTests. ---
+
+        /// <summary>Passing directness (short · mixed · direct): the weight on a long forward ball's gain, on top of Tempo's.</summary>
+        public int[] V11PassingDirectnessPercent { get; set; } = { 50, 100, 220 };
+
+        /// <summary>
+        /// Build-up (play out from the back · mixed · goal kick long): the weight on a long forward
+        /// ball's gain while the ball is in the side's own third — the keeper's and the back line's first ball.
+        /// </summary>
+        public int[] V11BuildUpLongPercent { get; set; } = { 50, 100, 200 };
+
+        /// <summary>
+        /// Build-up: how a goal kick is played, as <see cref="GoalKickLongByTempo"/> names the
+        /// values; -1 (the middle) leaves it to Tempo.
+        /// </summary>
+        public int[] GoalKickLengthByBuildUp { get; set; } = { 0, -1, 1 };
+
+        /// <summary>Final-third approach (work into the box · mixed · cross early): the weight on a cross's gain, on top of Width's.</summary>
+        public int[] V11FinalThirdCrossPercent { get; set; } = { 40, 100, 250 };
+
+        /// <summary>
+        /// Final-third approach: the weight on a ball out to the touchline channel of the final
+        /// stretch, on top of Width's — where a cross comes from, and where the feed counts one.
+        /// </summary>
+        public int[] V11FinalThirdChannelPercent { get; set; } = { 40, 100, 250 };
+
+        /// <summary>Shooting (patient · normal · shoot on sight): the side's shot appetite, on top of Mentality's and Tempo's.</summary>
+        public int[] ShotSelectionAppetitePercent { get; set; } = { 85, 100, 118 };
+
+        /// <summary>Dribbling (less · normal · more): the weight on a carry's gain.</summary>
+        public int[] V11DribbleCarryPercent { get; set; } = { 60, 100, 160 };
 
         // --- V11 set pieces (R6) ---
 
@@ -1536,11 +1808,40 @@ namespace Sim.Core.Config
         public int PenaltyRunUpDm { get; set; } = 70;
 
         /// <summary>
-        /// Whether a goal kick / a throw-in is played long (1) or short (0), by Tempo
-        /// Slow/Normal/Fast — the build-up instruction.
+        /// How a goal kick / a throw-in is played, by Tempo Slow/Normal/Fast — the build-up
+        /// instruction: short (0), long (1), or short unless the man it would go to is pressed (2),
+        /// as Match.Movement.RestartLength names them.
         /// </summary>
-        public int[] GoalKickLongByTempo { get; set; } = { 0, 1, 1 };
+        public int[] GoalKickLongByTempo { get; set; } = { 0, 2, 1 };
         public int[] ThrowInLongByTempo { get; set; } = { 0, 0, 1 };
+
+        /// <summary>
+        /// An opponent this close to the man a goal kick would be played short to presses him: it goes long.
+        /// 10 m, wider than the ~5 m "pressure" radius of event data, because the presser has the ball's
+        /// flight time: a short kick to a centre-back on the box corner travels ~16-20 m (~1.3-1.5 s),
+        /// in which a presser at 6-7 m/s closes ~9-10 m and arrives with the ball.
+        /// </summary>
+        public int GoalKickPressedDm { get; set; } = 100;
+
+        /// <summary>
+        /// The goal-kick shape a side plays out of (real-match spec R11): its two outer centre-backs
+        /// split to the corners of the box, this deep and this far across from the middle; its
+        /// full-backs go wide, this deep and this far in from the touchline.
+        /// </summary>
+        public int GoalKickCentreBackDepthDm { get; set; } = 160;
+        public int GoalKickCentreBackAcrossDm { get; set; } = 195;
+        public int GoalKickFullBackDepthDm { get; set; } = 250;
+        public int GoalKickFullBackInsetDm { get; set; } = 30;
+
+        /// <summary>
+        /// The two men nearest a throw-in offer for it (R11): each goes to his place in the shape,
+        /// held this close to the ball.
+        /// </summary>
+        public int ThrowInOfferDm { get; set; } = 120;
+
+        /// <summary>How long, past the usual pause, a goal kick or a throw-in waits for its shape.</summary>
+        public int RestartShapeWaitMs { get; set; } = 3000;
+        public int RestartShapeWaitTicks => TicksOfMs(RestartShapeWaitMs);
 
         /// <summary>The nearest a restart is played to a man, and the furthest a thrown ball goes.</summary>
         public int RestartMinPassDm { get; set; } = 40;
@@ -1548,6 +1849,9 @@ namespace Sim.Core.Config
 
         /// <summary>Touchline shouts: duration, cooldown and magnitudes (watchable-match spec R11).</summary>
         public ShoutBalance Shouts { get; set; } = new ShoutBalance();
+
+        /// <summary>The R16 transition and out-of-possession axes (issue #91).</summary>
+        public DefendingAxesBalance DefendingAxes { get; set; } = new DefendingAxesBalance();
 
         // --- Time base ---
 
@@ -1627,16 +1931,11 @@ namespace Sim.Core.Config
         /// </summary>
         public int PlayerCruisePercent { get; set; } = 42;
 
-        /// <summary>Acceleration in decimetres per second per second (35 = 3.5 m/s^2, so ~2s to top speed).</summary>
-        public int PlayerAccelDmPerSecond2 { get; set; } = 35;
-
         /// <summary>
-        /// How near his target a player has to be to call it arrived and stand still. Without a
-        /// deadband every man chases a position that moves with the ball ten times a second, and
-        /// the eleven of them walk a marathon: it is the difference between covering eleven
-        /// kilometres in a match and covering sixteen.
+        /// Acceleration in decimetres per second per second (50 = 5 m/s^2, so ~1.5 s to top
+        /// speed): a professional reaches 5-6 m/s^2 from a standing start (R8).
         /// </summary>
-        public int PlayerArrivalRadiusDm { get; set; } = 30;
+        public int PlayerAccelDmPerSecond2 { get; set; } = 50;
 
         /// <summary>
         /// Inside this distance from his position a player scales his pace down with the
@@ -1654,6 +1953,19 @@ namespace Sim.Core.Config
         /// <summary>How close a player must be to take a loose ball, and to reach one to put it back in play.</summary>
         public int ControlRadiusDm { get; set; } = 24;
         public int KickRangeDm { get; set; } = 26;
+
+        /// <summary>
+        /// How close an opponent must be to the man on the ball to challenge him for it, and how
+        /// close to a pass on its way to a team-mate to cut it out (issue #87). Both were
+        /// ControlRadiusDm, and at 2.4 m the ball changed hands about 800 times a match: R2's
+        /// passes per sequence read 1.6 (3-5), pass accuracy 70% (78-86) and PPDA 3.9 (9-14).
+        /// A loose ball is still collected from ControlRadiusDm: picked up from closer, more of
+        /// them ran out of play and the off-target time of R4 rose with the longer chases.
+        /// A pass is cut out from 1.4 m: at 1.5 m passes per sequence read 3.06 (3-5) once the
+        /// throw-ins were back in RefereeTests' band (ClearIntoTouchDm).
+        /// </summary>
+        public int ChallengeRadiusDm { get; set; } = 16;
+        public int PassCutOutReachDm { get; set; } = 14;
 
         /// <summary>How far a player can stretch to cut a pass out.</summary>
         public int InterceptReachDm { get; set; } = 25;
@@ -1677,7 +1989,7 @@ namespace Sim.Core.Config
         public int PassReactionTicks => TicksOfMs(PassReactionMs);
 
         /// <summary>How long after a challenge before the ball can change hands again, so it does not ping-pong.</summary>
-        public int TackleLockMs { get; set; } = 700;
+        public int TackleLockMs { get; set; } = 850;
         public int TackleLockTicks => TicksOfMs(TackleLockMs);
 
         /// <summary>How often a defender only gets something on the ball instead of controlling it.</summary>
@@ -1706,13 +2018,37 @@ namespace Sim.Core.Config
         /// A ball a defender only gets something on INSIDE HIS OWN BOX is a clearance, not a
         /// deflection: how hard he gets it away, and how often he simply puts it behind for the
         /// corner.
+        /// 210 since issue #81 (was 265): with the open-goal shortcut only for a genuinely open
+        /// goal, a move is played on into the box rather than finished on sight, and more balls are
+        /// got at there (corners off passes, recoveries, saves and blocks all rose): at 265 the
+        /// pitch harness had 11.8 corners a match and RefereeTests' sample 14.1 (8-13); at 210,
+        /// 9.8 and 10.9, with goals 2.52 (220: 10.2 corners but goals 2.47, nearer R7's 2.4 floor).
+        /// 290 since issue #87 (was 210): with fewer duels and fewer balls cut out, fewer
+        /// balls are got at in the box, and at 210 corners fell to 7.5 a match (R2: 9-11).
         /// </summary>
         public int DeflectClearForcePercent { get; set; } = 100;
-        public int DeflectBehindPermille { get; set; } = 265;
-        public int DeflectIntoTouchPermille { get; set; } = 170;
+        public int DeflectBehindPermille { get; set; } = 290;
+        public int DeflectIntoTouchPermille { get; set; } = 220;
 
-        public int BlockReachDm { get; set; } = 8;
-        public int BlockPermillePerTick { get; set; } = 320;
+        /// <summary>
+        /// A body in the lane of a strike (real-match spec R2, issue #80; see
+        /// <see cref="Sim.Core.Match.Movement.ShotBlock"/>), one go per man as the ball comes level
+        /// with him. Football: a defender gets a leg or his body to a strike within a stride and a
+        /// stretch of its line, never from further. So his reach is his intercept reach plus
+        /// BlockReachDm (2.5 + 1.5 = 4 m from the line, at the edge only just); within
+        /// BlockFullOddsDm of the line the ball is struck straight at him and he has the full
+        /// BlockPermilleOnLine (not certain: some are lifted over him or bent round him), falling
+        /// to nothing at the edge of his reach. The man within BlockCloseRangeDm of the strike
+        /// point, closing the striker down square to it, charges it down BlockClosePercent as often.
+        /// R2's band: 20-30% of shots blocked.
+        /// #87: 600 and 110 (were 900 and 150): with the compact block of #78 more bodies
+        /// stand in the lane, and the old odds blocked 35% of shots (R2: 20-30%).
+        /// </summary>
+        public int BlockReachDm { get; set; } = 15;
+        public int BlockPermilleOnLine { get; set; } = 600;
+        public int BlockFullOddsDm { get; set; } = 15;
+        public int BlockCloseRangeDm { get; set; } = 40;
+        public int BlockClosePercent { get; set; } = 110;
 
         // --- Striking the ball ---
 
@@ -2017,6 +2353,19 @@ namespace Sim.Core.Config
         public int PassErrorLongBallPercent { get; set; } = 55;
 
         /// <summary>
+        /// Real-match spec R3: below this passing mix a ball played into the opposition half
+        /// misses by <see cref="PassErrorLowSkillPermillePerPoint"/> more a point. The linear
+        /// slope alone barely separates a 64 from a 79, and what a lower-league side cannot do is
+        /// find a man in the other half; keeping it among its own back line it does as well as
+        /// anyone, which is also why its own half does not leak more goals. The passer's own
+        /// valuation does not price this extra: he does not play safer to make up for it.
+        /// 13 a point since issue #87 (was 10): with passes cut out from closer (PassCutOutReachDm)
+        /// fewer of the poorer side's balls were lost, and R3's ball-in-play gap read -1.48 min (-1.5).
+        /// </summary>
+        public int PassErrorLowSkillFrom { get; set; } = 78;
+        public int PassErrorLowSkillPermillePerPoint { get; set; } = 13;
+
+        /// <summary>
         /// How fast the ball should still be going when it reaches the man it is for, in
         /// decimetres per second. This is the WEIGHT of the pass: a ball struck to arrive dying
         /// can be taken in his stride, and one struck to merely reach him runs on past him and
@@ -2035,8 +2384,12 @@ namespace Sim.Core.Config
         /// <summary>The same, for a man knocking it ahead of himself and running onto it.</summary>
         public int CarryArrivalSpeedDmPerSecond { get; set; } = 25;
 
-        /// <summary>Error on the WEIGHT of the pass, as a share of the force, scaled the same way.</summary>
-        public int PassWeightErrorPermille { get; set; } = 130;
+        /// <summary>
+        /// Error on the WEIGHT of the pass, as a share of the force, scaled the same way. Raised
+        /// from 130 for real-match spec R3: a poor passer's ball now runs past his man or out of
+        /// play as well as wide of him, while a good one's weight is still within a few percent.
+        /// </summary>
+        public int PassWeightErrorPermille { get; set; } = 800;
 
         /// <summary>
         /// Weight of Passing against Technique in the execution of a pass, out of ten. Passing
@@ -2078,8 +2431,11 @@ namespace Sim.Core.Config
         /// And into touch — the same decision made by a man with a touchline near him instead of a
         /// goal line, at any height of the pitch. This is football's commonest way of putting the
         /// ball out, and where most of its forty throw-ins a match come from.
+        /// 33 m since issue #87 (was 26 m), with a deflection near touch going out 220 times in a
+        /// thousand (DeflectIntoTouchPermille, was 170): with a third of the challenges, fewer
+        /// balls were got at near the line and RefereeTests read 24.6 throw-ins a match (30-50).
         /// </summary>
-        public int ClearIntoTouchDm { get; set; } = 260;
+        public int ClearIntoTouchDm { get; set; } = 330;
         public int ClearIntoTouchPermille { get; set; } = 600;
 
         /// <summary>
@@ -2181,9 +2537,19 @@ namespace Sim.Core.Config
 
         // --- Goalkeeper ---
 
+        // Where he stands in open play: see KeeperPositioning (R6). Depths run from his goal centre.
         public int KeeperDepthDm { get; set; } = 45;
-        public int KeeperLateralPercent { get; set; } = 38;
-        public int KeeperRushDm { get; set; } = 130;
+        public int KeeperRushDm { get; set; } = 125;
+        public int KeeperRushFromDm { get; set; } = 400;
+        public int KeeperRushFullDm { get; set; } = 650;
+        // R6 took him off the edge of his box, where he swept up what was played into it (+5 shots
+        // a match inside the box). He still owns it: a ball the other side played into his box he
+        // reaches for KeeperClaimReachDm further than a man does with his feet, and catches it,
+        // punching KeeperClaimPunchPercent of them. One he claimed past KeeperCarryDepthDm he plays
+        // from where he took it, so he is not caught off his line when it leaves him.
+        public int KeeperClaimReachDm { get; set; } = 40;
+        public int KeeperClaimPunchPercent { get; set; } = 40;
+        public int KeeperCarryDepthDm { get; set; } = 55;
 
         // --- Restarts ---
 
@@ -2215,32 +2581,56 @@ namespace Sim.Core.Config
         /// </summary>
         public int ShotSpreadDm { get; set; } = 700;
 
-        /// <summary>
-        /// The keeper's dive: the extra reach, in decimetres, he has at a ball struck at his
-        /// goal, on top of the control radius everyone has. Goalkeeping earns most of it and the
-        /// quality of the strike takes some of it away.
-        /// </summary>
-        /// <summary>
-        /// And whether being near it was enough (engine phase 6): the odds he actually keeps the
-        /// strike out. This is the knob behind "the keeper saves about seven of every ten shots
-        /// on target", and it is separate from the dive on purpose — the dive is where he is, this
-        /// is who he is.
-        /// </summary>
-        public int KeeperStopBasePercent { get; set; } = 80;
-        public int KeeperStopSkillPercent { get; set; } = 46;
-        public int KeeperStopQualityPercent { get; set; } = 30;
+        // --- Saves (real-match spec R7): see KeeperSaveModel ---
+        //
+        // The odds, in permille, that a keeper keeps out a strike on target, decided when it is
+        // struck: a base per zone, plus SavePerMetrePermille per metre from the goal centre,
+        // SaveAnglePermille at the tightest angle, SavePressurePermille per opponent on the
+        // striker (up to three), SaveSkillPermille at Goalkeeping 100 (taken away at 1), less
+        // SaveOffLinePermillePerMetre per metre the keeper stands off the strike's line. The R2
+        // bands are 65-75% overall, 55-68% inside the box and 78-90% outside it.
+        // From six yards the keeper has no time to react: most on-target strikes beat him.
+        public int SaveSixYardBoxPermille { get; set; } = 250;
+        // In the box he sees it a beat earlier; the distance term does most of the rest.
+        // #87: 305 in the box and 370 outside it (were 350 and 500), the R2 save rates read with
+        // the merged v12 shot mix (outside the box 92% at 500; R2 78-90%); at 320, with the
+        // throw-ins back, a second-tier match had 2.34 goals (R3: 2.3-2.9).
+        public int SaveBoxPermille { get; set; } = 305;
+        // From outside the box he sees it all the way: four in five are kept out.
+        public int SaveOutsidePermille { get; set; } = 370;
+        // Penalties: roughly three in four on target go in, whatever the pitch around them.
+        public int SavePenaltyPermille { get; set; } = 220;
+        // Every metre is travel time for the keeper.
+        public int SavePerMetrePermille { get; set; } = 15;
+        // From a tight angle the near post is all he has to cover.
+        public int SaveAnglePermille { get; set; } = 200;
+        // A hurried, blocked-off strike is a weaker one.
+        public int SavePressurePermille { get; set; } = 30;
+        // A top keeper keeps out about one more in ten than an average one.
+        public int SaveSkillPermille { get; set; } = 100;
+        // A strike away from him is the hard one; one at him is the easy one.
+        public int SaveOffLinePermillePerMetre { get; set; } = 40;
+        // Even a tap-in can hit the keeper; even a speculative one can beat him.
+        public int SaveMinPermille { get; set; } = 50;
+        public int SaveMaxPermille { get; set; } = 970;
 
-        public int KeeperDiveBaseDm { get; set; } = 10;
-        public int KeeperDiveSkillDm { get; set; } = 40;
-        public int KeeperDiveQualityDm { get; set; } = 12;
+        /// <summary>
+        /// How far past everyone's control radius a keeper gets a hand to a strike he is saving, in
+        /// decimetres: an arm and a dive. He runs at the strike's line meanwhile, so most saves are
+        /// made where he stands (R7: within 1.5 m on 70% of them).
+        /// </summary>
+        public int KeeperSaveReachDm { get; set; } = 10;
 
         /// <summary>
         /// Home advantage ON THE PITCH, in permille on every attribute of the home eleven. The
         /// result model has always had <see cref="HomeAdvantagePercent"/> on the team ratings;
         /// with the causality inverted the watched match needs its own, and it is a much smaller
         /// number because it multiplies eleven men rather than three aggregates.
+        /// 50 since issue #87 (was 34): with a third of the challenges a duel decides less of the
+        /// match, and at 34 a club against itself won as often away as at home (213 home wins and
+        /// 218 away over CausalityTests' 600); at 50 the home side wins about 42% of them.
         /// </summary>
-        public int PitchHomeAdvantagePermille { get; set; } = 34;
+        public int PitchHomeAdvantagePermille { get; set; } = 50;
 
         /// <summary>
         /// Extra push on the block of the side that HAS the ball. It used to be the director's
@@ -2254,6 +2644,13 @@ namespace Sim.Core.Config
         /// play around, and near your own goal that is not a risk anybody takes.
         /// </summary>
         public int SecondPressDepthDm { get; set; } = 350;
+
+        /// <summary>
+        /// Real-match spec R4: how much the choice of the man who doubles up reads his place in
+        /// the block rather than where he stands, in percent. At 0 it was the second-nearest man
+        /// wherever he came from, and he spent the press 25 m or more out of the shape.
+        /// </summary>
+        public int SecondPresserSpotPercent { get; set; } = 40;
 
         /// <summary>How long before the man who played the ball may take it back.</summary>
         public int ReleaseLockMs { get; set; } = 400;
@@ -2741,7 +3138,11 @@ namespace Sim.Core.Config
 
         public int RatingPerGoal { get; set; } = 12;
         public int RatingPerAssist { get; set; } = 7;
-        public int RatingPerKeyPass { get; set; } = 2;
+        /// <summary>
+        /// 1 since issue #87 (was 2): with 27 shots a match a forward played twice the key passes
+        /// (2.2 a match), and the three highest men out-marked the four deepest by 1.1.
+        /// </summary>
+        public int RatingPerKeyPass { get; set; } = 1;
         public int RatingPerShotOnTarget { get; set; } = 1;
         public int RatingPerBlock { get; set; } = 2;
 

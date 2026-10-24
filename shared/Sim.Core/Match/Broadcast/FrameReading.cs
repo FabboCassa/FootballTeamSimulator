@@ -3,17 +3,17 @@ namespace Sim.Core.Match.Broadcast
     /// <summary>What a frame is worth to the broadcast before the budget is spent.</summary>
     internal enum FrameClass : byte
     {
-        /// <summary>Other open play: shown at 2x when the budget reaches it.</summary>
-        Warm = 0,
-
-        /// <summary>Final-third possession, a counter, an attacking-half set piece: shown at 1x.</summary>
-        Hot = 1,
+        /// <summary>Open play: shown live when the budget reaches it.</summary>
+        Open = 0,
 
         /// <summary>A possession spell that never left its own half: cut unless the budget is starved.</summary>
-        Sterile = 2,
+        Sterile = 1,
 
-        /// <summary>A dead ball outside the attacking half, or a celebration: always cut.</summary>
-        Dead = 3
+        /// <summary>The set-up of a dead ball: shown at dead time when the budget reaches it.</summary>
+        DeadTime = 2,
+
+        /// <summary>A dead ball before its set-up (the rest of a celebration, a stoppage): always cut.</summary>
+        Idle = 3
     }
 
     /// <summary>The per-frame reading the director spends its budget on.</summary>
@@ -29,7 +29,7 @@ namespace Sim.Core.Match.Broadcast
 
         public FrameClass[] Classes { get; }
 
-        /// <summary>Frames that must play at 1x whatever the budget says.</summary>
+        /// <summary>Frames that must be shown whatever the budget says.</summary>
         public bool[] Key { get; }
 
         /// <summary>The first frame of each key event: the lead-ins grow backwards from these.</summary>
@@ -38,5 +38,9 @@ namespace Sim.Core.Match.Broadcast
         public int SecondHalfStart { get; }
 
         public int HalfEnd(int frame) => frame < SecondHalfStart ? SecondHalfStart : Classes.Length;
+
+        /// <summary>The rate frame <paramref name="f"/> plays at when it is shown.</summary>
+        public PlaybackRate ShownRate(int f) =>
+            Classes[f] >= FrameClass.DeadTime ? PlaybackRate.DeadTime : PlaybackRate.Live;
     }
 }

@@ -3,8 +3,15 @@ using System;
 namespace Sim.Core.Match.Analysis
 {
     /// <summary>
-    /// R2 of the watchable-match spec: how long each outfielder spends more than 25 m from his
-    /// phase target while neither chasing the ball nor marking a man.
+    /// R2 of the watchable-match spec, read by real-match spec R4 as "off-target seconds per
+    /// player": how long each outfielder spends more than 25 m from his phase target while
+    /// neither chasing the ball nor marking a man. Every such open-play frame counts but those of
+    /// the turnover window below. Dead-ball
+    /// frames do not: the target read here is the open-play shape, and a restart is the
+    /// set-piece phase of watchable-match R1, with targets of its own (where the wall, the
+    /// corner roles and the taker go). Open play is the convention of
+    /// <see cref="ShapeMovementAnalyzer"/>: dead from a restart's whistle, a goal or half-time
+    /// until somebody holds the ball after the restart's whistle.
     ///
     /// The stream does not carry the brain's targets, so the target is read back from the play
     /// itself: the phase is which side last held the ball (in possession / out of it), and a
@@ -16,6 +23,12 @@ namespace Sim.Core.Match.Analysis
     ///     lower slot);
     ///   * marking: an opponent is within 3 m of him.
     ///
+    /// The first <see cref="TransitionWindowMs"/> after a turnover (the phase flipping from one
+    /// side to the other) do not count: every man's target jumps to the other phase's shape in
+    /// that one frame, and the run back to it is what R2's "for more than 5 s" allows. Settled
+    /// play still counts every frame. <see cref="MedianWithoutWindow"/> keeps the reading that
+    /// counts the run back too, so the harness can print both.
+    ///
     /// Keepers and men already sent off are left out. The reading of a match is the median over
     /// the outfielders of both sides. Buffers are reused between matches.
     /// </summary>
@@ -24,20 +37,30 @@ namespace Sim.Core.Match.Analysis
         private const int OffTargetDm = 250;
         private const int MarkingDm = 30;
         private const int Unknown = -1;
+        // R2: "never sits over 25 m from his phase target for more than 5 s".
+        private const int TransitionWindowMs = 5000;
 
         private int _n;
         private int _ticks;
         private int[] _phase = Array.Empty<int>();      // per frame: side that last held the ball, or Unknown
+        private bool[] _transition = Array.Empty<bool>(); // per frame: inside the window after a turnover
         private int[] _offX = Array.Empty<int>();       // per (side, slot, frame): offset from team-mates' centroid
         private int[] _offY = Array.Empty<int>();
         private int[] _scratch = Array.Empty<int>();
         private int[] _medianX = Array.Empty<int>();    // per (side, slot, phase)
         private int[] _medianY = Array.Empty<int>();
         private int[] _frames = Array.Empty<int>();     // per (side, slot): frames off target
+        private int[] _rawFrames = Array.Empty<int>();  // per (side, slot): the same, run back after a turnover included
+        private bool[] _open = Array.Empty<bool>();     // per frame: the ball is in play
         private int _ticksPerMinute = 1;
 
-        public double Seconds(bool home, int slot) =>
-            slot < 0 || slot >= _n ? 0 : _frames[(home ? 0 : _n) + slot] * 60.0 / _ticksPerMinute;
+        public double Seconds(bool home, int slot) => Seconds(_frames, home, slot);
+
+        /// <summary>The last match's median with the turnover window's frames counted too.</summary>
+        public double MedianWithoutWindow { get; private set; }
+
+        private double Seconds(int[] frames, bool home, int slot) =>
+            slot < 0 || slot >= _n ? 0 : frames[(home ? 0 : _n) + slot] * 60.0 / _ticksPerMinute;
 
         /// <summary>Measures one match and returns the median off-target seconds over the outfielders.</summary>
         public double Measure(PositionStream s, int ticks, int[] keeper, int[] sentOffFrom)
@@ -45,17 +68,25 @@ namespace Sim.Core.Match.Analysis
             Ensure(s.PlayerCount, ticks);
             _ticksPerMinute = s.TicksPerMinute > 0 ? s.TicksPerMinute : 1;
             TrackPhase(s);
+            MarkOpenPlay(s);
             StoreOffsets(s, keeper, sentOffFrom);
             TakeMedians(keeper, sentOffFrom);
             CountFrames(s, keeper, sentOffFrom);
-            return MedianOverOutfielders(keeper);
+            MedianWithoutWindow = MedianOverOutfielders(_rawFrames, keeper);
+            return MedianOverOutfielders(_frames, keeper);
         }
 
         private void Ensure(int n, int ticks)
         {
             _n = n;
             _ticks = ticks;
-            if (_phase.Length < ticks) _phase = new int[ticks];
+            if (_phase.Length < ticks)
+            {
+                _phase = new int[ticks];
+                _transition = new bool[ticks];
+                _open = new bool[ticks];
+            }
+
             if (_offX.Length < 2 * n * ticks)
             {
                 _offX = new int[2 * n * ticks];
@@ -66,28 +97,65 @@ namespace Sim.Core.Match.Analysis
             if (_frames.Length != 2 * n)
             {
                 _frames = new int[2 * n];
+                _rawFrames = new int[2 * n];
                 _medianX = new int[2 * n * 2];
                 _medianY = new int[2 * n * 2];
             }
 
             Array.Clear(_frames, 0, _frames.Length);
+            Array.Clear(_rawFrames, 0, _rawFrames.Length);
         }
 
         private void TrackPhase(PositionStream s)
         {
-            int last = Unknown;
+            int last = Unknown, turnover = Unknown;
+            long windowTicks = (long)TransitionWindowMs * _ticksPerMinute / 60000;
             for (int t = 0; t < _ticks; t++)
             {
                 int code = s.Owner[t];
                 if (code != PositionStream.NoOwner)
                 {
                     s.TryOwner(code, out bool home, out int _);
-                    last = home ? 0 : 1;
+                    int side = home ? 0 : 1;
+                    if (last != Unknown && side != last) turnover = t;
+                    last = side;
                 }
 
                 _phase[t] = last;
+                _transition[t] = turnover != Unknown && t - turnover < windowTicks;
             }
         }
+
+        private void MarkOpenPlay(PositionStream s)
+        {
+            bool dead = false, awaitingTaker = false;
+            int restartTick = Unknown, next = 0;
+            for (int t = 0; t < _ticks; t++)
+            {
+                for (; next < s.Actions.Count && s.Actions[next].Tick <= t; next++)
+                {
+                    BallActionKind k = s.Actions[next].Kind;
+                    if (IsRestart(k))
+                    {
+                        dead = awaitingTaker = true;
+                        restartTick = s.Actions[next].Tick;
+                    }
+                    else if (k == BallActionKind.Goal || k == BallActionKind.HalfTime)
+                    {
+                        dead = true;
+                        awaitingTaker = false;
+                    }
+                }
+
+                if (dead && awaitingTaker && t > restartTick && s.Owner[t] != PositionStream.NoOwner)
+                    dead = awaitingTaker = false;
+                _open[t] = !dead;
+            }
+        }
+
+        private static bool IsRestart(BallActionKind k) =>
+            k == BallActionKind.Kickoff || k == BallActionKind.ThrowIn || k == BallActionKind.GoalKick
+            || k == BallActionKind.FreeKick || k == BallActionKind.Corner || k == BallActionKind.Penalty;
 
         private bool Active(int side, int slot, int t, int[] keeper, int[] sentOffFrom) =>
             slot != keeper[side] && t < sentOffFrom[side * _n + slot];
@@ -137,13 +205,13 @@ namespace Sim.Core.Match.Analysis
             }
         }
 
-        /// <summary>Lower median of one man's offsets over the frames of one phase, up to his sending-off.</summary>
+        /// <summary>Lower median of one man's offsets over the open-play frames of one phase, up to his sending-off.</summary>
         private int Median(int[] offsets, int side, int slot, int held, int until)
         {
             int count = 0;
             for (int t = 0; t < _ticks && t < until; t++)
             {
-                if (_phase[t] == Unknown || (_phase[t] == side ? 1 : 0) != held) continue;
+                if (_phase[t] == Unknown || !_open[t] || (_phase[t] == side ? 1 : 0) != held) continue;
                 _scratch[count++] = offsets[Index(side, slot, t)];
             }
 
@@ -156,7 +224,8 @@ namespace Sim.Core.Match.Analysis
         {
             for (int t = 0; t < _ticks; t++)
             {
-                if (_phase[t] == Unknown) continue;
+                if (_phase[t] == Unknown || !_open[t]) continue;
+
                 int bx = s.BallXY[t * 2], by = s.BallXY[t * 2 + 1];
 
                 for (int side = 0; side < 2; side++)
@@ -175,7 +244,8 @@ namespace Sim.Core.Match.Analysis
                         long dy = _medianY[key] - _offY[Index(side, k, t)];
                         if (dx * dx + dy * dy <= (long)OffTargetDm * OffTargetDm) continue;
                         if (Marking(s, foes, 1 - side, t, s.PlayerX(xy, t, k), s.PlayerY(xy, t, k), sentOffFrom)) continue;
-                        _frames[side * _n + k]++;
+                        _rawFrames[side * _n + k]++;
+                        if (!_transition[t]) _frames[side * _n + k]++;
                     }
                 }
             }
@@ -219,13 +289,13 @@ namespace Sim.Core.Match.Analysis
             return false;
         }
 
-        private double MedianOverOutfielders(int[] keeper)
+        private double MedianOverOutfielders(int[] frames, int[] keeper)
         {
             var values = new double[2 * _n];
             int count = 0;
             for (int side = 0; side < 2; side++)
             for (int k = 0; k < _n; k++)
-                if (k != keeper[side]) values[count++] = Seconds(side == 0, k);
+                if (k != keeper[side]) values[count++] = Seconds(frames, side == 0, k);
 
             if (count == 0) return 0;
             Array.Sort(values, 0, count);

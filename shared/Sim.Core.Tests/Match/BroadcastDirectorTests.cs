@@ -13,10 +13,10 @@ using Sim.Core.Random;
 namespace Sim.Core.Tests.Match
 {
     /// <summary>
-    /// The broadcast director (spec watchable-match-engine R12-R14): a report goes in, a playback
-    /// timeline of 1x / 2x / cut segments comes out. The acceptance runs over a corpus of real
-    /// engine matches; a hand-built stream pins the classification and the budget arithmetic
-    /// against values worked out on paper.
+    /// The broadcast director (spec real-match-and-playing-styles R12): a report goes in, a playback
+    /// timeline of live (1.3x) / dead-time (2x) / cut segments comes out. The acceptance runs over a
+    /// corpus of real engine matches; a hand-built stream pins the classification and the budget
+    /// arithmetic against values worked out on paper.
     /// </summary>
     [TestFixture]
     public class BroadcastDirectorTests
@@ -96,6 +96,7 @@ namespace Sim.Core.Tests.Match
         public void EveryReport_PlaysTenMinutesAtOneX_FiveEachHalf()
         {
             var director = new BroadcastDirector();
+            var totals = new List<double>();
             foreach (MatchReport report in Reports)
             {
                 BroadcastTimeline t = director.Build(report);
@@ -106,12 +107,97 @@ namespace Sim.Core.Tests.Match
                 Assert.That(total, Is.InRange(MatchBandLowMs, MatchBandHighMs), $"{Describe(report)} total");
                 Assert.That(first, Is.InRange(HalfBandLowMs, HalfBandHighMs), $"{Describe(report)} first half");
                 Assert.That(second, Is.InRange(HalfBandLowMs, HalfBandHighMs), $"{Describe(report)} second half");
-                Assert.That(first + second, Is.EqualTo(total));
+
+                double whole = t.PlaybackSeconds(0, t.FrameCount);
+                Assert.That(t.PlaybackSeconds(0, t.SecondHalfStartFrame) + t.PlaybackSeconds(t.SecondHalfStartFrame, t.FrameCount),
+                    Is.EqualTo(whole).Within(1e-9));
+                totals.Add(whole);
             }
+
+            TestContext.Progress.WriteLine(
+                $"BroadcastDirector 1x duration over {totals.Count} reports: mean {totals.Average():F1} s, " +
+                $"min {totals.Min():F1} s, max {totals.Max():F1} s");
         }
 
         [Test]
-        public void EveryGoalShotCardPenaltyAndSubstitution_IsShownAtRealTime()
+        public void TheRates_AreOnePointThreeForLivePlay_AndTwoForDeadTime()
+        {
+            Assert.That(PlaybackRate.Live.Factor(), Is.EqualTo(1.3).Within(1e-12));
+            Assert.That(PlaybackRate.DeadTime.Factor(), Is.EqualTo(2.0).Within(1e-12));
+            Assert.That(PlaybackRate.Cut.Factor(), Is.EqualTo(0.0));
+        }
+
+        [Test]
+        public void EveryShownFrame_PlaysLiveInOpenPlay_AndAtDeadTimeWhileTheBallIsDead()
+        {
+            var director = new BroadcastDirector();
+            int live = 0, deadTime = 0;
+            foreach (MatchReport report in Reports)
+            {
+                BroadcastTimeline t = director.Build(report);
+                bool[] dead = DeadBallOracle(report.Positions!);
+                foreach (BroadcastSegment seg in t.Segments)
+                {
+                    if (seg.Rate == PlaybackRate.Cut) continue;
+                    for (int f = seg.StartFrame; f < seg.EndFrame; f++)
+                    {
+                        PlaybackRate expected = dead[f] ? PlaybackRate.DeadTime : PlaybackRate.Live;
+                        if (seg.Rate != expected)
+                            Assert.Fail($"{Describe(report)}: frame {f} plays {seg.Rate}, expected {expected}");
+                    }
+
+                    if (seg.Rate == PlaybackRate.Live) live += seg.Frames;
+                    else deadTime += seg.Frames;
+                }
+            }
+
+            Assert.That(live, Is.GreaterThan(0), "the corpus must show live play");
+            Assert.That(deadTime, Is.GreaterThan(0), "the corpus must show dead time");
+        }
+
+        /// <summary>
+        /// The ball is dead from a whistle (a restart, a goal, half-time) to the next touch that puts
+        /// it back in play; written here independently of the director.
+        /// </summary>
+        private static bool[] DeadBallOracle(PositionStream s)
+        {
+            var dead = new bool[s.TickCount];
+            bool open = false;
+            int start = 0;
+            foreach (BallAction a in s.Actions.OrderBy(a => a.Tick))
+            {
+                if (StopsPlay.Contains(a.Kind))
+                {
+                    if (!open) start = a.Tick;
+                    open = true;
+                }
+                else if (open && PutsInPlay.Contains(a.Kind))
+                {
+                    for (int f = start; f < a.Tick && f < dead.Length; f++) dead[f] = true;
+                    open = false;
+                }
+            }
+
+            if (open)
+                for (int f = start; f < dead.Length; f++) dead[f] = true;
+            return dead;
+        }
+
+        private static readonly BallActionKind[] StopsPlay =
+        {
+            BallActionKind.Kickoff, BallActionKind.ThrowIn, BallActionKind.GoalKick, BallActionKind.FreeKick,
+            BallActionKind.Corner, BallActionKind.Penalty, BallActionKind.Goal, BallActionKind.HalfTime
+        };
+
+        private static readonly BallActionKind[] PutsInPlay =
+        {
+            BallActionKind.Pass, BallActionKind.LongBall, BallActionKind.Cross, BallActionKind.Dribble,
+            BallActionKind.Recovery, BallActionKind.Interception, BallActionKind.Clearance, BallActionKind.Shot,
+            BallActionKind.Save, BallActionKind.Miss, BallActionKind.Block
+        };
+
+        [Test]
+        public void EveryGoalShotCardPenaltyAndSubstitution_IsShown()
         {
             var director = new BroadcastDirector();
             int substitutions = 0, keyActions = 0, goals = 0;
@@ -124,14 +210,14 @@ namespace Sim.Core.Tests.Match
                 {
                     keyActions++;
                     if (a.Kind == BallActionKind.Goal) goals++;
-                    Assert.That(t.RateAt(a.Tick), Is.EqualTo(PlaybackRate.RealTime),
+                    Assert.That(t.RateAt(a.Tick), Is.AnyOf(PlaybackRate.Live, PlaybackRate.DeadTime),
                         $"{Describe(report)}: {a.Kind} at frame {a.Tick}");
                 }
 
                 foreach (SlotChange c in s.Changes)
                 {
                     substitutions++;
-                    Assert.That(t.RateAt(c.Frame), Is.EqualTo(PlaybackRate.RealTime),
+                    Assert.That(t.RateAt(c.Frame), Is.AnyOf(PlaybackRate.Live, PlaybackRate.DeadTime),
                         $"{Describe(report)}: substitution at frame {c.Frame}");
                 }
             }
@@ -142,7 +228,7 @@ namespace Sim.Core.Tests.Match
         }
 
         [Test]
-        public void Segments_TileTheMatch_AndNoneIsSlowerThanRealTime()
+        public void Segments_TileTheMatch_AndNoneIsSlowerThanLivePlay()
         {
             var director = new BroadcastDirector();
             foreach (MatchReport report in Reports)
@@ -158,9 +244,9 @@ namespace Sim.Core.Tests.Match
                     Assert.That(seg.StartFrame, Is.EqualTo(expectedStart), Describe(report));
                     Assert.That(seg.EndFrame, Is.GreaterThan(seg.StartFrame), Describe(report));
                     Assert.That(seg.Rate, Is.Not.EqualTo(previous), "adjacent segments are merged");
-                    Assert.That(seg.Rate, Is.AnyOf(PlaybackRate.Cut, PlaybackRate.RealTime, PlaybackRate.Double));
+                    Assert.That(seg.Rate, Is.AnyOf(PlaybackRate.Cut, PlaybackRate.Live, PlaybackRate.DeadTime));
                     if (seg.Rate != PlaybackRate.Cut)
-                        Assert.That((int)seg.Rate, Is.GreaterThanOrEqualTo(1), "nothing plays slower than real time");
+                        Assert.That(seg.Rate.Factor(), Is.GreaterThanOrEqualTo(1.3), "nothing plays slower than 1.3x real time at 1x");
 
                     expectedStart = seg.EndFrame;
                     previous = seg.Rate;
@@ -257,23 +343,23 @@ namespace Sim.Core.Tests.Match
         [Test]
         public void HandBuiltStream_GrowsTheLeadInBackFromTheShot_UntilTheBudgetIsSpent()
         {
-            // Budget 30 s = 120 quarter-second units. Shot + 3 s = frames 1190-1196 at 1x (14 units);
-            // the final-third run-up 1140-1189 at 1x (100); then six own-half frames at 2x (6) = 120.
+            // A real-time frame is 26 cost units, a live frame (1.3x) 20, a dead-time frame (2x) 13.
+            // Budget 30 s = 60 real-time frames = 1560 units. Shot + 3 s = frames 1190-1196 live
+            // (140); the run-up grows back from the shot, 71 more live frames 1119-1189 (1420) = 1560.
             BroadcastTimeline t = new BroadcastDirector(new BroadcastSettings { TargetSecondsPerHalf = 30 })
                 .Build(HandBuilt());
 
             Assert.That(t.Segments, Is.EqualTo(new[]
             {
-                new BroadcastSegment(0, 1134, PlaybackRate.Cut),
-                new BroadcastSegment(1134, 1140, PlaybackRate.Double),
-                new BroadcastSegment(1140, 1197, PlaybackRate.RealTime),
+                new BroadcastSegment(0, 1119, PlaybackRate.Cut),
+                new BroadcastSegment(1119, 1197, PlaybackRate.Live),
                 new BroadcastSegment(1197, Frames, PlaybackRate.Cut)
             }));
             Assert.That(t.TotalPlaybackMilliseconds, Is.EqualTo(30_000));
 
             Assert.That(t.Summaries, Is.EqualTo(new[]
             {
-                new CutSummary(0, 1134, PossessionSide.Home, CutZone.Defensive, BallActionKind.Kickoff)
+                new CutSummary(0, 1119, PossessionSide.Home, CutZone.Defensive, BallActionKind.Kickoff)
             }), "the three-frame cut after the shot is under a minute and carries no summary");
         }
 
@@ -286,7 +372,7 @@ namespace Sim.Core.Tests.Match
             Assert.That(t.Segments, Is.EqualTo(new[]
             {
                 new BroadcastSegment(0, ShotFrame, PlaybackRate.Cut),
-                new BroadcastSegment(ShotFrame, 1197, PlaybackRate.RealTime),
+                new BroadcastSegment(ShotFrame, 1197, PlaybackRate.Live),
                 new BroadcastSegment(1197, Frames, PlaybackRate.Cut)
             }));
         }
@@ -304,7 +390,7 @@ namespace Sim.Core.Tests.Match
         // ------------------------------------------------------------------ one classification rule per stream
 
         // A budget no stream here can spend: every frame the rules allow is bought, so the rate
-        // shows the class directly (Hot = 1x, Warm = 2x, Dead = cut).
+        // shows the class directly (open play live, a dead ball at dead time, the rest cut).
         private static readonly BroadcastSettings Unlimited = new BroadcastSettings { TargetSecondsPerHalf = 10_000 };
 
         private const int Slot = 5;
@@ -349,11 +435,10 @@ namespace Sim.Core.Tests.Match
         }
 
         [Test]
-        public void ACounter_WonInTheOwnHalfAndInTheFinalThirdWithinTheWindow_PlaysAtRealTime()
+        public void OpenPlay_PlaysLive_InEveryThird_AndTheKickOffWaitAtDeadTime()
         {
-            // Away keeps a warm spell (X 400 = 650 dm up for away). Home wins it at 100 in its own
-            // half (X 300) and is in the final third at 110 (5 s, inside the 12 s window): a counter.
-            // At 150 home wins it again, but only reaches the final third at 190 (20 s): build-up.
+            // Away keeps the ball at X 400 (650 dm up for away); home wins it in its own half
+            // (X 300), carries it to the final third (X 800), loses it, and so on.
             PositionStream s = KickedOff(300, home: false);
             Hold(s, 4, 100, 400, false);
             Hold(s, 100, 110, 300, true);
@@ -369,71 +454,77 @@ namespace Sim.Core.Tests.Match
 
             BroadcastTimeline t = Direct(s, Unlimited);
 
-            AssertRate(t, 100, 120, PlaybackRate.RealTime, "the counter, own half included");
-            AssertRate(t, 150, 190, PlaybackRate.Double, "a slow build-up out of the own half");
-            AssertRate(t, 4, 100, PlaybackRate.Double, "other open play");
+            AssertRate(t, 0, 4, PlaybackRate.DeadTime, "the kick-off wait");
+            AssertRate(t, 4, 300, PlaybackRate.Live, "open play, own half to final third");
         }
 
         /// <summary>
-        /// Home plays at X 600, has a free kick taken from <paramref name="kickX"/> (dead 100-109) and
-        /// the touch at 110 already has the ball at <paramref name="playedToX"/>, where home keeps it.
+        /// Home plays at X 600, has a free kick taken from <paramref name="kickX"/> (dead 100 to
+        /// <paramref name="touch"/> - 1) and the touch already has the ball at <paramref name="playedToX"/>,
+        /// where home keeps it.
         /// </summary>
-        private static PositionStream HomeFreeKick(int kickX, int playedToX)
+        private static PositionStream HomeFreeKick(int kickX, int playedToX, int touch = 110)
         {
             PositionStream s = KickedOff(200, home: true);
             Hold(s, 4, 100, 600, true);
-            Hold(s, 100, 110, kickX, null);
-            Hold(s, 110, 200, playedToX, true);
+            Hold(s, 100, touch, kickX, null);
+            Hold(s, touch, 200, playedToX, true);
             s.Actions.Add(new BallAction(100, BallActionKind.FreeKick, true, Slot, -1));
-            s.Actions.Add(new BallAction(110, BallActionKind.Pass, true, Slot, 7));
+            s.Actions.Add(new BallAction(touch, BallActionKind.Pass, true, Slot, 7));
             return s;
         }
 
-        [Test]
-        public void ASetPieceInTheAttackingHalf_PlaysAtRealTime()
+        [TestCase(650, 450, TestName = "ADeadBall_PlaysAtDeadTime_InTheAttackingHalf")]
+        [TestCase(300, 650, TestName = "ADeadBall_PlaysAtDeadTime_InTheOwnHalf")]
+        public void ADeadBall_PlaysAtTwiceTheSpeedOfLivePlay_WhereverItIs(int kickX, int playedToX)
         {
-            // X 650 is past halfway but short of the final third: only the set-piece rule makes it 1x.
-            // It is played back to X 450, so the spot is read where the ball waits, not where it goes.
-            BroadcastTimeline t = Direct(HomeFreeKick(650, 450), Unlimited);
+            BroadcastTimeline t = Direct(HomeFreeKick(kickX, playedToX), Unlimited);
 
-            AssertRate(t, 100, 110, PlaybackRate.RealTime, "the free kick in the attacking half");
-            AssertRate(t, 110, 200, PlaybackRate.Double, "open play after it");
+            AssertRate(t, 0, 4, PlaybackRate.DeadTime, "the kick-off wait");
+            AssertRate(t, 4, 100, PlaybackRate.Live, "open play before");
+            AssertRate(t, 100, 110, PlaybackRate.DeadTime, "the free kick being set up");
+            AssertRate(t, 110, 200, PlaybackRate.Live, "open play after");
         }
 
         [Test]
-        public void ADeadBallOutsideTheAttackingHalf_IsCut_EvenWithBudgetToSpare()
+        public void ALongDeadBall_ShowsOnlyItsSetUp_AndCutsTheRest_EvenWithBudgetToSpare()
         {
-            // Played forward to X 650: the spot, not the landing, decides.
-            BroadcastTimeline t = Direct(HomeFreeKick(300, 650), Unlimited);
+            // Dead 100-159 (30 s). The 6 s before the touch (12 frames, 148-159) are the set-up.
+            BroadcastTimeline t = Direct(HomeFreeKick(650, 450, touch: 160),
+                new BroadcastSettings { TargetSecondsPerHalf = 10_000, DeadTimeShownSeconds = 6 });
 
-            AssertRate(t, 0, 4, PlaybackRate.Cut, "the kick-off wait");
-            AssertRate(t, 100, 110, PlaybackRate.Cut, "the free kick in the own half");
-            AssertRate(t, 4, 100, PlaybackRate.Double, "open play before");
-            AssertRate(t, 110, 200, PlaybackRate.Double, "open play after");
+            AssertRate(t, 100, 148, PlaybackRate.Cut, "the wait before the set-up");
+            AssertRate(t, 148, 160, PlaybackRate.DeadTime, "the set-up");
+            AssertRate(t, 160, 200, PlaybackRate.Live, "open play after");
         }
 
         [Test]
         public void ASterileSpell_IsCut_WhileTheBudgetStillBuysOtherOpenPlay()
         {
-            // Home plays a warm spell (X 600) for 4-199; away then keeps it in its own half
-            // (X 900 = 150 dm up for away) for 200-399. The budget, 49 s = 196 half-frames, buys
-            // exactly the 196 warm frames at 2x. Were the sterile spell ordinary open play it would
-            // be bought first (it is later, so cheaper) and the warm spell would be the one cut.
+            // Home plays a spell up to X 600 for 4-199; away then keeps it in its own half
+            // (X 900 = 150 dm up for away) for 200-399. The budget, 76 s = 3952 units, buys the
+            // 196 frames of the first spell live (3920) and two kick-off frames at dead time (26).
+            // Were the sterile spell ordinary open play it would be bought first (it is later, so
+            // cheaper) and the first spell would be the one cut.
             PositionStream s = KickedOff(400, home: true);
             Hold(s, 4, 200, 600, true);
             Hold(s, 200, 400, 900, false);
             s.Actions.Add(new BallAction(200, BallActionKind.Interception, false, Slot, -1));
 
-            BroadcastTimeline t = Direct(s, new BroadcastSettings { TargetSecondsPerHalf = 49 });
+            BroadcastTimeline t = Direct(s, new BroadcastSettings { TargetSecondsPerHalf = 76 });
 
-            AssertRate(t, 4, 200, PlaybackRate.Double, "the warm spell");
+            AssertRate(t, 0, 2, PlaybackRate.Cut, "the kick-off wait past the budget");
+            AssertRate(t, 2, 4, PlaybackRate.DeadTime, "the kick-off wait the budget still buys");
+            AssertRate(t, 4, 200, PlaybackRate.Live, "the spell that crossed halfway");
             AssertRate(t, 200, 400, PlaybackRate.Cut, "the sterile spell");
         }
 
         [Test]
-        public void AGoalPlaysForThreeSeconds_AndTheCelebrationBeyondIsCut()
+        public void AGoal_PlaysThreeSecondsAtDeadTime_CutsTheCelebration_AndShowsTheKickOffSetUp()
         {
-            // Home scores at 100; the ball sits in the net (X 1040) until away kicks off at 140.
+            // Home scores at 100; the ball sits in the net (X 1040) until away kicks off at 140 and
+            // touches it at 144. Dead 100-143: the goal and 3 s after (100-106), then only the 6 s
+            // (12 frames, 132-143) before the kick-off touch.
             PositionStream s = KickedOff(200, home: true);
             Hold(s, 4, 100, 900, true);
             Hold(s, 100, 140, 1040, null);
@@ -445,16 +536,19 @@ namespace Sim.Core.Tests.Match
 
             BroadcastTimeline t = Direct(s, Unlimited);
 
-            AssertRate(t, 100, 107, PlaybackRate.RealTime, "the goal and 3 s after");
-            AssertRate(t, 107, 144, PlaybackRate.Cut, "the celebration and the kick-off wait");
-            AssertRate(t, 144, 200, PlaybackRate.Double, "the restart");
+            AssertRate(t, 4, 100, PlaybackRate.Live, "the attack");
+            AssertRate(t, 100, 107, PlaybackRate.DeadTime, "the goal and 3 s after");
+            AssertRate(t, 107, 132, PlaybackRate.Cut, "the rest of the celebration");
+            AssertRate(t, 132, 144, PlaybackRate.DeadTime, "the kick-off set-up");
+            AssertRate(t, 144, 200, PlaybackRate.Live, "the restart");
         }
 
         [Test]
         public void APenalty_PlaysFromTheAwardToTheKick_EvenWhenTheBudgetIsStarved()
         {
-            // Awarded at 100, kicked at 160 (30 s later, far past the 3 s aftermath). A 1 s budget
-            // buys nothing, so only the key rules decide what plays.
+            // Awarded at 100, kicked at 160 (30 s later, far past the 3 s aftermath and the 6 s of
+            // set-up). A 1 s budget buys nothing, so only the key rules decide what plays: the wait
+            // at dead time, the kick and 3 s after it live.
             PositionStream s = KickedOff(200, home: true);
             Hold(s, 4, 100, 800, true);
             Hold(s, 100, 160, 940, null);
@@ -467,7 +561,8 @@ namespace Sim.Core.Tests.Match
             Assert.That(t.Segments, Is.EqualTo(new[]
             {
                 new BroadcastSegment(0, 100, PlaybackRate.Cut),
-                new BroadcastSegment(100, 167, PlaybackRate.RealTime),
+                new BroadcastSegment(100, 160, PlaybackRate.DeadTime),
+                new BroadcastSegment(160, 167, PlaybackRate.Live),
                 new BroadcastSegment(167, 200, PlaybackRate.Cut)
             }));
         }

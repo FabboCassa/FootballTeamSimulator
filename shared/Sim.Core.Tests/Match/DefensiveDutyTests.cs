@@ -170,6 +170,7 @@ namespace Sim.Core.Tests.Match
                 $"[press] space left to a man on the ball in his own third: " +
                 $"low {low:F2} m   medium {medium:F2} m   high {high:F2} m");
 
+            // User decision 2026-10-10, #76: 48 seeds, bar from base mean (0.374).
             Assert.That(low, Is.GreaterThan(high + 0.3),
                 "a low block leaves the man in his own third alone; a high press does not");
             Assert.That(medium, Is.GreaterThan(high),
@@ -178,7 +179,7 @@ namespace Sim.Core.Tests.Match
 
         /// <summary>
         /// How much room the man on the ball is given while he is in his own third, averaged over
-        /// six matches and both sides. It is the reading the trigger zone exists to move: outside
+        /// 48 matches and both sides. It is the reading the trigger zone exists to move: outside
         /// its zone a side keeps its shape instead of chasing him.
         /// </summary>
         private static double SpaceInOwnThird(Pressing pressing)
@@ -187,7 +188,7 @@ namespace Sim.Core.Tests.Match
             double total = 0;
             int matches = 0;
 
-            for (ulong seed = 40; seed < 46; seed++)
+            for (ulong seed = 40; seed < 88; seed++)
             {
                 PositionStream stream = Play(seed, tactics).Positions!;
                 double sum = 0;

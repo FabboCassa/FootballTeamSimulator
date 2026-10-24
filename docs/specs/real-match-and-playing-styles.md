@@ -104,6 +104,7 @@ Out:
 
   (acceptance: harness metrics. A unit test on easing: a player 2 m from his target still moves toward it.)
 - R9 Passing chains. Open-play shots preceded by ≥ 3 passes in the same sequence are ≥ 40% of open-play shots. Open-play shots preceded by 0-1 passes are ≤ 35%, and not counting rebounds or high turnovers, ≤ 25%. The passes-per-sequence and 10+ sequence bands in R2 hold. (acceptance: harness metrics. Bands confirmed or narrowed by the R1 doc.)
+  - Amended by user decision 2026-10-10 (#82): the engine's ball is in play about 81 minutes (real 53-59), so the volume bands scale by 81/56: passes attempted per team 550-750 in the harness (R2's 380-520 stays the real-football reference) and at most 1,750 passes a match in `BallDecisionTests.Passes_ArriveLikeRealFootball` (was 1,200). #82 gates the volume row; the ratio rows (passes per sequence, 10+ sequences per team, shots after 0-1 and 3+ passes, pass accuracy 78-86%) are reported and move to #87.
 - R10 Shot selection.
   - The open-goal shortcut fires only for a genuinely open goal: keeper beaten or out of position, lane clear, ≤ 20 m.
   - Shots from it are ≤ 15% of all shots.

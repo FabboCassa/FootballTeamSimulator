@@ -3,10 +3,11 @@ using System;
 namespace Sim.Core.Match.Broadcast
 {
     /// <summary>
-    /// The playback clock of a <see cref="BroadcastTimeline"/> (spec R12-R13): wall time in, stream
-    /// position out. RealTime frames play at the stream's own rate × speed, Double frames at twice
-    /// that, and cut frames are jumped at no wall-time cost, so nothing ever plays below real time
-    /// at 1x. Position runs from the start frame to the last frame, where playback is finished.
+    /// The playback clock of a <see cref="BroadcastTimeline"/> (spec R12): wall time in, stream
+    /// position out. Live frames play at 1.3x the stream's own rate × speed, dead-time frames at 2x,
+    /// and cut frames are jumped at no wall-time cost, so nothing ever plays below 1.3x real time at
+    /// 1x and 2x / 4x scale every rate. Position runs from the start frame to the last frame, where
+    /// playback is finished.
     ///
     /// Pure and allocation-free per <see cref="Advance"/>, so a renderer can drive it every pump.
     /// </summary>
@@ -90,7 +91,7 @@ namespace Sim.Core.Match.Broadcast
                     continue;
                 }
 
-                double framesPerSecond = _realFramesPerSecond * (int)s.Rate;
+                double framesPerSecond = _realFramesPerSecond * s.Rate.Factor();
                 double need = (end - Position) / framesPerSecond;
                 if (budget < need)
                 {

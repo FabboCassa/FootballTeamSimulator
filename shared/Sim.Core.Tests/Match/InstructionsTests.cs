@@ -198,7 +198,8 @@ namespace Sim.Core.Tests.Match
             // Measured at 64 seeds: with the shot appetite read at the Mentality/Tempo axis spreads,
             // eager reads +1.1 shots / +0.4 from outside the box over patient; at
             // V11ShotAppetiteSpreadPercent (200) plus the open-goal stretch, +4.3 / +4.2. The margins
-            // sit about halfway; a looser bound would pass without the fix.
+            // sit about halfway; a looser bound would pass without the fix. Since R10 (#81) holds the
+            // shortcut to 20 m the long sight is priced (V11ShotAppetiteRangePercent): +4.6 / +3.0.
             Assert.That(eager.Shots, Is.GreaterThan(patient.Shots + 2.5),
                 "a side told to attack and to play quickly has a go more often");
             Assert.That(eager.ShotsEdge + eager.ShotsLong,

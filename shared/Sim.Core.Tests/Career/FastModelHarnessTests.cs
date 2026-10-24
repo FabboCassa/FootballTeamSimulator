@@ -17,12 +17,12 @@ namespace Sim.Core.Tests.Career
 {
     /// <summary>
     /// R17 of the watchable-match spec: the fast model (<see cref="QuickResultResolver"/>) against
-    /// the full engine on the V11 brain. Two readings, both printed as a table:
+    /// the full engine (v12 since the real-match spec's R15). Two readings, both printed as a table:
     ///   - outcomes: 1,000 fixtures of a generated league (every pairing, both venues) played by
     ///     the full engine, and the same fixtures through the fast model — mean goals within 0.15,
     ///     home/draw/away shares within 3 pp. The fast side is drawn many times per fixture so its
     ///     own sampling noise drops out and the 3 pp is spent on the engine's.
-    ///   - instructions: each non-neutral instruction against a neutral side of the same club,
+    ///   - instructions: each non-neutral level of every R16 axis against a neutral side of the same club,
     ///     and the treated side's goals for/against compared with the neutral run on the same
     ///     seeds. Where the engine's shift is beyond two standard errors, the fast model's
     ///     expected goals must move the same way; a shift inside the noise is only reported.
@@ -37,7 +37,7 @@ namespace Sim.Core.Tests.Career
     [TestFixture]
     public class FastModelHarnessTests
     {
-        private const string Reason = "Report-only harness: thousands of watched V11 matches.";
+        private const string Reason = "Report-only harness: thousands of watched matches.";
         private const int Matches = 1000;
         private const int InstructionMatches = 1000;
         private const int FastDrawsPerFixture = 50;
@@ -45,15 +45,15 @@ namespace Sim.Core.Tests.Career
         private const ulong FastWorldSeed = 39_500;
         private const ulong InstructionSeed = 40_000;
 
-        private const double MaxGoalsGap = 0.15;
-        private const double MaxSharePpGap = 3.0;
+        internal const double MaxGoalsGap = 0.15;
+        internal const double MaxSharePpGap = 3.0;
         private const double SignalStandardErrors = 2.0;
 
         [Test, Explicit(Reason), Category("FastModelHarness")]
-        public void Harness_FastModelVsV11_Outcomes()
+        public void Harness_FastModelVsFullEngine_Outcomes()
         {
             List<Club> clubs = Clubs();
-            BalanceConfig cfg = V11();
+            BalanceConfig cfg = new BalanceConfig();
             var full = new OutcomeTally();
             var fast = new OutcomeTally();
             var homeGoals = new int[Matches];
@@ -88,22 +88,23 @@ namespace Sim.Core.Tests.Career
         }
 
         [Test, Explicit(Reason), Category("FastModelHarness")]
-        public void Harness_FastModelVsV11_InstructionDirections()
+        public void Harness_FastModelVsFullEngine_InstructionDirections()
         {
             List<Club> clubs = Clubs();
-            BalanceConfig cfg = V11();
+            BalanceConfig cfg = new BalanceConfig();
             int n = TestContext.Parameters.Get("instructionMatches", InstructionMatches);
             IReadOnlyList<(string Name, TacticInstructions Set)> settings = Settings();
             var clock = Stopwatch.StartNew();
 
-            SideRun neutral = RunFull(cfg, clubs, TacticInstructions.Neutral, n);
-            (double neutralFor, double neutralAgainst) = FastExpected(cfg, clubs, TacticInstructions.Neutral, n);
+            SideRun neutral = RunFull(cfg, clubs, Tactic.Neutral, n, InstructionSeed);
+            (double neutralFor, double neutralAgainst) = FastExpected(cfg, clubs, Tactic.Neutral, n);
 
             var rows = new List<DirectionRow>();
             foreach ((string name, TacticInstructions set) in settings)
             {
-                SideRun treated = RunFull(cfg, clubs, set, n);
-                (double fastFor, double fastAgainst) = FastExpected(cfg, clubs, set, n);
+                var tactic = new Tactic(Formation.F433, set);
+                SideRun treated = RunFull(cfg, clubs, tactic, n, InstructionSeed);
+                (double fastFor, double fastAgainst) = FastExpected(cfg, clubs, tactic, n);
                 rows.Add(new DirectionRow(name,
                     treated.MeanFor - neutral.MeanFor, StandardError(treated.For, neutral.For),
                     treated.MeanAgainst - neutral.MeanAgainst, StandardError(treated.Against, neutral.Against),
@@ -111,7 +112,7 @@ namespace Sim.Core.Tests.Career
             }
 
             var misses = new List<string>();
-            TestContext.Out.WriteLine(FormatDirections(rows, n, clock.Elapsed.TotalSeconds, misses));
+            TestContext.Out.WriteLine(FormatDirections(rows, n, clock.Elapsed.TotalSeconds, (neutral.MeanFor + neutral.MeanAgainst) / 2, misses));
             Assert.That(misses, Is.Empty, "R17 instruction directions");
         }
 
@@ -140,7 +141,7 @@ namespace Sim.Core.Tests.Career
 
         // ------------------------------------------------------------------ the full engine
 
-        private sealed class SideRun
+        internal sealed class SideRun
         {
             public SideRun(int n) { For = new int[n]; Against = new int[n]; }
             public readonly int[] For;
@@ -149,8 +150,12 @@ namespace Sim.Core.Tests.Career
             public double MeanAgainst => Mean(Against);
         }
 
-        /// <summary>The treated side plays <paramref name="set"/> against a neutral side of the same club, venue alternating.</summary>
-        private static SideRun RunFull(BalanceConfig cfg, List<Club> clubs, TacticInstructions set, int n)
+        /// <summary>
+        /// The treated side plays <paramref name="treated"/> (its best eleven for the tactic's formation) against a
+        /// Balanced 4-3-3 side of the same club, venue alternating: match i is club i mod count, the treated side at
+        /// home on even i.
+        /// </summary>
+        internal static SideRun RunFull(BalanceConfig cfg, List<Club> clubs, Tactic treated, int n, ulong seed)
         {
             var run = new SideRun(n);
             int fam = cfg.Tactics.FamiliarityMax;
@@ -159,11 +164,11 @@ namespace Sim.Core.Tests.Career
             {
                 Club club = clubs[i % clubs.Count];
                 bool home = i % 2 == 0;
-                var treated = new TacticContext(new Tactic(Formation.F433, set), fam);
+                var side = new TacticContext(treated, fam);
                 TacticContext other = TacticContext.Neutral(fam);
-                MatchReport r = Engine(cfg).Simulate(
-                    LineupSelector.BestEleven(club), LineupSelector.BestEleven(club), new Pcg32(InstructionSeed + (ulong)i),
-                    home ? new MatchTactics(treated, other) : new MatchTactics(other, treated));
+                Lineup own = LineupSelector.BestEleven(club, treated.Formation), neutral = LineupSelector.BestEleven(club);
+                MatchReport r = Engine(cfg).Simulate(home ? own : neutral, home ? neutral : own, new Pcg32(seed + (ulong)i),
+                    home ? new MatchTactics(side, other) : new MatchTactics(other, side));
                 run.For[i] = home ? r.HomeGoals : r.AwayGoals;
                 run.Against[i] = home ? r.AwayGoals : r.HomeGoals;
             });
@@ -172,15 +177,14 @@ namespace Sim.Core.Tests.Career
         }
 
         /// <summary>The fast model's mean expected goals for/against the treated side over the same fixtures.</summary>
-        private static (double For, double Against) FastExpected(BalanceConfig cfg, List<Club> clubs, TacticInstructions set, int n)
+        internal static (double For, double Against) FastExpected(BalanceConfig cfg, List<Club> clubs, Tactic set, int n)
         {
             double goalsFor = 0, goalsAgainst = 0;
             for (int i = 0; i < n; i++)
             {
                 int s = BackgroundLeagueProgressor.StrengthOf(clubs[i % clubs.Count]);
                 bool home = i % 2 == 0;
-                QuickResultResolver.ExpectedGoals(s, s, cfg,
-                    home ? set : TacticInstructions.Neutral, home ? TacticInstructions.Neutral : set,
+                QuickResultResolver.ExpectedGoals(s, s, cfg, home ? set : Tactic.Neutral, home ? Tactic.Neutral : set,
                     out double h, out double a);
                 goalsFor += home ? h : a;
                 goalsAgainst += home ? a : h;
@@ -230,7 +234,7 @@ namespace Sim.Core.Tests.Career
         private static string FormatOutcomes(OutcomeTally full, OutcomeTally fast, double seconds, List<string> misses)
         {
             var sb = new StringBuilder();
-            sb.AppendLine(Inv($"[fast-model] V11 full engine {Matches} matches vs fast model x{FastDrawsPerFixture} draws per fixture, {seconds:F0} s"));
+            sb.AppendLine(Inv($"[fast-model] v{MatchEngine.Version} full engine {Matches} matches vs fast model x{FastDrawsPerFixture} draws per fixture, {seconds:F0} s"));
             sb.AppendLine("  reading        full      fast      gap   tolerance");
             Row(sb, misses, "mean goals", full.MeanGoals, fast.MeanGoals, MaxGoalsGap, "F2");
             Row(sb, misses, "home win %", full.HomePercent, fast.HomePercent, MaxSharePpGap, "F1");
@@ -250,7 +254,7 @@ namespace Sim.Core.Tests.Career
                 gap.ToString("+0.00;-0.00", CultureInfo.InvariantCulture), tolerance.ToString(CultureInfo.InvariantCulture), inside ? "IN" : "OUT"));
         }
 
-        private sealed class DirectionRow
+        internal sealed class DirectionRow
         {
             public DirectionRow(string name, double fullFor, double seFor, double fullAgainst, double seAgainst, double fastFor, double fastAgainst)
             {
@@ -270,10 +274,12 @@ namespace Sim.Core.Tests.Career
             }
         }
 
-        private static string FormatDirections(List<DirectionRow> rows, int n, double seconds, List<string> misses)
+        /// <summary><paramref name="neutralSideGoals"/> is what a table entry is a share of: entry ≈ 100 × shift / side goals.</summary>
+        private static string FormatDirections(List<DirectionRow> rows, int n, double seconds, double neutralSideGoals, List<string> misses)
         {
             var sb = new StringBuilder();
-            sb.AppendLine(Inv($"[fast-model-instructions] V11 full engine {n} matches per setting (+ neutral) vs fast-model expected goals, {seconds:F0} s"));
+            sb.AppendLine(Inv($"[fast-model-instructions] v{MatchEngine.Version} full engine {n} matches per setting (+ neutral) vs fast-model expected goals, {seconds:F0} s"));
+            sb.AppendLine(Inv($"  neutral side goals (full engine) {neutralSideGoals:F3}"));
             sb.AppendLine("  treated side    full dGF (se)    fast dGF   GF     full dGA (se)    fast dGA   GA");
             foreach (DirectionRow r in rows)
             {
@@ -303,11 +309,49 @@ namespace Sim.Core.Tests.Career
                 ("tempo slow", new TacticInstructions(n.Mentality, n.Pressing, Tempo.Slow, n.Width)),
                 ("tempo fast", new TacticInstructions(n.Mentality, n.Pressing, Tempo.Fast, n.Width)),
                 ("narrow", new TacticInstructions(n.Mentality, n.Pressing, n.Tempo, Width.Narrow)),
-                ("wide", new TacticInstructions(n.Mentality, n.Pressing, n.Tempo, Width.Wide))
+                ("wide", new TacticInstructions(n.Mentality, n.Pressing, n.Tempo, Width.Wide)),
+                ("pass short", Set(passing: PassingDirectness.Short)),
+                ("pass direct", Set(passing: PassingDirectness.Direct)),
+                ("build out", Set(buildUp: BuildUp.PlayOutFromBack)),
+                ("build long", Set(buildUp: BuildUp.GoalKickLong)),
+                ("work in box", Set(finalThird: FinalThirdApproach.WorkIntoBox)),
+                ("cross early", Set(finalThird: FinalThirdApproach.CrossEarly)),
+                ("shot patient", Set(shot: ShotSelection.Patient)),
+                ("shoot on sight", Set(shot: ShotSelection.ShootOnSight)),
+                ("dribble less", Set(dribble: DribbleFrequency.Less)),
+                ("dribble more", Set(dribble: DribbleFrequency.More)),
+                ("counter-press", Set(lost: OnBallLost.CounterPress)),
+                ("regroup", Set(lost: OnBallLost.Regroup)),
+                ("won: counter", Set(won: OnBallWon.Counter)),
+                ("won: hold", Set(won: OnBallWon.HoldShape)),
+                ("engage low", Set(engagement: LineOfEngagement.Low)),
+                ("engage high", Set(engagement: LineOfEngagement.High)),
+                ("line v.deep", Set(line: DefensiveLine.VeryDeep)),
+                ("line deep", Set(line: DefensiveLine.Deep)),
+                ("line high", Set(line: DefensiveLine.High)),
+                ("line v.high", Set(line: DefensiveLine.VeryHigh)),
+                ("zonal", Set(marking: MarkingScheme.Zonal)),
+                ("man-oriented", Set(marking: MarkingScheme.ManOriented)),
+                ("force outside", Set(direction: PressDirection.ForceOutside)),
+                ("force inside", Set(direction: PressDirection.ForceInside))
             };
         }
 
-        private static List<Club> Clubs() => new LeagueGenerator().Generate(new Pcg32(20260611)).Clubs;
+        /// <summary>The neutral set with the given R16 axes changed.</summary>
+        private static TacticInstructions Set(
+            PassingDirectness passing = PassingDirectness.Mixed, BuildUp buildUp = BuildUp.Mixed,
+            FinalThirdApproach finalThird = FinalThirdApproach.Mixed, ShotSelection shot = ShotSelection.Normal,
+            DribbleFrequency dribble = DribbleFrequency.Normal, OnBallLost lost = OnBallLost.Normal,
+            OnBallWon won = OnBallWon.Normal, LineOfEngagement engagement = LineOfEngagement.Mid,
+            DefensiveLine line = DefensiveLine.Normal, MarkingScheme marking = MarkingScheme.Mixed,
+            PressDirection direction = PressDirection.None)
+        {
+            TacticInstructions n = TacticInstructions.Neutral;
+            return new TacticInstructions(n.Mentality, passing, n.Tempo, n.Width, buildUp, finalThird, shot, dribble,
+                lost, won, engagement, line, n.Pressing, marking, direction);
+        }
+
+        internal static List<Club> Clubs() => new LeagueGenerator().Generate(new Pcg32(20260611)).Clubs;
 
         /// <summary>Fixture <paramref name="i"/> of a double round robin, cycled: every pairing, both venues.</summary>
         private static (Club Home, Club Away) Pairing(List<Club> clubs, int i)
@@ -319,14 +363,12 @@ namespace Sim.Core.Tests.Career
             return (clubs[home], clubs[away]);
         }
 
-        private static BalanceConfig V11() => new BalanceConfig();
-
         /// <summary>The flags the shipped client plays a watched match with (SeasonProgressor's); nothing reads the stats.</summary>
-        private static MatchEngine Engine(BalanceConfig cfg) =>
+        internal static MatchEngine Engine(BalanceConfig cfg) =>
             new MatchEngine(cfg, applyCondition: true, applyMatchFatigue: true, applyPositioning: true,
                 generatePositions: true, buildStats: false);
 
-        private static double Mean(int[] values)
+        internal static double Mean(int[] values)
         {
             double sum = 0;
             foreach (int v in values) sum += v;
@@ -334,7 +376,7 @@ namespace Sim.Core.Tests.Career
         }
 
         /// <summary>Standard error of the difference of two sample means.</summary>
-        private static double StandardError(int[] a, int[] b) => Math.Sqrt(Variance(a) / a.Length + Variance(b) / b.Length);
+        internal static double StandardError(int[] a, int[] b) => Math.Sqrt(Variance(a) / a.Length + Variance(b) / b.Length);
 
         private static double Variance(int[] values)
         {
@@ -343,6 +385,6 @@ namespace Sim.Core.Tests.Career
             return values.Length > 1 ? sum / (values.Length - 1) : 0;
         }
 
-        private static string Inv(FormattableString s) => s.ToString(CultureInfo.InvariantCulture);
+        internal static string Inv(FormattableString s) => s.ToString(CultureInfo.InvariantCulture);
     }
 }

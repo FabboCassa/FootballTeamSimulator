@@ -199,8 +199,8 @@ namespace Sim.Core.Tests.Match
 
             Assert.Multiple(() =>
             {
-                Assert.That(ShoutEffect.Of(TouchlineShout.PressHigh, 0, cfg).FatiguePercent, Is.EqualTo(150));
-                Assert.That(ShoutEffect.Of(TouchlineShout.PressHigh, 0, older).FatiguePercent, Is.EqualTo(150));
+                Assert.That(ShoutEffect.Of(TouchlineShout.PressHigh, 0, cfg).FatiguePercent, Is.EqualTo(220));
+                Assert.That(ShoutEffect.Of(TouchlineShout.PressHigh, 0, older).FatiguePercent, Is.EqualTo(220));
             });
         }
 

@@ -241,7 +241,7 @@ public sealed class DevSeedService : IDevSeedService
                 usedMinute = Clamp(System.Math.Max(request.Minute, System.Math.Max(1, last)), 1, 90);
 
                 var res = await _liveMatch.SubmitChangeAsync(
-                    botUserId, leagueId, fixtureId,
+                    botUserId, leagueId, fixtureId, MatchEngine.Version,
                     new SubmitLiveChangeRequest(usedMinute, plan, null), ct);
                 subMade = res.Success;
                 if (!subMade) return new DevBotLiveResult(res.Error.ToString(), wentLive, false, usedMinute);
@@ -375,7 +375,7 @@ public sealed class DevSeedService : IDevSeedService
                 usedMinute = Clamp(System.Math.Max(wanted, System.Math.Max(1, last)), 1, 90);
 
                 var res = await _rankedLive.SubmitChangeAsync(
-                    botUserId.Value, fixtureId,
+                    botUserId.Value, fixtureId, MatchEngine.Version,
                     new SubmitRankedLiveChangeRequest(usedMinute, plan, null), ct);
                 subMade = res.Success;
                 if (!subMade)
