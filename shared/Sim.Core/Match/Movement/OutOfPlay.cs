@@ -91,22 +91,27 @@ namespace Sim.Core.Match.Movement
             // off a defender putting it into his own net, because the laws do not care either.
             if (betweenPosts)
             {
-                _restarts.ScoreGoal(tick, attacking, defending, crossY);
+                _restarts.ScoreGoal(tick, attacking, defending);
                 return;
             }
 
             // Wide, and it was a strike: his miss.
-            if (_ctx.ShotLive)
+            bool strike = _ctx.ShotLive;
+            if (strike)
             {
                 _ctx.ShotLive = false;
                 _ctx.Sheet.RecordMiss(tick, attacking, _ctx.ShotSlot);
             }
 
-            if (defenderPutItBehind)
-                _restarts.Restart(tick, BallActionKind.Corner, attacking, goalX, crossY < U.CenterYU ? 0 : U.WidthU);
-            else
-                _restarts.Restart(tick, BallActionKind.GoalKick, defending,
-                    overHomeGoal ? U.Units(55) : U.LengthU - U.Units(55), U.CenterYU);
+            BallActionKind kind = defenderPutItBehind ? BallActionKind.Corner : BallActionKind.GoalKick;
+            int side = defenderPutItBehind ? attacking : defending;
+            int x = defenderPutItBehind ? goalX : (overHomeGoal ? U.Units(55) : U.LengthU - U.Units(55));
+            int y = defenderPutItBehind ? (crossY < U.CenterYU ? 0 : U.WidthU) : U.CenterYU;
+
+            // A strike, or the keeper's save, is a ball the viewer follows over the line.
+            bool saved = defenderPutItBehind && _ctx.Ball.LastTouchSlot == _ctx.KeeperOf(defending);
+            if (strike || saved) _restarts.RestartFromBehind(tick, kind, side, x, y, goalX);
+            else _restarts.Restart(tick, kind, side, x, y);
         }
 
         /// <summary>

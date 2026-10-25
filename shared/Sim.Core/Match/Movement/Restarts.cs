@@ -1,3 +1,5 @@
+using Sim.Core.Config;
+
 namespace Sim.Core.Match.Movement
 {
     /// <summary>
@@ -14,6 +16,13 @@ namespace Sim.Core.Match.Movement
         /// <summary>How close to goal a free kick gets a wall (the set-piece range).</summary>
         private readonly int _wallRangeDm;
 
+        /// <summary>A ball in the net stays this far inside a post.</summary>
+        private const int PostClearanceDm = 2;
+
+        // The restart owed for a ball lying behind a goal line, and when it may be taken.
+        private BallActionKind _behindKind;
+        private int _behindSide, _behindX, _behindY, _behindTakeAt;
+
         public Restarts(MatchContext ctx, Offside offside, FreeKickWall wall, int wallRangeDm)
         {
             _ctx = ctx;
@@ -26,16 +35,13 @@ namespace Sim.Core.Match.Movement
         /// The ball ends up IN THE NET and stays there while it is celebrated: a goal frame
         /// showing the ball already back on the centre spot is a goal the viewer never sees.
         /// The kickoff is set up when the celebration is over.
+        ///
+        /// It runs on from where it crossed into the back of the net, and at least a metre behind
+        /// the line (believable-match R5): laid on the line itself, as phase 8 did, a goal and a
+        /// shot cleared off the line looked the same. The ball is dead from this tick to the
+        /// kickoff and nobody may play it, so the only thing this moves is the picture.
         /// </summary>
-        /// <summary>
-        /// <paramref name="crossY"/> is where the ball crossed the line, and the ball is laid to
-        /// rest THERE for the celebration rather than in the middle of the goal (engine phase 8).
-        /// Phase 6 wrote this down as cosmetic and true: every goal in its dump went in dead
-        /// centre, which the eye sees at once. The ball is dead from this tick to the kickoff and
-        /// nobody may play it, so the only thing this moves is the picture — and the golden
-        /// master, since the resting frames are in the stream the hash covers.
-        /// </summary>
-        public void ScoreGoal(int tick, int attacking, int defending, int crossY)
+        public void ScoreGoal(int tick, int attacking, int defending)
         {
             int goalX = U.Units(MovementGeometry.AttackedGoalX(attacking == 0));
 
@@ -50,10 +56,10 @@ namespace Sim.Core.Match.Movement
             _ctx.ShotSlot = scorer;
             _ctx.Sheet.RecordGoal(tick, attacking, scorer);
 
-            _ctx.Ball.Place(goalX, U.ClampY(crossY));
-            _ctx.Ball.Dead = true;
-            _ctx.Ball.OwnerSide = -1;
-            _ctx.Ball.OwnerSlot = -1;
+            MatchBalance cfg = _ctx.Cfg;
+            int inside = U.Units(MovementGeometry.GoalHalfWidthDm - PostClearanceDm);
+            _ctx.Ball.RunBehind(goalX, U.Units(cfg.GoalRestDepthDm), U.Units(cfg.GoalNetDepthDm),
+                U.CenterYU - inside, U.CenterYU + inside, U.PerTick(cfg.BehindLineCreepDmPerSecond, cfg));
             _ctx.Ball.LastTouchSide = attacking;
             _ctx.Receiver[0] = -1;
             _ctx.Receiver[1] = -1;
@@ -62,6 +68,47 @@ namespace Sim.Core.Match.Movement
             _ctx.DeadSide = defending;
             _ctx.DeadTaker = -1;
             _ctx.DeadAt = tick + _ctx.Cfg.GoalCelebrationTicks;
+        }
+
+        /// <summary>
+        /// A strike wide of the goal, or a save turned round the post, has just crossed the goal
+        /// line at <paramref name="lineX"/>. The ball runs on behind it and lies there BehindLineMs
+        /// before the restart is given (believable-match R5): given on the tick it crossed, the
+        /// ball was already on the goal-kick spot in the frame that should show it going wide. While
+        /// it lies there the dead ball reads as a Miss with nobody to take it.
+        /// </summary>
+        public void RestartFromBehind(int tick, BallActionKind kind, int side, int x, int y, int lineX)
+        {
+            MatchBalance cfg = _ctx.Cfg;
+            _ctx.ShotLive = false;
+            _offside.ClearFlags();
+            _ctx.Ball.RunBehind(lineX, U.Units(cfg.WideRestDepthDm), U.Units(cfg.RunOffDepthDm),
+                0, U.WidthU, U.PerTick(cfg.BehindLineCreepDmPerSecond, cfg));
+            _ctx.Receiver[0] = -1;
+            _ctx.Receiver[1] = -1;
+
+            _behindKind = kind;
+            _behindSide = side;
+            _behindX = x;
+            _behindY = y;
+            _behindTakeAt = tick + cfg.DeadBallTicks;
+
+            // Actions are filed on the first frame at or after their tick, so the pause is padded
+            // by a frame less a tick: otherwise an odd tick shows the ball out a frame too briefly.
+            int stride = cfg.StreamTicksPerFrame < 1 ? 1 : cfg.StreamTicksPerFrame;
+            _ctx.DeadKind = BallActionKind.Miss;
+            _ctx.DeadSide = side;
+            _ctx.DeadTaker = -1;
+            _ctx.DeadAt = tick + cfg.TicksOfMs(cfg.BehindLineMs) + stride - 1;
+        }
+
+        /// <summary>The ball has lain behind the line long enough: the restart it is owed, taken when it would have been.</summary>
+        public void RestartAfterBehind(int tick)
+        {
+            if (!_ctx.Ball.Dead || _ctx.DeadKind != BallActionKind.Miss || tick < _ctx.DeadAt) return;
+
+            Restart(tick, _behindKind, _behindSide, _behindX, _behindY);
+            _ctx.DeadAt = _behindTakeAt > tick ? _behindTakeAt : tick;
         }
 
         public void GoalKick(int tick, int defending)

@@ -291,6 +291,8 @@ namespace Sim.Core.Match.Movement
                 HalfTime(tick);
             }
 
+            _restarts.RestartAfterBehind(tick);
+
             // Celebration over: the ball goes back to the centre spot for the kickoff.
             if (_ball.Dead && _ctx.DeadKind == BallActionKind.Goal && tick >= _ctx.DeadAt)
             {
@@ -1588,6 +1590,7 @@ namespace Sim.Core.Match.Movement
                 return;
             }
 
+            int metX = _ball.X, metY = _ball.Y;
             Collect(bestSide, bestSlot);
             _lastTouch[bestSide] = bestSlot;
             _hold[bestSide * _n + bestSlot] = HoldTicks(bestSide);
@@ -1611,6 +1614,10 @@ namespace Sim.Core.Match.Movement
 
             if (wasShot && bestSide != (_ctx.ShotHome ? 0 : 1))
             {
+                // Held where his hands met it on its path (believable-match R5). Snapped to his
+                // feet on the same tick, the ball stepped its flight AND his reach in one frame.
+                U.NearestOnSegment(_px[gkSlot], _py[gkSlot], metX - inVx, metY - inVy, metX, metY,
+                    out _ball.X, out _ball.Y);
                 _ctx.ShotLive = false;
                 _sheet.RecordSave(tick, bestSide, bestSlot, _ctx.ShotSlot);
                 return;
@@ -1861,7 +1868,8 @@ namespace Sim.Core.Match.Movement
         /// <summary>Writes one stream frame. <paramref name="frame"/> is in FRAME space, not tick space.</summary>
         private void WriteFrame(int frame)
         {
-            int bx = U.ClampX(_ball.X), by = U.ClampY(_ball.Y);
+            // A dead ball may lie behind a goal line (MatchBall.RunBehind); one in play never leaves the pitch.
+            int bx = _ball.Dead ? _ball.X : U.ClampX(_ball.X), by = _ball.Dead ? _ball.Y : U.ClampY(_ball.Y);
             _stream.BallXY[frame * 2] = U.Dm(bx);
             _stream.BallXY[frame * 2 + 1] = U.Dm(by);
             _stream.BallZ[frame] = _ball.Z;

@@ -101,6 +101,30 @@ namespace Sim.Core.Match.Movement
             return ox * ox + oy * oy;
         }
 
+        /// <summary>The point of the segment a-b nearest to p: where a man reaching for a moving ball meets it.</summary>
+        public static void NearestOnSegment(int px, int py, int ax, int ay, int bx, int by, out int x, out int y)
+        {
+            long dx = bx - ax, dy = by - ay;
+            long lengthSq = dx * dx + dy * dy;
+            long t = lengthSq == 0 ? 0 : (px - ax) * dx + (py - ay) * dy;
+            if (t <= 0)
+            {
+                x = ax;
+                y = ay;
+                return;
+            }
+
+            if (t >= lengthSq)
+            {
+                x = bx;
+                y = by;
+                return;
+            }
+
+            x = ax + (int)(dx * t / lengthSq);
+            y = ay + (int)(dy * t / lengthSq);
+        }
+
         /// <summary>Rescales a vector to the given length (zero-safe).</summary>
         public static void Scaled(int dx, int dy, int length, out int x, out int y)
         {

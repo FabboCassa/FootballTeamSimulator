@@ -73,6 +73,9 @@ namespace Sim.Core.Tests.Match
                 rose++;
 
                 int landed = Array.IndexOf(s.BallZ, 0, peakFrame);
+
+                // Struck in the last seconds: the final whistle ends the stream before it can land.
+                if (landed < 0 && peakFrame + LandingFrames > s.LastTick) continue;
                 Assert.That(landed, Is.GreaterThan(peakFrame), $"{kind} at frame {from} never comes down");
                 Assert.That(landed - peakFrame, Is.LessThanOrEqualTo(LandingFrames),
                     $"{kind} at frame {from} hangs in the air");

@@ -46,7 +46,8 @@ namespace Sim.Core.Match.Broadcast
             return side;
         }
 
-        internal static int Progress(int ballX, bool home) => home ? ballX : Pitch.LengthDm - ballX;
+        /// <summary>How far up the pitch the ball is for the side. A dead ball behind a goal line reads as on it.</summary>
+        internal static int Progress(int ballX, bool home) => home ? Pitch.ClampX(ballX) : Pitch.LengthDm - Pitch.ClampX(ballX);
 
         private static int SecondHalfStart(List<BallAction> actions, int frames, int framesPerMinute)
         {
