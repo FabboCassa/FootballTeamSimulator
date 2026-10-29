@@ -6,8 +6,14 @@ on:
   pull_request:
 
 jobs:
+  # Sharded by fixture: the suite is CPU-bound (~55 min of test time), one runner took ~15 min wall.
+  # tools/simcore-shards.sh owns the filters; its last shard is the catch-all for unnamed fixtures.
   test-simcore:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -19,19 +25,35 @@ jobs:
           dotnet build shared/Contracts/Contracts.csproj -c Release
       # verbosity=normal on purpose: the harness prints its measurements ([balance-*], the golden
       # master hash) through TestContext and those lines are the point of the run.
-      - name: Run Sim.Core tests
-        run: >
-          dotnet test shared/Sim.Core.Tests/Sim.Core.Tests.csproj -c Release
-          --logger "console;verbosity=normal"
-          --logger "trx;LogFileName=simcore-tests.trx"
-          --results-directory artifacts/test-results
+      - name: Run Sim.Core tests (shard ${{ matrix.shard }})
+        # Assigned first so a bad shard number fails the step instead of an empty filter running everything.
+        run: |
+          filter="$(bash tools/simcore-shards.sh filter ${{ matrix.shard }})"
+          dotnet test shared/Sim.Core.Tests/Sim.Core.Tests.csproj -c Release \
+            --filter "$filter" \
+            --logger "console;verbosity=normal" \
+            --logger "trx;LogFileName=simcore-tests-${{ matrix.shard }}.trx" \
+            --results-directory artifacts/test-results
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: simcore-test-results
+          name: simcore-test-results-${{ matrix.shard }}
           path: artifacts/test-results
           if-no-files-found: ignore
+
+  # Proves the shard filters are disjoint and cover every test, so a shard edit can't skip one.
+  simcore-shards:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Build Sim.Core tests
+        run: dotnet build shared/Sim.Core.Tests/Sim.Core.Tests.csproj -c Release
+      - name: Check shard coverage
+        run: bash tools/simcore-shards.sh check
 
   test-server:
     runs-on: ubuntu-latest
