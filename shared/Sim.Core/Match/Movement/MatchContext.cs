@@ -56,6 +56,9 @@ namespace Sim.Core.Match.Movement
         public bool ShotHome;
         public int ShotSlot;
 
+        /// <summary>The tick the strike was released on: the keeper's reaction runs from here (R6).</summary>
+        public int ShotTick;
+
         public MatchContext(
             MatchBalance cfg, IRandomSource rng, MatchBall ball, MatchScoresheet sheet, int n,
             int[] px, int[] py, bool[] keeper, bool[] sentOff,

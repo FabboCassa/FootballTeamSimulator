@@ -59,10 +59,11 @@ namespace Sim.Core.Tests.Match
         [Test]
         public void V11_OverASmallSample_ReadsNearTheR7Bands()
         {
-            // STATISTICALLY FRAGILE: twelve matches, not the harness's thousand. Each band is
+            // STATISTICALLY FRAGILE: twenty-four matches, not the harness's thousand. Each band is
             // widened by its own width on either side (the box-entry floor is exact), so that only a real
-            // regression, not the noise of twelve fixed seeds, trips it.
-            const int SampleMatches = 12;
+            // regression, not the noise of fixed seeds, trips it. Twelve read 3.67 goals a match with
+            // the keeper's reaction (#149) while the 2,000-match harness read 2.87.
+            const int SampleMatches = 24;
             const double BandSlack = 1.0;
             BalanceConfig cfg = Config();
             Lineup a = LineupSelector.BestEleven(_league.Clubs[9]), b = LineupSelector.BestEleven(_league.Clubs[10]);

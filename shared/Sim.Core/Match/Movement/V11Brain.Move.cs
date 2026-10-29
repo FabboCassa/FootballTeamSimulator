@@ -41,7 +41,7 @@ namespace Sim.Core.Match.Movement
                 if (job != BaseJob.None && job != BaseJob.Support && !leashed)
                 {
                     EndSpell(side, slot);
-                    _base.Move(side, slot, job, 0, 0, 0);
+                    _base.Move(tick, side, slot, job, 0, 0, 0);
                     return;
                 }
 
@@ -77,7 +77,7 @@ namespace Sim.Core.Match.Movement
                     EndSpell(side, slot);
                     int leash = U.Units(JobLeashDm(side, job));
                     if (job == BaseJob.Press && _sim._cfg.V11PressStandOffPercent > 0) PressGoalSide(side, slot, spotX, spotY, leash);
-                    else _base.Move(side, slot, job, spotX, spotY, leash);
+                    else _base.Move(tick, side, slot, job, spotX, spotY, leash);
                     return;
                 }
 
