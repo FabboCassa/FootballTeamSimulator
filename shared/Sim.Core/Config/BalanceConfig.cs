@@ -2646,6 +2646,18 @@ namespace Sim.Core.Config
         public int KeeperSaveReachDm { get; set; } = 10;
 
         /// <summary>
+        /// From a strike's release, how long the keeper stands set before he moves (believable-match
+        /// R6): KeeperReactionSlowMs at Goalkeeping 1, KeeperReactionFastMs at 100 (see
+        /// <see cref="Sim.Core.Match.Movement.KeeperReaction"/>). He then goes for the predicted
+        /// crossing point at his running speed, and covers the last KeeperDiveFromDm of it at
+        /// KeeperDiveDmPerSecond, never slower than he runs.
+        /// </summary>
+        public int KeeperReactionSlowMs { get; set; } = 300;
+        public int KeeperReactionFastMs { get; set; } = 150;
+        public int KeeperDiveFromDm { get; set; } = 20;
+        public int KeeperDiveDmPerSecond { get; set; } = 80;
+
+        /// <summary>
         /// Home advantage ON THE PITCH, in permille on every attribute of the home eleven. The
         /// result model has always had <see cref="HomeAdvantagePercent"/> on the team ratings;
         /// with the causality inverted the watched match needs its own, and it is a much smaller

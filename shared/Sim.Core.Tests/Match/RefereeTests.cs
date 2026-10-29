@@ -252,7 +252,10 @@ namespace Sim.Core.Tests.Match
         {
             var analyzer = new MatchAnalyzer();
             double goodFouls = 0, poorFouls = 0, goodCards = 0, poorCards = 0;
-            const int matches = 10;
+
+            // STATISTICALLY FRAGILE: cards are a couple a match, so ten fixed seeds were a coin toss
+            // on the card line (16 against 18 with the keeper's reaction, #149); twenty are not.
+            const int matches = 20;
 
             for (int i = 0; i < matches; i++)
             {

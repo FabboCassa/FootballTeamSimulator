@@ -995,6 +995,7 @@ namespace Sim.Core.Match.Movement
             System.Array.Clear(_blockTried, 0, _blockTried.Length);
             _ctx.ShotHome = home;
             _ctx.ShotSlot = slot;
+            _ctx.ShotTick = tick;
             _lastTouch[side] = slot;
             _shotExpires = tick + _cfg.ShotResolveTicks;
 
@@ -1198,25 +1199,24 @@ namespace Sim.Core.Match.Movement
         /// </summary>
         private void WalkTo(int k, int tx, int ty, bool hurry = false)
         {
-            _stepFromX[k] = _px[k];
-            _stepFromY[k] = _py[k];
-
             int dx = tx - _px[k], dy = ty - _py[k];
             int gap = U.Length(dx, dy);
             int step = hurry || gap > _approachU ? _maxSpeed[k] : _cruise[k];
             if (step < 1) step = 1;
 
             if (gap <= step)
-            {
-                _px[k] = U.ClampX(tx);
-                _py[k] = U.ClampY(ty);
-            }
+                StepTo(k, tx, ty);
             else
-            {
-                _px[k] = U.ClampX(_px[k] + (int)((long)dx * step / gap));
-                _py[k] = U.ClampY(_py[k] + (int)((long)dy * step / gap));
-            }
+                StepTo(k, _px[k] + (int)((long)dx * step / gap), _py[k] + (int)((long)dy * step / gap));
+        }
 
+        /// <summary>He is put at (<paramref name="x"/>, <paramref name="y"/>), one step on, with no momentum to carry past it.</summary>
+        private void StepTo(int k, int x, int y)
+        {
+            _stepFromX[k] = _px[k];
+            _stepFromY[k] = _py[k];
+            _px[k] = U.ClampX(x);
+            _py[k] = U.ClampY(y);
             _vx[k] = 0;
             _vy[k] = 0;
             _stepToX[k] = _px[k];
