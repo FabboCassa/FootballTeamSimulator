@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using Sim.Core.Config;
+using Sim.Core.Match.Movement;
 
 namespace Sim.Core.Match.Broadcast
 {
@@ -58,10 +60,12 @@ namespace Sim.Core.Match.Broadcast
         /// <summary>The half-time whistle's frame; int.MaxValue when the stream has none.</summary>
         private readonly int _secondHalfFrom;
 
-        public SaveHighlight(PositionStream stream)
+        public SaveHighlight(PositionStream stream, MatchBalance? cfg = null)
         {
             if (stream == null)
                 throw new ArgumentNullException(nameof(stream));
+
+            DiveReachDm = (cfg ?? new BalanceConfig().Match).KeeperDiveFromDm;
 
             int fpm = stream.TicksPerMinute > 0 ? stream.TicksPerMinute : 1;
             LengthFrames = Math.Max(1, (int)Math.Round(AccentSeconds * fpm / 60.0));
@@ -106,6 +110,37 @@ namespace Sim.Core.Match.Broadcast
 
         /// <summary>The longest reach back of the keeper's drawn path, in frames.</summary>
         public int MaxDiveFrames { get; }
+
+        /// <summary>How far the keeper's dive stretches him, in decimetres: the simulated dive.</summary>
+        public int DiveReachDm { get; }
+
+        /// <summary>
+        /// Where the keeper's dive reaches, drawn toward the impact (spec believable-match R12): from
+        /// the keeper at (<paramref name="keeperX"/>, <paramref name="keeperY"/>) toward the ball at
+        /// (<paramref name="impactX"/>, <paramref name="impactY"/>), <paramref name="reachDm"/> long.
+        /// A keeper standing on the impact dives the way he came, from (<paramref name="fromX"/>,
+        /// <paramref name="fromY"/>) through it; false when that gives no direction either.
+        /// </summary>
+        public static bool DiveToward(int keeperX, int keeperY, int fromX, int fromY, int impactX, int impactY,
+            int reachDm, out int x, out int y)
+        {
+            int dx = impactX - keeperX, dy = impactY - keeperY;
+            if (dx == 0 && dy == 0)
+            {
+                dx = impactX - fromX;
+                dy = impactY - fromY;
+            }
+
+            x = keeperX;
+            y = keeperY;
+            int length = MovementGeometry.Distance(dx, dy, 0, 0);
+            if (length == 0)
+                return false;
+
+            x = keeperX + (int)((long)dx * reachDm / length);
+            y = keeperY + (int)((long)dy * reachDm / length);
+            return true;
+        }
 
         /// <summary>
         /// The save to accent at stream position <paramref name="position"/>: the latest one at or
