@@ -72,8 +72,10 @@ namespace Sim.Core.Tests.Match
                     PitchPoint ball = stream.BallAt(a.Tick);
                     int goalX = a.Home ? Pitch.LengthDm : 0;
 
-                    Assert.That(Math.Abs(ball.X - goalX), Is.LessThanOrEqualTo(6),
-                        "a goal is the ball ON the line it crossed");
+                    // Believable-match R5: over the line it crossed and in the net, no deeper than its back.
+                    int depth = a.Home ? ball.X - goalX : goalX - ball.X;
+                    Assert.That(depth, Is.InRange(1, Cfg.Match.GoalNetDepthDm),
+                        "a goal is the ball over the line it crossed, in the net");
                     Assert.That(Math.Abs(ball.Y - Pitch.CenterY), Is.LessThanOrEqualTo(40),
                         "and between the posts");
                     goals++;

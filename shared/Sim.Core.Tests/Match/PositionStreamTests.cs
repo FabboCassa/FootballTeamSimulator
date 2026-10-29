@@ -264,7 +264,17 @@ namespace Sim.Core.Tests.Match
                 PositionStream stream = Play(seed).Positions!;
                 for (int t = 0; t <= stream.LastTick; t++)
                 {
-                    AssertOnPitch(stream.BallAt(t));
+                    // Believable-match R5: a dead ball lies behind a goal line, no further than the
+                    // boards, and nobody holds it there. Every other frame it is on the pitch.
+                    PitchPoint ball = stream.BallAt(t);
+                    if (ball.X < 0 || ball.X > Pitch.LengthDm)
+                    {
+                        Assert.That(ball.X, Is.InRange(-Cfg.RunOffDepthDm, Pitch.LengthDm + Cfg.RunOffDepthDm), $"frame {t}");
+                        Assert.That(stream.Owner[t], Is.EqualTo(PositionStream.NoOwner), $"frame {t}: held behind the line");
+                        ball = new PitchPoint(Pitch.ClampX(ball.X), ball.Y);
+                    }
+
+                    AssertOnPitch(ball);
                     for (int i = 0; i < stream.PlayerCount; i++)
                     {
                         AssertOnPitch(stream.HomeAt(t, i));
@@ -369,6 +379,11 @@ namespace Sim.Core.Tests.Match
                 // cannot happen is the ball resting on a line, because the laws call that a
                 // throw-in and the referee now gives it (see MatchBalance.TouchlineInsetDm).
                 int inset = new BalanceConfig().Match.TouchlineInsetDm;
+
+                // Believable-match R5: on the frame of his save the ball is in the keeper's hands
+                // where he met it, at full stretch, and at his feet from the next.
+                if (stream.Actions.Any(a => a.Tick == t && a.Kind == BallActionKind.Save && a.Home == home && a.Slot == slot))
+                    inset = Cfg.ControlRadiusDm + Cfg.KeeperSaveReachDm;
                 Assert.That(System.Math.Abs(carrier.X - ball.X), Is.LessThanOrEqualTo(inset),
                     $"tick {t}: the ball is not at its carrier's feet");
                 Assert.That(System.Math.Abs(carrier.Y - ball.Y), Is.LessThanOrEqualTo(inset),
@@ -437,7 +452,9 @@ namespace Sim.Core.Tests.Match
                     if (a.Kind == BallActionKind.Goal)
                     {
                         goals++;
-                        Assert.That(depth, Is.LessThanOrEqualTo(6), "a goal has to cross the line");
+                        // Believable-match R5: over the line and in the net, no deeper than its back.
+                        bool over = a.Home ? ball.X > goalX : ball.X < goalX;
+                        Assert.That(over && depth <= Cfg.GoalNetDepthDm, Is.True, "a goal has to cross the line into the net");
                         Assert.That(offCentre, Is.LessThanOrEqualTo(40), "a goal has to go between the posts");
                     }
                     else if (a.Kind == BallActionKind.Save)

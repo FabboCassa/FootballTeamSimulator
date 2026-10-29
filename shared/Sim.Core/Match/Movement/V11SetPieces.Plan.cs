@@ -96,9 +96,13 @@ namespace Sim.Core.Match.Movement
                 && slot != _ctx.DeadTaker && _offering[slot];
 
             /// <summary>The restart's shape is up or the wait for it is over.</summary>
-            private bool ShapeUp(int tick) =>
-                !_hasShape || tick >= _ctx.DeadAt + _cfg.RestartShapeWaitTicks
-                || (_ctx.DeadKind == BallActionKind.ThrowIn ? Offering() >= _offers : ShapeInPlace());
+            private bool ShapeUp(int tick)
+            {
+                if (!_hasShape) return true;
+                if (_ctx.DeadKind == BallActionKind.ThrowIn)
+                    return tick >= _ctx.DeadAt + _cfg.ThrowInShapeWaitTicks || Offering() >= _offers;
+                return tick >= _ctx.DeadAt + _cfg.RestartShapeWaitTicks || ShapeInPlace();
+            }
 
             /// <summary>
             /// Team-mates of a throw-in's taker within reach of the ball now, whoever they are: the

@@ -1839,9 +1839,17 @@ namespace Sim.Core.Config
         /// </summary>
         public int ThrowInOfferDm { get; set; } = 120;
 
-        /// <summary>How long, past the usual pause, a goal kick or a throw-in waits for its shape.</summary>
+        /// <summary>How long, past the usual pause, a goal kick waits for its shape.</summary>
         public int RestartShapeWaitMs { get; set; } = 3000;
         public int RestartShapeWaitTicks => TicksOfMs(RestartShapeWaitMs);
+
+        /// <summary>
+        /// How long, past the usual pause, a throw-in waits for its two men within reach (R11).
+        /// Longer than a goal kick's wait: they always can come, and a man sprinting onto his spot
+        /// runs past it and back, so on the shorter wait the throw went with one of them out of reach.
+        /// </summary>
+        public int ThrowInShapeWaitMs { get; set; } = 6000;
+        public int ThrowInShapeWaitTicks => TicksOfMs(ThrowInShapeWaitMs);
 
         /// <summary>The nearest a restart is played to a man, and the furthest a thrown ball goes.</summary>
         public int RestartMinPassDm { get; set; } = 40;
@@ -2558,6 +2566,22 @@ namespace Sim.Core.Config
         public int DeadBallTicks => TicksOfMs(DeadBallMs);
         public int GoalCelebrationMs { get; set; } = 9000;
         public int GoalCelebrationTicks => TicksOfMs(GoalCelebrationMs);
+
+        /// <summary>
+        /// A shot wide of the goal, or a save turned behind, runs on beyond the goal line and lies
+        /// there at least this long before the goal kick or corner is given (believable-match R5).
+        /// It is still taken DeadBallMs after the ball went out, so the pause costs no playing time.
+        /// </summary>
+        public int BehindLineMs { get; set; } = 1500;
+
+        /// <summary>The back of the net, and the boards behind a goal line, as depths beyond the line.</summary>
+        public int GoalNetDepthDm { get; set; } = 20;
+        public int RunOffDepthDm { get; set; } = 30;
+
+        /// <summary>How deep a ball beyond the line always rolls, and the walking pace it creeps there at.</summary>
+        public int GoalRestDepthDm { get; set; } = 12;
+        public int WideRestDepthDm { get; set; } = 10;
+        public int BehindLineCreepDmPerSecond { get; set; } = 10;
 
         // --- The strike decides (engine phase 6) ---
         //

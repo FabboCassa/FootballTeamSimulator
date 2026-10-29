@@ -139,6 +139,7 @@ namespace Sim.Core.Match.Movement
             PrevY = Y;
             Vx = 0;
             Vy = 0;
+            _behind = false;
             Ground();
         }
 
@@ -186,6 +187,7 @@ namespace Sim.Core.Match.Movement
         public void Advance()
         {
             StepHeight();
+            if (Dead) StepBehind();
             if (Dead || !Free) return;
 
             PrevX = X;
