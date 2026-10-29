@@ -36,6 +36,11 @@ namespace Fts.MatchView
     /// director filed one, stays on as a caption (<see cref="SetCutCaptions"/>). The ball's trail and
     /// a shot's line never reach back past the last cut, so nothing drawn spans one.
     ///
+    /// STRIKES (spec believable-match R12). A shot's line runs from the shooter to the ball and stays
+    /// while a goal runs into the net (lit briefly) or a wide shot past the line (<see cref="ShotHighlight"/>);
+    /// the pitch leaves room behind each goal line so that ball is on screen. A save stretches the keeper
+    /// toward the impact. The ball grows and lifts off its shadow with its height (<see cref="BallLook"/>).
+    ///
     /// Shirt numbers are real <see cref="Label"/> children rather than painter text: a label
     /// centres itself in the token's own box, which is the only way a two-digit number stays
     /// inside its circle at every pitch size.
@@ -52,6 +57,9 @@ namespace Fts.MatchView
         private const float BallRadiusDm = 7f;
         private const int TrailSeconds = 4;
 
+        /// <summary>Room beyond each goal line: the net and the run-off a ball past the line lies in (spec R12).</summary>
+        private const float EndRoomDm = 40f;
+
         /// <summary>Wall seconds a cut caption stays up: long enough to read one line at any speed.</summary>
         private const float CaptionSeconds = 2.5f;
 
@@ -62,6 +70,8 @@ namespace Fts.MatchView
         private static readonly Color TrailColor = new Color(1f, 1f, 1f, 0.55f);
         private static readonly Color ShotColor = new Color(1f, 0.85f, 0.35f, 0.9f);
         private static readonly Color SaveColor = new Color(0.45f, 0.9f, 1f, 1f);
+        private static readonly Color NetColor = new Color(1f, 0.95f, 0.6f, 1f);
+        private static readonly Color ShadowColor = new Color(0f, 0f, 0f, 1f);
 
         private readonly Color _homeColor;
         private readonly Color _awayColor;
@@ -84,6 +94,9 @@ namespace Fts.MatchView
 
         /// <summary>Which save to accent now, and the keeper's path to the ball (spec R7).</summary>
         private readonly SaveHighlight _saves;
+
+        /// <summary>Which strike's line to draw now, and which net a goal lights (spec believable-match R12).</summary>
+        private readonly ShotHighlight _shots;
 
         /// <summary>The stream position a shared clock shows now; null when the renderer keeps its own time.</summary>
         private Func<double> _sharedClock;
@@ -187,6 +200,7 @@ namespace Fts.MatchView
             Timeline = new BroadcastDirector().Build(report);
             _playback = new BroadcastPlayback(Timeline);
             _saves = new SaveHighlight(_stream);
+            _shots = new ShotHighlight(_stream);
 
             foreach (BallAction action in _actions)
                 if (action.Kind == BallActionKind.HalfTime)
@@ -621,7 +635,7 @@ namespace Fts.MatchView
             if (!HasStream || float.IsNaN(r.width) || r.width <= 1f || r.height <= 1f)
                 return;
 
-            Rect fit = PitchGraphics.FitRect(r.width, r.height);
+            Rect fit = PitchGraphics.FitRect(r.width, r.height, EndRoomDm);
             float scale = fit.width / PitchGraphics.LengthDm;
             float radius = Mathf.Max(4f, TokenRadiusDm * scale);
 
@@ -680,7 +694,7 @@ namespace Fts.MatchView
             if (!HasStream || r.width <= 1f || r.height <= 1f)
                 return;
 
-            Rect fit = PitchGraphics.FitRect(r.width, r.height);
+            Rect fit = PitchGraphics.FitRect(r.width, r.height, EndRoomDm);
             float scale = fit.width / PitchGraphics.LengthDm;
 
             Painter2D p = mgc.painter2D;
@@ -690,12 +704,21 @@ namespace Fts.MatchView
             int tb = Mathf.Min(ta + 1, _lastTick);
             float f = Mathf.Clamp01(_tickPos - ta);
 
+            BallLook look = BallLook.At(BallLook.HeightAt(_stream.BallZ, _tickPos));
+            Vector2 ground = BallGround(fit, ta, tb, f);
+            Vector2 ball = new Vector2(ground.x, ground.y - look.LiftDm * scale);
+
+            if (_shots.TryNetAt(_tickPos, out NetMoment net))
+                DrawNet(p, fit, scale, net);
             DrawTrail(p, fit, ta);
-            DrawFlight(p, fit, ta, scale);
+            DrawFlight(p, fit, ta, scale, ball);
 
             bool saving = _saves.TryAt(_tickPos, out SaveMoment save);
             if (saving)
+            {
                 DrawDive(p, fit, scale, save);
+                DrawStretch(p, fit, scale, save);
+            }
 
             _stream.TryOwner(_stream.Owner[ta], out bool ownerHome, out int ownerSlot);
             bool owned = _stream.Owner[ta] != PositionStream.NoOwner;
@@ -708,7 +731,34 @@ namespace Fts.MatchView
             if (saving)
                 DrawSaveAccent(p, fit, scale, save, ta, tb, f);
 
-            DrawBall(p, fit, scale, ta, tb, f);
+            DrawBall(p, scale, ground, ball, look);
+        }
+
+        /// <summary>A goal's net, lit behind the line and fading: where the ball now lies.</summary>
+        private void DrawNet(Painter2D p, Rect fit, float scale, NetMoment net)
+        {
+            Vector2 a = Pixel(fit, net.GoalFrame, net.LineX, net.MinY);
+            Vector2 b = Pixel(fit, net.GoalFrame, net.BackX, net.MinY);
+            Vector2 c = Pixel(fit, net.GoalFrame, net.BackX, net.MaxY);
+            Vector2 d = Pixel(fit, net.GoalFrame, net.LineX, net.MaxY);
+
+            p.fillColor = new Color(NetColor.r, NetColor.g, NetColor.b, 0.35f * net.Strength);
+            p.BeginPath();
+            p.MoveTo(a);
+            p.LineTo(b);
+            p.LineTo(c);
+            p.LineTo(d);
+            p.ClosePath();
+            p.Fill();
+
+            p.strokeColor = new Color(NetColor.r, NetColor.g, NetColor.b, net.Strength);
+            p.lineWidth = Mathf.Max(1.5f, 3f * scale);
+            p.BeginPath();
+            p.MoveTo(a);
+            p.LineTo(b);
+            p.LineTo(c);
+            p.LineTo(d);
+            p.Stroke();
         }
 
         /// <summary>The keeper's path from the strike to the save, under the tokens, fading with the accent.</summary>
@@ -725,6 +775,32 @@ namespace Fts.MatchView
             for (int t = save.DiveFrom + 1; t <= save.SaveFrame; t++)
                 p.LineTo(PlayerPixel(fit, side, t, save.KeeperSlot));
             p.Stroke();
+        }
+
+        /// <summary>
+        /// The keeper stretched out toward the impact on the save frame: a body-wide stroke from his
+        /// centre past the token's edge by the dive's reach, under the token, fading with the accent.
+        /// </summary>
+        private void DrawStretch(Painter2D p, Rect fit, float scale, SaveMoment save)
+        {
+            int[] side = save.KeeperHome ? _stream.HomeXY : _stream.AwayXY;
+            int keeper = (save.SaveFrame * _players + save.KeeperSlot) * 2;
+            int from = (save.DiveFrom * _players + save.KeeperSlot) * 2;
+            int ball = save.SaveFrame * 2;
+            if (!SaveHighlight.DiveToward(side[keeper], side[keeper + 1], side[from], side[from + 1],
+                    _stream.BallXY[ball], _stream.BallXY[ball + 1],
+                    (int)TokenRadiusDm + _saves.DiveReachDm, out int x, out int y))
+                return;
+
+            float radius = Mathf.Max(4f, TokenRadiusDm * scale);
+            p.strokeColor = new Color(SaveColor.r, SaveColor.g, SaveColor.b, 0.85f * save.Strength);
+            p.lineWidth = radius * 1.1f;
+            p.lineCap = LineCap.Round;
+            p.BeginPath();
+            p.MoveTo(Pixel(fit, save.SaveFrame, side[keeper], side[keeper + 1]));
+            p.LineTo(Pixel(fit, save.SaveFrame, x, y));
+            p.Stroke();
+            p.lineCap = LineCap.Butt;
         }
 
         /// <summary>A brief ring that opens out from the keeper as the save's accent fades.</summary>
@@ -806,9 +882,26 @@ namespace Fts.MatchView
             }
         }
 
-        /// <summary>The line of a pass in the air, or the trajectory of a shot.</summary>
-        private void DrawFlight(Painter2D p, Rect fit, int ta, float scale)
+        /// <summary>
+        /// The line of a shot from the shooter to the ball — kept, fading, while a goal runs into the
+        /// net or a wide shot past the line — or else the line of a pass in the air to its receiver.
+        /// </summary>
+        private void DrawFlight(Painter2D p, Rect fit, int ta, float scale, Vector2 ball)
         {
+            if (_shots.TryShotAt(_tickPos, out ShotMoment shot))
+            {
+                if (shot.StrikeFrame < _shownFrom)
+                    return; // struck inside a cut: the shooter was never on screen there
+                int[] shooters = shot.ShooterHome ? _stream.HomeXY : _stream.AwayXY;
+                p.strokeColor = new Color(ShotColor.r, ShotColor.g, ShotColor.b, ShotColor.a * shot.Strength);
+                p.lineWidth = Mathf.Max(1.5f, 4f * scale);
+                p.BeginPath();
+                p.MoveTo(PlayerPixel(fit, shooters, shot.StrikeFrame, shot.ShooterSlot));
+                p.LineTo(ball);
+                p.Stroke();
+                return;
+            }
+
             if (_stream.Owner[ta] != PositionStream.NoOwner)
                 return;
 
@@ -817,27 +910,10 @@ namespace Fts.MatchView
                 return;
 
             BallAction a = _actions[index];
-            if (ta - a.Tick > _ticksPerMinute)
+            if (ta - a.Tick > _ticksPerMinute || a.TargetSlot < 0 || a.TargetSlot >= _players)
                 return;
 
             int[] side = a.Home ? _stream.HomeXY : _stream.AwayXY;
-            Vector2 ball = BallPixel(fit, ta);
-
-            if (a.Kind == BallActionKind.Shot)
-            {
-                if (a.Tick < _shownFrom)
-                    return; // struck inside a cut: the shooter was never on screen there
-                p.strokeColor = ShotColor;
-                p.lineWidth = Mathf.Max(1.5f, 4f * scale);
-                p.BeginPath();
-                p.MoveTo(PlayerPixel(fit, side, a.Tick, a.Slot));
-                p.LineTo(ball);
-                p.Stroke();
-                return;
-            }
-
-            if (a.TargetSlot < 0 || a.TargetSlot >= _players)
-                return;
 
             Color line = a.Home ? _homeColor : _awayColor;
             p.strokeColor = new Color(line.r, line.g, line.b, 0.55f);
@@ -848,13 +924,28 @@ namespace Fts.MatchView
             p.Stroke();
         }
 
-        private void DrawBall(Painter2D p, Rect fit, float scale, int ta, int tb, float f)
-        {
-            Vector2 pos = SecondHalf(ta) != SecondHalf(tb)
+        /// <summary>The ball's point on the grass now; never interpolated across the change of ends.</summary>
+        private Vector2 BallGround(Rect fit, int ta, int tb, float f) =>
+            SecondHalf(ta) != SecondHalf(tb)
                 ? BallPixel(fit, tb)
                 : Vector2.Lerp(BallPixel(fit, ta), BallPixel(fit, tb), f);
-            float radius = Mathf.Max(2.5f, BallRadiusDm * scale);
 
+        /// <summary>
+        /// The ball, grown and lifted up the screen by its height (<see cref="BallLook"/>), over its
+        /// shadow on the grass.
+        /// </summary>
+        private static void DrawBall(Painter2D p, float scale, Vector2 ground, Vector2 pos, BallLook look)
+        {
+            float size = Mathf.Max(2.5f, BallRadiusDm * scale);
+            if (look.LiftDm > 0f)
+            {
+                p.fillColor = new Color(ShadowColor.r, ShadowColor.g, ShadowColor.b, look.ShadowAlpha);
+                p.BeginPath();
+                p.Arc(ground, size * look.ShadowScale, 0f, 360f);
+                p.Fill();
+            }
+
+            float radius = size * look.Scale;
             p.fillColor = BallColor;
             p.BeginPath();
             p.Arc(pos, radius, 0f, 360f);

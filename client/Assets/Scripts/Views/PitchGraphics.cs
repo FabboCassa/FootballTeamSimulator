@@ -79,9 +79,15 @@ namespace Fts.Views
         private const float GoalHalf = 37f;         // 7.32 m wide
 
         /// <summary>The letterboxed pitch rectangle (aspect 1050:680) centred in a w x h box.</summary>
-        public static Rect FitRect(float w, float h)
+        public static Rect FitRect(float w, float h) => FitRect(w, h, 0f);
+
+        /// <summary>
+        /// As <see cref="FitRect(float, float)"/>, leaving <paramref name="endRoomDm"/> of room beyond
+        /// each goal line, so what lies behind it (a ball in the net) stays inside the box.
+        /// </summary>
+        public static Rect FitRect(float w, float h, float endRoomDm)
         {
-            float scale = Mathf.Min(w / LengthDm, h / WidthDm);
+            float scale = Mathf.Min(w / (LengthDm + 2f * endRoomDm), h / WidthDm);
             float pw = LengthDm * scale;
             float ph = WidthDm * scale;
             return new Rect((w - pw) * 0.5f, (h - ph) * 0.5f, pw, ph);
