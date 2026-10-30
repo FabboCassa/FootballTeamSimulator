@@ -30,6 +30,12 @@ internal sealed class HarnessOptions
     /// <summary>Which of the measured matches to write out. Index into the run, from 0.</summary>
     public int PitchDumpMatch { get; private set; }
 
+    /// <summary>Where to write the tick-by-tick movement trace (free-ball spec R7), if anywhere.</summary>
+    public string? PitchTrace { get; private set; }
+
+    /// <summary>How many of the measured matches, from the first, are traced.</summary>
+    public int PitchTraceMatches { get; private set; } = 10;
+
     // --- instructions (phase 8 of the match engine rework) --------------------------------------
 
     /// <summary>
@@ -108,6 +114,8 @@ internal sealed class HarnessOptions
                 case "--pitch-dump" when value is not null: o.PitchDump = value; i++; break;
                 case "--pitch-dump-match" when value is not null: o.PitchDumpMatch = int.Parse(value); i++; break;
                 case "--pitch-strict": o.PitchStrict = true; break;
+                case "--pitch-trace" when value is not null: o.PitchTrace = value; i++; break;
+                case "--pitch-trace-matches" when value is not null: o.PitchTraceMatches = int.Parse(value); i++; break;
                 case "--instruction-matches" when value is not null: o.InstructionMatches = int.Parse(value); i++; break;
                 case "--instructions-strict": o.InstructionsStrict = true; break;
                 case "--tactic-repeats" when value is not null: o.TacticRepeats = int.Parse(value); i++; break;
@@ -175,6 +183,9 @@ internal sealed class HarnessOptions
           --pitch-strict                turn the "against real football" bands into PASS/FAIL checks
           --pitch-dump <path>           write one match as a self-contained HTML replay
           --pitch-dump-match <n>        which match to write out (default 0)
+          --pitch-trace <path>          play the first matches again with the movement trace on
+                                        (top oscillators + strikers) and write it as CSV
+          --pitch-trace-matches <n>     how many matches to trace (default 10)
 
           --instruction-matches <n>     matches per setting of each axis (default 30, 12 columns)
           --instructions-strict         turn the four instruction claims into PASS/FAIL checks

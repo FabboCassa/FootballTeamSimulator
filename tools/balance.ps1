@@ -54,6 +54,13 @@
 .PARAMETER PitchDump
     Write one measured match out as a self-contained HTML replay at this path.
 
+.PARAMETER PitchTrace
+    Play the first measured matches again with the tick-by-tick movement trace attached (the top
+    oscillators and the strikers, free-ball spec R7) and write it to this path as CSV.
+
+.PARAMETER PitchTraceMatches
+    How many matches the trace covers. Default 10 (the harness default).
+
 .PARAMETER InstructionMatches
     Matches per setting of each axis in the instructions scenario. Default 30 (the harness default).
 
@@ -84,6 +91,8 @@ param(
     [int]$PitchMatches = 0,
     [switch]$PitchStrict,
     [string]$PitchDump,
+    [string]$PitchTrace,
+    [int]$PitchTraceMatches = 0,
     [int]$InstructionMatches = 0,
     [switch]$InstructionsStrict
 )
@@ -114,6 +123,8 @@ if ($Long) { $arguments += "--long" }
 if ($PitchMatches -gt 0) { $arguments += @("--pitch-matches", $PitchMatches) }
 if ($PitchStrict) { $arguments += "--pitch-strict" }
 if ($PitchDump) { $arguments += @("--pitch-dump", $PitchDump) }
+if ($PitchTrace) { $arguments += @("--pitch-trace", $PitchTrace) }
+if ($PitchTraceMatches -gt 0) { $arguments += @("--pitch-trace-matches", $PitchTraceMatches) }
 if ($InstructionMatches -gt 0) { $arguments += @("--instruction-matches", $InstructionMatches) }
 if ($InstructionsStrict) { $arguments += "--instructions-strict" }
 
