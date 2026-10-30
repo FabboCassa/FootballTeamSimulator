@@ -108,6 +108,15 @@ namespace Sim.Core.Match.Movement
 
             public int Releases(int side) => _releases[side];
 
+            /// <summary>The offside line this side attacks, as read at the top of the tick (dm).</summary>
+            public int LineX(int side) => _lineX[side];
+
+            public TeamPhase PhaseOf(int side) => _phases.PhaseOf(side);
+
+            public bool InPossession(int side) => _phases.InPossession(side);
+
+            public int Expansion(int side) => _expansion[side];
+
             public void Begin()
             {
                 _phases.Reset();

@@ -29,15 +29,19 @@ namespace Sim.Core.Match.Movement
             /// </summary>
             public void Move(int tick, int side, int slot)
             {
+                int k = side * _sim._n + slot;
                 if (_setPieces.Move(tick, side, slot))
                 {
+                    _sim.TraceJob(k, MovementJob.SetPiece, MovementJob.SetPiece);
                     EndSpell(side, slot);
                     return;
                 }
 
-                BaseJob job = _base.JobOf(tick, side, slot);
+                BaseJob asked = _base.JobOf(tick, side, slot);
+                BaseJob job = asked;
                 if (job == BaseJob.Chase && ChasesAPassOutOfReach(side, slot)) job = BaseJob.None;
                 bool leashed = job == BaseJob.Press || job == BaseJob.Cover || job == BaseJob.Mark;
+                _sim.TraceJob(k, (MovementJob)(int)asked, (MovementJob)(int)job);
                 if (job != BaseJob.None && job != BaseJob.Support && !leashed)
                 {
                     EndSpell(side, slot);
@@ -45,7 +49,6 @@ namespace Sim.Core.Match.Movement
                     return;
                 }
 
-                int k = side * _sim._n + slot;
                 bool home = side == 0;
                 MatchBall ball = _sim._ball;
                 V11Slot man = SlotOf(side, slot);
@@ -57,13 +60,16 @@ namespace Sim.Core.Match.Movement
                     U.Dm(ball.X), U.Dm(ball.Y), out int sx, out int sy);
                 if (man.Role != Domain.PositionRole.Goalkeeper)
                     sx = Pitch.ClampX(sx + MovementGeometry.Direction(home) * _sim._tactics[side].ShoutLinePushDm);
+                int rawSx = sx;
                 if (inPossession) sx = _positioning.Onside(home, sx, _lineX[side]);
                 int spotX = U.ClampX(U.Units(sx));
                 int spotY = _sim._ctx.Inside(U.Units(sy));
+                _sim.TraceSpot(k, rawSx, U.Dm(spotX), U.Dm(spotY));
 
                 if (_setPieces.Offers(side, slot))
                 {
                     // R11: his place in the shape, held within reach of the throw.
+                    _sim.TraceJob(k, MovementJob.RestartOffer);
                     EndSpell(side, slot);
                     RestartShape.OfferSpot(U.Dm(ball.X), U.Dm(ball.Y), U.Dm(spotX), U.Dm(spotY), _sim._cfg,
                         out int ox, out int oy);
@@ -76,7 +82,11 @@ namespace Sim.Core.Match.Movement
                     // R4: the job is done from his place in the block, not wherever it leads him.
                     EndSpell(side, slot);
                     int leash = U.Units(JobLeashDm(side, job));
-                    if (job == BaseJob.Press && _sim._cfg.V11PressStandOffPercent > 0) PressGoalSide(side, slot, spotX, spotY, leash);
+                    if (job == BaseJob.Press && _sim._cfg.V11PressStandOffPercent > 0)
+                    {
+                        _sim.TraceJob(k, MovementJob.PressGoalSide);
+                        PressGoalSide(side, slot, spotX, spotY, leash);
+                    }
                     else _base.Move(tick, side, slot, job, spotX, spotY, leash);
                     return;
                 }
@@ -88,6 +98,7 @@ namespace Sim.Core.Match.Movement
                     tx = rx;
                     ty = ry;
                     sprint = true;
+                    _sim.TraceJob(k, MovementJob.Run);
                 }
                 else if (inPossession && OfferTarget(side, slot, out int fx, out int fy))
                 {
@@ -98,6 +109,7 @@ namespace Sim.Core.Match.Movement
                     Leash(spotX, spotY, U.Units(_sim._cfg.V11SupportOfferLeashDm), ref tx, ref ty);
                     sprint = U.DistanceSq(_sim._px[k], _sim._py[k], tx, ty) > (long)_sim._approachU * _sim._approachU;
                     _offerTicks[side]++;
+                    _sim.TraceJob(k, MovementJob.Offer);
                 }
                 else if (job == BaseJob.Support)
                 {
@@ -113,6 +125,7 @@ namespace Sim.Core.Match.Movement
                     ty = oy;
                     Leash(spotX, spotY, U.Units(_sim._cfg.V11SupportLeashDm), ref tx, ref ty);
                     _overlaps[side]++;
+                    _sim.TraceJob(k, MovementJob.Overlap);
                 }
 
                 // Far from where he is going he runs, whichever side has the ball: a shape that

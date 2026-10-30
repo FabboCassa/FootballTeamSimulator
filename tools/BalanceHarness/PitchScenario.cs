@@ -55,6 +55,9 @@ internal static class PitchScenario
         var perf = new PerfTotals();
         var strikerOscillation = new PitchStrikerOscillation();
         var turnsCrosses = new PitchTurnsCrosses(cfg.Match.StreamTicksPerFrame);
+        PitchTrace? trace = opt.PitchTrace == null
+            ? null
+            : new PitchTrace(opt.PitchTrace, opt.PitchTraceMatches, cfg.Match.TicksPerSecond);
         var clock = Stopwatch.StartNew();
         int played = 0, streamless = 0, disagreements = 0;
 
@@ -71,8 +74,11 @@ internal static class PitchScenario
             engine.DecisionSink = decisions;
             var ballEvents = new BallEventLog();
             engine.BallEventSink = ballEvents;
-            MatchReport report = engine.Simulate(homeXI, awayXI, new Pcg32(opt.Seed + 31_000 + (ulong)i));
+            ulong seed = opt.Seed + 31_000 + (ulong)i;
+            MatchReport report = engine.Simulate(homeXI, awayXI, new Pcg32(seed));
             engine.DecisionSink = null;
+            engine.BallEventSink = null;   // the trace replays the match: its events must not land in this log
+            if (trace != null && trace.Wants(i)) trace.Add(i, engine, homeXI, awayXI, seed, report);
 
             if (dump && report.Positions != null)
             {
@@ -122,6 +128,7 @@ internal static class PitchScenario
         perf.Print(played);
         strikerOscillation.Print();
         turnsCrosses.Print(checks);
+        trace?.Print(checks);
 
         Console.WriteLine();
         Console.Write(ballFreedomTally.Format("pitch"));
