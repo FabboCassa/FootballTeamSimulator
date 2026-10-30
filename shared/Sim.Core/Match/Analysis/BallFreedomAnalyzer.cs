@@ -283,13 +283,13 @@ namespace Sim.Core.Match.Analysis
         private static int Frames(PositionStream s, int ms) => (int)Math.Round((double)ms * s.TicksPerMinute / 60_000);
 
         /// <summary>A touch that plays the ball: the kinds the broadcast's dead-ball reader ends a stoppage on.</summary>
-        private static bool IsPlay(BallActionKind k) =>
+        internal static bool IsPlay(BallActionKind k) =>
             k == BallActionKind.Pass || k == BallActionKind.LongBall || k == BallActionKind.Cross
             || k == BallActionKind.Dribble || k == BallActionKind.Recovery || k == BallActionKind.Interception
             || k == BallActionKind.Clearance || k == BallActionKind.Shot || k == BallActionKind.Save
             || k == BallActionKind.Miss || k == BallActionKind.Block;
 
-        private static bool IsRestart(BallActionKind k) =>
+        internal static bool IsRestart(BallActionKind k) =>
             k == BallActionKind.Kickoff || k == BallActionKind.ThrowIn || k == BallActionKind.GoalKick
             || k == BallActionKind.FreeKick || k == BallActionKind.Corner || k == BallActionKind.Penalty;
     }

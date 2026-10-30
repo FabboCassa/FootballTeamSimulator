@@ -54,6 +54,7 @@ internal static class PitchScenario
         var totals = new PitchTotals();
         var perf = new PerfTotals();
         var strikerOscillation = new PitchStrikerOscillation();
+        var turnsCrosses = new PitchTurnsCrosses(cfg.Match.StreamTicksPerFrame);
         var clock = Stopwatch.StartNew();
         int played = 0, streamless = 0, disagreements = 0;
 
@@ -68,6 +69,8 @@ internal static class PitchScenario
             bool dump = opt.PitchDump != null && i == opt.PitchDumpMatch;
             var decisions = dump ? new DecisionLog() : null;
             engine.DecisionSink = decisions;
+            var ballEvents = new BallEventLog();
+            engine.BallEventSink = ballEvents;
             MatchReport report = engine.Simulate(homeXI, awayXI, new Pcg32(opt.Seed + 31_000 + (ulong)i));
             engine.DecisionSink = null;
 
@@ -89,6 +92,7 @@ internal static class PitchScenario
             totals.Add(metrics);
             perf.Add(report);
             strikerOscillation.Add(report, homeXI, awayXI);
+            turnsCrosses.Add(i, report, ballEvents);
             played++;
 
             // Ball freedom, passes and loose balls (free-ball-real-movement R2), against doc §10.5.
@@ -117,6 +121,7 @@ internal static class PitchScenario
 
         perf.Print(played);
         strikerOscillation.Print();
+        turnsCrosses.Print(checks);
 
         Console.WriteLine();
         Console.Write(ballFreedomTally.Format("pitch"));

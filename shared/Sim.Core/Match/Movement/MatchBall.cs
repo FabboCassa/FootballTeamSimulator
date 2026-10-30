@@ -170,6 +170,7 @@ namespace Sim.Core.Match.Movement
             LastTouchSide = side;
             LastTouchSlot = slot;
             Dead = false;
+            Heard(BallEventKind.Touch, side, slot);
         }
 
         public void Take(int side, int slot)
@@ -182,6 +183,7 @@ namespace Sim.Core.Match.Movement
             Vy = 0;
             Dead = false;
             Drive();
+            Heard(BallEventKind.Touch, side, slot);
         }
 
         /// <summary>Rolls the ball on one tick. Positions are NOT clamped: crossing a line is the point.</summary>

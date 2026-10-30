@@ -89,7 +89,10 @@ namespace Sim.Core.Match.Movement
 
             _z += _vz;
             _vz -= _gravity;
-            if (_z <= 0) Ground();
+            if (_z > 0) return;
+
+            Ground();
+            Heard(BallEventKind.Bounce, LastTouchSide, LastTouchSlot);
         }
     }
 }

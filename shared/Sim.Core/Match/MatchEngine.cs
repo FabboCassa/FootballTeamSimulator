@@ -148,6 +148,13 @@ namespace Sim.Core.Match
         public IDecisionSink? DecisionSink { get; set; }
 
         /// <summary>
+        /// Hears every touch, deflection and landing of the ball of a played match, for the cause
+        /// trace of free-ball turns (free-ball-real-movement spec R2). Null in production; attached,
+        /// it moves no bit of the result.
+        /// </summary>
+        public IBallEventSink? BallEventSink { get; set; }
+
+        /// <summary>
         /// Simulates a match. When <paramref name="tactics"/> is null the engine
         /// runs exactly as before the tactics system (task 3.2): same score/events
         /// per seed, so existing golden masters and replays are unaffected.
@@ -209,7 +216,8 @@ namespace Sim.Core.Match
             {
                 report.Positions = new MatchSimulator(_cfg, _condition, _applyCondition, _applyMatchFatigue)
                     {
-                        DecisionSink = DecisionSink
+                        DecisionSink = DecisionSink,
+                        BallEventSink = BallEventSink
                     }
                     .Generate(feed, report, rng);
 
