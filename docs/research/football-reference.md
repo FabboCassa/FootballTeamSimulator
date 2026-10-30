@@ -809,6 +809,10 @@ Considered and kept at the R2 starting value:
   above 5.5 m/s and accelerations take their bands from the optical sources (DFL, Metrica) only;
   with SkillCorner's 10 fps broadcast tracking the turn band would be 0.00-8.45% and would not catch
   the engine's 7.6%. SkillCorner's readings stay in §10.5 in parentheses.
+- **StatsBomb licence (§11.1).** Impect was dropped from reference v2 because its terms forbid
+  commercial use. StatsBomb's agreement (§1.2.2) also forbids commercially exploiting "any analysis
+  derived" from its data; spec R1 keeps it with attribution, and `RealismReference.Events` rests on
+  it. Whether those constants may ship in the commercial game is to be decided before release.
 - **R19 directions per style.** #94 reads them from §3.1 into §3.3; the table and its minimums
   are to be judged with the user.
 
@@ -1088,6 +1092,205 @@ target only after its hash matches; the DFL position cache is keyed by its sourc
 The test `RealismReferenceTests.TrackingBands_MatchDocTable` asserts that every
 `RealismReference.Tracking` constant equals the Band column above.
 
+## 11. Event reference v2
+
+Backs R1 of `docs/specs/free-ball-real-movement.md` (reference v2, event metrics) and the
+`RealismReference.Events` bands in `shared/Sim.Core/Match/Analysis/RealismReference.Events.cs`.
+Every figure is my computation on StatsBomb open data [54], printed by `tools/event_reference.py`
+(run from the repo root: `python -I tools/event_reference.py`; needs numpy, reuses the download
+and band helpers of `tools/tracking_reference.py`). The script downloads the match lists and event
+files into `tools/.tracking-data/` (git-ignored) and prints the §11.2 and §11.5 tables as they
+stand; only these aggregates are committed. With `--check` it exits 1 unless every table line it
+prints is in this section verbatim.
+
+**Pinning.** Every URL is under one pinned StatsBomb commit, and every downloaded file (6 match
+lists, 887 event files) is pinned by name and SHA-256 in the committed manifest
+`tools/event_reference.sha256` (`sha256sum -c` format). 893 hashes do not belong in the script, and
+fetching a list of hashes from the remote would let the remote vouch for itself, so the manifest
+was written by the first run (`--pin`, which records a file only when it is missing from the
+manifest and never rewrites an entry) and is re-verified on every later run: a pinned file is
+reused only if its hash matches, else downloaded to a `.part` file that replaces it only after the
+hash matches; a file missing from the manifest stops a run without `--pin`. File names are built
+by the script from the integer competition, season and match ids (a non-integer match id stops the
+run), so no remote-supplied name reaches the filesystem.
+
+### 11.1 Sources, licences and tiers
+
+| Source | Data | Version | Licence | Script |
+|---|---|---|---|---|
+| StatsBomb open data [54] | Event data of six league seasons, the most recent open one per league: Bundesliga 2023/24 (Leverkusen's 34 matches), Ligue 1 2022/23 and 2021/22 (PSG's 32 and 26), La Liga 2020/21 (Barcelona's 35), and the full 380-match Premier League and Serie A 2015/16, the newest open season of those two leagues | commit `4b73468fc5b0f1950f9f66fada70ad3a4f9327cb` (2026-09-07); competition/season ids 9/281, 7/235, 7/108, 11/90, 2/27, 12/27 | StatsBomb Public Data User Agreement (`LICENSE.pdf`, last updated 8 September 2023): attribution to StatsBomb with its logo | `tools/event_reference.py` |
+| Impect open data [55] | Bundesliga 2023/24, 306 matches | commit `d412b35943340d50867a48deddf64fb7b65c6191`; `LICENSE.pdf` SHA-256 `1707e9d4248bdde70f6111952c486ad26c5f24f9d538675947c2b1d2dd180922` | IMPECT Terms of Use Agreement | **dropped**: no data downloaded |
+
+- **Impect dropped.** Its `LICENSE.pdf` §1 restricts the data "strictly" to "analytical and
+  research-related applications", and §2.2 says the user may not "Use the data for any commercial
+  purposes". Band constants shipped in a commercial game are a commercial use of figures derived
+  from the data, so spec R1's condition for dropping it holds; only the licence was downloaded.
+- **StatsBomb licence, open for the user.** Its agreement §1.2.2 says the user may not
+  "commercially exploit the data or any analysis derived from the use of the Service", and §1.4
+  asks for the StatsBomb logo on any publication of analysis. Spec R1 names StatsBomb as a source
+  with attribution, and §2.2 already uses it [19], so it is kept as the spec says; whether
+  constants derived from it may ship in the commercial game is the same question that dropped
+  Impect, and is the user's call before release.
+- **One-club seasons.** In Bundesliga 2023/24, both Ligue 1 seasons and La Liga 2020/21 StatsBomb
+  covers one club's matches only. Both teams' events are in each file, so the opponent's
+  team-matches count too, and the tier split reads the opponent: every split of those seasons has
+  the club (always top) on one side.
+- **Tiers:** a team's position in that season's final league table: top = the first six, bottom =
+  the last six, middle = the rest (18 teams in the Bundesliga, 20 elsewhere). The tables are static
+  in the script, from Wikipedia [56]. For the two full seasons the script re-derives every team's
+  tier from the StatsBomb results (points, goal difference, goals scored) and stops on a mismatch;
+  only the tier boundaries matter, so the order inside a tier is not checked. Top 6: Bundesliga
+  2023/24 Leverkusen, Stuttgart, Bayern, Leipzig, Dortmund, Frankfurt; Ligue 1 2022/23 PSG, Lens,
+  Marseille, Rennes, Lille, Monaco; Ligue 1 2021/22 PSG, Marseille, Monaco, Rennes, Nice,
+  Strasbourg; La Liga 2020/21 Atlético, Real Madrid, Barcelona, Sevilla, Real Sociedad, Betis;
+  Premier League 2015/16 Leicester, Arsenal, Tottenham, Man City, Man United, Southampton; Serie A
+  2015/16 Juventus, Napoli, Roma, Inter, Fiorentina, Sassuolo.
+
+### 11.2 Coverage, league and tier split
+
+The first table is the league split, the second the league x team-tier split, the third the band
+splits (§11.4). "SB cross flag" is StatsBomb's own cross flag, for comparison with the geometric
+cross of §11.3. Passes per team-match on Premier League 2015/16 reproduce §2.2's 485.
+
+| League, season | Matches | Team-matches | Coverage | Passes | Long % | High % | High crosses | Low crosses | SB cross flag | Through balls | Aerial duels | Offsides |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Bundesliga 2023/24 | 34 | 68 | Bayer Leverkusen | 576.7 | 11.20 | 15.26 | 4.50 | 4.34 | 9.38 | 2.65 | 25.65 | 1.60 |
+| Ligue 1 2022/23 | 32 | 64 | Paris Saint-Germain | 576.2 | 8.92 | 11.11 | 3.75 | 3.84 | 7.92 | 4.25 | 13.66 | 1.84 |
+| Ligue 1 2021/22 | 26 | 52 | Paris Saint-Germain | 559.4 | 10.45 | 11.82 | 4.58 | 3.90 | 8.65 | 5.25 | 13.04 | 2.54 |
+| La Liga 2020/21 | 35 | 70 | Barcelona | 576.2 | 11.78 | 14.84 | 4.03 | 4.33 | 9.29 | 4.07 | 19.14 | 1.80 |
+| Premier League 2015/16 | 380 | 760 | full season | 485.0 | 16.77 | 25.01 | 6.94 | 4.43 | 11.47 | 2.13 | 44.33 | 1.96 |
+| Serie A 2015/16 | 380 | 760 | full season | 491.7 | 15.94 | 24.67 | 7.43 | 4.17 | 11.71 | 2.08 | 39.16 | 2.37 |
+
+| League, season | Team tier | Team-matches | Passes | Long % | High % | High crosses | Low crosses | SB cross flag | Through balls | Aerial duels | Offsides |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| Bundesliga 2023/24 | top | 44 | 675.5 | 8.51 | 11.67 | 4.61 | 5.34 | 10.86 | 3.36 | 25.34 | 1.80 |
+| Bundesliga 2023/24 | middle | 12 | 410.4 | 15.16 | 20.70 | 5.17 | 2.75 | 7.75 | 2.08 | 25.00 | 0.92 |
+| Bundesliga 2023/24 | bottom | 12 | 380.6 | 17.11 | 22.97 | 3.42 | 2.25 | 5.58 | 0.58 | 27.42 | 1.58 |
+| Ligue 1 2022/23 | top | 40 | 654.4 | 7.42 | 9.28 | 3.02 | 3.85 | 7.12 | 5.60 | 14.15 | 2.05 |
+| Ligue 1 2022/23 | middle | 14 | 468.8 | 11.23 | 13.97 | 4.36 | 4.64 | 9.43 | 2.43 | 12.36 | 1.86 |
+| Ligue 1 2022/23 | bottom | 10 | 413.9 | 11.69 | 14.46 | 5.80 | 2.70 | 9.00 | 1.40 | 13.50 | 1.00 |
+| Ligue 1 2021/22 | top | 34 | 650.3 | 8.74 | 9.42 | 4.79 | 4.18 | 9.03 | 6.88 | 13.29 | 2.65 |
+| Ligue 1 2021/22 | middle | 10 | 405.4 | 12.73 | 15.57 | 3.30 | 3.90 | 8.10 | 2.00 | 12.60 | 2.50 |
+| Ligue 1 2021/22 | bottom | 8 | 365.8 | 14.88 | 17.32 | 5.25 | 2.75 | 7.75 | 2.38 | 12.50 | 2.12 |
+| La Liga 2020/21 | top | 45 | 690.2 | 8.73 | 10.71 | 3.36 | 4.91 | 9.38 | 5.62 | 19.11 | 2.13 |
+| La Liga 2020/21 | middle | 16 | 387.8 | 16.32 | 21.11 | 5.44 | 3.44 | 9.50 | 1.50 | 18.44 | 1.19 |
+| La Liga 2020/21 | bottom | 9 | 341.7 | 18.96 | 24.30 | 4.89 | 3.00 | 8.44 | 0.89 | 20.56 | 1.22 |
+| Premier League 2015/16 | top | 228 | 529.2 | 15.18 | 23.07 | 7.06 | 5.18 | 12.38 | 2.58 | 43.29 | 1.91 |
+| Premier League 2015/16 | middle | 304 | 485.5 | 16.64 | 24.58 | 6.58 | 4.27 | 10.93 | 2.25 | 43.41 | 2.04 |
+| Premier League 2015/16 | bottom | 228 | 440.2 | 18.54 | 27.52 | 7.31 | 3.89 | 11.29 | 1.53 | 46.60 | 1.91 |
+| Serie A 2015/16 | top | 228 | 585.4 | 12.93 | 19.44 | 7.46 | 4.73 | 12.54 | 2.83 | 35.11 | 2.32 |
+| Serie A 2015/16 | middle | 304 | 480.7 | 15.86 | 24.29 | 7.13 | 4.21 | 11.48 | 1.89 | 40.16 | 2.38 |
+| Serie A 2015/16 | bottom | 228 | 412.6 | 19.06 | 30.41 | 7.78 | 3.54 | 11.20 | 1.58 | 41.86 | 2.42 |
+
+| Split | League, season | Team tier - opponent tier | Team-matches | Passes | Long % | High % | High crosses | Low crosses | SB cross flag | Through balls | Aerial duels | Offsides |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| E1 | Bundesliga 2023/24 | top-top | 20 | 564.8 | 10.25 | 14.40 | 4.30 | 4.05 | 8.85 | 3.25 | 24.30 | 1.65 |
+| E2 | Bundesliga 2023/24 | top-middle | 12 | 755.3 | 7.23 | 9.70 | 5.25 | 6.25 | 13.50 | 4.08 | 25.00 | 1.92 |
+| E3 | Bundesliga 2023/24 | top-bottom | 12 | 780.2 | 6.88 | 9.11 | 4.50 | 6.58 | 11.58 | 2.83 | 27.42 | 1.92 |
+| E4 | Bundesliga 2023/24 | middle-top | 12 | 410.4 | 15.16 | 20.70 | 5.17 | 2.75 | 7.75 | 2.08 | 25.00 | 0.92 |
+| E5 | Bundesliga 2023/24 | bottom-top | 12 | 380.6 | 17.11 | 22.97 | 3.42 | 2.25 | 5.58 | 0.58 | 27.42 | 1.58 |
+| E6 | Ligue 1 2022/23 | top-top | 16 | 549.2 | 9.13 | 11.53 | 4.00 | 3.12 | 7.25 | 3.62 | 16.12 | 1.88 |
+| E7 | Ligue 1 2022/23 | top-middle | 14 | 692.4 | 6.24 | 8.01 | 2.21 | 3.93 | 5.93 | 5.93 | 12.36 | 1.93 |
+| E8 | Ligue 1 2022/23 | top-bottom | 10 | 769.5 | 6.34 | 7.44 | 2.60 | 4.90 | 8.60 | 8.30 | 13.50 | 2.50 |
+| E9 | Ligue 1 2022/23 | middle-top | 14 | 468.8 | 11.23 | 13.97 | 4.36 | 4.64 | 9.43 | 2.43 | 12.36 | 1.86 |
+| E10 | Ligue 1 2022/23 | bottom-top | 10 | 413.9 | 11.69 | 14.46 | 5.80 | 2.70 | 9.00 | 1.40 | 13.50 | 1.00 |
+| E11 | Ligue 1 2021/22 | top-top | 16 | 559.9 | 10.68 | 11.80 | 5.44 | 4.06 | 9.31 | 6.25 | 14.12 | 3.00 |
+| E12 | Ligue 1 2021/22 | top-middle | 10 | 728.9 | 6.83 | 7.35 | 3.50 | 4.80 | 8.20 | 5.60 | 12.60 | 1.60 |
+| (E13) | Ligue 1 2021/22 | top-bottom | 8 | 732.9 | 7.25 | 7.26 | 5.12 | 3.62 | 9.50 | 9.75 | 12.50 | 3.25 |
+| E14 | Ligue 1 2021/22 | middle-top | 10 | 405.4 | 12.73 | 15.57 | 3.30 | 3.90 | 8.10 | 2.00 | 12.60 | 2.50 |
+| (E15) | Ligue 1 2021/22 | bottom-top | 8 | 365.8 | 14.88 | 17.32 | 5.25 | 2.75 | 7.75 | 2.38 | 12.50 | 2.12 |
+| E16 | La Liga 2020/21 | top-top | 20 | 570.9 | 10.56 | 13.18 | 2.95 | 4.20 | 7.90 | 4.40 | 19.00 | 1.90 |
+| E17 | La Liga 2020/21 | top-middle | 16 | 762.8 | 7.66 | 9.25 | 4.25 | 5.94 | 12.12 | 5.94 | 18.44 | 2.38 |
+| (E18) | La Liga 2020/21 | top-bottom | 9 | 826.1 | 6.57 | 7.82 | 2.67 | 4.67 | 7.78 | 7.78 | 20.56 | 2.22 |
+| E19 | La Liga 2020/21 | middle-top | 16 | 387.8 | 16.32 | 21.11 | 5.44 | 3.44 | 9.50 | 1.50 | 18.44 | 1.19 |
+| (E20) | La Liga 2020/21 | bottom-top | 9 | 341.7 | 18.96 | 24.30 | 4.89 | 3.00 | 8.44 | 0.89 | 20.56 | 1.22 |
+| E21 | Premier League 2015/16 | top-top | 60 | 484.4 | 16.59 | 25.68 | 6.72 | 4.68 | 11.13 | 2.30 | 44.23 | 1.87 |
+| E22 | Premier League 2015/16 | top-middle | 96 | 525.2 | 15.06 | 22.97 | 6.97 | 5.33 | 12.32 | 2.40 | 42.83 | 1.84 |
+| E23 | Premier League 2015/16 | top-bottom | 72 | 571.8 | 14.15 | 21.02 | 7.46 | 5.39 | 13.50 | 3.06 | 43.11 | 2.04 |
+| E24 | Premier League 2015/16 | middle-top | 96 | 465.6 | 17.09 | 25.71 | 6.04 | 3.80 | 9.77 | 1.90 | 42.83 | 2.39 |
+| E25 | Premier League 2015/16 | middle-middle | 112 | 484.0 | 16.51 | 24.06 | 7.21 | 4.45 | 11.65 | 2.46 | 41.98 | 1.92 |
+| E26 | Premier League 2015/16 | middle-bottom | 96 | 507.2 | 16.36 | 24.06 | 6.36 | 4.53 | 11.25 | 2.35 | 45.65 | 1.82 |
+| E27 | Premier League 2015/16 | bottom-top | 72 | 418.1 | 19.07 | 27.88 | 6.75 | 3.38 | 10.12 | 1.22 | 43.11 | 1.82 |
+| E28 | Premier League 2015/16 | bottom-middle | 96 | 446.4 | 18.07 | 26.98 | 7.53 | 3.93 | 11.70 | 1.69 | 45.65 | 2.01 |
+| E29 | Premier League 2015/16 | bottom-bottom | 60 | 456.9 | 18.66 | 27.97 | 7.62 | 4.43 | 12.03 | 1.65 | 52.30 | 1.85 |
+| E30 | Serie A 2015/16 | top-top | 60 | 532.9 | 13.80 | 21.12 | 6.95 | 3.43 | 10.50 | 2.65 | 31.13 | 2.55 |
+| E31 | Serie A 2015/16 | top-middle | 96 | 583.7 | 13.00 | 19.57 | 7.12 | 4.41 | 12.18 | 2.85 | 36.28 | 2.29 |
+| E32 | Serie A 2015/16 | top-bottom | 72 | 631.4 | 12.11 | 17.86 | 8.35 | 6.24 | 14.72 | 2.94 | 36.86 | 2.15 |
+| E33 | Serie A 2015/16 | middle-top | 96 | 432.8 | 16.74 | 25.75 | 6.19 | 3.77 | 9.58 | 1.65 | 36.28 | 2.50 |
+| E34 | Serie A 2015/16 | middle-middle | 112 | 488.0 | 16.04 | 24.65 | 7.12 | 4.11 | 11.38 | 2.03 | 40.57 | 2.39 |
+| E35 | Serie A 2015/16 | middle-bottom | 96 | 520.0 | 14.76 | 22.42 | 8.09 | 4.77 | 13.49 | 1.99 | 43.55 | 2.25 |
+| E36 | Serie A 2015/16 | bottom-top | 72 | 378.7 | 19.87 | 30.97 | 6.00 | 3.39 | 8.61 | 1.67 | 36.86 | 2.75 |
+| E37 | Serie A 2015/16 | bottom-middle | 96 | 409.8 | 19.22 | 30.75 | 7.94 | 3.31 | 11.45 | 1.46 | 43.55 | 2.36 |
+| E38 | Serie A 2015/16 | bottom-bottom | 60 | 457.6 | 17.82 | 29.20 | 9.67 | 4.10 | 13.92 | 1.68 | 45.17 | 2.10 |
+
+### 11.3 Definitions
+
+StatsBomb's pitch is 120 x 80 units and every event is seen from the acting team, attacking toward
+x = 120. Distances in metres scale x by 105/120 and y by 68/80 (a 105 x 68 m pitch). Penalty
+shoot-outs (period 5) are left out; the six seasons have no extra time.
+
+- **Passes:** every StatsBomb Pass event of the team, set pieces, throw-ins and keeper
+  distribution included (§2.2's StatsBomb scale), completed or not.
+- **Long pass:** a pass whose start-to-end distance is > 30 m. **High pass:** pass height "High
+  Pass". Both are shares of the passes above.
+- **Cross** (the same geometry the harness uses, spec R2): an open-play pass (not a corner, free
+  kick, goal kick, kick-off or throw-in) that starts in the final third (x ≥ 80) in the wide
+  channel, ≤ 13.84 m from a touchline in metres (y ≤ 13.84 / 0.85 = 16.28 or y ≥ 63.72 units), and
+  ends inside the penalty area as StatsBomb draws it (x ≥ 102, 18 ≤ y ≤ 62, §2.2). The two rules
+  differ on purpose: the channel is spec R2's distance, the arrival is the provider's own box
+  lines (15.3 m from the touchline on the scaled pitch). The end is StatsBomb's end location: where the ball was
+  received, intercepted or went out, so a cross blocked outside the box is not one. **High cross:**
+  height "High Pass" (the harness: peak ≥ 2 m). **Low crosses and cut-backs:** the rest (ground and
+  low passes). **SB cross flag:** open-play passes with StatsBomb's cross flag, any origin and end,
+  for information only.
+- **Through ball:** technique "Through Ball" (the 2015/16 files use the `through_ball` flag; either
+  counts).
+- **Aerial duels:** the team's aerial duels won (an event with `aerial_won`) plus lost (Duel
+  "Aerial Lost"). Each duel has a player of each team, so this is close to the match's aerial
+  duels. It is on StatsBomb's scale, which records far fewer of them in the recent seasons
+  (12.36-27.42 per split) than in 2015/16 (31.13-52.30).
+- **Offsides:** the team's passes with outcome "Pass Offside" plus its Offside events (offsides
+  not called on a pass).
+
+### 11.4 Splits and band rule
+
+- **Split:** league x season x team tier x opponent tier (ordered: "top-bottom" is the top team's
+  side of a top-bottom match, "bottom-top" the other side). A split's value is the mean of its
+  team-matches' values.
+- **Minimum size:** a split of fewer than 10 team-matches (only one-club seasons have them) is
+  printed with its id in parentheses and is not in the band.
+- **Band:** the R1 rule as in §10.4: the min-max across the split values, each bound moved out by
+  10% of the range (by 5% of the value when the range is 0), rounded outward at the table's
+  precision; a lower bound is floored at 0 and a share's upper bound capped at 100.
+
+### 11.5 Event bands
+
+| Metric (constant) | Lowest split | Highest split | Band |
+|---|---|---|---|
+| Passes per team-match (`PassesPerTeamMatch`) | 378.7 (E36) | 780.2 (E3) | 338.5-820.5 |
+| Long passes (> 30 m), % of passes (`LongPassPercent`) | 6.24 (E7) | 19.87 (E36) | 4.87-21.23 |
+| High passes, % of passes (`HighPassPercent`) | 7.35 (E12) | 30.97 (E36) | 4.98-33.34 |
+| High crosses per team-match (`HighCrossesPerTeamMatch`) | 2.21 (E7) | 9.67 (E38) | 1.46-10.42 |
+| Low crosses and cut-backs per team-match (`LowCrossesPerTeamMatch`) | 2.25 (E5) | 6.58 (E3) | 1.81-7.02 |
+| Crosses by StatsBomb's own flag, open play, per team-match (information, no constant) | 5.58 (E5) | 14.72 (E32) | 4.66-15.64 |
+| Through balls per team-match (`ThroughBallsPerTeamMatch`) | 0.58 (E5) | 8.30 (E8) | 0.00-9.08 |
+| Aerial duels per team-match (`AerialDuelsPerTeamMatch`) | 12.36 (E7) | 52.30 (E29) | 8.36-56.30 |
+| Offsides per team-match (`OffsidesPerTeamMatch`) | 0.92 (E4) | 3.00 (E11) | 0.70-3.21 |
+
+- **Spread.** The bands span dominant clubs and their opponents: Leverkusen, PSG and Barcelona
+  make 692-780 passes per team-match against middle and bottom sides (splits of 10 or more), who
+  make 381-469 against them. A neutral engine match should sit well inside; a weak team against a
+  strong one near an edge.
+- **Through balls** floor at 0.00: the lowest split (0.58, bottom sides against Leverkusen) minus
+  10% of the range is below 0.
+- **Aerial duels** mix StatsBomb's two scales (§11.3).
+- **Crosses:** the geometric cross gives 7.59-11.60 per team-match (high + low) on the league
+  split, StatsBomb's flag 7.92-11.71. The counts are close but not the same passes: the flag has
+  no origin or arrival rule, the geometry no intent rule.
+
+The test `RealismReferenceTests.EventBands_MatchDocTable` asserts that every
+`RealismReference.Events` constant equals the Band column above.
+
 ## Sources
 
 - [1] football-data.co.uk match files 2024-25 and 2025-26 (also `I1, SP1, D1, F1, N1, P1, I2, E1, D2` and `/2526/`): https://www.football-data.co.uk/mmz4281/2425/E0.csv ; column notes: https://www.football-data.co.uk/notes.txt
@@ -1136,6 +1339,9 @@ The test `RealismReferenceTests.TrackingBands_MatchDocTable` asserts that every
 - [51] Wikipedia, "2022–23 Bundesliga" (results matrix; final table computed from it): https://en.wikipedia.org/wiki/2022%E2%80%9323_Bundesliga
 - [52] Wikipedia, "2022–23 2. Bundesliga" (results matrix; final table computed from it): https://en.wikipedia.org/wiki/2022%E2%80%9323_2._Bundesliga
 - [53] Wikipedia, 2019–20 season articles (also `La_Liga`, `Serie_A`, `Bundesliga`, `Ligue_1`), final tables: https://en.wikipedia.org/wiki/2019%E2%80%9320_Premier_League
+- [54] StatsBomb open data, reference v2 (my computation, `tools/event_reference.py`; commit `4b73468fc5b0f1950f9f66fada70ad3a4f9327cb`, competitions 9/281, 7/235, 7/108, 11/90, 2/27, 12/27; StatsBomb Public Data User Agreement, attribution with the StatsBomb logo): https://github.com/statsbomb/open-data
+- [55] Impect open data (commit `d412b35943340d50867a48deddf64fb7b65c6191`; `LICENSE.pdf` read, no data used): https://github.com/ImpectAPI/open-data
+- [56] Wikipedia final tables: "2023–24 Bundesliga", "2022–23 Ligue 1", "2021–22 Ligue 1", "2020–21 La Liga", "2015–16 Premier League", "2015–16 Serie A": https://en.wikipedia.org/wiki/2023%E2%80%9324_Bundesliga
 
 [1]: https://www.football-data.co.uk/mmz4281/2425/E0.csv
 [2]: https://understat.com/league/EPL/2024
@@ -1183,3 +1389,6 @@ The test `RealismReferenceTests.TrackingBands_MatchDocTable` asserts that every
 [51]: https://en.wikipedia.org/wiki/2022%E2%80%9323_Bundesliga
 [52]: https://en.wikipedia.org/wiki/2022%E2%80%9323_2._Bundesliga
 [53]: https://en.wikipedia.org/wiki/2019%E2%80%9320_Premier_League
+[54]: https://github.com/statsbomb/open-data
+[55]: https://github.com/ImpectAPI/open-data
+[56]: https://en.wikipedia.org/wiki/2023%E2%80%9324_Bundesliga
