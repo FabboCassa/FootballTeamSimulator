@@ -27,5 +27,17 @@ namespace Fts.Services
 #else
             false;
 #endif
+
+        /// <summary>
+        /// Logs to the dev console every drawn ball that moved more than 2 m since the frame before,
+        /// outside cut fades and the change of ends (spec free-ball-real-movement R9): the Play-mode
+        /// check of R10 reads "0 rendered jumps" off it. Off in release.
+        /// </summary>
+        public static bool BallJumpLog =
+#if DEVELOPMENT_BUILD || UNITY_EDITOR
+            true;
+#else
+            false;
+#endif
     }
 }
