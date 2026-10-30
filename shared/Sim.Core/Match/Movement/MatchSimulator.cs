@@ -151,7 +151,12 @@ namespace Sim.Core.Match.Movement
         private long _foeSeparationSq;
         private int _approachU;
         private int _separationSq;
-        private int _maxPassForce, _maxShootForce, _shootRangeU;
+        private int _maxPassForce, _maxClearForce, _maxShootForce, _shootRangeU;
+
+        // Where the ball was at the end of the last two ticks and how far from both a man may gather
+        // it; the last man to gather it, the tick after, and how far it came to his feet (R5).
+        private int _ballAgoX, _ballAgoY, _ballTwoAgoX, _ballTwoAgoY, _gatherU;
+        private int _gatherer = -1, _gatheredNext = -1, _gatheredFromU;
         private int _maxPassRange;
         private int _arrivalStepU, _carryArrivalU;
         private int _streamStride, _lastFrame;
@@ -297,12 +302,18 @@ namespace Sim.Core.Match.Movement
             if (_ball.Dead && _ctx.DeadKind == BallActionKind.Goal && tick >= _ctx.DeadAt)
             {
                 int conceding = _ctx.DeadSide;
-                _ball.Place(U.CenterXU, U.CenterYU);
+                _ball.SendTo(U.CenterXU, U.CenterYU);
                 _ctx.DeadKind = BallActionKind.Kickoff;
                 _ctx.DeadTaker = MostAdvanced(conceding);
-                _ctx.DeadAt = tick + _cfg.DeadBallTicks;
+                _ctx.DeadAt = tick + Restarts.DeadBallOrTransportTicks(_ctx);
                 _sheet.Record(tick, BallActionKind.Kickoff, conceding == 0, _ctx.DeadTaker, -1);
             }
+
+            _ball.StepShown();
+            _ballTwoAgoX = _ballAgoX;
+            _ballTwoAgoY = _ballAgoY;
+            _ballAgoX = _ball.X;
+            _ballAgoY = _ball.Y;
         }
 
         /// <summary>
@@ -333,7 +344,7 @@ namespace Sim.Core.Match.Movement
             _sheet.Record(tick, BallActionKind.HalfTime, _kickedOffFirst == 0, -1, -1);
 
             int kicking = 1 - _kickedOffFirst;
-            _ball.Place(U.CenterXU, U.CenterYU);
+            _ball.SendTo(U.CenterXU, U.CenterYU);
             _ball.Dead = true;
             _ball.OwnerSide = -1;
             _ball.OwnerSlot = -1;
@@ -342,7 +353,8 @@ namespace Sim.Core.Match.Movement
             _ctx.DeadKind = BallActionKind.Kickoff;
             _ctx.DeadSide = kicking;
             _ctx.DeadTaker = MostAdvanced(kicking);
-            _ctx.DeadAt = tick + _cfg.HalfTimeTicks;
+            int transport = _ball.TransportTicks;
+            _ctx.DeadAt = tick + (transport > _cfg.HalfTimeTicks ? transport : _cfg.HalfTimeTicks);
             _sheet.Record(tick, BallActionKind.Kickoff, kicking == 0, _ctx.DeadTaker, -1);
         }
 
@@ -423,6 +435,8 @@ namespace Sim.Core.Match.Movement
             // tick here — the one place the time base and the length unit meet (engine phase 1).
             _ball = new MatchBall(_cfg);
             _maxPassForce = U.PerTick(_cfg.MaxPassSpeedDmPerSecond, _cfg);
+            _maxClearForce = U.PerTick(_cfg.MaxClearSpeedDmPerSecond, _cfg);
+            _gatherU = U.Units(_cfg.GatherFromDm);
             _maxShootForce = U.PerTick(_cfg.MaxShootSpeedDmPerSecond, _cfg);
             _arrivalStepU = U.PerTick(_cfg.PassArrivalSpeedDmPerSecond, _cfg);
             if (_arrivalStepU < 1) _arrivalStepU = 1;
@@ -464,6 +478,9 @@ namespace Sim.Core.Match.Movement
             // the ball, and a ball still sitting at the origin drags all twenty-two men onto one
             // touchline for the kickoff frame.
             _ball.Place(U.CenterXU, U.CenterYU);
+            _ball.ShowWhereItIs();
+            _ballAgoX = _ballTwoAgoX = _ball.X;
+            _ballAgoY = _ballTwoAgoY = _ball.Y;
 
             _ctx.DeadKind = BallActionKind.Kickoff;
             _ball.Dead = true;
@@ -884,7 +901,7 @@ namespace Sim.Core.Match.Movement
 
                 // Hit as hard as he can hit it: this is a man getting rid of the ball, and a ball
                 // rolling gently towards the line is a ball his own keeper collects.
-                _ball.Kick(side, slot, targetX - _px[k], targetY - _py[k], _maxPassForce);
+                _ball.Kick(side, slot, targetX - _px[k], targetY - _py[k], _maxClearForce);
                 _ball.Loft(U.Distance(_px[k], _py[k], targetX, targetY), 0);
                 Release(tick, side, slot);
                 _sheet.Record(tick, BallActionKind.Clearance, home, slot, -1);
@@ -911,7 +928,7 @@ namespace Sim.Core.Match.Movement
             int distance = U.Distance(_px[k], _py[k], targetX, targetY);
             _ball.Kick(side, slot, targetX - _px[k], targetY - _py[k],
                 _ball.ForceToArrive(
-                    distance, _arrivalStepU * _cfg.ClearanceArrivalPercent / 100, _maxPassForce, out int _));
+                    distance, _arrivalStepU * _cfg.ClearanceArrivalPercent / 100, _maxClearForce, out int _));
             _ball.Loft(distance, 0);
             Release(tick, side, slot);
             _sheet.Record(tick, BallActionKind.Clearance, home, slot, -1);
@@ -943,11 +960,18 @@ namespace Sim.Core.Match.Movement
             }
         }
 
-        /// <summary>The ball is back in play, at the taker's feet.</summary>
+        /// <summary>
+        /// The ball is back in play, his — and played from where it lies: snapped to the taker's
+        /// feet a couple of metres away and struck on the same tick, a restart left the spot faster
+        /// than any pass (R5). The glue puts it at his feet if he holds it.
+        /// </summary>
         private void BeginRestart(int tick, int side, int slot)
         {
             _ball.Dead = false;
+            int x = _ball.X, y = _ball.Y;
             Collect(side, slot);
+            _ball.X = x;
+            _ball.Y = y;
             _hold[side * _n + slot] = 1;
             _ctx.RestartGrace = tick + _cfg.RestartGraceTicks;
             _ctx.RestartTaker = side * _n + slot;
@@ -1351,6 +1375,31 @@ namespace Sim.Core.Match.Movement
         }
 
         /// <summary>
+        /// Believable-match R5: a gathered ball goes to his feet on this tick, so its last two
+        /// positions must both be within GatherFromDm of them — a fast ball met at the end of a
+        /// long reach otherwise crossed more than eight metres in one frame. He may still take it
+        /// a tick later, nearer. A strike the keeper saves is held where he met it instead.
+        /// </summary>
+        private bool CanGather(int k)
+        {
+            long limit = (long)_gatherU * _gatherU;
+            return FeetDistanceSq(k, _ballAgoX, _ballAgoY) <= limit && FeetDistanceSq(k, _ballTwoAgoX, _ballTwoAgoY) <= limit;
+        }
+
+        /// <summary>
+        /// On the tick after he gathered it, he may strike it at up to <paramref name="strikeU"/> a
+        /// tick only if it came to his feet from no further than that: the reach and the strike's
+        /// first tick otherwise showed in one frame as a ball faster than any of its kind (R5).
+        /// Further, he takes a touch first.
+        /// </summary>
+        private bool MayStrikeOffTheGather(int tick, int k, int strikeU) =>
+            k != _gatherer || tick != _gatheredNext || _gatheredFromU <= strikeU;
+
+        /// <summary>Squared distance from where a gathered ball would sit at his feet (see <see cref="BallToFeet"/>).</summary>
+        private long FeetDistanceSq(int k, int x, int y) =>
+            U.DistanceSq(MovementGeometry.Clamp(_px[k], _ctx.InsetU, U.LengthU - _ctx.InsetU), _ctx.Inside(_py[k]), x, y);
+
+        /// <summary>
         /// The ball, at a man's feet — and ON the pitch (engine phase 5). A player can be a stride
         /// over the touchline while the ball is still in play at his inside foot; what cannot
         /// happen is the ball itself resting on a line, which is the throw-in the laws demand and
@@ -1512,6 +1561,7 @@ namespace Sim.Core.Match.Movement
                         ? SweptDistance(k, inVx, inVy)
                         : U.Distance(_px[k], _py[k], _ball.X, _ball.Y);
                     if (distance >= reach) continue;
+                    if (!_ctx.ShotLive && !CanGather(k)) continue;
 
                     // Scored on how far INSIDE his own reach he is, so the extra stride is a
                     // tie-break in a challenge rather than a licence to hoover up the pitch.
@@ -1579,7 +1629,7 @@ namespace Sim.Core.Match.Movement
                 }
 
                 _ball.Kick(bestSide, bestSlot, outX, outY,
-                    _ball.ForceForTicks(U.Units(_cfg.KeeperParryDm), _cfg.TicksOfMs(700), _maxPassForce));
+                    _ball.ForceForTicks(U.Units(_cfg.KeeperParryDm), _cfg.TicksOfMs(700), _maxClearForce));
                 _lastTouch[bestSide] = bestSlot;
 
                 // A parry leaves his hands like a pass leaves a foot (R7): without the release lock
@@ -1591,6 +1641,14 @@ namespace Sim.Core.Match.Movement
             }
 
             int metX = _ball.X, metY = _ball.Y;
+            if (!wasShot)
+            {
+                _gatherer = gkSlot;
+                _gatheredNext = tick + 1;
+                long gap = FeetDistanceSq(gkSlot, _ballAgoX, _ballAgoY);
+                _gatheredFromU = MovementGeometry.Sqrt(gap > int.MaxValue ? int.MaxValue : (int)gap);
+            }
+
             Collect(bestSide, bestSlot);
             _lastTouch[bestSide] = bestSlot;
             _hold[bestSide * _n + bestSlot] = HoldTicks(bestSide);
@@ -1742,7 +1800,7 @@ namespace Sim.Core.Match.Movement
 
             if (deep || nearTouch)
             {
-                int firm = _maxPassForce * _cfg.DeflectClearForcePercent / 100;
+                int firm = _maxClearForce * _cfg.DeflectClearForcePercent / 100;
                 int roll = _rng.NextInt(0, 1000);
 
                 if (deep && roll < _cfg.DeflectBehindPermille)
@@ -1868,8 +1926,9 @@ namespace Sim.Core.Match.Movement
         /// <summary>Writes one stream frame. <paramref name="frame"/> is in FRAME space, not tick space.</summary>
         private void WriteFrame(int frame)
         {
-            // A dead ball may lie behind a goal line (MatchBall.RunBehind); one in play never leaves the pitch.
-            int bx = _ball.Dead ? _ball.X : U.ClampX(_ball.X), by = _ball.Dead ? _ball.Y : U.ClampY(_ball.Y);
+            // A dead ball may lie behind a goal line (MatchBall.RunBehind) or be on its way to a restart
+            // spot (MatchBall.SendTo); one in play never leaves the pitch.
+            int bx = _ball.Dead ? _ball.ShownX : U.ClampX(_ball.X), by = _ball.Dead ? _ball.ShownY : U.ClampY(_ball.Y);
             _stream.BallXY[frame * 2] = U.Dm(bx);
             _stream.BallXY[frame * 2 + 1] = U.Dm(by);
             _stream.BallZ[frame] = _ball.Z;

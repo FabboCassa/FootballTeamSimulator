@@ -29,6 +29,16 @@ namespace Sim.Core.Tests.Match
         private const int Seeds = 64;
         private const ulong FirstSeed = 9000;
 
+        /// <summary>
+        /// The shots and crosses axes read a mean over this many matches instead: a count a match
+        /// spreads by 4 (shots) to 6 (crosses) between seeds, so over 64 the gap to neutral carried a
+        /// standard error of 0.7-1.1 against minimums of 1.2 and 1.0, and every change to the match
+        /// flipped them. Over 1,024 seeds engine v12 reads shots 15.8 / 17.4 / 20.2 and crosses
+        /// 28.6 / 30.6 / 33.7; the R5 ball of issue #147 reads 15.5 / 17.0 / 19.8 and 29.2 / 30.8 /
+        /// 33.4, where its first 64 seeds read gaps of 0.9 for both.
+        /// </summary>
+        private const int CountSeeds = 1024;
+
         // Documented minimums: how far each extreme must move its reading from neutral (issue #90).
         // Measured when wired (64 seeds, low / neutral / high): long-ball share 3.6 / 5.6 / 9.5 %;
         // own-third long share 6.8 / 12.7 / 23.9 %; crosses 29.5 / 31.5 / 34.6; shots 15.5 / 17.9 /
@@ -42,7 +52,7 @@ namespace Sim.Core.Tests.Match
         private static League _league = null!;
         private static Club _home = null!;
         private static Club _away = null!;
-        private Reading? _neutral;
+        private Reading? _neutral, _neutralForCounts;
 
         [OneTimeSetUp]
         public void GenerateWorld()
@@ -53,6 +63,7 @@ namespace Sim.Core.Tests.Match
         }
 
         private Reading Neutral => _neutral ??= Measure(TacticInstructions.Neutral);
+        private Reading NeutralForCounts => _neutralForCounts ??= Measure(TacticInstructions.Neutral, CountSeeds);
 
         [Test]
         public void PassingDirectness_MovesTheLongBallShare() =>
@@ -68,12 +79,13 @@ namespace Sim.Core.Tests.Match
         public void FinalThirdApproach_MovesTheCrosses() =>
             AssertShift("approach", "crosses a match", r => r.Crosses, CrossesMin,
                 "work into box", With(approach: FinalThirdApproach.WorkIntoBox),
-                "cross early", With(approach: FinalThirdApproach.CrossEarly));
+                "cross early", With(approach: FinalThirdApproach.CrossEarly), CountSeeds);
 
         [Test]
         public void ShotSelection_MovesTheShots() =>
             AssertShift("shooting", "shots a match", r => r.Shots, ShotsMin,
-                "patient", With(shooting: ShotSelection.Patient), "shoot on sight", With(shooting: ShotSelection.ShootOnSight));
+                "patient", With(shooting: ShotSelection.Patient), "shoot on sight", With(shooting: ShotSelection.ShootOnSight),
+                CountSeeds);
 
         [Test]
         public void DribbleFrequency_MovesTheDribbles() =>
@@ -98,11 +110,11 @@ namespace Sim.Core.Tests.Match
         /// balance cost of an extreme can be judged.
         /// </summary>
         private void AssertShift(string tag, string metric, Func<Reading, double> read, double min,
-            string lowName, TacticInstructions low, string highName, TacticInstructions high)
+            string lowName, TacticInstructions low, string highName, TacticInstructions high, int seeds = Seeds)
         {
-            Reading neutral = Neutral;
-            Reading l = Measure(low);
-            Reading h = Measure(high);
+            Reading neutral = seeds == Seeds ? Neutral : NeutralForCounts;
+            Reading l = Measure(low, seeds);
+            Reading h = Measure(high, seeds);
 
             TestContext.Out.WriteLine(
                 $"[instructions-{tag}] {metric}: {lowName} {read(l):F1} ({l.Goals})   " +
@@ -135,22 +147,18 @@ namespace Sim.Core.Tests.Match
         }
 
         /// <summary>Plays the fixtures with one instruction set for the home side and reads the home side.</summary>
-        private static Reading Measure(TacticInstructions instructions)
+        private static Reading Measure(TacticInstructions instructions, int seeds = Seeds)
         {
-            var reports = new MatchReport[Seeds];
-            var metrics = new MatchMetrics?[Seeds];
-            Parallel.For(0, Seeds, i =>
-            {
-                reports[i] = Play(FirstSeed + (ulong)i, instructions);
-                metrics[i] = new MatchAnalyzer().Measure(reports[i]);
-            });
-
+            // Added as each match ends rather than kept: a thousand streams do not fit in a test run.
+            // Every term is a whole count, so the sums do not depend on the order they arrive in.
             var reading = new Reading();
-            for (int i = 0; i < Seeds; i++)
+            Parallel.For(0, seeds, i =>
             {
-                if (metrics[i] == null || reports[i].Positions == null) continue;
-                reading.Add(metrics[i]!, reports[i].Positions!);
-            }
+                MatchReport report = Play(FirstSeed + (ulong)i, instructions);
+                MatchMetrics? metrics = new MatchAnalyzer().Measure(report);
+                if (metrics == null || report.Positions == null) return;
+                lock (reading) reading.Add(metrics, report.Positions);
+            });
 
             return reading;
         }

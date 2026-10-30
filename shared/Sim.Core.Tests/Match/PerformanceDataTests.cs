@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Linq;
+using System.Threading.Tasks;
 using NUnit.Framework;
 using Sim.Core.Config;
 using Sim.Core.Domain;
@@ -659,10 +660,15 @@ namespace Sim.Core.Tests.Match
             double deepSum = 0, highSum = 0;
             int deepCount = 0, highCount = 0;
 
-            for (int i = 0; i < 8; i++)
-            {
-                MatchStats stats = Match(i).Stats!;
+            // Sixty-four matches, not eight: the gap reads about 0.8 with a spread of about 0.17
+            // between blocks of eight, so eight of them crossed the 1.0 line whenever the stream
+            // moved (the R5 ball of issue #147 drew 1.12 on the first eight, 0.76 on the next 56).
+            const int Matches = 64;
+            var all = new MatchStats[Matches];
+            Parallel.For(0, Matches, i => all[i] = Match(i).Stats!);
 
+            foreach (MatchStats stats in all)
+            {
                 foreach (bool home in new[] { true, false })
                 {
                     var outfield = stats.Players

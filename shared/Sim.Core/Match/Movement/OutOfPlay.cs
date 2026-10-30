@@ -110,7 +110,7 @@ namespace Sim.Core.Match.Movement
 
             // A strike, or the keeper's save, is a ball the viewer follows over the line.
             bool saved = defenderPutItBehind && _ctx.Ball.LastTouchSlot == _ctx.KeeperOf(defending);
-            if (strike || saved) _restarts.RestartFromBehind(tick, kind, side, x, y, goalX);
+            if (strike || saved) _restarts.RestartFromBehind(tick, kind, side, x, y, goalX, crossY);
             else _restarts.Restart(tick, kind, side, x, y);
         }
 
