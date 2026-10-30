@@ -49,6 +49,8 @@ internal static class PitchScenario
             applyPositioning: true, generatePositions: true);
 
         var analyzer = new MatchAnalyzer();
+        var ballFreedom = new BallFreedomAnalyzer();
+        var ballFreedomTally = new BallFreedomTally();
         var totals = new PitchTotals();
         var perf = new PerfTotals();
         var clock = Stopwatch.StartNew();
@@ -86,6 +88,10 @@ internal static class PitchScenario
             totals.Add(metrics);
             perf.Add(report);
             played++;
+
+            // Ball freedom, passes and loose balls (free-ball-real-movement R2), against doc §10.5.
+            BallFreedomMetrics? freedom = ballFreedom.Measure(report);
+            if (freedom != null) ballFreedomTally.Add(freedom);
         }
 
         clock.Stop();
@@ -108,6 +114,9 @@ internal static class PitchScenario
         bands.Print();
 
         perf.Print(played);
+
+        Console.WriteLine();
+        Console.Write(ballFreedomTally.Format("pitch"));
 
         // --- contract, not calibration -------------------------------------------------------
         checks.Check(
