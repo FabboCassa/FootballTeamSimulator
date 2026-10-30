@@ -28,7 +28,9 @@ namespace Sim.Core.Tests.Match
     [TestFixture]
     public class DefendingAxesTests
     {
-        private const int Seeds = 64;
+        // 128 since #186 (was 64): with engine R7's movement the hold-shape gap read 1.47 at 64 seeds
+        // against its 1.5 minimum, 1.98 at 128 and 2.20 at 256 - the dice, not the lever.
+        private const int Seeds = 128;
         private const ulong FirstSeed = 9100;
 
         // Final third and wide channel (from the centre line), in decimetres.

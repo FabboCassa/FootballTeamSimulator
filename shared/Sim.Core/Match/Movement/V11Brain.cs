@@ -88,6 +88,7 @@ namespace Sim.Core.Match.Movement
                 _base = new BaseBrain(sim);
                 _phases = new TeamPhaseMachine(sim._cfg);
                 _positioning = new V11Positioning(sim._cfg);
+                _roleJobs = new V11RoleJobs(sim._cfg);
                 _valuation = new V11ActionValuation(sim._cfg);
                 _setPieces = new V11SetPieces(sim);
                 _supportAngles = new V11SupportAngles(sim._cfg);
@@ -140,6 +141,7 @@ namespace Sim.Core.Match.Movement
                 }
 
                 BeginOffers();
+                BeginReReads();
                 _base.Begin();
                 _setPieces.Begin();
             }

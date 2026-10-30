@@ -20,10 +20,15 @@ namespace Sim.Core.Match.Movement
             if (_approachU < 1) _approachU = 1;
             int accel = U.PerTickPerTick(cfg.PlayerAccelDmPerSecond2, cfg);
             Accel = accel < 1 ? 1 : accel;
+            int brake = U.PerTickPerTick(cfg.PlayerBrakeDmPerSecond2, cfg);
+            Brake = brake < Accel ? Accel : brake;
         }
 
         /// <summary>The most a man's velocity can change in one tick, in units per tick.</summary>
         public int Accel { get; }
+
+        /// <summary>The most a man off the ball can slow down in one tick, in units per tick (at least <see cref="Accel"/>).</summary>
+        public int Brake { get; }
 
         /// <summary>A speed in decimetres per second, as units per tick.</summary>
         public static int SpeedPerTick(int dmPerSecond, MatchBalance cfg) => U.PerTick(dmPerSecond, cfg);
@@ -66,14 +71,20 @@ namespace Sim.Core.Match.Movement
             return top;
         }
 
-        /// <summary>One tick of inertia: velocity turns toward the wanted one by at most accel, capped at top.</summary>
-        public static void Accelerate(ref int vx, ref int vy, int wx, int wy, int accel, int top)
+        /// <summary>
+        /// One tick of inertia: velocity turns toward the wanted one by at most accel, capped at top.
+        /// With a <paramref name="brake"/> the cap falls to top no faster than that a tick, so a man
+        /// whose eased pace drops sharply turns on a curve instead of pivoting on the spot.
+        /// </summary>
+        public static void Accelerate(ref int vx, ref int vy, int wx, int wy, int accel, int top, int brake = int.MaxValue)
         {
+            int before = brake == int.MaxValue ? 0 : U.Length(vx, vy);
             int ax = wx - vx, ay = wy - vy;
             U.Cap(ref ax, ref ay, accel);
             vx += ax;
             vy += ay;
-            U.Cap(ref vx, ref vy, top);
+            int cap = before - brake > top ? before - brake : top;
+            U.Cap(ref vx, ref vy, cap);
         }
     }
 }
