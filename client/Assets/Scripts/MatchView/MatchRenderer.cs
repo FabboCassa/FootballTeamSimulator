@@ -24,9 +24,10 @@ namespace Fts.MatchView
     /// it is going to, or the trajectory of a shot), or dead on a spot. Players wear
     /// their shirt numbers. A short trail follows the ball so a pass reads as a pass.
     ///
-    /// PACING. Playback advances in wall-clock time (scheduler delta) and interpolates linearly
-    /// between stream ticks so motion stays smooth at any frame rate. It plays the broadcast
-    /// director's timeline (<see cref="Timeline"/>): open play at 1.3x real time, dead time at 2x,
+    /// PACING. Playback advances in wall-clock time (scheduler delta) and interpolates between stream
+    /// ticks so motion stays smooth at any frame rate: the players linearly, the ball along its own
+    /// decelerating path and height arc (<see cref="BallPath"/>, spec free-ball-real-movement R9).
+    /// It plays the broadcast director's timeline (<see cref="Timeline"/>): open play at 1.3x real time, dead time at 2x,
     /// the cut segments jumped (spec R12), so nothing is ever slower than 1.3x real time at 1x. A screen
     /// whose moment is agreed with another viewer hands the renderer that clock instead
     /// (<see cref="FollowClock"/>), and the renderer then only draws where the clock says.
@@ -97,6 +98,9 @@ namespace Fts.MatchView
 
         /// <summary>Which strike's line to draw now, and which net a goal lights (spec believable-match R12).</summary>
         private readonly ShotHighlight _shots;
+
+        /// <summary>The ball between frames, on the ground and in the air (spec free-ball-real-movement R9).</summary>
+        private readonly BallPath _ballPath;
 
         /// <summary>The stream position a shared clock shows now; null when the renderer keeps its own time.</summary>
         private Func<double> _sharedClock;
@@ -201,6 +205,7 @@ namespace Fts.MatchView
             _playback = new BroadcastPlayback(Timeline);
             _saves = new SaveHighlight(_stream);
             _shots = new ShotHighlight(_stream);
+            _ballPath = new BallPath(_stream);
 
             foreach (BallAction action in _actions)
                 if (action.Kind == BallActionKind.HalfTime)
@@ -704,8 +709,8 @@ namespace Fts.MatchView
             int tb = Mathf.Min(ta + 1, _lastTick);
             float f = Mathf.Clamp01(_tickPos - ta);
 
-            BallLook look = BallLook.At(BallLook.HeightAt(_stream.BallZ, _tickPos));
-            Vector2 ground = BallGround(fit, ta, tb, f);
+            BallLook look = BallLook.At(_ballPath.HeightAt(_tickPos));
+            Vector2 ground = BallGround(fit, ta, tb);
             Vector2 ball = new Vector2(ground.x, ground.y - look.LiftDm * scale);
 
             if (_shots.TryNetAt(_tickPos, out NetMoment net))
@@ -925,10 +930,14 @@ namespace Fts.MatchView
         }
 
         /// <summary>The ball's point on the grass now; never interpolated across the change of ends.</summary>
-        private Vector2 BallGround(Rect fit, int ta, int tb, float f) =>
-            SecondHalf(ta) != SecondHalf(tb)
-                ? BallPixel(fit, tb)
-                : Vector2.Lerp(BallPixel(fit, ta), BallPixel(fit, tb), f);
+        private Vector2 BallGround(Rect fit, int ta, int tb)
+        {
+            if (SecondHalf(ta) != SecondHalf(tb))
+                return BallPixel(fit, tb);
+
+            _ballPath.GroundAt(_tickPos, out float x, out float y);
+            return Pixel(fit, ta, x, y);
+        }
 
         /// <summary>
         /// The ball, grown and lifted up the screen by its height (<see cref="BallLook"/>), over its
@@ -977,7 +986,7 @@ namespace Fts.MatchView
         /// is the change of ends. Both axes turn, because that is what swapping ends IS: the same
         /// football seen from the other touchline.
         /// </summary>
-        private Vector2 Pixel(Rect fit, int tick, int xDm, int yDm) =>
+        private Vector2 Pixel(Rect fit, int tick, float xDm, float yDm) =>
             SecondHalf(tick)
                 ? PitchGraphics.ToPixelDm(fit, Pitch.LengthDm - xDm, Pitch.WidthDm - yDm)
                 : PitchGraphics.ToPixelDm(fit, xDm, yDm);

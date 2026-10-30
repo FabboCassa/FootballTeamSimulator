@@ -109,7 +109,7 @@ namespace Sim.Core.Match.Movement
         /// the per-second one. Integer binary search on the very recurrence the simulation runs,
         /// so the answer is identical on .NET, Mono and IL2CPP — no root, no logarithm, no float.
         /// </summary>
-        private static int PerTickRetention(int perSecond, int ticksPerSecond)
+        internal static int PerTickRetention(int perSecond, int ticksPerSecond)
         {
             if (ticksPerSecond <= 1) return perSecond;
 

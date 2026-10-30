@@ -6,7 +6,9 @@ namespace Sim.Core.Match.Broadcast
     /// How the top-down picture shows the ball's height (spec believable-match R12, from the
     /// stream's <see cref="PositionStream.BallZ"/>): the ball grows and is lifted up the screen off
     /// its shadow, which stays on the ground point and fades and shrinks as the ball rises. Capped
-    /// at <see cref="FullHeightDm"/>, so a lob reads as high without leaving the pitch.
+    /// at <see cref="FullHeightDm"/>, so a lob reads as high without leaving the pitch. The look
+    /// rises fastest off the grass and flattens toward the cap (spec free-ball-real-movement R9), so
+    /// a cross at head height already reads as in the air at 1x and a hoof still reads higher.
     /// Presentation only; pure and allocation-free, read on every repaint.
     /// </summary>
     public readonly struct BallLook
@@ -50,6 +52,7 @@ namespace Sim.Core.Match.Broadcast
         public static BallLook At(float heightDm)
         {
             float h = heightDm <= 0f ? 0f : (heightDm >= FullHeightDm ? 1f : heightDm / FullHeightDm);
+            h *= 2f - h;
             return new BallLook(
                 1f + (MaxScale - 1f) * h,
                 MaxLiftDm * h,
