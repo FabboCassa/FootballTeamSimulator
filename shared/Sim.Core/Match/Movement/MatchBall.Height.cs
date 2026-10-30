@@ -11,7 +11,7 @@ namespace Sim.Core.Match.Movement
         private const int Milli = 1000;
 
         /// <summary>9.81 m/s², in thousandths of a decimetre per second squared.</summary>
-        private const int GravityMilliDmPerSecond2 = 98_100;
+        internal const int GravityMilliDmPerSecond2 = 98_100;
 
         /// <summary>Where a cross is aimed: a forehead, not a boot.</summary>
         public const int HeadHeightDm = 18;
