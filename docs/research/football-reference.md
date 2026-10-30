@@ -805,6 +805,10 @@ Considered and kept at the R2 starting value:
   sides. The Championship (2.45, 2.61) and Serie B (2.46, 2.56) sit inside it in 2024-25 and
   2025-26, but 2. Bundesliga sits above it in both, 3.02 and 2.93 [1] (§7). The target fits two of
   the three second tiers reached, not all; whether to keep it is left to the user (#73, #83).
+- **Reference v2 noise-sensitive rows (§10.4).** Fast free-ball turns, heading reversals, speeds
+  above 5.5 m/s and accelerations take their bands from the optical sources (DFL, Metrica) only;
+  with SkillCorner's 10 fps broadcast tracking the turn band would be 0.00-8.45% and would not catch
+  the engine's 7.6%. SkillCorner's readings stay in §10.5 in parentheses.
 - **R19 directions per style.** #94 reads them from §3.1 into §3.3; the table and its minimums
   are to be judged with the user.
 
@@ -902,6 +906,188 @@ The shot rows rest on 20-25 shots per match, so they move most from match to mat
 `RealismReferenceTests.MovementBands_MatchDocTable` asserts that every `RealismReference.Movement`
 constant equals the Band column above.
 
+## 10. Tracking reference v2
+
+Backs R1 of `docs/specs/free-ball-real-movement.md` (reference v2, tracking metrics) and the
+`RealismReference.Tracking` bands in `shared/Sim.Core/Match/Analysis/RealismReference.Tracking.cs`.
+Every figure is my computation [48][49][50], printed by `tools/tracking_reference.py` (run from the
+repo root: `python -I tools/tracking_reference.py`; needs numpy). The script downloads the raw
+files into `tools/.tracking-data/` (git-ignored), caches the parsed DFL positions there, and prints
+the §10.2 and §10.5 tables as they stand; only these aggregates are committed. With `--check` it
+exits 1 unless every table line it prints is in this section verbatim, so a second run proves the
+numbers. Every raw file is pinned in the script by name and SHA-256 (DFL also by figshare file id),
+re-verified on every run before it is parsed, and downloaded to a `.part` file that replaces the
+target only after its hash matches; the DFL position cache is keyed by its source file's hash.
+§9 (Metrica only) and `RealismReference.Movement` are unchanged.
+
+### 10.1 Sources, licences and tiers
+
+| Source | Data | Version | Licence | Script |
+|---|---|---|---|---|
+| DFL / IDSSE [49] | 7 matches of 2022/23: Bundesliga matchday 34 (Köln - Bayern, Bochum - Leverkusen) and 5 2. Bundesliga home matches of Fortuna Düsseldorf. Optical tracking at 25 fps of every player and the ball, ball height (`Z`), ball status and team in possession per frame; synchronised event data | figshare DOI 10.6084/m9.figshare.28196177, v1; 21 files pinned by figshare file id and SHA-256 | CC BY 4.0 | `tools/tracking_reference.py` |
+| SkillCorner [50] | 9 league matches of 2019/20: Man City - Liverpool ×2, Barcelona - Real Madrid ×2, Juventus - Inter ×2, Dortmund - Bayern ×2, PSG - Marseille. Broadcast tracking at 10 fps: only what the camera shows; ball with an estimated height; no events | commit `1ed50b775f93075c2a6d00d0d795f13b7b89709e` (2020-10-08) | MIT | `tools/tracking_reference.py` |
+| Metrica Sports [48] | Sample Games 1-3, as §9.1 | commit `e706dd506b360d69d9d123d5b8026e7294b13996` | README: acknowledge the source (§9.1) | `tools/tracking_reference.py` (loaders of `tools/movement_reference.py`) |
+
+- **Tiers:** a team's position in that season's final league table: top = the first six, bottom =
+  the last six, middle = the rest. The positions are a static table in the script. 2022/23 (18
+  teams), computed from the results matrices [51][52]: Bundesliga Bayern 1st, Leverkusen 6th, Köln
+  11th, Bochum 14th; 2. Bundesliga Düsseldorf 4th, St. Pauli 5th, Kaiserslautern 9th, Rostock 13th,
+  Nürnberg 14th, Regensburg 17th. 2019/20 [53]: every SkillCorner team finished first or second
+  (Liverpool and Man City, Real Madrid and Barcelona, Juventus and Inter, Bayern and Dortmund, PSG
+  and Marseille). Metrica's games are anonymised: league and tier unknown.
+- **Limits:** 19 matches. Top-five leagues outside Germany come only from SkillCorner's 2019/20 big
+  matches (top-top only); weak teams only from the 2. Bundesliga and, perhaps, Metrica. Ball height
+  is taken from DFL only (spec R1).
+
+### 10.2 Matches and splits
+
+| Match | Source | League, season | Tiers (home-away) | Split | Ball in play, min | Measured, min |
+|---|---|---|---|---|---|---|
+| Fortuna Düsseldorf - FC St. Pauli | DFL | 2. Bundesliga 2022/23 | top-top | S1 | 56.2 | 56.2 |
+| Fortuna Düsseldorf - 1. FC Kaiserslautern | DFL | 2. Bundesliga 2022/23 | top-middle | S2 | 56.9 | 56.9 |
+| Fortuna Düsseldorf - SSV Jahn Regensburg | DFL | 2. Bundesliga 2022/23 | top-bottom | S3 | 48.0 | 48.0 |
+| Fortuna Düsseldorf - F.C. Hansa Rostock | DFL | 2. Bundesliga 2022/23 | top-bottom | S3 | 50.9 | 50.9 |
+| Fortuna Düsseldorf - 1. FC Nürnberg | DFL | 2. Bundesliga 2022/23 | top-bottom | S3 | 54.3 | 54.3 |
+| 1. FC Köln - FC Bayern München | DFL | Bundesliga 2022/23 | middle-top | S4 | 56.9 | 56.9 |
+| VfL Bochum 1848 - Bayer 04 Leverkusen | DFL | Bundesliga 2022/23 | bottom-top | S5 | 45.6 | 45.6 |
+| Bayern Munchen - Dortmund | SkillCorner | Bundesliga 2019/20 | top-top | S6 | 66.8 | 43.0 |
+| Dortmund - Bayern Munchen | SkillCorner | Bundesliga 2019/20 | top-top | S6 | 69.0 | 38.2 |
+| FC Barcelona - Real Madrid | SkillCorner | La Liga 2019/20 | top-top | S7 | 64.9 | 53.1 |
+| Real Madrid - FC Barcelona | SkillCorner | La Liga 2019/20 | top-top | S7 | 65.9 | 51.2 |
+| Paris - Marseille | SkillCorner | Ligue 1 2019/20 | top-top | S8 | 61.0 | 43.8 |
+| Liverpool - Manchester City | SkillCorner | Premier League 2019/20 | top-top | S9 | 60.6 | 40.3 |
+| Manchester City - Liverpool | SkillCorner | Premier League 2019/20 | top-top | S9 | 60.7 | 40.4 |
+| Inter - Juventus | SkillCorner | Serie A 2019/20 | top-top | S10 | 58.8 | 43.2 |
+| Juventus - Inter | SkillCorner | Serie A 2019/20 | top-top | S10 | 63.9 | 47.8 |
+| Game 1 home - Game 1 away | Metrica | unknown unknown | unknown-unknown | S11 | 56.3 | 55.8 |
+| Game 2 home - Game 2 away | Metrica | unknown unknown | unknown-unknown | S11 | 55.3 | 54.7 |
+| Game 3 home - Game 3 away | Metrica | unknown unknown | unknown-unknown | S11 | 65.2 | 64.7 |
+
+| Split | Source | League, season | Tier pairing | Matches |
+|---|---|---|---|---|
+| S1 | DFL | 2. Bundesliga 2022/23 | top-top | 1 |
+| S2 | DFL | 2. Bundesliga 2022/23 | top-middle | 1 |
+| S3 | DFL | 2. Bundesliga 2022/23 | top-bottom | 3 |
+| S4 | DFL | Bundesliga 2022/23 | top-middle | 1 |
+| S5 | DFL | Bundesliga 2022/23 | top-bottom | 1 |
+| S6 | SkillCorner | Bundesliga 2019/20 | top-top | 2 |
+| S7 | SkillCorner | La Liga 2019/20 | top-top | 2 |
+| S8 | SkillCorner | Ligue 1 2019/20 | top-top | 1 |
+| S9 | SkillCorner | Premier League 2019/20 | top-top | 2 |
+| S10 | SkillCorner | Serie A 2019/20 | top-top | 2 |
+| S11 | Metrica | unknown unknown | unknown-unknown | 3 |
+
+### 10.3 Definitions
+
+- **Ball in play:** DFL: ball status 1. SkillCorner: frames whose possession group is set; it is
+  empty only in runs of 10 s or more (the stoppages; 78 runs, 39.6 min in Inter - Juventus).
+  Metrica: open play of §9.2.
+- **Measured frames:** ball in play and its position known. SkillCorner also needs ≥ 10 tracked
+  players in the frame (a wide shot; close-ups and replays are left out). The "Measured, min"
+  column of §10.2. Unidentified SkillCorner tracks count as players for every distance, with no
+  team; referees never count.
+- **Reach:** 1.5 m. The **holder** is the nearest player when he is within reach. **Ball free**:
+  nobody within reach.
+- **Nobody within 1.5 m / 3 m:** share of measured frames. **Players within 5 m / 10 m:** mean count
+  of players of both teams, keepers included, over measured frames.
+- **Ball above 1 m:** share of measured DFL frames with `Z` > 1 m.
+- **Fast free-ball turn:** raw ball positions, no smoothing. Two consecutive 0.2 s displacement
+  steps around a frame (5 frames each at 25 fps, 2 at 10 fps) count when every frame of both is
+  measured, both are faster than 5 m/s, nobody is within 2 m at the middle frame and (DFL) the ball
+  is below 1 m there. The share of those pairs whose headings differ by more than 20°. A real ball
+  does not change course untouched, so this is the tracking's noise floor.
+- **Striker offside position:** per team and period, the declared forwards on the pitch (DFL
+  `STZ`, `STL`, `STR`; SkillCorner Center/Left/Right Forward), else the outfielder tracked in ≥ 25%
+  of the period who stands furthest forward on average (Metrica). Counted frames: measured, his team
+  in possession (DFL ball possession; Metrica: the team of the last pass, recovery, set piece or
+  shot event). Offside position: more than 0.3 m beyond the second-last opponent (keeper
+  included), beyond the ball and in the opponent half. Not measured on SkillCorner: with the ball
+  in midfield the back line is usually off camera.
+- **Pass (tracking-derived, every source):** a holder keeps the ball within reach for ≥ 0.2 s, then
+  the ball is free (every frame measured), then a team-mate holds it for ≥ 0.2 s, within 6 s. A
+  shorter touch by anyone in between, or a frame not measured, drops it. Release: the passer's
+  last frame within reach; arrival: the receiver's first. **Flight time** = arrival − release, p50
+  and p90 over the match's passes. **Receiver to arrival point:** the receiver's position at
+  release to the ball at arrival, p50; **pass into space:** the share ≥ 3 m.
+  Why not the event data: DFL event times are manual. Matched to the tracking with the same reach
+  rule (the passer's last frame within reach from 0.5 s before to 1 s after the event, the
+  recipient's first frame within reach after it), they give a flight p50 of 1.10 s in Köln - Bayern
+  (tracking 1.08 s) but 1.48-2.08 s in the five 2. Bundesliga matches (tracking 1.08-1.20 s), and
+  only 95 completed passes match in Bochum - Leverkusen (tracking 408): the event clock drifts from
+  the tracking. Metrica's frame-numbered events give 0.92-1.04 s (tracking 0.88-0.92 s). The script
+  prints both per match on stderr. SkillCorner has no events.
+- **Loose-ball episode:** a free run of ≥ 1 s that starts after a touch (the last holder kept the
+  ball within reach for less than 0.4 s), either in a duel (players of both teams within reach in
+  the 0.5 s before the run) or by the other team than the holder before it (a deflection or a
+  poke). A release after ≥ 0.4 s of control is a pass, not a loose ball. Per match = episodes ÷
+  measured minutes × ball-in-play minutes. On SkillCorner duels read low (22-38 per match against
+  80-102 on DFL): unidentified tracks have no team.
+- **Movement:** the §9.2 definitions at the source's frame rate, over outfielders with a known
+  team, ball in play as above: Savitzky-Golay over 0.52 s (13 frames at 25 fps, 5 at 10 fps),
+  quadratic; an acceleration effort lasts ≥ 0.52 s (13 or 5 frames); 1 s steps of 25 or 10 frames.
+  On Metrica the script reproduces §9.4: S11 is the mean of games 1-3 there (R median 0.862,
+  reversals 0.925, accelerations 1.371).
+
+### 10.4 Splits and band rule
+
+- **Split:** source × league × season × tier pairing (the two tiers sorted top, middle, bottom).
+  A split's value is the mean of its matches' values.
+- **Band:** the min-max across the split values, each bound moved out by 10% of the range (by 5%
+  of the value when the range is 0), rounded outward at the table's precision; a lower bound is
+  floored at 0 and a share's upper bound capped at 100 (R at 1). An "n/a" split is not measured
+  for that metric and does not count.
+- **Noise-sensitive rows, optical sources only:** fast free-ball turns, heading reversals, speed
+  5.5-7 m/s, speed > 7 m/s and accelerations read the tracking's jitter as much as the football.
+  SkillCorner's 10 fps broadcast tracking reads them far higher than the 25 fps optical sources, and
+  with it the turn band would reach 8.45%, past the engine's 7.6% of the spec's Goal table, so the
+  band would stop gating the engine. Their bands come from the DFL and Metrica splits only; the
+  SkillCorner splits are printed in parentheses for information and are not in the band. Every
+  other row takes all splits.
+
+### 10.5 Tracking bands
+
+| Metric (constant) | S1 | S2 | S3 | S4 | S5 | S6 | S7 | S8 | S9 | S10 | S11 | Band |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Nobody within 1.5 m of the ball, % of time (`BallFree15Percent`) | 46.10 | 44.05 | 48.12 | 45.70 | 47.40 | 54.50 | 47.79 | 51.30 | 51.37 | 51.17 | 40.31 | 38.89-55.92 |
+| Nobody within 3 m of the ball, % of time (`BallFree3Percent`) | 27.45 | 25.68 | 28.35 | 26.27 | 25.57 | 28.42 | 24.45 | 27.74 | 27.71 | 26.97 | 24.53 | 24.05-28.82 |
+| Players within 5 m of the ball (`PlayersWithin5m`) | 1.56 | 1.50 | 1.63 | 1.64 | 1.79 | 1.61 | 1.63 | 1.67 | 1.57 | 1.59 | 1.60 | 1.47-1.83 |
+| Players within 10 m of the ball (`PlayersWithin10m`) | 3.49 | 3.28 | 3.66 | 3.64 | 4.06 | 3.72 | 3.76 | 4.02 | 3.68 | 3.59 | 3.58 | 3.20-4.15 |
+| Ball above 1 m, % of time (DFL only) (`BallAbove1mPercent`) | 19.91 | 21.99 | 25.88 | 18.34 | 26.07 | n/a | n/a | n/a | n/a | n/a | n/a | 17.56-26.85 |
+| Fast free ball turning > 20 deg per 0.2 s, % of steps (`FastFreeBallTurnPercent`) | 0.18 | 0.14 | 0.12 | 0.72 | 0.72 | (7.69) | (6.19) | (5.86) | (7.05) | (5.52) | 0.17 | 0.06-0.78 |
+| Striker in an offside position, % of his team's possession (`StrikerOffsidePercent`) | 7.10 | 9.67 | 8.15 | 7.56 | 8.05 | n/a | n/a | n/a | n/a | n/a | 8.18 | 6.84-9.94 |
+| Pass flight time p50, s (`PassFlightP50Seconds`) | 1.16 | 1.16 | 1.13 | 1.08 | 0.92 | 1.00 | 1.00 | 1.00 | 1.10 | 1.05 | 0.92 | 0.89-1.19 |
+| Pass flight time p90, s (`PassFlightP90Seconds`) | 2.08 | 1.92 | 2.08 | 1.84 | 2.00 | 1.69 | 1.85 | 1.80 | 1.87 | 1.80 | 1.83 | 1.64-2.12 |
+| Receiver to arrival point at release p50, m (`ReceiverToArrivalP50Meters`) | 2.83 | 2.65 | 2.81 | 2.44 | 2.46 | 2.38 | 2.70 | 2.49 | 2.56 | 2.54 | 2.19 | 2.12-2.90 |
+| Passes into space (receiver >= 3 m from arrival), % (`PassIntoSpacePercent`) | 47.98 | 41.61 | 45.51 | 39.79 | 40.20 | 40.94 | 44.50 | 41.04 | 41.60 | 41.88 | 32.21 | 30.63-49.56 |
+| Loose-ball episodes per match (`LooseBallsPerMatch`) | 199.0 | 155.0 | 171.7 | 186.0 | 188.0 | 102.6 | 135.4 | 86.3 | 130.9 | 121.5 | 128.1 | 75.0-210.3 |
+| Direction agreement R, median (`AgreementMedian`) | 0.844 | 0.819 | 0.860 | 0.854 | 0.865 | 0.866 | 0.834 | 0.840 | 0.892 | 0.872 | 0.862 | 0.811-0.899 |
+| Direction agreement R > 0.9, % of windows (`AgreementAbove09Percent`) | 35.46 | 30.79 | 38.27 | 36.44 | 40.11 | 40.99 | 33.02 | 34.09 | 47.41 | 41.50 | 38.90 | 29.12-49.08 |
+| Heading reversals per player-minute (`ReversalsPerPlayerMinute`) | 1.474 | 1.408 | 1.285 | 1.345 | 1.253 | (1.698) | (1.616) | (1.680) | (1.765) | (1.959) | 0.925 | 0.870-1.529 |
+| Speed < 0.2 m/s, % of frames (`SpeedBelow02Percent`) | 1.16 | 1.14 | 0.89 | 0.96 | 1.30 | 0.80 | 1.00 | 1.29 | 1.03 | 0.94 | 1.13 | 0.75-1.35 |
+| Speed 0.2-2 m/s, % of frames (`Speed02To2Percent`) | 42.32 | 49.15 | 41.70 | 44.51 | 47.48 | 36.77 | 47.54 | 45.48 | 38.60 | 35.58 | 47.33 | 34.22-50.51 |
+| Speed 2-4 m/s, % of frames (`Speed2To4Percent`) | 39.54 | 36.68 | 40.14 | 39.77 | 36.00 | 38.80 | 34.96 | 36.32 | 37.94 | 40.42 | 38.63 | 34.41-40.97 |
+| Speed 4-5.5 m/s, % of frames (`Speed4To55Percent`) | 12.64 | 9.55 | 12.67 | 10.91 | 10.92 | 15.15 | 11.14 | 11.63 | 14.62 | 16.13 | 9.80 | 8.89-16.79 |
+| Speed 5.5-7 m/s, % of frames (`Speed55To7Percent`) | 3.60 | 2.80 | 3.79 | 3.10 | 3.40 | (5.84) | (3.98) | (3.88) | (5.74) | (5.14) | 2.53 | 2.40-3.92 |
+| Speed > 7 m/s, % of frames (`SpeedAbove7Percent`) | 0.74 | 0.69 | 0.82 | 0.76 | 0.90 | (2.64) | (1.39) | (1.40) | (2.08) | (1.79) | 0.58 | 0.54-0.94 |
+| Accelerations > 2 m/s2 per player-minute (`AccelerationsPerPlayerMinute`) | 2.580 | 2.273 | 2.381 | 2.200 | 2.474 | (3.536) | (2.674) | (3.045) | (3.415) | (3.358) | 1.371 | 1.249-2.702 |
+
+- **Values in parentheses** are SkillCorner readings of the noise-sensitive rows (§10.4), for
+  information only. Broadcast tracking at 10 fps reads far higher than DFL and Metrica on fast
+  free-ball turns (5.52-7.69% against 0.12-0.72%), heading reversals (1.62-1.96 against
+  0.93-1.47), speeds above 5.5 m/s and accelerations (2.67-3.54 against 1.37-2.58). With them the
+  turn band would be 0.00-8.45%; from the optical sources it is 0.06-0.78%.
+- **DFL against Metrica:** with the same filter at the same frame rate, DFL reads higher on
+  reversals (1.25-1.47 against 0.93) and accelerations (2.20-2.58 against 1.37). Whether that is the
+  tracking system or the football is not established here.
+- **Goal table of the spec.** Its "Real" column (2 DFL matches) came from a prototype with the
+  same ball-freedom, crowding and height definitions: 45.7/47.4%, 26.3/25.6%, 1.64/1.79, 3.64/4.06
+  and 18.3/26.1% are reproduced in S4/S5. Its turn and offside figures (1.0/1.2%, 7.7/8.0%) differ
+  from S4/S5 (0.72/0.72%, 7.56/8.05%) because §10.3 needs every frame of both steps measured and
+  counts every declared forward.
+
+The test `RealismReferenceTests.TrackingBands_MatchDocTable` asserts that every
+`RealismReference.Tracking` constant equals the Band column above.
+
 ## Sources
 
 - [1] football-data.co.uk match files 2024-25 and 2025-26 (also `I1, SP1, D1, F1, N1, P1, I2, E1, D2` and `/2526/`): https://www.football-data.co.uk/mmz4281/2425/E0.csv ; column notes: https://www.football-data.co.uk/notes.txt
@@ -945,6 +1131,11 @@ constant equals the Band column above.
 - [46] Opta Analyst, "Gian Piero Gasperini Leaves Atalanta: A Nine-Year Legacy" (4 Jun 2025): https://theanalyst.com/articles/gian-piero-gasperini-leaves-atalanta-stats
 - [47] Coaches' Voice, "The 4-5-1 formation: football tactics explained": https://learning.coachesvoice.com/cv/4-5-1-formation-football-tactics/
 - [48] Metrica Sports sample data (my computation, `tools/movement_reference.py`; Sample Games 1-3 at commit `e706dd506b360d69d9d123d5b8026e7294b13996`): https://github.com/metrica-sports/sample-data
+- [49] DFL / IDSSE, Bassek et al., "An integrated dataset of spatiotemporal and event data in elite soccer" (figshare, DOI 10.6084/m9.figshare.28196177, v1, CC BY 4.0; my computation, `tools/tracking_reference.py`): https://doi.org/10.6084/m9.figshare.28196177
+- [50] SkillCorner open data (MIT; my computation, `tools/tracking_reference.py`; commit `1ed50b775f93075c2a6d00d0d795f13b7b89709e`): https://github.com/SkillCorner/opendata
+- [51] Wikipedia, "2022–23 Bundesliga" (results matrix; final table computed from it): https://en.wikipedia.org/wiki/2022%E2%80%9323_Bundesliga
+- [52] Wikipedia, "2022–23 2. Bundesliga" (results matrix; final table computed from it): https://en.wikipedia.org/wiki/2022%E2%80%9323_2._Bundesliga
+- [53] Wikipedia, 2019–20 season articles (also `La_Liga`, `Serie_A`, `Bundesliga`, `Ligue_1`), final tables: https://en.wikipedia.org/wiki/2019%E2%80%9320_Premier_League
 
 [1]: https://www.football-data.co.uk/mmz4281/2425/E0.csv
 [2]: https://understat.com/league/EPL/2024
@@ -987,3 +1178,8 @@ constant equals the Band column above.
 [46]: https://theanalyst.com/articles/gian-piero-gasperini-leaves-atalanta-stats
 [47]: https://learning.coachesvoice.com/cv/4-5-1-formation-football-tactics/
 [48]: https://github.com/metrica-sports/sample-data
+[49]: https://doi.org/10.6084/m9.figshare.28196177
+[50]: https://github.com/SkillCorner/opendata
+[51]: https://en.wikipedia.org/wiki/2022%E2%80%9323_Bundesliga
+[52]: https://en.wikipedia.org/wiki/2022%E2%80%9323_2._Bundesliga
+[53]: https://en.wikipedia.org/wiki/2019%E2%80%9320_Premier_League

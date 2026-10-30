@@ -53,7 +53,7 @@ namespace Sim.Core.Match.Analysis
     /// - Distance per outfield player (convention): a team's outfield distance in a match,
     ///   substitutes included, keepers excluded, ÷ 10; mean over team-matches.
     /// </summary>
-    public static class RealismReference
+    public static partial class RealismReference
     {
         /// <summary>
         /// PPDA zone on the Understat scale (doc §1.3): the fraction of the pitch length, nearest

@@ -13,7 +13,9 @@ namespace Sim.Core.Tests.Match
     /// The R2 band set of docs/specs/real-match-and-playing-styles.md, as held by
     /// <see cref="RealismReference"/>: one well-formed band per R2 row, sourced in
     /// docs/research/football-reference.md. The R1 movement bands of docs/specs/believable-match.md
-    /// must equal the doc's §9 table, which tools/movement_reference.py prints.
+    /// must equal the doc's §9 table, which tools/movement_reference.py prints; the R1 tracking bands
+    /// of docs/specs/free-ball-real-movement.md must equal the doc's §10 table, which
+    /// tools/tracking_reference.py prints.
     /// </summary>
     [TestFixture]
     public class RealismReferenceTests
@@ -86,12 +88,12 @@ namespace Sim.Core.Tests.Match
             return dir ?? throw new DirectoryNotFoundException("Repo root containing FootballTeamSimulator.sln not found");
         }
 
-        // Constant name -> (min, max) from the "Band" column of the doc's §9 movement table.
-        private static Dictionary<string, (double Min, double Max)> DocMovementBands()
+        // Constant name -> (min, max) from the "Band" column of the band table in a doc section.
+        private static Dictionary<string, (double Min, double Max)> DocBands(string heading)
         {
             string doc = File.ReadAllText(Path.Combine(FindRepoRoot(), "docs", "research", "football-reference.md"));
-            int start = doc.IndexOf("## 9. Movement reference", System.StringComparison.Ordinal);
-            Assert.That(start, Is.GreaterThanOrEqualTo(0), "doc §9 Movement reference missing");
+            int start = doc.IndexOf(heading, System.StringComparison.Ordinal);
+            Assert.That(start, Is.GreaterThanOrEqualTo(0), heading + " missing");
             int end = doc.IndexOf("\n## ", start + 1, System.StringComparison.Ordinal);
             string section = end < 0 ? doc.Substring(start) : doc.Substring(start, end - start);
 
@@ -106,11 +108,10 @@ namespace Sim.Core.Tests.Match
             return bands;
         }
 
-        [Test]
-        public void MovementBands_MatchDocTable()
+        private static void AssertBandsMatchDoc(System.Type holder, string heading)
         {
-            Dictionary<string, (double Min, double Max)> doc = DocMovementBands();
-            FieldInfo[] fields = typeof(RealismReference.Movement)
+            Dictionary<string, (double Min, double Max)> doc = DocBands(heading);
+            FieldInfo[] fields = holder
                 .GetFields(BindingFlags.Public | BindingFlags.Static)
                 .Where(f => f.FieldType == typeof(RealismBand))
                 .ToArray();
@@ -125,17 +126,44 @@ namespace Sim.Core.Tests.Match
             }
         }
 
-        [Test]
-        public void MovementAll_ListsEveryMovementBandField_AndNothingElse()
-        {
-            RealismBand[] declared = typeof(RealismReference.Movement)
+        private static RealismBand[] Declared(System.Type holder) =>
+            holder
                 .GetFields(BindingFlags.Public | BindingFlags.Static)
                 .Where(f => f.FieldType == typeof(RealismBand))
                 .Select(f => (RealismBand)f.GetValue(null)!)
                 .ToArray();
 
+        [Test]
+        public void MovementBands_MatchDocTable() =>
+            AssertBandsMatchDoc(typeof(RealismReference.Movement), "## 9. Movement reference");
+
+        [Test]
+        public void MovementAll_ListsEveryMovementBandField_AndNothingElse()
+        {
+            RealismBand[] declared = Declared(typeof(RealismReference.Movement));
+
             Assert.That(declared.Select(b => b.Name), Is.Unique);
             Assert.That(RealismReference.Movement.All, Is.EquivalentTo(declared));
+        }
+
+        // Reference v2 (docs/specs/free-ball-real-movement.md R1): tools/tracking_reference.py prints doc §10.5.
+        [Test]
+        public void TrackingBands_MatchDocTable() =>
+            AssertBandsMatchDoc(typeof(RealismReference.Tracking), "## 10. Tracking reference v2");
+
+        // Doc §10.4: the noise-sensitive bands take the optical sources only, so they still catch the
+        // engine's 7.6% fast free-ball turn rate of the spec's Goal table (SkillCorner alone reads 5.5-7.7%).
+        [Test]
+        public void FastFreeBallTurnBand_IsANoiseFloor_ThatExcludesTheEngineRate() =>
+            Assert.That(RealismReference.Tracking.FastFreeBallTurnPercent.Contains(7.6), Is.False);
+
+        [Test]
+        public void TrackingAll_ListsEveryTrackingBandField_AndNothingElse()
+        {
+            RealismBand[] declared = Declared(typeof(RealismReference.Tracking));
+
+            Assert.That(declared.Select(b => b.Name), Is.Unique);
+            Assert.That(RealismReference.Tracking.All, Is.EquivalentTo(declared));
         }
     }
 }
