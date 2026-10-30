@@ -53,6 +53,7 @@ internal static class PitchScenario
         var ballFreedomTally = new BallFreedomTally();
         var totals = new PitchTotals();
         var perf = new PerfTotals();
+        var strikerOscillation = new PitchStrikerOscillation();
         var clock = Stopwatch.StartNew();
         int played = 0, streamless = 0, disagreements = 0;
 
@@ -87,6 +88,7 @@ internal static class PitchScenario
             if (!metrics.GoalsAgree) disagreements++;
             totals.Add(metrics);
             perf.Add(report);
+            strikerOscillation.Add(report, homeXI, awayXI);
             played++;
 
             // Ball freedom, passes and loose balls (free-ball-real-movement R2), against doc §10.5.
@@ -114,6 +116,7 @@ internal static class PitchScenario
         bands.Print();
 
         perf.Print(played);
+        strikerOscillation.Print();
 
         Console.WriteLine();
         Console.Write(ballFreedomTally.Format("pitch"));
@@ -343,7 +346,8 @@ internal sealed class PitchTotals
         bands.Add("pass accuracy", 100.0 * _completed / Math.Max(1, _passes), 76, 88, "%");
         bands.Add("throw-ins per match", _throwIns / n, 30, 50);
         bands.Add("corners per match", _corners / n, 8, 13);
-        bands.Add("offsides per match", _offsides / n, 1.5, 5);
+        RealismBand offsides = RealismReference.PitchEvents.OffsidesPerTeamMatch;
+        bands.Add("offsides per team-match", _offsides / n / 2, offsides.Min, offsides.Max);
         bands.Add("fouls per match", _fouls / n, 18, 28);
         bands.Add("yellow cards per match", _yellows / n, 2.0, 5.5);
         bands.Add("km per player", _kmPerPlayer / n, 9.0, 12.0, " km");
