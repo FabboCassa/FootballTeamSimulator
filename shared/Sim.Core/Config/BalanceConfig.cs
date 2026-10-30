@@ -1963,6 +1963,14 @@ namespace Sim.Core.Config
         public int KickRangeDm { get; set; } = 26;
 
         /// <summary>
+        /// A restart he holds rather than strikes on the spot (a kickoff, a free kick played short)
+        /// is taken only with the taker this close to the ball — at a kickoff, to his stand-off mark
+        /// behind it. The ball goes to his feet as he takes it, and from KickRangeDm the picture
+        /// showed that as a ball placed (believable-match R5).
+        /// </summary>
+        public int RestartOnBallDm { get; set; } = 5;
+
+        /// <summary>
         /// How close an opponent must be to the man on the ball to challenge him for it, and how
         /// close to a pass on its way to a team-mate to cut it out (issue #87). Both were
         /// ControlRadiusDm, and at 2.4 m the ball changed hands about 800 times a match: R2's
@@ -2064,10 +2072,23 @@ namespace Sim.Core.Config
         /// Hardest a pass can be struck, in decimetres per second (240 = 24 m/s). Together with
         /// the ball's friction this is what makes a seventy-metre pass IMPOSSIBLE rather than
         /// merely discouraged: the ball simply does not roll that far before it is gathered.
+        /// Believable-match R5 caps every frame of a pass, cross and long ball at the R1 pass
+        /// p99 plus 10% (22.78 m/s x 1.1 = 25.06): 260 drew 26 m/s frames, and 245 leaves room
+        /// for the stream's decimetre rounding.
         /// </summary>
-        public int MaxPassSpeedDmPerSecond { get; set; } = 260;
+        public int MaxPassSpeedDmPerSecond { get; set; } = 245;
 
-        /// <summary>Hardest a shot can be struck, in decimetres per second (300 = 30 m/s).</summary>
+        /// <summary>
+        /// Hardest a clearance, a block cleared away or a keeper's parry can be struck. Not a pass,
+        /// so not under the R5 pass cap: these are the balls put out for corners and throw-ins,
+        /// and at 245 the engine gave three corners a match fewer.
+        /// </summary>
+        public int MaxClearSpeedDmPerSecond { get; set; } = 260;
+
+        /// <summary>
+        /// Hardest a shot can be struck, in decimetres per second (300 = 30 m/s). Under the R5 cap
+        /// of the R1 shot p99 plus 10% (30.03 m/s x 1.1 = 33.03).
+        /// </summary>
         public int MaxShootSpeedDmPerSecond { get; set; } = 320;
 
         /// <summary>
@@ -2566,6 +2587,28 @@ namespace Sim.Core.Config
         public int DeadBallTicks => TicksOfMs(DeadBallMs);
         public int GoalCelebrationMs { get; set; } = 9000;
         public int GoalCelebrationTicks => TicksOfMs(GoalCelebrationMs);
+
+        /// <summary>
+        /// A restart's ball is rolled to its spot from where play stopped at this speed, and the
+        /// restart waits for it (believable-match R5: at most 8 m/s, never placed). Under the cap
+        /// with room for the stream's decimetre rounding.
+        /// </summary>
+        public int RestartTransportDmPerSecond { get; set; } = 70;
+
+        /// <summary>
+        /// Before it is rolled back, a ball whistled dead in play runs on this long, its pace falling
+        /// off to nothing (stopped by a player, by the boards RunOffDepthDm beyond a goal line, or
+        /// along a touchline): it is seen to go out, and one whistled for offside does not freeze.
+        /// </summary>
+        public int DeadBallRunOnMs { get; set; } = 500;
+
+        /// <summary>
+        /// A loose ball is gathered only by a man whose feet are this close to where it was at the
+        /// end of each of the last two ticks (believable-match R5). Snapped to his feet from a long
+        /// reach, a fast ball crossed more than 8 m in one frame of the stream; with the carrier's
+        /// next step and the decimetre rounding, 7 m keeps every frame under that.
+        /// </summary>
+        public int GatherFromDm { get; set; } = 70;
 
         /// <summary>
         /// A shot wide of the goal, or a save turned behind, runs on beyond the goal line and lies

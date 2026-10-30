@@ -70,6 +70,9 @@ namespace Sim.Core.Match.Movement
                 Read(side, slot, raw);
                 TrackOpenGoal(tick, k);
                 V11Choice choice = _valuation.Choose(_scene, holding);
+                int strikeU = choice.Kind == V11ActionKind.Shot ? _sim._maxShootForce
+                    : choice.Kind == V11ActionKind.Clear ? _sim._maxClearForce : _sim._maxPassForce;
+                if (choice.Kind != V11ActionKind.Hold && !_sim.MayStrikeOffTheGather(tick, k, strikeU)) return;
                 if (_sim.DecisionSink != null && choice.Kind != V11ActionKind.Hold) Explain(tick, side, slot, choice);
                 if (choice.Kind != V11ActionKind.Hold)
                 {

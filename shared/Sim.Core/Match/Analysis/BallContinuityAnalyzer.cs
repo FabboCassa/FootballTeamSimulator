@@ -16,7 +16,9 @@ namespace Sim.Core.Match.Analysis
     ///     restart being filed (throw-in, goal kick, corner, free kick, penalty, kick-off) are also
     ///     counted apart.
     ///   * Restart spot: the ball on the frame before the next action after the restart is filed
-    ///     (the taker's kick), else on the restart's own frame. The ball arrives there on the
+    ///     (the taker's kick). One the half-time or full-time whistle beats is read on the frame
+    ///     before that whistle, or the last, if its ball lies still there; still on its way, it
+    ///     is not read. The ball arrives there on the
     ///     first frame of the run, back from the spot frame, it stays within
     ///     <see cref="SpotToleranceDm"/> of it. Placed: that arrival step is faster than
     ///     <see cref="TransportCapMps"/>, so no player carried or rolled it there. A restart whose
@@ -107,15 +109,18 @@ namespace Sim.Core.Match.Analysis
                 if (!IsRestart(r.Kind) || r.Tick == lastTick || r.Tick < 0 || r.Tick >= _ticks) continue;
                 lastTick = r.Tick;
 
-                int spot = r.Tick;
+                int spot = _ticks - 1;
+                bool taken = false;
                 for (int j = i + 1; j < actions.Count; j++)
                 {
                     BallAction next = actions[j];
                     if (next.Tick <= r.Tick || next.Kind == BallActionKind.YellowCard || next.Kind == BallActionKind.RedCard) continue;
                     spot = Math.Min(next.Tick - 1, _ticks - 1);
+                    taken = next.Kind != BallActionKind.HalfTime;
                     break;
                 }
 
+                if (!taken && Step(spot) > 0) continue;
                 int sx = X(spot), sy = Y(spot);
                 int arrival = spot;
                 while (arrival > 0 && Distance(X(arrival - 1), Y(arrival - 1), sx, sy) <= SpotToleranceDm) arrival--;

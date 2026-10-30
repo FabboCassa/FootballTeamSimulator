@@ -16,7 +16,7 @@ namespace Sim.Core.Match.Movement
         /// <summary>How close to goal a free kick gets a wall (the set-piece range).</summary>
         private readonly int _wallRangeDm;
 
-        /// <summary>A ball in the net stays this far inside a post.</summary>
+        /// <summary>A ball in the net stays this far inside a post, and one gone wide this far outside it.</summary>
         private const int PostClearanceDm = 2;
 
         // The restart owed for a ball lying behind a goal line, and when it may be taken.
@@ -75,15 +75,21 @@ namespace Sim.Core.Match.Movement
         /// line at <paramref name="lineX"/>. The ball runs on behind it and lies there BehindLineMs
         /// before the restart is given (believable-match R5): given on the tick it crossed, the
         /// ball was already on the goal-kick spot in the frame that should show it going wide. While
-        /// it lies there the dead ball reads as a Miss with nobody to take it.
+        /// it lies there the dead ball reads as a Miss with nobody to take it. It stays on the side
+        /// of the goal it crossed at <paramref name="crossY"/>: one wide of a post running across
+        /// went on through the side netting and lay behind the line inside the posts, a ball in
+        /// the net.
         /// </summary>
-        public void RestartFromBehind(int tick, BallActionKind kind, int side, int x, int y, int lineX)
+        public void RestartFromBehind(int tick, BallActionKind kind, int side, int x, int y, int lineX, int crossY)
         {
             MatchBalance cfg = _ctx.Cfg;
             _ctx.ShotLive = false;
             _offside.ClearFlags();
+            int outside = U.Units(MovementGeometry.GoalHalfWidthDm + PostClearanceDm);
+            bool low = crossY < U.CenterYU;
             _ctx.Ball.RunBehind(lineX, U.Units(cfg.WideRestDepthDm), U.Units(cfg.RunOffDepthDm),
-                0, U.WidthU, U.PerTick(cfg.BehindLineCreepDmPerSecond, cfg));
+                low ? 0 : U.CenterYU + outside, low ? U.CenterYU - outside : U.WidthU,
+                U.PerTick(cfg.BehindLineCreepDmPerSecond, cfg));
             _ctx.Receiver[0] = -1;
             _ctx.Receiver[1] = -1;
 
@@ -108,7 +114,8 @@ namespace Sim.Core.Match.Movement
             if (!_ctx.Ball.Dead || _ctx.DeadKind != BallActionKind.Miss || tick < _ctx.DeadAt) return;
 
             Restart(tick, _behindKind, _behindSide, _behindX, _behindY);
-            _ctx.DeadAt = _behindTakeAt > tick ? _behindTakeAt : tick;
+            int arrival = tick + _ctx.Ball.TransportTicks;
+            _ctx.DeadAt = _behindTakeAt > arrival ? _behindTakeAt : arrival;
         }
 
         public void GoalKick(int tick, int defending)
@@ -128,7 +135,8 @@ namespace Sim.Core.Match.Movement
             // So the ball goes down a stride inside the line instead: the same spot to the eye,
             // and it keeps "a held ball is never sitting on a line of the pitch" a real invariant
             // instead of a check that fires every time the referee gets a restart right.
-            _ctx.Ball.Place(
+            // Never placed in the picture (R5): rolled there, and taken once it has arrived.
+            _ctx.Ball.SendTo(
                 MovementGeometry.Clamp(x, _ctx.InsetU, U.LengthU - _ctx.InsetU),
                 _ctx.Inside(y));
             _ctx.Ball.Dead = true;
@@ -144,7 +152,7 @@ namespace Sim.Core.Match.Movement
                 : kind == BallActionKind.Penalty
                     ? _ctx.BestStriker(side)
                     : _ctx.NearestTo(side, _ctx.Ball.X, _ctx.Ball.Y, includeKeeper: false);
-            _ctx.DeadAt = tick + _ctx.Cfg.DeadBallTicks;
+            _ctx.DeadAt = tick + DeadBallOrTransportTicks(_ctx);
 
             // And the wall, decided here and once (Law 13): the three men nearest the ball at the
             // whistle, when the kick is inside range of the goal they are defending.
@@ -155,6 +163,13 @@ namespace Sim.Core.Match.Movement
             _wall.FormWall(walled ? defending : -1);
 
             _ctx.Sheet.Record(tick, kind, side == 0, _ctx.DeadTaker, -1);
+        }
+
+        /// <summary>The referee's pause, or longer while the ball is still rolling to its spot.</summary>
+        public static int DeadBallOrTransportTicks(MatchContext ctx)
+        {
+            int transport = ctx.Ball.TransportTicks;
+            return transport > ctx.Cfg.DeadBallTicks ? transport : ctx.Cfg.DeadBallTicks;
         }
     }
 }

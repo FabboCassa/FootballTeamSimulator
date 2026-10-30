@@ -121,6 +121,32 @@ namespace Sim.Core.Tests.Match
         }
 
         [Test]
+        public void Restart_NeverTaken_IsRead_OnlyWithItsBallLyingStill()
+        {
+            // Out at 3 m a frame on frame 70, the final whistle before the throw-in is taken: the
+            // ball is still on its way on the last frame, so there is no spot to read.
+            PositionStream s = Stream();
+            for (int t = 0; t <= 70; t++) Ball(s, t, 600, System.Math.Min(230, 20 + 30 * (70 - t)));
+            for (int t = 71; t <= 79; t++) Ball(s, t, 600, 20 - 10 * (t - 70));
+            Act(s, 70, BallActionKind.ThrowIn, true, Striker);
+
+            BallContinuityMetrics full = Measure(s);
+
+            Assert.That(full.Restarts, Is.EqualTo(0));
+            Assert.That(full.PlacedRestarts, Is.EqualTo(0));
+
+            // Nor when the half-time whistle beats it.
+            Act(s, 75, BallActionKind.HalfTime, true, -1);
+            Assert.That(Measure(s).Restarts, Is.EqualTo(0));
+
+            // Put down on the spot at the whistle and lying there, it is read, and placed.
+            Rest(s, 70, 79, 600, 8);
+            BallContinuityMetrics placed = Measure(s);
+            Assert.That(placed.Restarts, Is.EqualTo(1));
+            Assert.That(placed.PlacedRestarts, Is.EqualTo(1));
+        }
+
+        [Test]
         public void KickoffOnTheFirstFrame_IsNotARestartToTransport()
         {
             PositionStream s = Stream();

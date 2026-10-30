@@ -232,7 +232,10 @@ namespace Sim.Core.Tests.Match
         public void HomeAdvantage_IsPlayedOut()
         {
             // Sixty matches flipped with every tuning change; the edge is a few points, so it needs hundreds.
-            const int Matches = 600;
+            // Six hundred were not enough either: the margin of wins over losses is about 50 in 600 with a
+            // spread of about 21, and the R5 ball of issue #147 drew 227-224 on the first 600 seeds while the
+            // next 2,400 read 1,033-783. Twelve hundred put the floor more than three spreads below the edge.
+            const int Matches = 1200;
             var margin = new int[Matches];
 
             Parallel.For(0, Matches, i =>

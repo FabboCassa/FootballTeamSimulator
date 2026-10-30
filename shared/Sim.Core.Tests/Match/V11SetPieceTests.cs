@@ -90,6 +90,17 @@ namespace Sim.Core.Tests.Match
             return streak;
         }
 
+        /// <summary>
+        /// R5: the ball is carried to its spot, not put there on the restart's frame — so the spot is
+        /// the last frame before the kick that nobody holds it.
+        /// </summary>
+        private static int Spot(PositionStream s, int awarded, int kicked)
+        {
+            int spot = Math.Max(awarded, kicked - 1);
+            while (spot > awarded && s.Owner[spot] != PositionStream.NoOwner) spot--;
+            return spot;
+        }
+
         private static int TakerToBall(PositionStream s, bool home, int slot, int frame)
         {
             Xy(s, home, slot, frame, out int x, out int y);
@@ -118,7 +129,7 @@ namespace Sim.Core.Tests.Match
                     int next = NextKick(a, i);
                     if (next < 0) continue;
 
-                    int spot = a[i].Tick;
+                    int spot = Spot(s, a[i].Tick, a[next].Tick);
                     int bx = s.BallXY[spot * 2], by = s.BallXY[spot * 2 + 1];
                     int goalX = a[i].Home ? Pitch.LengthDm : 0;
                     int range = Dist(bx, by, goalX, Pitch.CenterY);
@@ -164,7 +175,7 @@ namespace Sim.Core.Tests.Match
                     if (a[i].Kind != BallActionKind.FreeKick) continue;
                     int next = NextKick(a, i);
                     if (next < 0) continue;
-                    int spot = a[i].Tick;
+                    int spot = Spot(s, a[i].Tick, a[next].Tick);
                     int goalX = a[i].Home ? Pitch.LengthDm : 0;
                     if (Dist(s.BallXY[spot * 2], s.BallXY[spot * 2 + 1], goalX, Pitch.CenterY) >= cfg.SetPieceRangeDm) continue;
 

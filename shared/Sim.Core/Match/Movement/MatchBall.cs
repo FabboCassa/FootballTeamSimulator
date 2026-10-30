@@ -87,6 +87,7 @@ namespace Sim.Core.Match.Movement
 
             _maxFlightTicks = cfg.MaxFlightTicks;
             InitHeight(cfg.TicksPerSecond);
+            InitTransport(cfg);
             _trackedTicks = cfg.BallTrackedSeconds * cfg.TicksPerSecond;
             if (_trackedTicks < _maxFlightTicks) _trackedTicks = _maxFlightTicks;
 

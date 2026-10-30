@@ -1,3 +1,5 @@
+using System.Linq;
+using System.Threading.Tasks;
 using NUnit.Framework;
 using Sim.Core.Config;
 using Sim.Core.Domain;
@@ -24,7 +26,7 @@ namespace Sim.Core.Tests.Match
     {
         private const ulong FirstSeed = 3400;
         private const int Matches = 4;
-        private const int OpenGoalMatches = 12;
+        private const int OpenGoalMatches = 48;
         private const ulong BandSeed = 30_000;   // the realism harness's first seed
 
         private static League _league = null!;
@@ -137,14 +139,16 @@ namespace Sim.Core.Tests.Match
             // Before the lane needed the mouth in view and nobody a stride from it, the trigger
             // fired 89-353 times a match and every one of them was a forced shot.
             // Since R10 (issue #81) the keeper has to be beaten or out of position too, and the
-            // harness reads about 0.5 a match (it was about 6): so twelve of the harness's own
-            // seeds rather than four from FirstSeed (whose first twelve matches have none), and a
-            // floor of 0.1 (two in twelve) — still zero only if the trigger never fires.
-            int chances = 0;
-            for (ulong seed = BandSeed; seed < BandSeed + OpenGoalMatches; seed++)
-                chances += RealismAnalyzer.Analyze(Play(Config(), seed))!.OpenGoalChances;
+            // harness reads about 0.5 a match (it was about 6): so the harness's own seeds rather
+            // than four from FirstSeed (whose first twelve matches have none), and a floor of 0.1
+            // a match — still zero only if the trigger never fires. Forty-eight of them, not twelve:
+            // at 0.3-0.4 a match, twelve held one chance or none in about one stream in ten (the
+            // R5 ball of issue #147 drew one, then 40 in the next 84).
+            var chances = new int[OpenGoalMatches];
+            Parallel.For(0, OpenGoalMatches, i =>
+                chances[i] = RealismAnalyzer.Analyze(Play(Config(), BandSeed + (ulong)i))!.OpenGoalChances);
 
-            double perMatch = (double)chances / OpenGoalMatches;
+            double perMatch = (double)chances.Sum() / OpenGoalMatches;
             TestContext.Out.WriteLine($"[V11 open goals] {perMatch:F2} a match");
             Assert.That(perMatch, Is.InRange(0.1, 12.0));
         }
