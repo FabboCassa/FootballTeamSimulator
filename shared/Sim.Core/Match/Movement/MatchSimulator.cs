@@ -276,7 +276,10 @@ namespace Sim.Core.Match.Movement
 
             for (int side = 0; side < SideCount; side++)
                 for (int slot = 0; slot < _n; slot++)
-                    _brain.Move(tick, side, slot);
+                {
+                    if (MovementSink != null && MovementSink.Watches(side, slot)) MoveTraced(tick, side, slot);
+                    else _brain.Move(tick, side, slot);
+                }
 
             _ball.Advance();
             ResolveControl(tick);
@@ -1225,6 +1228,7 @@ namespace Sim.Core.Match.Movement
         {
             int dx = tx - _px[k], dy = ty - _py[k];
             int gap = U.Length(dx, dy);
+            if (k == _traced) TraceTarget(k, tx, ty);
             int step = hurry || gap > _approachU ? _maxSpeed[k] : _cruise[k];
             if (step < 1) step = 1;
 
@@ -1265,7 +1269,9 @@ namespace Sim.Core.Match.Movement
             int wx, wy;
             top = _steering.Desired(tx - _px[k], ty - _py[k], top, sprint, out wx, out wy);
 
+            int wantX = wx, wantY = wy;
             Separate(k, ref wx, ref wy, top);
+            if (k == _traced) TraceSteer(k, tx, ty, sprint, wantX, wantY, wx, wy);
 
             PlayerSteering.Accelerate(ref _vx[k], ref _vy[k], wx, wy, _accel[k], top);
 
