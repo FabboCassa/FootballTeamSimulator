@@ -15,7 +15,8 @@ namespace Sim.Core.Tests.Match
     /// docs/research/football-reference.md. The R1 movement bands of docs/specs/believable-match.md
     /// must equal the doc's §9 table, which tools/movement_reference.py prints; the R1 tracking bands
     /// of docs/specs/free-ball-real-movement.md must equal the doc's §10 table, which
-    /// tools/tracking_reference.py prints.
+    /// tools/tracking_reference.py prints, and its R1 event bands the doc's §11 table, which
+    /// tools/event_reference.py prints.
     /// </summary>
     [TestFixture]
     public class RealismReferenceTests
@@ -164,6 +165,20 @@ namespace Sim.Core.Tests.Match
 
             Assert.That(declared.Select(b => b.Name), Is.Unique);
             Assert.That(RealismReference.Tracking.All, Is.EquivalentTo(declared));
+        }
+
+        // Reference v2 (docs/specs/free-ball-real-movement.md R1): tools/event_reference.py prints doc §11.5.
+        [Test]
+        public void EventBands_MatchDocTable() =>
+            AssertBandsMatchDoc(typeof(RealismReference.Events), "## 11. Event reference v2");
+
+        [Test]
+        public void EventsAll_ListsEveryEventBandField_AndNothingElse()
+        {
+            RealismBand[] declared = Declared(typeof(RealismReference.Events));
+
+            Assert.That(declared.Select(b => b.Name), Is.Unique);
+            Assert.That(RealismReference.Events.All, Is.EquivalentTo(declared));
         }
     }
 }
