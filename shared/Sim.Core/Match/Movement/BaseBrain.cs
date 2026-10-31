@@ -58,6 +58,8 @@ namespace Sim.Core.Match.Movement
             private readonly int[] _supportX = new int[SideCount];
             private readonly int[] _supportY = new int[SideCount];
             private readonly int[] _supporters = new int[SideCount * MaxSupporters];
+            private readonly int[] _supportersWere = new int[MaxSupporters];
+            private readonly int[] _cover = new int[SideCount];
 
             // The simulator's, for the life of the simulator.
             private readonly MatchSimulator _sim;
@@ -118,6 +120,8 @@ namespace Sim.Core.Match.Movement
                 {
                     for (int i = 0; i < _n; i++) _mark[side * _n + i] = -1;
                     _chaser[side] = -1;
+                    _cover[side] = -1;
+                    _supportX[side] = 0;
                     for (int s = 0; s < MaxSupporters; s++) _supporters[side * MaxSupporters + s] = -1;
                 }
 

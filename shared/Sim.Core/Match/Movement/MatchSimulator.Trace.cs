@@ -53,6 +53,11 @@ namespace Sim.Core.Match.Movement
             if (k == _traced) _trace.Job = job;
         }
 
+        private void TraceReread(int k)
+        {
+            if (k == _traced) _trace.Reread = true;
+        }
+
         private void TraceSpot(int k, int rawSpotXDm, int spotXDm, int spotYDm)
         {
             if (k != _traced) return;

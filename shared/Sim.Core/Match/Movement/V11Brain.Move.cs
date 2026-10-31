@@ -25,7 +25,9 @@ namespace Sim.Core.Match.Movement
             /// supporter keeps its supporting run unless he is a forward with a run in behind on, and a
             /// pass meant for somebody else is chased only within reach of his place. Everybody else
             /// goes to his phase target spot — held onside when his side has the ball — or, for a
-            /// full-back whose side asks for it, on the overlap.
+            /// full-back whose side asks for it, on the overlap; without the ball, to his role job
+            /// (free-ball spec R7: step, tuck, screen). His place is read off the ball as he last saw
+            /// it (staggered re-reads), and a run bends round an opponent in its way.
             /// </summary>
             public void Move(int tick, int side, int slot)
             {
@@ -56,8 +58,9 @@ namespace Sim.Core.Match.Movement
                 TeamPhase phase = _phases.PhaseOf(side);
                 bool inPossession = _phases.InPossession(side);
 
+                ReRead(tick, side, k);
                 _positioning.PhaseSpot(man, home, phase, _expansion[side], instructions,
-                    U.Dm(ball.X), U.Dm(ball.Y), out int sx, out int sy);
+                    U.Dm(_seenBallX[k]), U.Dm(_seenBallY[k]), out int sx, out int sy);
                 if (man.Role != Domain.PositionRole.Goalkeeper)
                     sx = Pitch.ClampX(sx + MovementGeometry.Direction(home) * _sim._tactics[side].ShoutLinePushDm);
                 int rawSx = sx;
@@ -115,7 +118,8 @@ namespace Sim.Core.Match.Movement
                 {
                     // He offers the angle the base brain found, on a leash from his own spot: a supporting
                     // run across the whole pitch leaves his place in the shape empty.
-                    _base.SupportSpot(side, out tx, out ty);
+                    tx = _seenSupportX[k];
+                    ty = _seenSupportY[k];
                     Leash(spotX, spotY, U.Units(_sim._cfg.V11SupportLeashDm), ref tx, ref ty);
                     sprint = U.DistanceSq(_sim._px[k], _sim._py[k], tx, ty) > (long)_sim._approachU * _sim._approachU;
                 }
@@ -127,6 +131,12 @@ namespace Sim.Core.Match.Movement
                     _overlaps[side]++;
                     _sim.TraceJob(k, MovementJob.Overlap);
                 }
+                else if (!inPossession && RoleJob(side, man, k, spotX, spotY, out int jx, out int jy, out sprint, out MovementJob role))
+                {
+                    tx = jx;
+                    ty = jy;
+                    _sim.TraceJob(k, role);
+                }
 
                 // Far from where he is going he runs, whichever side has the ball: a shape that
                 // re-forms at a jog is a shape with holes in it for a dozen seconds.
@@ -136,7 +146,10 @@ namespace Sim.Core.Match.Movement
                 if (!sprint && U.DistanceSq(_sim._px[k], _sim._py[k], tx, ty) > catchUp * catchUp)
                     sprint = true;
 
-                _sim.Steer(k, tx, ty, sprint);
+                // R7: a run bends round an opponent in its way; a man jogging into his place does not.
+                int viaX = -1, viaY = -1;
+                if (sprint) CurveVia(side, k, tx, ty, out viaX, out viaY);
+                _sim.SteerVia(k, tx, ty, sprint, viaX, viaY);
                 CountOffTarget(k, spotX, spotY);
             }
 

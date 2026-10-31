@@ -1254,7 +1254,14 @@ namespace Sim.Core.Match.Movement
             _stepToY[k] = _py[k];
         }
 
-        private void Steer(int k, int tx, int ty, bool sprint)
+        private void Steer(int k, int tx, int ty, bool sprint) => SteerVia(k, tx, ty, sprint, -1, -1);
+
+        /// <summary>
+        /// The legs, toward (<paramref name="tx"/>, <paramref name="ty"/>). With a waypoint
+        /// (<paramref name="viaX"/> at least 0) the pace is still read off the target but the run
+        /// heads for the waypoint: a run bent round an opponent (<see cref="RunCurve"/>).
+        /// </summary>
+        private void SteerVia(int k, int tx, int ty, bool sprint, int viaX, int viaY)
         {
             // Flat out only when the ball is the reason; otherwise a jog. A match where every
             // man ran at eight metres a second for ninety minutes would cover forty kilometres.
@@ -1271,12 +1278,17 @@ namespace Sim.Core.Match.Movement
 
             int wx, wy;
             top = _steering.Desired(tx - _px[k], ty - _py[k], top, sprint, out wx, out wy);
+            if (viaX >= 0) U.Scaled(viaX - _px[k], viaY - _py[k], U.Length(wx, wy), out wx, out wy);
 
             int wantX = wx, wantY = wy;
             Separate(k, ref wx, ref wy, top);
             if (k == _traced) TraceSteer(k, tx, ty, sprint, wantX, wantY, wx, wy);
 
-            PlayerSteering.Accelerate(ref _vx[k], ref _vy[k], wx, wy, _accel[k], top);
+            // The man on the ball is held to the carrier's pace at once, the ball being at his feet,
+            // and a keeper to his line and his dive (R6); every other man brakes within a limit.
+            bool onBall = !_ball.Free && _ball.OwnerSide * _n + _ball.OwnerSlot == k;
+            PlayerSteering.Accelerate(ref _vx[k], ref _vy[k], wx, wy, _accel[k], top,
+                onBall || _keeper[k] ? int.MaxValue : _steering.Brake);
 
             // The step, before the pitch is allowed to have an opinion about it. A man who runs
             // over a line is put back on it; the ball he is holding is NOT, and the referee reads

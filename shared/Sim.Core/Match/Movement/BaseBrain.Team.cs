@@ -67,7 +67,15 @@ namespace Sim.Core.Match.Movement
                 int wanted = _tactics[side].Supporters;
                 if (wanted > MaxSupporters) wanted = MaxSupporters;
 
-                for (int s = 0; s < MaxSupporters; s++) _supporters[side * MaxSupporters + s] = -1;
+                // Re-dealt with the men already on the run preferred (free-ball spec R7): dealt from
+                // scratch, every pass swapped the supporters and sent the old ones 20 m back to
+                // their spots (oscillation trace section 1).
+                int[] was = _supportersWere;
+                for (int s = 0; s < MaxSupporters; s++)
+                {
+                    was[s] = _supporters[side * MaxSupporters + s];
+                    _supporters[side * MaxSupporters + s] = -1;
+                }
 
                 // The most advanced men who are neither on the ball nor chasing it go and support.
                 for (int s = 0; s < wanted; s++)
@@ -81,6 +89,7 @@ namespace Sim.Core.Match.Movement
 
                         int distance = U.Distance(_px[k], _py[k], _supportX[side], _supportY[side]);
                         int score = _forward[k] * 4 - distance / U.Scale;
+                        if (System.Array.IndexOf(was, i) >= 0) score += _cfg.SupportIncumbentBonus;
                         if (score > bestScore)
                         {
                             bestScore = score;
@@ -109,7 +118,6 @@ namespace Sim.Core.Match.Movement
                 int fromX = home ? U.CenterXU : U.Units(60);
                 int spanX = home ? U.LengthU - U.Units(60) - fromX : U.CenterXU - fromX;
 
-                int carrierX = _ball.X, carrierY = _ball.Y;
                 int bestX = U.CenterXU + dir * U.Units(200), bestY = U.CenterYU, bestScore = int.MinValue;
 
                 for (int c = 0; c < columns; c++)
@@ -118,17 +126,7 @@ namespace Sim.Core.Match.Movement
                     for (int r = 0; r < rows; r++)
                     {
                         int y = U.Units(80) + (U.WidthU - U.Units(160)) * r / (rows - 1);
-
-                        int score = 0;
-                        if (PassSafe(side, carrierX, carrierY, x, y, _maxPassForce)) score += 200;
-                        if (U.Distance(x, y, goalX, U.CenterYU) < _shootRangeU
-                            && PassSafe(side, x, y, goalX, U.CenterYU, _maxShootForce)) score += 150;
-
-                        int gap = U.Distance(x, y, carrierX, carrierY);
-                        int ideal = U.Units(_cfg.SupportIdealDistanceDm);
-                        int off = gap > ideal ? gap - ideal : ideal - gap;
-                        score += 120 - off / U.Scale;
-
+                        int score = SupportScore(side, goalX, x, y);
                         if (score > bestScore)
                         {
                             bestScore = score;
@@ -138,8 +136,28 @@ namespace Sim.Core.Match.Movement
                     }
                 }
 
+                // The run already on keeps its spot unless the new one is clearly better (free-ball
+                // spec R7): an argmax re-run every second moved every supporter's target 20 m.
+                if (_supportX[side] != 0
+                    && SupportScore(side, goalX, _supportX[side], _supportY[side]) + _cfg.SupportSpotSwitchMargin >= bestScore)
+                    return;
+
                 _supportX[side] = bestX;
                 _supportY[side] = bestY;
+            }
+
+            /// <summary>Whether the man on the ball could find the spot, a goal could be struck from it, and it is a comfortable distance away.</summary>
+            private int SupportScore(int side, int goalX, int x, int y)
+            {
+                int score = 0;
+                if (PassSafe(side, _ball.X, _ball.Y, x, y, _maxPassForce)) score += 200;
+                if (U.Distance(x, y, goalX, U.CenterYU) < _shootRangeU
+                    && PassSafe(side, x, y, goalX, U.CenterYU, _maxShootForce)) score += 150;
+
+                int gap = U.Distance(x, y, _ball.X, _ball.Y);
+                int ideal = U.Units(_cfg.SupportIdealDistanceDm);
+                int off = gap > ideal ? gap - ideal : ideal - gap;
+                return score + 120 - off / U.Scale;
             }
 
             /// <summary>
@@ -213,17 +231,29 @@ namespace Sim.Core.Match.Movement
 
                 // And one man covers the space behind whoever goes to the ball.
                 CoverSpot(side, out int cx, out int cy);
-                int cover = -1;
-                long coverRange = (long)U.Units(_cfg.CoverMaxRangeDm) * U.Units(_cfg.CoverMaxRangeDm);
+                int cover = -1, kept = -1;
+                long maxRange = (long)U.Units(_cfg.CoverMaxRangeDm) * U.Units(_cfg.CoverMaxRangeDm);
+                long coverRange = maxRange;
                 for (int i = 0; i < _n; i++)
                 {
                     int k = side * _n + i;
                     if (_keeper[k] || _sentOff[k] || _duty[k] != DutyZone || _chaser[side] == i) continue;
                     if (_lineRank[k] == 0) continue;   // a centre-back covering is a centre-back out of the line
                     long d = U.DistanceSq(_px[k], _py[k], cx, cy);
+                    if (i == _cover[side] && d < maxRange) kept = i;
                     if (d < coverRange) { coverRange = d; cover = i; }
                 }
 
+                // The man already covering keeps it unless a team-mate is clearly nearer (R7).
+                if (kept >= 0 && kept != cover)
+                {
+                    int k = side * _n + kept, c = side * _n + cover;
+                    if (U.Distance(_px[k], _py[k], cx, cy)
+                        <= U.Distance(_px[c], _py[c], cx, cy) + U.Units(_cfg.CoverSwitchMarginDm))
+                        cover = kept;
+                }
+
+                _cover[side] = cover;
                 if (cover >= 0) _duty[side * _n + cover] = DutyCover;
             }
 
