@@ -102,6 +102,9 @@ namespace Fts.MatchView
         /// <summary>The ball between frames, on the ground and in the air (spec free-ball-real-movement R9).</summary>
         private readonly BallPath _ballPath;
 
+        /// <summary>The dev overlay's check on the drawn ball; read only while <see cref="LogBallJumps"/> is on.</summary>
+        private readonly BallJumpDetector _jumps = new BallJumpDetector();
+
         /// <summary>The stream position a shared clock shows now; null when the renderer keeps its own time.</summary>
         private Func<double> _sharedClock;
 
@@ -258,6 +261,13 @@ namespace Fts.MatchView
         public void FollowClock(Func<double> framePosition) => _sharedClock = framePosition;
 
         /// <summary>
+        /// Dev overlay (spec free-ball-real-movement R9): logs every drawn ball that moved more than
+        /// <see cref="BallJumpDetector.ThresholdDm"/> × speed since the frame drawn before, with its tick,
+        /// outside cut fades and the change of ends. Off unless a screen turns it on.
+        /// </summary>
+        public bool LogBallJumps { get; set; }
+
+        /// <summary>
         /// Writes every cut summary out once, as the caption its cut fades with; without it a cut
         /// still fades, uncaptioned. The renderer names no club, so the screen supplies the words.
         /// </summary>
@@ -310,6 +320,7 @@ namespace Fts.MatchView
             _lastMinute = m;
             _finished = false;
             _shownFrom = Mathf.FloorToInt(_tickPos);
+            _jumps.Forget();
             HideCaption();
             ShowCurtain();
             RecountStats();
@@ -340,6 +351,7 @@ namespace Fts.MatchView
 
             _tickPos = _lastTick;
             _playback.Skip();
+            _jumps.Forget();
             _nextEvent = _moments.Length;
             _nextAction = _actions.Count;
             SetMinute(90);
@@ -418,6 +430,7 @@ namespace Fts.MatchView
         private void OnCutCrossed(CutTransition cut)
         {
             _shownFrom = cut.ToFrame;
+            _jumps.Forget(); // a pump that carried past the fade still jumped the cut
             if (_captions == null || !cut.Summary.HasValue || !_captions.TryGetValue(cut.FromFrame, out string text))
                 return;
 
@@ -710,7 +723,9 @@ namespace Fts.MatchView
             float f = Mathf.Clamp01(_tickPos - ta);
 
             BallLook look = BallLook.At(_ballPath.HeightAt(_tickPos));
-            Vector2 ground = BallGround(fit, ta, tb);
+            Vector2 ground = BallGround(fit, ta, tb, out float groundX, out float groundY);
+            if (LogBallJumps)
+                CheckBallJump(groundX, groundY, tb);
             Vector2 ball = new Vector2(ground.x, ground.y - look.LiftDm * scale);
 
             if (_shots.TryNetAt(_tickPos, out NetMoment net))
@@ -929,14 +944,36 @@ namespace Fts.MatchView
             p.Stroke();
         }
 
-        /// <summary>The ball's point on the grass now; never interpolated across the change of ends.</summary>
-        private Vector2 BallGround(Rect fit, int ta, int tb)
+        /// <summary>
+        /// The ball's point on the grass now, on screen and in stream decimetres (<paramref name="x"/>,
+        /// <paramref name="y"/>); never interpolated across the change of ends.
+        /// </summary>
+        private Vector2 BallGround(Rect fit, int ta, int tb, out float x, out float y)
         {
             if (SecondHalf(ta) != SecondHalf(tb))
-                return BallPixel(fit, tb);
+            {
+                x = _stream.BallXY[tb * 2];
+                y = _stream.BallXY[tb * 2 + 1];
+                return Pixel(fit, tb, x, y);
+            }
 
-            _ballPath.GroundAt(_tickPos, out float x, out float y);
+            _ballPath.GroundAt(_tickPos, out x, out y);
             return Pixel(fit, ta, x, y);
+        }
+
+        /// <summary>
+        /// Feeds the drawn ball to the dev overlay and logs a jump. The picture is on the ends of
+        /// <paramref name="tb"/> (<see cref="BallGround"/> draws it there across the interval). A shared
+        /// clock ignores speed, so its frame step and the bar are 1x.
+        /// </summary>
+        private void CheckBallJump(float x, float y, int tb)
+        {
+            int speed = _sharedClock != null ? 1 : _playback.Speed;
+            if (!_jumps.Observe(_tickPos, x, y, SecondHalf(tb), _curtainShown, speed, out BallJump jump))
+                return;
+
+            Debug.Log($"[BallJump] tick {jump.Tick} ({jump.FromPosition:F2} -> {jump.ToPosition:F2}): "
+                + $"{jump.DistanceDm / 10f:F1} m at {speed}x, ({jump.FromX:F0},{jump.FromY:F0}) -> ({jump.ToX:F0},{jump.ToY:F0}) dm");
         }
 
         /// <summary>
