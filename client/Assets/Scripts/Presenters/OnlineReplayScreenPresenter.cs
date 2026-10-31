@@ -1,5 +1,6 @@
 using Cysharp.Threading.Tasks;
 using Fts.MatchView;
+using Fts.Services;
 using Fts.Services.Localization;
 using Fts.Services.Navigation;
 using Fts.Services.Online;
@@ -97,6 +98,7 @@ namespace Fts.Presenters
             UpdateScore();
 
             _renderer = new MatchRenderer(report, HomeColor, AwayColor);
+            _renderer.LogBallJumps = DevFlags.BallJumpLog;
             _renderer.SetCutCaptions(cut => CommentaryText.Caption(cut, _loc.Tr, home => (home ? _target.HomeName : _target.AwayName) ?? "?"));
             _renderer.MinuteChanged += OnMinuteChanged;
             _renderer.MomentReached += OnMomentReached;

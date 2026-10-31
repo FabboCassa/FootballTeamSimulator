@@ -45,7 +45,16 @@ namespace Sim.Core.Match.Movement
         RestartOffer = 14,
 
         /// <summary>The press closed down from the goal side.</summary>
-        PressGoalSide = 15
+        PressGoalSide = 15,
+
+        /// <summary>Out of possession (R7): the near-side full-back steps to the wide carrier.</summary>
+        Step = 16,
+
+        /// <summary>Out of possession (R7): the far-side full-back tucks in.</summary>
+        Tuck = 17,
+
+        /// <summary>Out of possession (R7): the holding midfielder screens the lane to the most advanced opponent.</summary>
+        Screen = 18
     }
 
     /// <summary>
@@ -74,6 +83,9 @@ namespace Sim.Core.Match.Movement
         public TeamPhase Phase;
         public bool InPossession;
         public int ExpansionPermille;
+
+        /// <summary>Whether he re-read the ball and the supporting run this tick (R7's staggered re-reads); his targets are read off what he last saw.</summary>
+        public bool Reread;
 
         /// <summary>His phase target spot, when his move reads it: X before the onside hold, then the spot after it.</summary>
         public int RawSpotXDm;

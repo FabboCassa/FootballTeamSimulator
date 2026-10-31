@@ -1404,8 +1404,13 @@ namespace Sim.Core.Config
         /// </summary>
         public int V11FoulPercent { get; set; } = 200;
 
-        /// <summary>A man further than this from where he is going sprints there, with or without the ball.</summary>
-        public int V11CatchUpSprintDm { get; set; } = 100;
+        /// <summary>
+        /// A man further than this from where he is going sprints there, with or without the ball.
+        /// 150 since issue #186 (was 100): with the jobs held (job hysteresis) and the legs braking
+        /// at a bounded rate, sprinting every 10 m correction put 11.8 km on a player; at 15 m he
+        /// jogs it, 10.8 km, and fewer frames above 5.5 m/s (R1 has 3%, the engine 10%).
+        /// </summary>
+        public int V11CatchUpSprintDm { get; set; } = 150;
 
         /// <summary>A supporting run or an overlap goes no further than this from the man's phase target spot.</summary>
         public int V11SupportLeashDm { get; set; } = 200;
@@ -1543,6 +1548,50 @@ namespace Sim.Core.Config
 
         /// <summary>The ball must be at least this far off the centre, on his flank, for a full-back to overlap.</summary>
         public int V11OverlapFlankMinDm { get; set; } = 60;
+
+        // --- V11 role jobs out of possession, curved runs, staggered re-reads (free-ball spec R7,
+        // issue #186; see V11RoleJobs, RunCurve, V11ReRead). Read only by the V11 brain. ---
+
+        /// <summary>
+        /// The near-side full-back steps out to an opponent on the ball on his flank, at least this
+        /// far off the centre (the wide channel), within <see cref="V11StepReachDm"/> of his place,
+        /// and stands <see cref="V11StepStandOffDm"/> off him on the goal side.
+        /// </summary>
+        public int V11StepFlankMinDm { get; set; } = 200;
+        public int V11StepReachDm { get; set; } = 200;
+        public int V11StepStandOffDm { get; set; } = 25;
+
+        /// <summary>
+        /// With the ball at least <see cref="V11TuckBallOffDm"/> off the centre on the other flank,
+        /// the far-side full-back tucks this far in toward the centre-backs.
+        /// </summary>
+        public int V11TuckBallOffDm { get; set; } = 100;
+        public int V11TuckDm { get; set; } = 70;
+
+        /// <summary>
+        /// The holding midfielder stands on the passing lane from the ball to the most advanced
+        /// opponent, this far in front of him, when the lane is at least
+        /// <see cref="V11ScreenMinLaneDm"/> long; no further than <see cref="V11ScreenLeashDm"/>
+        /// from his place.
+        /// </summary>
+        public int V11ScreenFromForwardDm { get; set; } = 80;
+        public int V11ScreenMinLaneDm { get; set; } = 160;
+        public int V11ScreenLeashDm { get; set; } = 120;
+
+        /// <summary>
+        /// A run bends round an opponent within <see cref="V11CurveTriggerDm"/> of its straight
+        /// line, passing him at <see cref="V11CurveClearanceDm"/>.
+        /// </summary>
+        public int V11CurveTriggerDm { get; set; } = 20;
+        public int V11CurveClearanceDm { get; set; } = 30;
+
+        /// <summary>
+        /// Each outfielder re-reads the ball and the supporting run on his own clock: every
+        /// <see cref="V11ReReadSlowMs"/> at Positioning 1 down to every <see cref="V11ReReadFastMs"/>
+        /// at 100, his phase staggered by his slot so the eleven do not all retarget on one tick.
+        /// </summary>
+        public int V11ReReadFastMs { get; set; } = 200;
+        public int V11ReReadSlowMs { get; set; } = 500;
 
         // --- V11 action selection (R3-R5). Read only by the V11 brain. Every option is priced in
         // ten-thousandths of a goal: xT for moving the ball, xG for the shot (ActionModels). ---
@@ -1968,6 +2017,13 @@ namespace Sim.Core.Config
         public int PlayerAccelDmPerSecond2 { get; set; } = 50;
 
         /// <summary>
+        /// The hardest a man off the ball brakes, in decimetres per second per second: a new target
+        /// close by eases the pace he WANTS, and his legs slow to it at this rate instead of
+        /// stopping dead in one tick (free-ball spec R7, oscillation trace §1).
+        /// </summary>
+        public int PlayerBrakeDmPerSecond2 { get; set; } = 70;
+
+        /// <summary>
         /// Inside this distance from his position a player scales his pace down with the
         /// distance left, in decimetres: a walk for a few metres, a jog for twenty. Only
         /// repositioning is paced this way — a man going for the ball goes at it.
@@ -2208,6 +2264,19 @@ namespace Sim.Core.Config
 
         /// <summary>How far from the ball a supporting run wants to be.</summary>
         public int SupportIdealDistanceDm { get; set; } = 260;
+
+        /// <summary>
+        /// Job hysteresis (free-ball spec R7, oscillation trace §1): a job is re-dealt with the
+        /// incumbent preferred. A supporter's score gets this bonus (the score is Anchor X x4 minus
+        /// metres, so 450 is a line of the shape); a new support spot must out-score the old one by
+        /// this margin; the covering man keeps the cover unless a team-mate is this much nearer its
+        /// spot. The chaser stays the nearest man every tick: a 2 m incumbent margin (#186, 200
+        /// matches) left the reversals where they were (1.19 against 1.18 a player-minute) and put
+        /// 2 shots a match and 0.9 s of off-target time on the realism harness.
+        /// </summary>
+        public int SupportIncumbentBonus { get; set; } = 450;
+        public int SupportSpotSwitchMargin { get; set; } = 60;
+        public int CoverSwitchMarginDm { get; set; } = 50;
 
         // --- The block (engine phase 2) ---
         //

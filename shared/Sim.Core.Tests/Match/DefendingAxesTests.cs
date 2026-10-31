@@ -28,7 +28,9 @@ namespace Sim.Core.Tests.Match
     [TestFixture]
     public class DefendingAxesTests
     {
-        private const int Seeds = 64;
+        // 128 since #186 (was 64): with engine R7's movement the hold-shape gap read 1.47 at 64 seeds
+        // against its 1.5 minimum, 1.98 at 128 and 2.20 at 256 - the dice, not the lever.
+        private const int Seeds = 128;
 
         // The line's offside shift, measured over 256 seeds (#178): +1.04 a match, and +0.71 over
         // the first 64, so 64 were a coin toss on its 0.8 margin.
