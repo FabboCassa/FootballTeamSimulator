@@ -148,6 +148,13 @@ namespace Sim.Core.Match
         public IDecisionSink? DecisionSink { get; set; }
 
         /// <summary>
+        /// Hears every touch, deflection and landing of the ball of a played match, for the cause
+        /// trace of free-ball turns (free-ball-real-movement spec R2). Null in production; attached,
+        /// it moves no bit of the result.
+        /// </summary>
+        public IBallEventSink? BallEventSink { get; set; }
+
+        /// <summary>
         /// Hears, tick by tick, how the men it watches are moved: the dev trace of free-ball spec R7.
         /// Null in production; attached, it moves no bit of the result.
         /// </summary>
@@ -216,6 +223,7 @@ namespace Sim.Core.Match
                 report.Positions = new MatchSimulator(_cfg, _condition, _applyCondition, _applyMatchFatigue)
                     {
                         DecisionSink = DecisionSink,
+                        BallEventSink = BallEventSink,
                         MovementSink = MovementSink
                     }
                     .Generate(feed, report, rng);

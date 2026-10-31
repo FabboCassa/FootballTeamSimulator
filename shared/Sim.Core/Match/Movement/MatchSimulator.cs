@@ -263,6 +263,8 @@ namespace Sim.Core.Match.Movement
 
         private void Tick(int tick)
         {
+            _ball.EventTick = tick;
+
             // The minute boundary: the legs get a little heavier, and whatever the bench has
             // decided by now comes on. Both are read off the LIVE score, which since phase 6 is
             // the score the pitch has produced.
@@ -437,6 +439,7 @@ namespace Sim.Core.Match.Movement
             // Speeds come off the config in decimetres per SECOND and are turned into units per
             // tick here — the one place the time base and the length unit meet (engine phase 1).
             _ball = new MatchBall(_cfg);
+            _ball.EventSink = BallEventSink;
             _maxPassForce = U.PerTick(_cfg.MaxPassSpeedDmPerSecond, _cfg);
             _maxClearForce = U.PerTick(_cfg.MaxClearSpeedDmPerSecond, _cfg);
             _gatherU = U.Units(_cfg.GatherFromDm);
@@ -1779,6 +1782,7 @@ namespace Sim.Core.Match.Movement
         /// </summary>
         private void Deflect(int tick, int side, int slot, int inVx, int inVy, bool charged = false)
         {
+            _ball.Heard(BallEventKind.Deflection, side, slot);
             int speed = U.Length(inVx, inVy);
             int force = speed * _cfg.DeflectForcePercent / 100;
             if (force < _maxPassForce / 20) force = _maxPassForce / 20;
