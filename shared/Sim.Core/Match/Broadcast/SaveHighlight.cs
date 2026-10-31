@@ -137,6 +137,15 @@ namespace Sim.Core.Match.Broadcast
             if (length == 0)
                 return false;
 
+            // An impact a decimetre or two off him: the whole-decimetre root of so short a vector is
+            // off by a fifth, and so would the stretch be. Scaled up, the direction is exact enough.
+            if (length < reachDm)
+            {
+                dx *= reachDm;
+                dy *= reachDm;
+                length = MovementGeometry.Distance(dx, dy, 0, 0);
+            }
+
             x = keeperX + (int)((long)dx * reachDm / length);
             y = keeperY + (int)((long)dy * reachDm / length);
             return true;

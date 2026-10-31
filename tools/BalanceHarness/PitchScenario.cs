@@ -54,7 +54,7 @@ internal static class PitchScenario
         var totals = new PitchTotals();
         var perf = new PerfTotals();
         var strikerOscillation = new PitchStrikerOscillation();
-        var turnsCrosses = new PitchTurnsCrosses(cfg.Match.StreamTicksPerFrame);
+        var turnsCrosses = new PitchTurnsCrosses(cfg.Match);
         PitchTrace? trace = opt.PitchTrace == null
             ? null
             : new PitchTrace(opt.PitchTrace, opt.PitchTraceMatches, cfg.Match.TicksPerSecond);

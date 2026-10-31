@@ -191,10 +191,13 @@ namespace Sim.Core.Match.Movement
                 x = U.Units(xDm);
                 y = U.Units(yDm);
 
-                // In his own box and nearest to it, he comes and claims it.
+                // In his own box and nearest to it, he comes and claims it; and a ball played to him
+                // he goes to meet, since it no longer comes to him from metres away (free-ball R3).
+                int keeper = _ctx.KeeperOf(side);
                 if (_ball.Free && !_ball.Dead
-                    && MovementGeometry.InOwnBox(home, U.Dm(_ball.X), U.Dm(_ball.Y))
-                    && _sim.NearestToBall(side, includeKeeper: true) == _ctx.KeeperOf(side))
+                    && (_receiver[side] == keeper
+                        || (MovementGeometry.InOwnBox(home, U.Dm(_ball.X), U.Dm(_ball.Y))
+                            && _sim.NearestToBall(side, includeKeeper: true) == keeper)))
                 {
                     x = _ball.X;
                     y = _ball.Y;
@@ -235,14 +238,21 @@ namespace Sim.Core.Match.Movement
             {
                 // Run to where the ball will be, not to where it is. The roll is stepped forward once
                 // rather than replayed from scratch for every horizon, which at 10 Hz matters.
+                // He has to get his feet within reach of it (free-ball spec R3), from the speed he is
+                // already running at toward it: assumed at full pace at once and in any direction, a
+                // man two metres off a pass set off for a point the ball had already passed. And only
+                // where it has come down to a header's height: under its flight it is out of reach.
                 int bx = _ball.X, by = _ball.Y, vx = _ball.Vx, vy = _ball.Vy;
                 int horizon = _cfg.InterceptLookaheadTicks;
 
                 for (int ahead = 1; ahead <= horizon; ahead++)
                 {
                     _ball.StepPrediction(ref bx, ref by, ref vx, ref vy);
-                    int reach = U.Distance(_px[k], _py[k], U.ClampX(bx), U.ClampY(by));
-                    if (reach <= (long)_maxSpeed[k] * ahead)
+                    int dx = U.ClampX(bx) - _px[k], dy = U.ClampY(by) - _py[k];
+                    int distance = U.Length(dx, dy);
+                    int toward = distance <= 0 ? 0 : (int)(((long)_sim._vx[k] * dx + (long)_sim._vy[k] * dy) / distance);
+                    if (!_keeper[k] && _ball.ZAfter(ahead) > _cfg.TouchHeightDm) continue;
+                    if (distance - _sim._controlU <= Covered(toward, _sim._accel[k], _maxSpeed[k], ahead))
                     {
                         x = U.ClampX(bx);
                         y = U.ClampY(by);
@@ -252,6 +262,16 @@ namespace Sim.Core.Match.Movement
 
                 x = U.ClampX(bx);
                 y = U.ClampY(by);
+            }
+
+            /// <summary>Ground a man covers in <paramref name="ticks"/> ticks from <paramref name="speed"/>, gaining <paramref name="accel"/> a tick up to <paramref name="top"/>.</summary>
+            private static long Covered(int speed, int accel, int top, int ticks)
+            {
+                if (speed < 0) speed = 0;
+                if (speed >= top || accel <= 0) return (long)(speed < top ? speed : top) * ticks;
+                long rising = (top - speed) / accel;
+                if (rising > ticks) rising = ticks;
+                return rising * speed + accel * rising * (rising + 1) / 2 + (ticks - rising) * top;
             }
         }
     }

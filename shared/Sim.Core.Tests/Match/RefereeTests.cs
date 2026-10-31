@@ -253,22 +253,27 @@ namespace Sim.Core.Tests.Match
         [Test]
         public void APoorTackler_GivesAwayMoreFreeKicks_ThanAGoodOne()
         {
-            var analyzer = new MatchAnalyzer();
             double goodFouls = 0, poorFouls = 0, goodCards = 0, poorCards = 0;
 
             // STATISTICALLY FRAGILE: cards are a couple a match, so ten fixed seeds were a coin toss
-            // on the card line (16 against 18 with the keeper's reaction, #149); twenty are not.
-            const int matches = 20;
+            // on the card line (16 against 18 with the keeper's reaction, #149). Twenty were one on
+            // the foul line (#178): the same seeds read 0.92, 1.06, 1.32 and 1.33 at 20, 40, 60 and
+            // 80 matches, settling at 1.37 over 120. Eighty are not.
+            const int matches = 80;
+            var metrics = new MatchMetrics[matches];
 
-            for (int i = 0; i < matches; i++)
+            Parallel.For(0, matches, i =>
             {
                 Club good = Tacklers(_league.Clubs[(2 * i) % _league.Clubs.Count], 90);
                 Club poor = Tacklers(_league.Clubs[(2 * i + 1) % _league.Clubs.Count], 20);
 
-                MatchMetrics m = analyzer.Measure(new MatchEngine().Simulate(
+                metrics[i] = new MatchAnalyzer().Measure(new MatchEngine().Simulate(
                     LineupSelector.BestEleven(good), LineupSelector.BestEleven(poor),
                     new Pcg32(700UL + (ulong)i)))!;
+            });
 
+            foreach (MatchMetrics m in metrics)
+            {
                 goodFouls += m.Home.Fouls;
                 poorFouls += m.Away.Fouls;
                 goodCards += m.Home.YellowCards + m.Home.RedCards;

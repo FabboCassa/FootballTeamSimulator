@@ -22,6 +22,13 @@ namespace Sim.Core.Tests.Match
     [TestFixture]
     public class V11SetPieceTests
     {
+        /// <summary>
+        /// The frames a penalty taker may spend inside 2 m of the ball before he strikes it from
+        /// within a metre (free-ball spec R3, issue #178): his last step onto it. Measured: 1 frame
+        /// at most over the sample, and every run-up before it at least 2 frames from 2 m out.
+        /// </summary>
+        private const int LastStepsMaxFrames = 1;
+
         private static League _league = null!;
 
         [OneTimeSetUp]
@@ -45,7 +52,7 @@ namespace Sim.Core.Tests.Match
             MatchBalance cfg = V11();
             cfg.FoulInBoxPermille = 1000;
 
-            int penalties = 0, withRunUp = 0;
+            int penalties = 0, withRunUp = 0, lastStepsMax = 0;
             foreach (PositionStream s in PlayMany(cfg, 8, 35_000, null))
             {
                 List<BallAction> a = s.Actions;
@@ -59,25 +66,39 @@ namespace Sim.Core.Tests.Match
                     Assert.That(a[next].Kind, Is.EqualTo(BallActionKind.Shot), "a penalty is struck");
                     Assert.That(a[next].Slot, Is.EqualTo(a[i].Slot), "by the man who stepped up");
 
-                    if (RunUpFrames(s, a[i].Home, a[i].Slot, a[i].Tick, a[next].Tick) >= 2) withRunUp++;
+                    if (RunUpFrames(s, a[i].Home, a[i].Slot, a[i].Tick, a[next].Tick, out int lastSteps) >= 2) withRunUp++;
+                    lastStepsMax = Math.Max(lastStepsMax, lastSteps);
                 }
             }
 
-            TestContext.Out.WriteLine($"[v11-penalty] {withRunUp}/{penalties} penalties with a run-up of >= 2 frames");
+            TestContext.Out.WriteLine($"[v11-penalty] {withRunUp}/{penalties} penalties with a run-up of >= 2 frames, " +
+                                      $"at most {lastStepsMax} frames of last steps inside 2 m");
             Assert.That(penalties, Is.GreaterThanOrEqualTo(5), "the sample needs penalties in it");
             Assert.That(withRunUp, Is.EqualTo(penalties), "every penalty has a visible run-up");
+            Assert.That(lastStepsMax, Is.LessThanOrEqualTo(LastStepsMaxFrames),
+                "inside 2 m he only steps onto the ball: the run-up is what comes before");
         }
 
         /// <summary>
-        /// Frames, ending at the strike, in which the taker is at least two metres off the ball and
-        /// closer than he was a frame earlier. The strike's own frame is skipped when it already
-        /// shows the ball off the spot.
+        /// Frames, ending where his last steps onto the ball begin, in which the taker is at least two
+        /// metres off it and closer than he was a frame earlier. Since free-ball spec R3 he strikes it
+        /// from within a metre, so the steps inside two metres that end the run are passed over while
+        /// he keeps closing in. The strike's own frame is skipped when it already shows the ball off
+        /// the spot.
         /// </summary>
-        private static int RunUpFrames(PositionStream s, bool home, int slot, int awarded, int struck)
+        private static int RunUpFrames(PositionStream s, bool home, int slot, int awarded, int struck, out int lastSteps)
         {
             int streak = 0;
+            lastSteps = 0;
             int spotX = s.BallXY[awarded * 2], spotY = s.BallXY[awarded * 2 + 1];
             if (s.BallXY[struck * 2] != spotX || s.BallXY[struck * 2 + 1] != spotY) struck--;
+
+            while (struck > awarded + 1 && TakerToBall(s, home, slot, struck - 1) < 20
+                   && TakerToBall(s, home, slot, struck - 1) > TakerToBall(s, home, slot, struck))
+            {
+                struck--;
+                lastSteps++;
+            }
 
             for (int f = struck; f > awarded + 1; f--)
             {

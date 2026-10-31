@@ -533,7 +533,7 @@ namespace Sim.Core.Match.Movement
             bool longBall = distanceDm > _cfg.LongBallFromDm;
             int error = BallSkill.PassErrorPermille(s.Passing, s.Technique, s.PressurePermille, longBall, _cfg);
             int miss = (int)((long)distanceDm * error / 1000 * 375 / 1000);
-            int tolerance = _cfg.ControlRadiusDm + 20;
+            int tolerance = _cfg.V11PassToleranceDm;
             if (miss <= tolerance) return 1000;
             return BallSkill.Lerp(miss - tolerance, tolerance * 3, 1000, 250);
         }

@@ -1,10 +1,9 @@
 namespace Sim.Core.Match.Movement
 {
     /// <summary>
-    /// The ball's height (R7 of believable-match), for the picture only. Nothing in the simulation
-    /// reads it — the pitch the model plays on stays flat, so a lofted ball is read, cut out and
-    /// collected exactly as before and no result can move — and it draws no random number: every
-    /// flight is derived from the kick that started it and from gravity.
+    /// The ball's height (R7 of believable-match). Since issue #178 the simulation reads it: an
+    /// outfield man touches only a ball no higher than a header (free-ball spec R3). It draws no
+    /// random number: every flight is derived from the kick that started it and from gravity.
     /// </summary>
     internal sealed partial class MatchBall
     {
@@ -40,6 +39,14 @@ namespace Sim.Core.Match.Movement
 
         /// <summary>Height above the grass, in decimetres.</summary>
         public int Z => _z / Milli;
+
+        /// <summary>Its height <paramref name="ticks"/> ticks on if nobody touches it, in decimetres (0 once it has come down).</summary>
+        public int ZAfter(int ticks)
+        {
+            if (_z == 0 && _vz <= 0) return 0;
+            long z = _z + (long)ticks * _vz - (long)_gravity * ticks * (ticks - 1) / 2;
+            return z <= 0 ? 0 : (int)(z / Milli);
+        }
 
         private void InitHeight(int ticksPerSecond)
         {
