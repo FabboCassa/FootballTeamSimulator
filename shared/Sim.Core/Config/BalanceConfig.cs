@@ -2730,6 +2730,18 @@ namespace Sim.Core.Config
         /// <summary>Within MaxShootRangeDm of the goal he attacks he keeps it this close, ready to strike.</summary>
         public int DribbleLeadShootingDm { get; set; } = 5;
 
+        /// <summary>
+        /// A touch played out of his reach whose run would carry it out of play before he is back on
+        /// it is shortened by this, again and again, until it stays in.
+        /// </summary>
+        public int DribbleLeadStepDownDm { get; set; } = 2;
+
+        /// <summary>
+        /// His own ball out of his reach: he runs at a point this far beyond it, so the approach does
+        /// not slow him down before he is back on it.
+        /// </summary>
+        public int ChaseOwnBallAimDm { get; set; } = 160;
+
         // --- Striking it (engine phase 4) ---
 
         /// <summary>

@@ -7,6 +7,9 @@ namespace Sim.Core.Match.Movement
     /// </summary>
     internal sealed partial class MatchBall
     {
+        /// <summary>Search bound of <see cref="DribbleTouchSpeed"/>: no dribble touch is played faster than this many times his pace.</summary>
+        private const int MaxDribbleTouchPaceMultiple = 3;
+
         /// <summary>One tick of roll: the step and the friction of <see cref="Advance"/>, whoever controls it.</summary>
         public void Roll()
         {
@@ -48,7 +51,7 @@ namespace Sim.Core.Match.Movement
             if (aheadU >= leadU) return carrierU > aheadU - leadU ? carrierU - (aheadU - leadU) : 0;
 
             // The fastest that does not run it beyond his lead.
-            int lo = carrierU, hi = 3 * carrierU;
+            int lo = carrierU, hi = MaxDribbleTouchPaceMultiple * carrierU;
             while (lo < hi)
             {
                 int mid = lo + (hi - lo + 1) / 2;

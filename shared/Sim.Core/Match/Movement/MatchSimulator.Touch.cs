@@ -2,7 +2,7 @@ namespace Sim.Core.Match.Movement
 {
     public sealed partial class MatchSimulator
     {
-        private int _firstTouchLooseU, _dribbleOffLineU, _dribbleContestU, _foulReachU, _dribbleSpaceU, _dribbleLeadMinU, _dribbleLeadFreeU, _dribbleLeadPressedU, _dribbleMinSpeedU, _dribbleLeadShootingU;
+        private int _firstTouchLooseU, _dribbleOffLineU, _dribbleContestU, _foulReachU, _dribbleSpaceU, _dribbleLeadMinU, _dribbleLeadFreeU, _dribbleLeadPressedU, _dribbleMinSpeedU, _dribbleLeadShootingU, _dribbleLeadStepDownU, _chaseOwnBallAimU;
 
         private int[] _aimTick = System.Array.Empty<int>(), _aimX = System.Array.Empty<int>(), _aimY = System.Array.Empty<int>();
 
@@ -23,6 +23,8 @@ namespace Sim.Core.Match.Movement
             _dribbleLeadPressedU = U.Units(_cfg.DribbleLeadPressedDm);
             _dribbleMinSpeedU = U.PerTick(_cfg.DribbleMinSpeedDmPerSecond, _cfg);
             _dribbleLeadShootingU = U.Units(_cfg.DribbleLeadShootingDm);
+            _dribbleLeadStepDownU = U.Units(_cfg.DribbleLeadStepDownDm);
+            _chaseOwnBallAimU = U.Units(_cfg.ChaseOwnBallAimDm);
         }
 
         /// <summary>His feet within reach of the ball: only then can he strike it.</summary>
@@ -176,7 +178,7 @@ namespace Sim.Core.Match.Movement
             int speed = _ball.DribbleTouchSpeed(ahead, pace, lead);
             while (lead > _controlU && _ball.TravelUntilBackInReach(speed, ahead, pace, _controlU) > room)
             {
-                lead -= U.Units(2);
+                lead -= _dribbleLeadStepDownU;
                 if (lead <= _controlU) lead = _dribbleLeadPressedU;
                 speed = _ball.DribbleTouchSpeed(ahead, pace, lead);
             }
@@ -303,8 +305,8 @@ namespace Sim.Core.Match.Movement
             int dx = _ball.X - _px[k], dy = _ball.Y - _py[k];
             int gap = U.Length(dx, dy);
             if (gap <= 0) return;
-            tx = U.ClampX(_px[k] + (int)((long)dx * U.Units(160) / gap));
-            ty = _ctx.Inside(_py[k] + (int)((long)dy * U.Units(160) / gap));
+            tx = U.ClampX(_px[k] + (int)((long)dx * _chaseOwnBallAimU / gap));
+            ty = _ctx.Inside(_py[k] + (int)((long)dy * _chaseOwnBallAimU / gap));
         }
     }
 }
