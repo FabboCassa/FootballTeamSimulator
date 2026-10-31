@@ -73,6 +73,12 @@ namespace Sim.Core.Match.Movement
         /// <summary>True while the ball is out of play waiting to be put back.</summary>
         public bool Dead;
 
+        /// <summary>
+        /// Struck and not yet past its first step: its path so far starts at the striker's foot, and
+        /// a man within reach of that foot is not within reach of the ball (free-ball spec R3).
+        /// </summary>
+        public bool JustStruck;
+
         public bool Free => OwnerSide < 0;
 
         public MatchBall(MatchBalance cfg)
@@ -170,6 +176,7 @@ namespace Sim.Core.Match.Movement
             LastTouchSide = side;
             LastTouchSlot = slot;
             Dead = false;
+            JustStruck = true;
             Heard(BallEventKind.Touch, side, slot);
         }
 
@@ -182,6 +189,7 @@ namespace Sim.Core.Match.Movement
             Vx = 0;
             Vy = 0;
             Dead = false;
+            JustStruck = false;
             Drive();
             Heard(BallEventKind.Touch, side, slot);
         }

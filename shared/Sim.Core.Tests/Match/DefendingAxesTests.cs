@@ -31,6 +31,10 @@ namespace Sim.Core.Tests.Match
         // 128 since #186 (was 64): with engine R7's movement the hold-shape gap read 1.47 at 64 seeds
         // against its 1.5 minimum, 1.98 at 128 and 2.20 at 256 - the dice, not the lever.
         private const int Seeds = 128;
+
+        // The line's offside shift, measured over 256 seeds (#178): +1.04 a match, and +0.71 over
+        // the first 64, so 64 were a coin toss on its 0.8 margin.
+        private const int LineSeeds = 256;
         private const ulong FirstSeed = 9100;
 
         // Final third and wide channel (from the centre line), in decimetres.
@@ -42,8 +46,8 @@ namespace Sim.Core.Tests.Match
         private const int FastAttackSeconds = 10;
         private const int AfterLossSeconds = 5;
 
-        private static readonly ConcurrentDictionary<TacticInstructions, Lazy<Reading>> Cache =
-            new ConcurrentDictionary<TacticInstructions, Lazy<Reading>>();
+        private static readonly ConcurrentDictionary<(TacticInstructions, int), Lazy<Reading>> Cache =
+            new ConcurrentDictionary<(TacticInstructions, int), Lazy<Reading>>();
 
         private static Club _home = null!;
         private static Club _away = null!;
@@ -111,9 +115,9 @@ namespace Sim.Core.Tests.Match
         [Test]
         public void DefensiveLine_VeryHighCatchesOffsidesAndLeavesSpaceBehind()
         {
-            Reading neutral = Neutral;
-            Reading high = Of(line: DefensiveLine.VeryHigh);
-            Reading deep = Of(line: DefensiveLine.VeryDeep);
+            Reading neutral = Of(seeds: LineSeeds);
+            Reading high = Of(line: DefensiveLine.VeryHigh, seeds: LineSeeds);
+            Reading deep = Of(line: DefensiveLine.VeryDeep, seeds: LineSeeds);
 
             Print("line", "offsides won a match", high.OffsidesWon, neutral.OffsidesWon, deep.OffsidesWon,
                 "very high", "very deep");
@@ -121,6 +125,7 @@ namespace Sim.Core.Tests.Match
                 "very high", "very deep");
 
             // Measured: offsides 3.59 / 1.80 / 0.83; space behind 36.40 / 33.01 / 26.92 m.
+            // #178, at 256 seeds: offsides 2.86 / 1.51 / 0.56; space behind 38.29 / 36.19 / 29.80 m.
             Assert.That(high.OffsidesWon, Is.GreaterThan(neutral.OffsidesWon + 0.8), "a very high line catches more men offside");
             Assert.That(high.SpaceBehindM, Is.GreaterThan(neutral.SpaceBehindM + 1.5), "and leaves more space behind it");
             Assert.That(deep.OffsidesWon, Is.LessThan(neutral.OffsidesWon - 0.4), "a very deep line catches fewer");
@@ -178,13 +183,13 @@ namespace Sim.Core.Tests.Match
             OnBallLost onLost = OnBallLost.Normal, OnBallWon onWon = OnBallWon.Normal,
             LineOfEngagement engagement = LineOfEngagement.Mid, DefensiveLine line = DefensiveLine.Normal,
             Pressing pressing = Pressing.Medium, MarkingScheme marking = MarkingScheme.Mixed,
-            PressDirection direction = PressDirection.None)
+            PressDirection direction = PressDirection.None, int seeds = Seeds)
         {
             var instructions = new TacticInstructions(
                 Mentality.Balanced, PassingDirectness.Mixed, Tempo.Normal, Width.Normal,
                 BuildUp.Mixed, FinalThirdApproach.Mixed, ShotSelection.Normal, DribbleFrequency.Normal,
                 onLost, onWon, engagement, line, pressing, marking, direction);
-            return Cache.GetOrAdd(instructions, i => new Lazy<Reading>(() => Measure(i))).Value;
+            return Cache.GetOrAdd((instructions, seeds), key => new Lazy<Reading>(() => Measure(key.Item1, key.Item2))).Value;
         }
 
         private static void Print(string tag, string metric, double extreme, double neutral, double other,
@@ -193,10 +198,10 @@ namespace Sim.Core.Tests.Match
                 $"[axes-{tag}] {metric}: {extremeName} {extreme:F2}   neutral {neutral:F2}   {otherName} {other:F2}");
 
         /// <summary>Plays the fixtures with the home side on these instructions and reads it off the finished matches.</summary>
-        private static Reading Measure(TacticInstructions instructions)
+        private static Reading Measure(TacticInstructions instructions, int seeds)
         {
-            var parts = new Reading[Seeds];
-            Parallel.For(0, Seeds, i =>
+            var parts = new Reading[seeds];
+            Parallel.For(0, seeds, i =>
             {
                 var cfg = new BalanceConfig();
                 MatchReport report = new MatchEngine().Simulate(

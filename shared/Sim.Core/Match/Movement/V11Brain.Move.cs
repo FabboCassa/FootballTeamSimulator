@@ -142,7 +142,7 @@ namespace Sim.Core.Match.Movement
                 // re-forms at a jog is a shape with holes in it for a dozen seconds.
                 tx = U.ClampX(tx);
                 ty = _sim._ctx.Inside(ty);
-                long catchUp = U.Units(_sim._cfg.V11CatchUpSprintDm);
+                long catchUp = U.Units(inPossession ? _sim._cfg.V11CatchUpSprintDm : _sim._cfg.V11RecoverySprintDm);
                 if (!sprint && U.DistanceSq(_sim._px[k], _sim._py[k], tx, ty) > catchUp * catchUp)
                     sprint = true;
 

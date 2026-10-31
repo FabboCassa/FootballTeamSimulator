@@ -47,5 +47,17 @@ namespace Sim.Core.Match.Movement
         /// <summary>Where the ball was, in dm.</summary>
         public int XDm;
         public int YDm;
+
+        /// <summary>The ball's height, in dm.</summary>
+        public int ZDm;
+
+        /// <summary>
+        /// How far the ball was from the man's feet when it came off him, in mm (rounded down); 0
+        /// for a bounce. R3: a touch is made within reach, never from further.
+        /// </summary>
+        public int FromFeetMm;
+
+        /// <summary>The man was a keeper, whose hands reach further than feet.</summary>
+        public bool Keeper;
     }
 }

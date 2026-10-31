@@ -63,7 +63,8 @@ namespace Sim.Core.Match.Movement
             bool deep = depth > _backDepth;
             if (deep)
             {
-                if (from < _backDepth) Y = PrevY + (int)((long)(Y - PrevY) * (_backDepth - from) / (depth - from));
+                // Met on its step; one that set off already against them goes nowhere along them.
+                Y = from < _backDepth ? PrevY + (int)((long)(Y - PrevY) * (_backDepth - from) / (depth - from)) : PrevY;
                 X = _lineX + _beyond * _backDepth;
             }
 
