@@ -291,8 +291,10 @@ namespace Sim.Core.Match.Movement
                 }
 
                 RestartLength length = SetPiecePlan.Length(kind, _sim._tempo[side], _sim._buildUp[side], _cfg);
-                // A keeper whose back line is not split yet when the wait runs out does not play it short into them.
-                if (kind == BallActionKind.GoalKick && _hasShape && !ShapeInPlace()) length = RestartLength.Long;
+                // A keeper whose back line is not split yet when the wait runs out does not play it short
+                // into them, nor one with a centre-back sent off: there is no back line to split.
+                if (kind == BallActionKind.GoalKick && _hasShape && (!ShapeInPlace() || !BackLineSplit()))
+                    length = RestartLength.Long;
                 int reach = kind == BallActionKind.ThrowIn ? U.Units(_cfg.ThrowInMaxDm) : _sim._maxPassRange;
                 int target = length == RestartLength.Long
                     ? PickTarget(side, true, _eligible, reach)
@@ -342,6 +344,13 @@ namespace Sim.Core.Match.Movement
             }
 
             private bool SplitCentreBack(int i) => _placed[i] && _roleOf[i] == PositionRole.CentreBack;
+
+            private bool BackLineSplit()
+            {
+                for (int i = 0; i < _n; i++)
+                    if (SplitCentreBack(i)) return true;
+                return false;
+            }
 
             private void LoadFoes(int side)
             {

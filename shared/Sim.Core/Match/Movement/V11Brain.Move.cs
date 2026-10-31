@@ -170,11 +170,11 @@ namespace Sim.Core.Match.Movement
             private void PressGoalSide(int side, int slot, int spotX, int spotY, int leash)
             {
                 int k = side * _sim._n + slot;
-                MatchBall ball = _sim._ball;
+                _sim.ManOnTheBall(out int bx, out int by);
                 int goalX = U.Units(MovementGeometry.OwnGoalX(side == 0));
                 int standOff = _sim._tactics[side].PressStandOffU * _sim._cfg.V11PressStandOffPercent / 100;
-                U.Scaled(goalX - ball.X, U.CenterYU - ball.Y, standOff, out int dx, out int dy);
-                int tx = ball.X + dx, ty = ball.Y + dy + PressTouchlineU(side, ball.Y);
+                U.Scaled(goalX - bx, U.CenterYU - by, standOff, out int dx, out int dy);
+                int tx = bx + dx, ty = by + dy + PressTouchlineU(side, by);
                 Leash(spotX, spotY, leash, ref tx, ref ty);
                 _sim.Steer(k, U.ClampX(tx), _sim._ctx.Inside(ty), sprint: true);
             }

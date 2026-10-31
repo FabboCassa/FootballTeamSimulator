@@ -47,6 +47,8 @@ namespace Sim.Core.Tests.Match
     /// Width and the shot are read over <see cref="LargeSample"/> seeds: a side's crosses and its
     /// shots both swing by about four a match from seed to seed, so at eight seeds a difference
     /// between two settings carries about two of noise, as much as the margins asserted (issue #66).
+    /// The mentality's line too since issue #179: on the free-ball engine eight seeds read the gap
+    /// between the extremes at 2.8 m and sixty-four at 4.2 m, against the 3 m asserted.
     /// </summary>
     [TestFixture]
     public class InstructionsTests
@@ -221,7 +223,7 @@ namespace Sim.Core.Tests.Match
         }
 
         private static double Average(Mentality m, Func<Reading, double> read) =>
-            read(Measure(new TacticInstructions(m, Pressing.Medium, Tempo.Normal, Width.Normal)));
+            read(Measure(new TacticInstructions(m, Pressing.Medium, Tempo.Normal, Width.Normal), LargeSample));
 
         private static double Average(Pressing p, Func<Reading, double> read) =>
             read(Measure(new TacticInstructions(Mentality.Balanced, p, Tempo.Normal, Width.Normal)));

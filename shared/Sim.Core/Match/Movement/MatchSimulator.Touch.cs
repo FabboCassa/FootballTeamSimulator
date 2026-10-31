@@ -2,16 +2,26 @@ namespace Sim.Core.Match.Movement
 {
     public sealed partial class MatchSimulator
     {
-        private int _firstTouchLooseU, _dribbleLeadMinU, _dribbleLeadFreeU, _dribbleLeadPressedU, _dribbleMinSpeedU, _dribbleClearU, _dribbleLeadShootingU;
+        private int _firstTouchLooseU, _dribbleOffLineU, _dribbleContestU, _foulReachU, _dribbleSpaceU, _dribbleLeadMinU, _dribbleLeadFreeU, _dribbleLeadPressedU, _dribbleMinSpeedU, _dribbleLeadShootingU;
+
+        private int[] _aimTick = System.Array.Empty<int>(), _aimX = System.Array.Empty<int>(), _aimY = System.Array.Empty<int>();
 
         private void InitTouch()
         {
+            int total = SideCount * _n;
+            _aimTick = new int[total];
+            _aimX = new int[total];
+            _aimY = new int[total];
+            for (int k = 0; k < total; k++) _aimTick[k] = -1;
             _firstTouchLooseU = U.Units(_cfg.FirstTouchLooseDm);
             _dribbleLeadMinU = U.Units(_cfg.DribbleLeadMinDm);
+            _dribbleOffLineU = U.Units(_cfg.DribbleOffLineDm);
+            _dribbleContestU = U.Units(_cfg.DribbleContestDm);
+            _foulReachU = U.Units(_cfg.ChallengeFoulReachDm);
+            _dribbleSpaceU = U.Units(_cfg.DribbleSpaceDm);
             _dribbleLeadFreeU = U.Units(_cfg.DribbleLeadFreeDm);
             _dribbleLeadPressedU = U.Units(_cfg.DribbleLeadPressedDm);
             _dribbleMinSpeedU = U.PerTick(_cfg.DribbleMinSpeedDmPerSecond, _cfg);
-            _dribbleClearU = U.Units(_cfg.DribbleClearOfOpponentDm);
             _dribbleLeadShootingU = U.Units(_cfg.DribbleLeadShootingDm);
         }
 
@@ -82,7 +92,7 @@ namespace Sim.Core.Match.Movement
         /// (<see cref="ChaseOwnBall"/>). False when it has run out of his reach onto a line and is his
         /// no longer.
         /// </summary>
-        private bool RunWithBall(int owner)
+        private bool RunWithBall(int tick, int owner)
         {
             if (_keeper[owner])
             {
@@ -114,9 +124,12 @@ namespace Sim.Core.Match.Movement
 
             if (!BallAtFeet(owner)) return true;
 
-            // Standing, he stops it at his feet.
+            // Standing, he stops it at his feet. Turning off his run (where he means to go is more than
+            // DribbleTurnPermille off it) he keeps it where it is, moving with him, round the turn;
+            // running, he plays it the way he runs, out ahead of him.
             int side = _ball.OwnerSide, slot = _ball.OwnerSlot;
-            int pace = U.Length(_vx[owner], _vy[owner]);
+            int dx = _vx[owner], dy = _vy[owner];
+            int pace = U.Length(dx, dy), span = pace;
             if (pace < _dribbleMinSpeedU)
             {
                 if (_ball.Vx == 0 && _ball.Vy == 0) return true;
@@ -126,56 +139,104 @@ namespace Sim.Core.Match.Movement
                 return true;
             }
 
-            // Running, he plays it the way he runs: out to his lead, shorter with a man on him or a
-            // shot on, never over a line nor to an opponent's feet.
-            int dx = _vx[owner], dy = _vy[owner], span = pace;
+            if (Turning(tick, owner, pace))
+            {
+                if (_ball.Vx == _vx[owner] && _ball.Vy == _vy[owner]) return true;
+                _ball.Vx = _vx[owner];
+                _ball.Vy = _vy[owner];
+                _ball.Heard(BallEventKind.Touch, side, slot);
+                return true;
+            }
+
+            // Out to his lead running forward with nobody near him (so never to an opponent's feet);
+            // within his reach with a man on him, running across or back, or with a shot on; never
+            // over a line.
             int gx = _ball.X - _px[owner], gy = _ball.Y - _py[owner];
             int ahead = (int)(((long)gx * dx + (long)gy * dy) / span);
             if (ahead < 0) ahead = 0;
-            int lead = BallSkill.Lerp(PressurePermille(side, slot), 1000, _dribbleLeadFreeU, _dribbleLeadPressedU);
+            int forward = MovementGeometry.Direction(side == 0) * dx;
+            int lead = !InSpace(owner, side) || 2 * forward < span ? _dribbleLeadPressedU : _dribbleLeadFreeU;
             int goalX = U.Units(MovementGeometry.AttackedGoalX(side == 0));
             if (lead > _dribbleLeadShootingU && U.DistanceSq(_px[owner], _py[owner], goalX, U.CenterYU) <= (long)_shootRangeU * _shootRangeU)
                 lead = _dribbleLeadShootingU;
             int room = RoomInside(dx, dy, span) - _dribbleLeadMinU;
             if (lead > room) lead = room;
-            lead = LeadClearOfOpponents(owner, side, dx, dy, span, ahead, lead);
 
-            // He touches it again before it comes within DribbleLeadMinDm of him — and, keeping it
-            // within his reach, before it runs out of it.
+            // He touches it again as it comes back within DribbleLeadMinDm of him, once it is off the
+            // line he runs (he has turned), and, keeping it within his reach, before it runs out of it.
             int nextX = gx + _ball.Vx - _vx[owner], nextY = gy + _ball.Vy - _vy[owner];
             long aheadNext = ((long)nextX * dx + (long)nextY * dy) / span;
-            bool leaving = lead <= _controlU && (long)nextX * nextX + (long)nextY * nextY > (long)_controlU * _controlU;
-            if (aheadNext >= _dribbleLeadMinU && !leaving) return true;
+            long across = ((long)nextX * dy - (long)nextY * dx) / span;
+            bool leaving = (long)nextX * nextX + (long)nextY * nextY > (long)_controlU * _controlU;
+            bool offLine = across > _dribbleOffLineU || across < -_dribbleOffLineU;
+            bool coming = (long)(_ball.Vx - _vx[owner]) * dx + (long)(_ball.Vy - _vy[owner]) * dy <= 0;
+            if ((aheadNext >= _dribbleLeadMinU || !coming) && !offLine && !(leaving && lead <= _controlU)) return true;
 
+            // Played out of his reach, it has to stay in play until he is back on it.
             int speed = _ball.DribbleTouchSpeed(ahead, pace, lead);
+            while (lead > _controlU && _ball.TravelUntilBackInReach(speed, ahead, pace, _controlU) > room)
+            {
+                lead -= U.Units(2);
+                if (lead <= _controlU) lead = _dribbleLeadPressedU;
+                speed = _ball.DribbleTouchSpeed(ahead, pace, lead);
+            }
+
+            // Along his run, and back onto its line by half of what it is off it.
             U.Scaled(dx, dy, speed, out _ball.Vx, out _ball.Vy);
+            long side0 = ((long)gx * dy - (long)gy * dx) / span;
+            if (side0 > _dribbleOffLineU || side0 < -_dribbleOffLineU)
+            {
+                _ball.Vx -= (int)(side0 * dy / span / 2);
+                _ball.Vy += (int)(side0 * dx / span / 2);
+            }
+
+            if (!_runCalled[owner] && TakesRestartRunning(tick, owner))
+            {
+                _runCalled[owner] = true;
+                _sheet.Record(tick, BallActionKind.Dribble, side == 0, slot, -1);
+            }
+
             _ball.Heard(BallEventKind.Touch, side, slot);
             return true;
         }
 
         /// <summary>
-        /// The longest lead, from <paramref name="lead"/> down in 2 dm steps, that puts the ball no
-        /// nearer than DribbleClearOfOpponentDm to an opponent; none does, and he keeps it at his pace.
+        /// He has just put the ball back in play and runs with it: the restart is played with this
+        /// touch, and filed as his dribble now, the frame the stream reads the restart off — the
+        /// ball runs at a dribble's pace from here, not at a transport's.
         /// </summary>
-        private int LeadClearOfOpponents(int owner, int side, int dx, int dy, int span, int ahead, int lead)
-        {
-            long clear = (long)_dribbleClearU * _dribbleClearU;
-            int opponent = 1 - side;
-            for (; lead > ahead; lead -= U.Units(2))
-            {
-                int bx = _px[owner] + (int)((long)dx * lead / span);
-                int by = _py[owner] + (int)((long)dy * lead / span);
-                bool open = true;
-                for (int j = 0; j < _n && open; j++)
-                {
-                    int ok = opponent * _n + j;
-                    if (!_sentOff[ok] && U.DistanceSq(_px[ok], _py[ok], bx, by) < clear) open = false;
-                }
+        private bool TakesRestartRunning(int tick, int k) => k == _ctx.RestartTaker && tick < _ctx.RestartGrace;
 
-                if (open) return lead;
+        /// <summary>Where the man on the ball means to run with it this tick (see <see cref="RunWithBall"/>).</summary>
+        private void AimCarry(int tick, int k, int tx, int ty)
+        {
+            _aimTick[k] = tick;
+            _aimX[k] = tx;
+            _aimY[k] = ty;
+        }
+
+        /// <summary>Where he means to go this tick is further off the way he runs than DribbleTurnPermille (a cosine).</summary>
+        private bool Turning(int tick, int k, int pace)
+        {
+            if (_aimTick[k] != tick) return false;
+            int ax = _aimX[k] - _px[k], ay = _aimY[k] - _py[k];
+            int aim = U.Length(ax, ay);
+            if (aim <= 0) return false;
+            return ((long)ax * _vx[k] + (long)ay * _vy[k]) * 1000 < (long)_cfg.DribbleTurnPermille * aim * pace;
+        }
+
+        /// <summary>No opponent within DribbleSpaceDm of him: room to play it out of his reach.</summary>
+        private bool InSpace(int owner, int side)
+        {
+            long space = (long)_dribbleSpaceU * _dribbleSpaceU;
+            int opponent = 1 - side;
+            for (int j = 0; j < _n; j++)
+            {
+                int ok = opponent * _n + j;
+                if (!_sentOff[ok] && U.DistanceSq(_px[ok], _py[ok], _px[owner], _py[owner]) < space) return false;
             }
 
-            return ahead;
+            return true;
         }
 
         /// <summary>
@@ -185,11 +246,15 @@ namespace Sim.Core.Match.Movement
         /// </summary>
         private int RoomInside(int dx, int dy, int span)
         {
+            // To the line itself (see RunsOntoALine), not to the inset a carrier's feet are held to: a
+            // ball at the inside foot of a man on the inset is already beyond it, and measured from
+            // there the slightest drift toward the line left it no room at all, so he stopped it dead
+            // and ran on, and ran back, for minutes.
             int room = int.MaxValue;
-            if (dx > 0) room = Shorter(room, U.LengthU - _ctx.InsetU - _ball.X, dx, span);
-            if (dx < 0) room = Shorter(room, _ball.X - _ctx.InsetU, -dx, span);
-            if (dy > 0) room = Shorter(room, U.WidthU - _ctx.InsetU - _ball.Y, dy, span);
-            if (dy < 0) room = Shorter(room, _ball.Y - _ctx.InsetU, -dy, span);
+            if (dx > 0) room = Shorter(room, U.LengthU - U.Scale - _ball.X, dx, span);
+            if (dx < 0) room = Shorter(room, _ball.X - U.Scale, -dx, span);
+            if (dy > 0) room = Shorter(room, U.WidthU - U.Scale - _ball.Y, dy, span);
+            if (dy < 0) room = Shorter(room, _ball.Y - U.Scale, -dy, span);
             return room;
         }
 
@@ -204,6 +269,21 @@ namespace Sim.Core.Match.Movement
         /// </summary>
         private bool RunsOntoALine() =>
             _ball.X < U.Scale || _ball.X > U.LengthU - U.Scale || _ball.Y < U.Scale || _ball.Y > U.WidthU - U.Scale;
+
+        /// <summary>
+        /// Where a presser closes down: the man on the ball, whose ball runs ahead of him between
+        /// touches (free-ball spec R3), or the ball itself when it is loose or in a keeper's hands.
+        /// </summary>
+        private void ManOnTheBall(out int x, out int y)
+        {
+            x = _ball.X;
+            y = _ball.Y;
+            if (_ball.Free) return;
+            int owner = _ball.OwnerSide * _n + _ball.OwnerSlot;
+            if (_keeper[owner]) return;
+            x = _px[owner];
+            y = _py[owner];
+        }
 
         /// <summary>
         /// His own ball out of his reach: he runs through it, aimed far enough beyond it that the

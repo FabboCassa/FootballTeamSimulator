@@ -8,6 +8,12 @@ namespace Sim.Core.Match.Movement
         private int _v11Carrier = -1;
 
         /// <summary>
+        /// The man (side * n + slot) with a choice to make and his ball ahead of him out of reach, -1
+        /// for nobody: he goes and gets it at full pace, uncapped (free-ball spec R3).
+        /// </summary>
+        private int _closeIn = -1;
+
+        /// <summary>
         /// A man running with the ball is slower than one running without it (V11 only): he is
         /// capped at <see cref="Config.MatchBalance.V11CarrierSpeedPercent"/> of his top speed while
         /// the ball is his — at his feet, or knocked ahead and not yet touched by anybody else.
@@ -16,7 +22,7 @@ namespace Sim.Core.Match.Movement
         /// </summary>
         private int CarrierTop(int k, int top)
         {
-            if (k != _v11Carrier || _ball.Dead || _ball.LastTouchSide < 0) return top;
+            if (k != _v11Carrier || k == _closeIn || _ball.Dead || _ball.LastTouchSide < 0) return top;
             int toucher = _ball.Free
                 ? _ball.LastTouchSide * _n + _ball.LastTouchSlot
                 : _ball.OwnerSide * _n + _ball.OwnerSlot;

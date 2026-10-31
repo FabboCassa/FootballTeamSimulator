@@ -38,23 +38,44 @@ namespace Sim.Core.Match.Movement
         /// <summary>
         /// The speed (units per tick) to play the ball at, from <paramref name="aheadU"/> in front of a
         /// man running at <paramref name="carrierU"/> a tick, so that it runs out to
-        /// <paramref name="leadU"/> ahead of him before he catches it again. Binary search on the
+        /// at most <paramref name="leadU"/> ahead of him before he catches it again. Binary search on the
         /// gain a ball faster than him makes while it is faster, which grows with its speed.
         /// </summary>
         public int DribbleTouchSpeed(int aheadU, int carrierU, int leadU)
         {
             if (carrierU < 1) carrierU = 1;
-            if (aheadU >= leadU) return carrierU;
+            // Beyond it already, he holds it back: slower than him by what it is beyond.
+            if (aheadU >= leadU) return carrierU > aheadU - leadU ? carrierU - (aheadU - leadU) : 0;
 
+            // The fastest that does not run it beyond his lead.
             int lo = carrierU, hi = 3 * carrierU;
             while (lo < hi)
             {
-                int mid = lo + (hi - lo) / 2;
-                if (aheadU + LeadGain(mid, carrierU) >= leadU) hi = mid;
-                else lo = mid + 1;
+                int mid = lo + (hi - lo + 1) / 2;
+                if (aheadU + LeadGain(mid, carrierU) <= leadU) lo = mid;
+                else hi = mid - 1;
             }
 
             return lo;
+        }
+
+        /// <summary>
+        /// How far a ball played at <paramref name="speed"/> from <paramref name="aheadU"/> in front of a
+        /// man running at <paramref name="carrierU"/> a tick runs, slowing, before it is back within
+        /// <paramref name="reachU"/> of him: where he can play it again.
+        /// </summary>
+        public int TravelUntilBackInReach(int speed, int aheadU, int carrierU, int reachU)
+        {
+            long gap = aheadU, travel = 0;
+            for (int t = 0; t < _trackedTicks; t++)
+            {
+                gap += speed - carrierU;
+                travel += speed;
+                speed = speed * _frictionPermille / 1000;
+                if (speed <= carrierU && gap <= reachU) break;
+            }
+
+            return travel > int.MaxValue ? int.MaxValue : (int)travel;
         }
 
         /// <summary>Ground a ball played at <paramref name="speed"/> gains on a man running at <paramref name="carrierU"/>.</summary>

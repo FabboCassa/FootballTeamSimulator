@@ -2661,10 +2661,10 @@ namespace Sim.Core.Config
         /// foot at this share of its incoming speed, in permille, at Technique 0 and 100 (linear in
         /// between), times a triangular draw from 0 to 2: so the error grows with the ball's speed
         /// and shrinks with Technique. A man's own knock-on, a keeper's hands and a strike are not
-        /// first touches. 75/12 since issue #179: at 90/15 pass accuracy fell to 74.6% (76-88).
+        /// first touches. 60/10 since issue #179: at 90/15 pass accuracy fell to 74.6% (76-88).
         /// </summary>
-        public int FirstTouchErrorPermilleAtZero { get; set; } = 75;
-        public int FirstTouchErrorPermilleAtHundred { get; set; } = 12;
+        public int FirstTouchErrorPermilleAtZero { get; set; } = 60;
+        public int FirstTouchErrorPermilleAtHundred { get; set; } = 10;
 
         /// <summary>
         /// A first touch that would run further than this off his foot is a poor one: the ball is
@@ -2677,28 +2677,58 @@ namespace Sim.Core.Config
         /// <summary>
         /// Running with the ball he plays it ahead of himself touch after touch, never glued to his
         /// feet: he touches it again (within reach) once it would come within DribbleLeadMinDm of
-        /// him, weighted so it runs out to DribbleLeadFreeDm ahead with room and DribbleLeadPressedDm
-        /// with a man on him, at his pace. Slower than DribbleMinSpeedDmPerSecond he stands over it.
-        /// A lead within ControlRadiusDm keeps the ball within his reach (he touches it again before it
-        /// leaves it). Measured on the pitch harness (issue #179): a lead of 1.6 m left the ball out
-        /// of his reach a third of the time he had it — he could not pass or shoot until he got back
-        /// to it, opponents picked it off (180 balls won back a match against 97) and a ball he had
-        /// stopped chasing ran over a line (120 throw-ins) or into the net (4.8 goals a match not off
-        /// a strike). At 0.9 m every outcome band holds.
+        /// him, weighted so it runs out to DribbleLeadFreeDm ahead running forward into open grass
+        /// (see DribbleSpaceDm) and DribbleLeadPressedDm otherwise, at his pace. Slower than
+        /// DribbleMinSpeedDmPerSecond he stands over it. A lead within ControlRadiusDm keeps the ball
+        /// within his reach (he touches it again before it leaves it). Measured on the pitch harness
+        /// (issue #179): a 1.6 m lead everywhere left the ball out of his reach a third of the time he
+        /// had it — he could not pass or shoot until he got back to it, opponents picked it off (180
+        /// balls won back a match against 97) and a ball he had stopped chasing ran over a line (120
+        /// throw-ins) or into the net. Kept to open grass, the outcome bands hold.
         /// </summary>
         public int DribbleLeadMinDm { get; set; } = 5;
-        public int DribbleLeadFreeDm { get; set; } = 9;
-        public int DribbleLeadPressedDm { get; set; } = 6;
+        public int DribbleLeadFreeDm { get; set; } = 20;
+
+        /// <summary>He plays it out to DribbleLeadFreeDm only with no opponent within this of him.</summary>
+        public int DribbleSpaceDm { get; set; } = 80;
+        public int DribbleLeadPressedDm { get; set; } = 8;
         public int DribbleMinSpeedDmPerSecond { get; set; } = 15;
 
         /// <summary>
-        /// He does not play it out to where an opponent's feet are: the lead is cut so the ball runs
-        /// out no nearer than this to any of them, down to keeping it at his own pace.
+        /// Within his reach, a ball further than this off the line he runs (he has turned) is touched
+        /// back onto it: a ball he has stopped running with does not roll on out of play on its own.
         /// </summary>
-        public int DribbleClearOfOpponentDm { get; set; } = 30;
+        public int DribbleOffLineDm { get; set; } = 4;
+
+        /// <summary>
+        /// Where he means to run with it is off the way he is running when the cosine between the two
+        /// is below this, in permille: he stops the ball and turns with it, rather than playing it on
+        /// the way his momentum still carries him (a defender who won it running back at his own goal
+        /// otherwise knocked it into his own net).
+        /// </summary>
+        public int DribbleTurnPermille { get; set; } = 500;
+
+        /// <summary>
+        /// His ball out of his reach but within this of him is still contested: an opponent at it has
+        /// to win the duel for it. Further, it is anybody's, and the man at it takes it.
+        /// </summary>
+        public int DribbleContestDm { get; set; } = 15;
+
+        /// <summary>
+        /// The ball runs ahead of the man on it (issue #179), so a challenger is at it a stride sooner
+        /// and for longer than when it was glued to his feet: the per-tick odds of a challenge are
+        /// scaled by this, in percent, so the balls won back and the fouls a match stay where they were.
+        /// </summary>
+        public int DribbleChallengePercent { get; set; } = 80;
+
+        /// <summary>
+        /// A challenge fouls the man only if the challenger is within this of him: one at a ball
+        /// played ahead of him, out of reach of his legs, takes the ball or misses it.
+        /// </summary>
+        public int ChallengeFoulReachDm { get; set; } = 15;
 
         /// <summary>Within MaxShootRangeDm of the goal he attacks he keeps it this close, ready to strike.</summary>
-        public int DribbleLeadShootingDm { get; set; } = 6;
+        public int DribbleLeadShootingDm { get; set; } = 5;
 
         // --- Striking it (engine phase 4) ---
 

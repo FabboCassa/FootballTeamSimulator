@@ -42,6 +42,7 @@ namespace Sim.Core.Match.Movement
             if (!Dead)
             {
                 int vx = X - ShownX, vy = Y - ShownY;
+                bool overTouchline = Y < 0 || Y > U.WidthU;
                 if (Free)
                 {
                     ShowWhereItIs();
@@ -55,6 +56,9 @@ namespace Sim.Core.Match.Movement
                     vy = _lastStepY;
                 }
 
+                // Beyond a touchline it runs on along it, the whole of its run-on: going straight out,
+                // what was left of it once the line had taken the rest kept it on its spot.
+                if (overTouchline) vy = 0;
                 if (vx == 0 && vy == 0) vx = MovementGeometry.Direction(LastTouchSide != 1);
                 U.Scaled(vx, vy, _transportStep, out _runVx, out _runVy);
                 _runLeft = _runOnTicks;
