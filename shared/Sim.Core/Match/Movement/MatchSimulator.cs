@@ -426,6 +426,7 @@ namespace Sim.Core.Match.Movement
             if (_approachU < 1) _approachU = 1;
             _dribbleReportU = U.Units(_cfg.DribbleReportDm);
             _controlU = U.Units(_cfg.ControlRadiusDm);
+            InitTouch();
             _cutOutU = U.Units(_cfg.PassCutOutReachDm);
             if (_cutOutU > _controlU) _cutOutU = _controlU;
             _keeperReachU = _controlU + U.Units(_cfg.KeeperSaveReachDm);
@@ -1468,9 +1469,9 @@ namespace Sim.Core.Match.Movement
 
             if (!_ball.Free)
             {
-                // The carrier keeps it glued to his feet; a challenge can still take it.
+                // The carrier plays it ahead of himself (free-ball spec R3); a challenge can still take it.
                 int owner = _ball.OwnerSide * _n + _ball.OwnerSlot;
-                BallToFeet(owner);
+                if (!RunWithBall(owner)) return;
 
                 int taker = -1, takerSide = -1;
                 int other = 1 - _ball.OwnerSide;
@@ -1486,6 +1487,13 @@ namespace Sim.Core.Match.Movement
                         taker = j;
                         takerSide = other;
                     }
+                }
+
+                // Out of his reach the ball is not his to defend in a duel (free-ball spec R3).
+                if (taker >= 0 && tick >= _tackleLock && !BallAtFeet(owner))
+                {
+                    NipIn(tick, takerSide, taker);
+                    return;
                 }
 
                 // The challenge, as a DUEL (engine phase 4). It used to be one flat roll per
@@ -1677,6 +1685,32 @@ namespace Sim.Core.Match.Movement
                 return;
             }
 
+            // THE FIRST TOUCH (free-ball spec R3): a ball played to him, or cut out, runs on off his
+            // foot by an error its speed grows and his Technique shrinks; too far, and it is loose.
+            // Not his own knock-on, not a keeper's hands, not a strike.
+            int residual = 0;
+            bool ownKnock = _ball.LastTouchSide == bestSide && _ball.LastTouchSlot == bestSlot;
+            if (!wasShot && !claimed && !ownKnock)
+            {
+                residual = FirstTouchResidual(gkSlot, U.Length(inVx, inVy));
+                if (_ball.RollOut(residual) > _firstTouchLooseU)
+                {
+                    if (_offside.AnyFlag)
+                    {
+                        if (_offside.IsFlagged(gkSlot))
+                        {
+                            _referee.GiveOffside(tick, bestSide, bestSlot);
+                            return;
+                        }
+
+                        _offside.ClearFlags();
+                    }
+
+                    LooseTouch(tick, bestSide, bestSlot, inVx, inVy, residual);
+                    return;
+                }
+            }
+
             int metX = _ball.X, metY = _ball.Y;
             if (!wasShot)
             {
@@ -1687,6 +1721,7 @@ namespace Sim.Core.Match.Movement
             }
 
             Collect(bestSide, bestSlot);
+            if (residual > 0) U.Scaled(inVx, inVy, residual, out _ball.Vx, out _ball.Vy);
             _lastTouch[bestSide] = bestSlot;
             _hold[bestSide * _n + bestSlot] = HoldTicks(bestSide);
             _receiver[0] = -1;

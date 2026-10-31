@@ -81,6 +81,7 @@ namespace Sim.Core.Match.Movement
                     // defender ends up carrying the ball into his own corner; sending him straight
                     // ahead for ever is how he ends up standing on the goal line holding it.
                     _sim.CarryTarget(side, k, U.Units(160), out tx, out ty);
+                    _sim.ChaseOwnBall(k, ref tx, ref ty);
                     sprint = !_keeper[k];
 
                     // A keeper walks it out rather than sprinting, and one who claimed it out past

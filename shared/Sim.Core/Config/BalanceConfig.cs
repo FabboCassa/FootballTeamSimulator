@@ -2654,6 +2654,52 @@ namespace Sim.Core.Config
         public int CarryTouchFreeDm { get; set; } = 105;
         public int CarryTouchSkillDm { get; set; } = 35;
 
+        // --- First touch and dribbling by touches (free-ball spec R3, issue #179) ---
+
+        /// <summary>
+        /// The first touch on a ball played to a man (or cut out by one) leaves it running off his
+        /// foot at this share of its incoming speed, in permille, at Technique 0 and 100 (linear in
+        /// between), times a triangular draw from 0 to 2: so the error grows with the ball's speed
+        /// and shrinks with Technique. A man's own knock-on, a keeper's hands and a strike are not
+        /// first touches. 75/12 since issue #179: at 90/15 pass accuracy fell to 74.6% (76-88).
+        /// </summary>
+        public int FirstTouchErrorPermilleAtZero { get; set; } = 75;
+        public int FirstTouchErrorPermilleAtHundred { get; set; } = 12;
+
+        /// <summary>
+        /// A first touch that would run further than this off his foot is a poor one: the ball is
+        /// loose, scattered up to FirstTouchSpreadPermille sideways off its incoming line, and he
+        /// may not touch it again for the release lock. Shorter, it is his, rolling that far ahead.
+        /// </summary>
+        public int FirstTouchLooseDm { get; set; } = 15;
+        public int FirstTouchSpreadPermille { get; set; } = 500;
+
+        /// <summary>
+        /// Running with the ball he plays it ahead of himself touch after touch, never glued to his
+        /// feet: he touches it again (within reach) once it would come within DribbleLeadMinDm of
+        /// him, weighted so it runs out to DribbleLeadFreeDm ahead with room and DribbleLeadPressedDm
+        /// with a man on him, at his pace. Slower than DribbleMinSpeedDmPerSecond he stands over it.
+        /// A lead within ControlRadiusDm keeps the ball within his reach (he touches it again before it
+        /// leaves it). Measured on the pitch harness (issue #179): a lead of 1.6 m left the ball out
+        /// of his reach a third of the time he had it — he could not pass or shoot until he got back
+        /// to it, opponents picked it off (180 balls won back a match against 97) and a ball he had
+        /// stopped chasing ran over a line (120 throw-ins) or into the net (4.8 goals a match not off
+        /// a strike). At 0.9 m every outcome band holds.
+        /// </summary>
+        public int DribbleLeadMinDm { get; set; } = 5;
+        public int DribbleLeadFreeDm { get; set; } = 9;
+        public int DribbleLeadPressedDm { get; set; } = 6;
+        public int DribbleMinSpeedDmPerSecond { get; set; } = 15;
+
+        /// <summary>
+        /// He does not play it out to where an opponent's feet are: the lead is cut so the ball runs
+        /// out no nearer than this to any of them, down to keeping it at his own pace.
+        /// </summary>
+        public int DribbleClearOfOpponentDm { get; set; } = 30;
+
+        /// <summary>Within MaxShootRangeDm of the goal he attacks he keeps it this close, ready to strike.</summary>
+        public int DribbleLeadShootingDm { get; set; } = 6;
+
         // --- Striking it (engine phase 4) ---
 
         /// <summary>

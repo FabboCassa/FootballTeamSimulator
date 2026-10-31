@@ -64,6 +64,9 @@ namespace Sim.Core.Match.Movement
                     if (_scene.CarrierIsKeeper || !_valuation.IsOpenGoal(_scene)) return;
                 }
 
+                // He plays it only with it at his feet: running with it, it is ahead of him between touches.
+                if (!_sim.BallAtFeet(k)) return;
+
                 // He chooses on the pressure as it is and executes on the pressure he feels: a shout
                 // that calms him makes him surer on the ball, not bolder with it.
                 int pressure = _sim.PressurePermille(side, slot);
