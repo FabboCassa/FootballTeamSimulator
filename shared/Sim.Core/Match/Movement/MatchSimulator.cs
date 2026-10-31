@@ -298,7 +298,9 @@ namespace Sim.Core.Match.Movement
             // The whistle WAITS: not while a strike is in the air, and not while the timeline has a
             // chance due — a referee does not blow for half-time with the ball in the box, and the
             // director would un-dead the ball for the strike and cancel the restart if he did.
-            if (!_secondHalf && tick >= _halfTime && !_ctx.ShotLive)
+            // Nor while a goal is celebrated: the ball lies in the net until the whistle.
+            bool celebrating = _ball.Dead && _ctx.DeadKind == BallActionKind.Goal && tick < _ctx.DeadAt;
+            if (!_secondHalf && tick >= _halfTime && !_ctx.ShotLive && !celebrating)
             {
                 _secondHalf = true;
                 HalfTime(tick);

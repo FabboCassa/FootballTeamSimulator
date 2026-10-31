@@ -1364,6 +1364,7 @@ namespace Sim.Core.Config
         /// </summary>
         public int V11PressStandOffPercent { get; set; } = 280;
 
+
         /// <summary>
         /// How wide a V11 strike can go, in percent of ShotSpreadDm. That spread was sized for the
         /// close-range shots engine v10 took; V11 shoots at the open goal from the edge of the box
@@ -1401,8 +1402,10 @@ namespace Sim.Core.Config
         /// The foul odds of a won challenge, in percent of the FoulPermille figures (see Referee).
         /// 200 since issue #87 (was 55): a shorter challenge radius cut the challenges by about two thirds,
         /// and the foul share of the rest rises with it to keep R2's 20-27 fouls a match.
+        /// 170 since issue #178: challenged from within a metre (free-ball spec R3) at
+        /// DuelChancePermillePerSecond's faster rate, a match had 30.7 fouls at 200 (R2: 20-27).
         /// </summary>
-        public int V11FoulPercent { get; set; } = 200;
+        public int V11FoulPercent { get; set; } = 170;
 
         /// <summary>
         /// A man further than this from where he is going sprints there, with or without the ball.
@@ -1411,6 +1414,15 @@ namespace Sim.Core.Config
         /// jogs it, 10.8 km, and fewer frames above 5.5 m/s (R1 has 3%, the engine 10%).
         /// </summary>
         public int V11CatchUpSprintDm { get; set; } = 150;
+
+        /// <summary>
+        /// The same without the ball: a man further than this from where he is going sprints there
+        /// (free-ball spec R3, issue #178). A defender wins it only within a metre of it now, so
+        /// one jogging back into his place arrives after the ball has gone past him: at 150 a
+        /// 192-match sample read 3.03 goals and 27.8 shots, at 100 2.60 and 26.5, for 0.5 km a
+        /// player more (11.3; R2: 9.5-11.5).
+        /// </summary>
+        public int V11RecoverySprintDm { get; set; } = 100;
 
         /// <summary>A supporting run or an overlap goes no further than this from the man's phase target spot.</summary>
         public int V11SupportLeashDm { get; set; } = 200;
@@ -1667,8 +1679,11 @@ namespace Sim.Core.Config
         /// now vetoes it (V11ShotCloseBlocker*); at 10 a match had 10.6 shots and 1.2 goals.
         /// 75 since issue #87 (was 105): with the merged v12 mechanisms the side keeps the ball
         /// and reaches the box far more often, and at 105 a match had 29 shots.
+        /// 62 since issue #178: a defender touches the ball only within a metre of it (free-ball
+        /// spec R3), so fewer strikes are charged down (blocked 13% against 20% before) and more
+        /// reach the keeper; at 75 a match had 3.3 goals over 192 (R2: 2.5-3.2), at 62 2.9.
         /// </summary>
-        public int V11ShotValuePercent { get; set; } = 75;
+        public int V11ShotValuePercent { get; set; } = 62;
 
         /// <summary>
         /// What each outfield defender in the way of a shot leaves of its value, in percent: in the
@@ -1690,7 +1705,7 @@ namespace Sim.Core.Config
         /// man square in front of him seldom shoots into him. Uncounted, he made three blocks in
         /// four of R2's blocked share (42% of shots); at 0 the share fell under R2's 20% floor.
         /// 30 since issue #178 (was 10): he blocks only within a metre of the strike's line now
-        /// (free-ball spec R3), and with the presser goal-side at PressDistanceDm 14 the striker
+        /// (free-ball spec R3), and with the presser goal-side at PressDistanceDm 14 (then) the striker
         /// who never shot into him left 7% of shots blocked (R2: 20-30%).
         /// </summary>
         public int V11ShotCloseBlockerMarginDm { get; set; } = 35;
@@ -1704,12 +1719,17 @@ namespace Sim.Core.Config
         /// from distance never beat the ball in: with the shortcut gone 87% of shots came from
         /// inside the box (R2: 60-72%). Only at a clear sight, so that a man in the lane still
         /// sends the ball to the team-mate free in the box (R10's scripted case); the 8 m blocker
-        /// margin is wider than any block's reach, so the sight uses ShotBlock's own 3 m.
+        /// margin is wider than any block's reach, so the sight uses a block's own reach.
         /// 4200 since issue #87 (was 900): longer possession puts the ball in the box
         /// more often, and at 900 three shots in four came from inside it (R2: 60-72%).
+        /// Since issue #178 a block reaches ControlRadiusDm (free-ball spec R3), so the clear sight
+        /// is 10 (was 30) and the credit back to 900: at 4200 over the wider sight 55% of a
+        /// match's 48 shots came from outside the box; at 900, 37% of 31. At the 3 m sight an
+        /// eager side shot from distance only 0.7 times a match more than a patient one
+        /// (InstructionsTests: 2), since no block reached a man stood 1-3 m off the lane.
         /// </summary>
-        public int V11ShotFromDistancePercent { get; set; } = 4200;
-        public int V11ShotClearSightMarginDm { get; set; } = 30;
+        public int V11ShotFromDistancePercent { get; set; } = 900;
+        public int V11ShotClearSightMarginDm { get; set; } = 10;
 
         /// <summary>
         /// The keeper on V11, in percent of the base Keeper* figures: the odds he holds a strike he
@@ -1743,13 +1763,11 @@ namespace Sim.Core.Config
 
         /// <summary>
         /// How far off its man a ball may be struck and still be his, as the man on the ball prices
-        /// it: his reach and the steps he takes onto it. It was ControlRadiusDm + 2 m until issue
-        /// #178; read at the new one-metre reach (free-ball spec R3) every pass of 20 m and more
-        /// lost value to the carry, and men ran with it out of their shape (317 player-seconds a
-        /// match off target against 195 at 44). He runs onto the ball now (InterceptSpot), so the
-        /// old 4.4 m stands for reach and steps together.
+        /// it: his reach (ControlRadiusDm) and these steps he takes onto it. Since issue #178 the
+        /// reach is a metre (free-ball spec R3), so a pass is priced as missing sooner than at the
+        /// 2.4 m reach before it.
         /// </summary>
-        public int V11PassToleranceDm { get; set; } = 44;
+        public int V11PassStepsDm { get; set; } = 20;
 
         /// <summary>
         /// A pass to a man on the move is played where his run takes him while it travels, up to
@@ -2073,13 +2091,13 @@ namespace Sim.Core.Config
         public int PressureRadiusDm { get; set; } = 48;
 
         /// <summary>
-        /// How close the presser gets to the ball, and a marker to his man. The presser 14 since
+        /// How close the presser gets to the ball, and a marker to his man. The presser 18 since
         /// issue #178 (was 22): a challenge reaches a metre now (free-ball spec R3, 1.6 m before),
-        /// and from 2.2 m he shadowed a carrier he could never reach — a full-back ran fifty metres
-        /// to the other box unchallenged and men sat 5.3 s a match off their shape (R2: 5). At 14
-        /// he stands off his reach by the share he did of the old one.
+        /// and from 2.2 m he shadowed a carrier he could never reach (off-target 5.3 s, R4: 5). At
+        /// 14 the Pressing instruction's stand-offs bunched up (DefensiveDutyTests' low-high gap
+        /// 0.18 m against 0.3) and a touch-tight presser was dribbled past into the box.
         /// </summary>
-        public int PressDistanceDm { get; set; } = 14;
+        public int PressDistanceDm { get; set; } = 18;
         public int MarkDistanceDm { get; set; } = 32;
 
         /// <summary>
@@ -2130,11 +2148,12 @@ namespace Sim.Core.Config
         /// 9.8 and 10.9, with goals 2.52 (220: 10.2 corners but goals 2.47, nearer R7's 2.4 floor).
         /// 290 since issue #87 (was 210): with fewer duels and fewer balls cut out, fewer
         /// balls are got at in the box, and at 210 corners fell to 7.5 a match (R2: 9-11).
-        /// Into touch 50 since issue #178 (was 220): see ClearanceArrivalPercent.
+        /// Into touch 90 since issue #178 (was 220): see ClearanceArrivalPercent; at 50 RefereeTests'
+        /// sample read 29.4 throw-ins a match (30-50), at 90 32.8.
         /// </summary>
         public int DeflectClearForcePercent { get; set; } = 100;
         public int DeflectBehindPermille { get; set; } = 290;
-        public int DeflectIntoTouchPermille { get; set; } = 50;
+        public int DeflectIntoTouchPermille { get; set; } = 90;
 
         /// <summary>
         /// A body in the lane of a strike (real-match spec R2, issue #80; see
@@ -2774,12 +2793,15 @@ namespace Sim.Core.Config
         // SaveOffLinePermillePerMetre per metre the keeper stands off the strike's line. The R2
         // bands are 65-75% overall, 55-68% inside the box and 78-90% outside it.
         // From six yards the keeper has no time to react: most on-target strikes beat him.
-        public int SaveSixYardBoxPermille { get; set; } = 250;
+        public int SaveSixYardBoxPermille { get; set; } = 290;
         // In the box he sees it a beat earlier; the distance term does most of the rest.
         // #87: 305 in the box and 370 outside it (were 350 and 500), the R2 save rates read with
         // the merged v12 shot mix (outside the box 92% at 500; R2 78-90%); at 320, with the
         // throw-ins back, a second-tier match had 2.34 goals (R3: 2.3-2.9).
-        public int SaveBoxPermille { get; set; } = 305;
+        // #178: 345 in the box and 290 in the six-yard box (were 305 and 250). A defender blocks
+        // only within a metre of the strike (free-ball spec R3), so the strikes the 4 m reach used
+        // to charge down reach the keeper: the save rate read 63.5% (R2: 65-75), 69.7% now.
+        public int SaveBoxPermille { get; set; } = 345;
         // From outside the box he sees it all the way: four in five are kept out.
         public int SaveOutsidePermille { get; set; } = 370;
         // Penalties: roughly three in four on target go in, whatever the pitch around them.
