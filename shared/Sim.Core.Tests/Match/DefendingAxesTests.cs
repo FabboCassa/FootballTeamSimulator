@@ -108,7 +108,8 @@ namespace Sim.Core.Tests.Match
             Print("engagement", "where the ball is won back, m from own goal", high, neutral, low, "high", "low");
 
             // Measured: high 37.18, mid 32.19, low 29.03 m.
-            Assert.That(high, Is.GreaterThan(neutral + 2.5), "a high line of engagement wins the ball further up");
+            // v13 re-baseline (#179, owner decision): mean 2.38 over 1024 seeds; effect size restored in #189.
+            Assert.That(high, Is.GreaterThan(neutral + 1.5), "a high line of engagement wins the ball further up");
             Assert.That(low, Is.LessThan(neutral - 1.5), "a low one wins it deeper");
         }
 
@@ -171,7 +172,8 @@ namespace Sim.Core.Tests.Match
                 "force outside", "force inside");
 
             // Measured: force outside 16.31, none 8.58, force inside 4.40%.
-            Assert.That(outside, Is.GreaterThan(neutral + 3.5), "forcing the play outside wins the ball on the flank");
+            // v13 re-baseline (#179, owner decision): mean 2.27 over 1024 seeds; effect size restored in #189.
+            Assert.That(outside, Is.GreaterThan(neutral + 0.6), "forcing the play outside wins the ball on the flank");
             Assert.That(inside, Is.LessThan(neutral - 2.0), "forcing it inside wins it in the middle");
         }
 

@@ -181,6 +181,14 @@ namespace Sim.Core.Match.Movement
                 speed = _ball.DribbleTouchSpeed(ahead, pace, lead);
             }
 
+            // A set-up touch: he chooses only with the ball at his feet (V11Brain.Act), so with his
+            // choice due before he would catch a long touch up, he keeps this one within reach.
+            if (lead > _controlU && _ball.TicksUntilBackInReach(speed, ahead, pace, _controlU) > _hold[owner])
+            {
+                lead = _dribbleLeadPressedU;
+                speed = _ball.DribbleTouchSpeed(ahead, pace, lead);
+            }
+
             // Along his run, and back onto its line by half of what it is off it.
             U.Scaled(dx, dy, speed, out _ball.Vx, out _ball.Vy);
             long side0 = ((long)gx * dy - (long)gy * dx) / span;

@@ -78,6 +78,23 @@ namespace Sim.Core.Match.Movement
             return travel > int.MaxValue ? int.MaxValue : (int)travel;
         }
 
+        /// <summary>
+        /// Ticks until a ball played as in <see cref="TravelUntilBackInReach"/> is back within
+        /// <paramref name="reachU"/> of him.
+        /// </summary>
+        public int TicksUntilBackInReach(int speed, int aheadU, int carrierU, int reachU)
+        {
+            long gap = aheadU;
+            for (int t = 0; t < _trackedTicks; t++)
+            {
+                gap += speed - carrierU;
+                speed = speed * _frictionPermille / 1000;
+                if (speed <= carrierU && gap <= reachU) return t + 1;
+            }
+
+            return _trackedTicks;
+        }
+
         /// <summary>Ground a ball played at <paramref name="speed"/> gains on a man running at <paramref name="carrierU"/>.</summary>
         private long LeadGain(int speed, int carrierU)
         {
