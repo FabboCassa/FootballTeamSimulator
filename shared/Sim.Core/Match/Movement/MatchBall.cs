@@ -200,19 +200,7 @@ namespace Sim.Core.Match.Movement
             StepHeight();
             if (Dead) StepBehind();
             if (Dead || !Free) return;
-
-            PrevX = X;
-            PrevY = Y;
-            X += Vx;
-            Y += Vy;
-            Vx = Vx * _frictionPermille / 1000;
-            Vy = Vy * _frictionPermille / 1000;
-
-            if (U.Length(Vx, Vy) < _restSpeed)
-            {
-                Vx = 0;
-                Vy = 0;
-            }
+            Roll();
         }
 
         public int Speed => U.Length(Vx, Vy);

@@ -14,7 +14,7 @@ namespace Sim.Core.Tests.Match
     /// <summary>
     /// The movement layer (tasks 1.5 · 13.1). What is pinned here is the CONTRACT the
     /// renderer plays back — determinism, the ball on the shooter at the event tick, no
-    /// teleports, the ball at somebody's feet — not the choreography itself, which is
+    /// teleports, the ball with somebody — not the choreography itself, which is
     /// balance and is meant to be tuned.
     /// </summary>
     [TestFixture]
@@ -361,8 +361,14 @@ namespace Sim.Core.Tests.Match
         [Test]
         public void TheBallIsAtSomebodysFeet_MostOfTheMatch()
         {
+            // Free-ball spec R3 (issue #179): the man on the ball no longer has it glued to his feet.
+            // He plays it ahead of himself touch after touch, out to his dribble lead at most, so an
+            // owned ball is within that lead of him (a decimetre of stream rounding on top) nearly
+            // always; only a man slowed after his touch (a body in his way) is briefly beyond it.
+            // And it is ON THE PITCH: a ball resting over a line is the referee's, not his.
             PositionStream stream = Play(21).Positions!;
-            int owned = 0, checkedTicks = 0;
+            int owned = 0, checkedTicks = 0, withinLead = 0;
+            int lead = Cfg.DribbleLeadFreeDm + 1;
 
             for (int t = 0; t <= stream.LastTick; t++)
             {
@@ -372,27 +378,18 @@ namespace Sim.Core.Tests.Match
                 owned++;
                 PitchPoint carrier = home ? stream.HomeAt(t, slot) : stream.AwayAt(t, slot);
                 PitchPoint ball = stream.BallAt(t);
+                Assert.That(ball.X, Is.InRange(0, Pitch.LengthDm), $"tick {t}: the ball he has is over a goal line");
+                Assert.That(ball.Y, Is.InRange(0, Pitch.WidthDm), $"tick {t}: the ball he has is over a touchline");
 
-                // At his feet — and the ball is ON THE PITCH, which since engine phase 5 is not
-                // the same point when the carrier himself is over a line. A player can be a stride
-                // outside the touchline with the ball still in play at his inside foot; what
-                // cannot happen is the ball resting on a line, because the laws call that a
-                // throw-in and the referee now gives it (see MatchBalance.TouchlineInsetDm).
-                int inset = new BalanceConfig().Match.TouchlineInsetDm;
-
-                // Believable-match R5: on the frame of his save the ball is in the keeper's hands
-                // where he met it, at full stretch, and at his feet from the next.
-                if (stream.Actions.Any(a => a.Tick == t && a.Kind == BallActionKind.Save && a.Home == home && a.Slot == slot))
-                    inset = Cfg.ControlRadiusDm + Cfg.KeeperSaveReachDm;
-                Assert.That(System.Math.Abs(carrier.X - ball.X), Is.LessThanOrEqualTo(inset),
-                    $"tick {t}: the ball is not at its carrier's feet");
-                Assert.That(System.Math.Abs(carrier.Y - ball.Y), Is.LessThanOrEqualTo(inset),
-                    $"tick {t}: the ball is not at its carrier's feet");
+                int dx = carrier.X - ball.X, dy = carrier.Y - ball.Y;
+                if ((long)dx * dx + (long)dy * dy <= (long)lead * lead) withinLead++;
             }
 
             int percent = owned * 100 / checkedTicks;
-            TestContext.Out.WriteLine($"[movement] ball at a player's feet for {percent}% of the match");
+            double within = 100.0 * withinLead / owned;
+            TestContext.Out.WriteLine($"[movement] the ball is somebody's for {percent}% of the match, within his lead {within:F1}% of it");
             Assert.That(percent, Is.GreaterThan(25), "Most of a match is somebody carrying the ball");
+            Assert.That(within, Is.GreaterThanOrEqualTo(95.0), "the ball he has is within his dribble lead of him");
         }
 
         [Test]

@@ -426,6 +426,7 @@ namespace Sim.Core.Match.Movement
             if (_approachU < 1) _approachU = 1;
             _dribbleReportU = U.Units(_cfg.DribbleReportDm);
             _controlU = U.Units(_cfg.ControlRadiusDm);
+            InitTouch();
             _cutOutU = U.Units(_cfg.PassCutOutReachDm);
             if (_cutOutU > _controlU) _cutOutU = _controlU;
             _keeperReachU = _controlU + U.Units(_cfg.KeeperSaveReachDm);
@@ -803,14 +804,14 @@ namespace Sim.Core.Match.Movement
         {
             int k = side * _n + slot;
             bool home = side == 0;
-            int distance = U.Distance(_px[k], _py[k], targetX, targetY);
+            int distance = U.Distance(_ball.X, _ball.Y, targetX, targetY);
 
             // He knocks it ahead and runs onto it. The push has to be long enough that one
             // touch covers real ground — knocking it a couple of metres every other tick is the
             // same picture with the feed full of "dribble, dribble, dribble" — and weighted so
             // it comes to rest where he is going rather than running away from him.
             int carryForce = _ball.ForceToArrive(distance, _carryArrivalU, _maxPassForce, out int carryTicks);
-            _ball.Kick(side, slot, targetX - _px[k], targetY - _py[k], carryForce);
+            _ball.Kick(side, slot, targetX - _ball.X, targetY - _ball.Y, carryForce);
 
             int hold = HoldTicks(side);
             int settle = carryTicks < _cfg.DribbleFlightTicks ? carryTicks : _cfg.DribbleFlightTicks;
@@ -820,7 +821,8 @@ namespace Sim.Core.Match.Movement
             // every touch turned the commentary into "dribble, dribble, dribble" and filled the
             // stream with a thousand entries a match that nobody would name.
             if (!_runCalled[k]
-                && U.DistanceSq(_px[k], _py[k], _gotBallX[k], _gotBallY[k]) >= (long)_dribbleReportU * _dribbleReportU)
+                && (TakesRestartRunning(tick, k)
+                    || U.DistanceSq(_px[k], _py[k], _gotBallX[k], _gotBallY[k]) >= (long)_dribbleReportU * _dribbleReportU))
             {
                 _runCalled[k] = true;
                 _sheet.Record(tick, BallActionKind.Dribble, home, slot, -1);
@@ -914,8 +916,8 @@ namespace Sim.Core.Match.Movement
 
                 // Hit as hard as he can hit it: this is a man getting rid of the ball, and a ball
                 // rolling gently towards the line is a ball his own keeper collects.
-                _ball.Kick(side, slot, targetX - _px[k], targetY - _py[k], _maxClearForce);
-                _ball.Loft(U.Distance(_px[k], _py[k], targetX, targetY), 0);
+                _ball.Kick(side, slot, targetX - _ball.X, targetY - _ball.Y, _maxClearForce);
+                _ball.Loft(U.Distance(_ball.X, _ball.Y, targetX, targetY), 0);
                 Release(tick, side, slot);
                 _sheet.Record(tick, BallActionKind.Clearance, home, slot, -1);
                 return;
@@ -929,7 +931,7 @@ namespace Sim.Core.Match.Movement
             // from.
             int error = BallSkill.PassErrorPermille(
                 _skPassing[k], _skTechnique[k], pressure, longBall: true, _cfg);
-            int spread = U.Length(targetX - _px[k], targetY - _py[k]) * BallSkill.Spread(_rng, error) / 1000;
+            int spread = U.Length(targetX - _ball.X, targetY - _ball.Y) * BallSkill.Spread(_rng, error) / 1000;
             targetY += spread;
 
             // Struck to TRAVEL the distance it is aimed at and to be DYING not long after it, not
@@ -938,8 +940,8 @@ namespace Sim.Core.Match.Movement
             // upfield from a defender's own box flew the length of the pitch and out. It still
             // arrives with pace on it — it is a clearance, not a pass — which is why the arrival
             // speed here is a multiple of the pass's (engine phase 5).
-            int distance = U.Distance(_px[k], _py[k], targetX, targetY);
-            _ball.Kick(side, slot, targetX - _px[k], targetY - _py[k],
+            int distance = U.Distance(_ball.X, _ball.Y, targetX, targetY);
+            _ball.Kick(side, slot, targetX - _ball.X, targetY - _ball.Y,
                 _ball.ForceToArrive(
                     distance, _arrivalStepU * _cfg.ClearanceArrivalPercent / 100, _maxClearForce, out int _));
             _ball.Loft(distance, 0);
@@ -1137,7 +1139,9 @@ namespace Sim.Core.Match.Movement
             bool home = side == 0;
             int dir = MovementGeometry.Direction(home);
 
-            int dx = choice.X - _px[k], dy = choice.Y - _py[k];
+            // From the ball, which runs a stride ahead of him between touches (free-ball spec R3):
+            // aimed and weighted from his own feet, a pass missed its man by that stride.
+            int dx = choice.X - _ball.X, dy = choice.Y - _ball.Y;
             int distance = U.Length(dx, dy);
             bool longBall = distance > U.Units(_cfg.LongBallFromDm);
 
@@ -1162,7 +1166,7 @@ namespace Sim.Core.Match.Movement
             if (force < 1) force = 1;
             if (force > _maxPassForce) force = _maxPassForce;
 
-            _ball.Kick(side, slot, aimX - _px[k], aimY - _py[k], force);
+            _ball.Kick(side, slot, aimX - _ball.X, aimY - _ball.Y, force);
             Release(tick, side, slot);
 
             // The assistant's flag, decided at the moment the ball is PLAYED and answered only if
@@ -1186,9 +1190,9 @@ namespace Sim.Core.Match.Movement
                 : IsCross(side, k) ? BallActionKind.Cross : BallActionKind.Pass;
             // Never lofted back to his own keeper: he may not handle it, and over his head is in the net.
             if (kind == BallActionKind.LongBall && !_keeper[side * _n + choice.Slot])
-                _ball.Loft(U.Distance(_px[k], _py[k], aimX, aimY), 0);
+                _ball.Loft(U.Distance(_ball.X, _ball.Y, aimX, aimY), 0);
             else if (kind == BallActionKind.Cross)
-                _ball.Loft(U.Distance(_px[k], _py[k], aimX, aimY), MatchBall.HeadHeightDm);
+                _ball.Loft(U.Distance(_ball.X, _ball.Y, aimX, aimY), MatchBall.HeadHeightDm);
             _sheet.Record(tick, kind, home, slot, choice.Slot);
         }
 
@@ -1468,9 +1472,9 @@ namespace Sim.Core.Match.Movement
 
             if (!_ball.Free)
             {
-                // The carrier keeps it glued to his feet; a challenge can still take it.
+                // The carrier plays it ahead of himself (free-ball spec R3); a challenge can still take it.
                 int owner = _ball.OwnerSide * _n + _ball.OwnerSlot;
-                BallToFeet(owner);
+                if (!RunWithBall(tick, owner)) return;
 
                 int taker = -1, takerSide = -1;
                 int other = 1 - _ball.OwnerSide;
@@ -1488,6 +1492,15 @@ namespace Sim.Core.Match.Movement
                     }
                 }
 
+                // Well out of his reach the ball is not his to defend in a duel (free-ball spec R3); a
+                // stride from it, he races the man at it for it.
+                if (taker >= 0 && tick >= _tackleLock
+                    && U.DistanceSq(_px[owner], _py[owner], _ball.X, _ball.Y) > (long)_dribbleContestU * _dribbleContestU)
+                {
+                    NipIn(tick, takerSide, taker);
+                    return;
+                }
+
                 // The challenge, as a DUEL (engine phase 4). It used to be one flat roll per
                 // tick of contact, identical for a winger and a centre-half; now the pace of
                 // duels is the config's and who wins them is the two men's — the carrier's
@@ -1499,7 +1512,8 @@ namespace Sim.Core.Match.Movement
                     // Pressing sets how readily he goes in, never how far he reaches (free-ball spec R3):
                     // squared, as the area of contact it scaled when it was a radius.
                     int press = _tactics[takerSide].ChallengePercent;
-                    int odds = (int)((long)V11DuelOdds(DuelWinPermille(owner, challenger), owner) * press * press / 10_000);
+                    int odds = (int)((long)V11DuelOdds(DuelWinPermille(owner, challenger), owner) * press * press / 10_000)
+                               * _cfg.DribbleChallengePercent / 100;
 
                     if (_rng.NextInt(0, 1000) < odds)
                     {
@@ -1512,7 +1526,10 @@ namespace Sim.Core.Match.Movement
                         // what makes Defending worth having in the picture rather than only in the
                         // result model — the same challenge, made by a worse tackler, is a free
                         // kick against him.
-                        if (_referee.GiveFoulIfCommitted(tick, takerSide, taker, owner)) return;
+                        // Only a challenge that reaches the man can foul him: one at a ball played ahead
+                        // of him, out of his reach, takes the ball or misses it.
+                        bool reachesMan = U.DistanceSq(_px[challenger], _py[challenger], _px[owner], _py[owner]) <= (long)_foulReachU * _foulReachU;
+                        if (reachesMan && _referee.GiveFoulIfCommitted(tick, takerSide, taker, owner)) return;
 
                         // Not every challenge won is a ball won. Half of them the ball simply
                         // runs loose and both of them go after it — which is where the loose
@@ -1677,6 +1694,32 @@ namespace Sim.Core.Match.Movement
                 return;
             }
 
+            // THE FIRST TOUCH (free-ball spec R3): a ball played to him, or cut out, runs on off his
+            // foot by an error its speed grows and his Technique shrinks; too far, and it is loose.
+            // Not his own knock-on, not a keeper's hands, not a strike.
+            int residual = 0;
+            bool ownKnock = _ball.LastTouchSide == bestSide && _ball.LastTouchSlot == bestSlot;
+            if (!wasShot && !claimed && !ownKnock)
+            {
+                residual = FirstTouchResidual(gkSlot, U.Length(inVx, inVy));
+                if (_ball.RollOut(residual) > _firstTouchLooseU)
+                {
+                    if (_offside.AnyFlag)
+                    {
+                        if (_offside.IsFlagged(gkSlot))
+                        {
+                            _referee.GiveOffside(tick, bestSide, bestSlot);
+                            return;
+                        }
+
+                        _offside.ClearFlags();
+                    }
+
+                    LooseTouch(tick, bestSide, bestSlot, inVx, inVy, residual);
+                    return;
+                }
+            }
+
             int metX = _ball.X, metY = _ball.Y;
             if (!wasShot)
             {
@@ -1687,6 +1730,7 @@ namespace Sim.Core.Match.Movement
             }
 
             Collect(bestSide, bestSlot);
+            if (residual > 0) U.Scaled(inVx, inVy, residual, out _ball.Vx, out _ball.Vy);
             _lastTouch[bestSide] = bestSlot;
             _hold[bestSide * _n + bestSlot] = HoldTicks(bestSide);
             _receiver[0] = -1;

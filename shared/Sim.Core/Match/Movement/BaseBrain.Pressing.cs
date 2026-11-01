@@ -73,26 +73,28 @@ namespace Sim.Core.Match.Movement
             }
 
             /// <summary>
-            /// Where the presser puts himself: a stride off the ball, on the line between him and it.
+            /// Where the presser puts himself: a stride off the man on the ball (the ball, loose), on the
+            /// line between him and it.
             /// HOW BIG a stride is the Pressing instruction (engine phase 8) — a high press is
             /// touch-tight and a low block CONTAINS, standing off him and keeping its shape. This is
             /// the number `[press]` reads: the space left to the man on the ball.
             /// </summary>
             private void PressSpot(int side, int k, out int x, out int y)
             {
-                int dx = _px[k] - _ball.X, dy = _py[k] - _ball.Y;
+                _sim.ManOnTheBall(out int bx, out int by);
+                int dx = _px[k] - bx, dy = _py[k] - by;
                 int distance = U.Length(dx, dy);
                 if (distance <= 0)
                 {
-                    x = _ball.X;
-                    y = _ball.Y;
+                    x = bx;
+                    y = by;
                     return;
                 }
 
                 int standOff = _tactics[side].PressStandOffU;
                 int reach = distance < standOff ? distance : standOff;
-                x = _ball.X + (int)((long)dx * reach / distance);
-                y = _ball.Y + (int)((long)dy * reach / distance);
+                x = bx + (int)((long)dx * reach / distance);
+                y = by + (int)((long)dy * reach / distance);
             }
 
             private void MarkSpot(int side, int k, out int x, out int y)

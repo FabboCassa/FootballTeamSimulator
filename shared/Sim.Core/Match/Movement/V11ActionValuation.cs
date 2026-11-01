@@ -174,7 +174,7 @@ namespace Sim.Core.Match.Movement
         public bool IsOpenGoal(V11Scene s)
         {
             int goalX = GoalX(s);
-            if (!OpenGoalLane.InRange(s.BallXDm, s.BallYDm, goalX, _cfg.V11OpenGoalRangeDm, _cfg.V11OpenGoalMinMouthSinePermille))
+            if (!OpenGoalLane.InRange(s.LaneXDm, s.LaneYDm, goalX, _cfg.V11OpenGoalRangeDm, _cfg.V11OpenGoalMinMouthSinePermille))
                 return false;
 
             for (int i = 0; i < s.FoeCount; i++)
@@ -182,13 +182,13 @@ namespace Sim.Core.Match.Movement
                 PitchActor foe = s.Foes[i];
                 if (i == s.FoeKeeper)
                 {
-                    if (!OpenGoalLane.KeeperBeaten(foe.XDm, foe.YDm, s.BallXDm, s.BallYDm, goalX,
+                    if (!OpenGoalLane.KeeperBeaten(foe.XDm, foe.YDm, s.LaneXDm, s.LaneYDm, goalX,
                             _cfg.V11OpenGoalKeeperMarginDm, _cfg.V11OpenGoalKeeperOneOnOneDm))
                         return false;
                     continue;
                 }
 
-                if (OpenGoalLane.Closes(foe.XDm, foe.YDm, s.BallXDm, s.BallYDm, goalX,
+                if (OpenGoalLane.Closes(foe.XDm, foe.YDm, s.LaneXDm, s.LaneYDm, goalX,
                         _cfg.V11OpenGoalLaneMarginDm, _cfg.V11OpenGoalFreeRadiusDm))
                     return false;
             }

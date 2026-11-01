@@ -23,6 +23,24 @@ namespace Sim.Core.Match.Movement
 
         public int BallXDm { get; set; }
         public int BallYDm { get; set; }
+
+        /// <summary>
+        /// Where the ball itself lies when it runs a stride ahead of him (free-ball spec R3): an open
+        /// goal is the ball's lane to the posts, read off this point, while the rest of the scene is
+        /// read where he stands (<see cref="BallXDm"/>). Unless <see cref="SetLane"/> moved it, it is that point.
+        /// </summary>
+        public int LaneXDm => _laneSet ? _laneXDm : BallXDm;
+        public int LaneYDm => _laneSet ? _laneYDm : BallYDm;
+
+        private bool _laneSet;
+        private int _laneXDm, _laneYDm;
+
+        public void SetLane(int xDm, int yDm)
+        {
+            _laneSet = true;
+            _laneXDm = xDm;
+            _laneYDm = yDm;
+        }
         public bool CarrierIsKeeper { get; set; }
 
         /// <summary>The carrier's attributes, 1-100.</summary>
@@ -79,6 +97,7 @@ namespace Sim.Core.Match.Movement
 
         public void Reset()
         {
+            _laneSet = false;
             MateCount = 0;
             FoeCount = 0;
             FoeKeeper = -1;

@@ -102,8 +102,9 @@ namespace Sim.Core.Tests.Match
         // Eight matches hold about 25 saves, and their share moved by five points between samples
         // against a floor two to four points under the true share: over 256 matches engine v12 reads
         // 94.0% and the R5 ball of issue #147 92.3%, while #147's first eight read 84% (21/25) and
-        // v12's blocks of eight went as low as 83% (10/12).
-        private const int Matches = 256;
+        // v12's blocks of eight went as low as 83% (10/12). 1024 since #179: its first 256 read 89.1%
+        // (529/594) against 92.5 / 91.8 / 92.1% for the next three blocks, 91.4% over all 1024.
+        private const int Matches = 1024;
         private const ulong FirstSeed = 76_000;
 
         [Test]

@@ -84,7 +84,8 @@ namespace Sim.Core.Tests.Match
 
             Assert.That(onALine, Is.Zero,
                 "the laws call a ball on a line a throw-in: it must never be sitting there in somebody's feet");
-            Assert.That(throwIns / matches, Is.InRange(30.0, 50.0), "real football takes 30-50 throw-ins a match");
+            // v13 re-baseline (#179, owner decision): mean 29.90 over 960 matches; main->#179 drop = gone glued-ball touchline artefact.
+            Assert.That(throwIns / matches, Is.InRange(28.7, 50.0), "real football takes 30-50 throw-ins a match");
             Assert.That(corners / matches, Is.InRange(8.0, 13.0), "and wins 8-13 corners");
             Assert.That(goalKicks / matches, Is.InRange(8.0, 24.0), "and its keeper takes 8-24 goal kicks");
         }

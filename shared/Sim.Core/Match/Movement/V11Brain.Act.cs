@@ -43,6 +43,7 @@ namespace Sim.Core.Match.Movement
                 }
 
                 if (ball.OwnerSide != side || ball.OwnerSlot != slot) return;
+                if (_sim._closeIn == k) _sim._closeIn = -1;
 
                 bool holding = _sim._hold[k] > 0;
                 if (holding) _sim._hold[k]--;
@@ -62,6 +63,14 @@ namespace Sim.Core.Match.Movement
                     ReadGoalward(side, slot);
                     TrackOpenGoal(tick, k);
                     if (_scene.CarrierIsKeeper || !_valuation.IsOpenGoal(_scene)) return;
+                }
+
+                // He plays it only with it at his feet: running with it, it is ahead of him between
+                // touches, and with a choice to make he goes and gets it (see MatchSimulator.CarrierTop).
+                if (!_sim.BallAtFeet(k))
+                {
+                    _sim._closeIn = k;
+                    return;
                 }
 
                 // He chooses on the pressure as it is and executes on the pressure he feels: a shout
@@ -165,10 +174,9 @@ namespace Sim.Core.Match.Movement
 
             private void Pass(int tick, int side, int slot, V11Choice choice, int pressure)
             {
-                int k = side * _sim._n + slot;
                 int tx = U.ClampX(U.Units(choice.XDm));
                 int ty = _sim._ctx.Inside(U.Units(choice.YDm));
-                int distance = U.Distance(_sim._px[k], _sim._py[k], tx, ty);
+                int distance = U.Distance(_sim._ball.X, _sim._ball.Y, tx, ty);
                 int force = _sim._ball.ForceToArrive(distance, _sim._arrivalStepU, _sim._maxPassForce, out int flight);
 
                 // Into the stride of a man on the move, where he will be when it arrives: he takes it
@@ -180,7 +188,7 @@ namespace Sim.Core.Match.Movement
                 {
                     tx = U.ClampX(tx + leadX);
                     ty = _sim._ctx.Inside(ty + leadY);
-                    distance = U.Distance(_sim._px[k], _sim._py[k], tx, ty);
+                    distance = U.Distance(_sim._ball.X, _sim._ball.Y, tx, ty);
                     force = _sim._ball.ForceToArrive(distance, _sim._arrivalStepU, _sim._maxPassForce, out _);
                 }
 
@@ -213,8 +221,13 @@ namespace Sim.Core.Match.Movement
                 V11Scene s = _scene;
                 s.Reset();
                 s.AttacksHighX = side == 0;
-                s.BallXDm = U.Dm(sim._ball.X);
-                s.BallYDm = U.Dm(sim._ball.Y);
+                // He reads the game from where he stands: running with it, the ball is a stride ahead of
+                // him between touches (free-ball spec R3), and read from there every chance looked a
+                // stride nearer than it is (a fifth more shots). The open goal is the ball's own lane.
+                bool feet = sim._ball.Free || sim._keeper[k];
+                s.BallXDm = U.Dm(feet ? sim._ball.X : sim._px[k]);
+                s.BallYDm = U.Dm(feet ? sim._ball.Y : sim._py[k]);
+                s.SetLane(U.Dm(sim._ball.X), U.Dm(sim._ball.Y));
                 s.CarrierIsKeeper = sim._keeper[k];
                 s.ShotAppetitePercent = sim._tactics[side].ShotAppetitePercent;
 
