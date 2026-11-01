@@ -176,21 +176,10 @@ namespace Sim.Core.Match.Movement
             {
                 int tx = U.ClampX(U.Units(choice.XDm));
                 int ty = _sim._ctx.Inside(U.Units(choice.YDm));
+                // Aimed where the choice priced it (free-ball spec R4): to his feet, ahead of him or
+                // behind the line, his run already in the aim. He takes it within his reach (R3).
                 int distance = U.Distance(_sim._ball.X, _sim._ball.Y, tx, ty);
-                int force = _sim._ball.ForceToArrive(distance, _sim._arrivalStepU, _sim._maxPassForce, out int flight);
-
-                // Into the stride of a man on the move, where he will be when it arrives: he takes it
-                // within his reach (free-ball spec R3), not from the metres the ball used to cross to him.
-                int r = side * _sim._n + _mateSlot[choice.Mate];
-                int leadX = _sim._vx[r] * flight, leadY = _sim._vy[r] * flight;
-                U.Cap(ref leadX, ref leadY, U.Units(_sim._cfg.PassRunLeadMaxDm));
-                if (leadX != 0 || leadY != 0)
-                {
-                    tx = U.ClampX(tx + leadX);
-                    ty = _sim._ctx.Inside(ty + leadY);
-                    distance = U.Distance(_sim._ball.X, _sim._ball.Y, tx, ty);
-                    force = _sim._ball.ForceToArrive(distance, _sim._arrivalStepU, _sim._maxPassForce, out _);
-                }
+                int force = _sim._ball.ForceToArrive(distance, _sim._arrivalStepU, _sim._maxPassForce, out _);
 
                 _sim.PlayPass(tick, side, slot, new PassChoice
                 {
@@ -198,7 +187,8 @@ namespace Sim.Core.Match.Movement
                     X = tx,
                     Y = ty,
                     Force = force,
-                    Completion = choice.SafetyPermille
+                    Completion = choice.SafetyPermille,
+                    RunOn = choice.Shape == V11PassShape.Through
                 }, pressure);
             }
 

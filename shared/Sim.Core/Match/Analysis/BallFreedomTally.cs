@@ -18,7 +18,7 @@ namespace Sim.Core.Match.Analysis
         public const string LooseDeflectionsName = "  ... loose balls off the other team/match";
 
         private int _matches, _passMatches;
-        private double _free15, _free3, _within5, _within10, _above1m, _loose, _duels, _deflections, _passes;
+        private double _free15, _free3, _within5, _within10, _above1m, _loose, _duels, _deflections, _passes, _through;
         private double _flight50, _flight90, _receiver50, _intoSpace;
 
         public int Matches => _matches;
@@ -36,6 +36,7 @@ namespace Sim.Core.Match.Analysis
             _duels += match.LooseDuels;
             _deflections += match.LooseDeflections;
             _passes += match.Passes;
+            _through += match.ThroughBalls / 2.0;
             if (match.Passes == 0) return;
 
             _passMatches++;
@@ -45,7 +46,10 @@ namespace Sim.Core.Match.Analysis
             _intoSpace += match.IntoSpacePercent;
         }
 
-        /// <summary>Every reading against its band, in doc §10.5 table order, with the loose-ball split and the pass count.</summary>
+        /// <summary>
+        /// Every reading against its band, in doc §10.5 table order, with the loose-ball split, the
+        /// pass count and the through balls per team-match (doc §11.5's event band).
+        /// </summary>
         public IReadOnlyList<ShotPassRow> Rows()
         {
             double n = _matches == 0 ? 1 : _matches, p = _passMatches == 0 ? 1 : _passMatches;
@@ -61,6 +65,7 @@ namespace Sim.Core.Match.Analysis
                 new ShotPassRow(RealismReference.Tracking.ReceiverToArrivalP50Meters, _receiver50 / p),
                 new ShotPassRow(RealismReference.Tracking.PassIntoSpacePercent, _intoSpace / p),
                 new ShotPassRow(PassesName, _passes / n),
+                new ShotPassRow(RealismReference.Events.ThroughBallsPerTeamMatch, _through / n),
                 new ShotPassRow(RealismReference.Tracking.LooseBallsPerMatch, _loose / n),
                 new ShotPassRow(LooseDuelsName, _duels / n),
                 new ShotPassRow(LooseDeflectionsName, _deflections / n),

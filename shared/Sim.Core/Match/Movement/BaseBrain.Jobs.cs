@@ -46,8 +46,11 @@ namespace Sim.Core.Match.Movement
             public bool PassToSomebodyElse(int side, int slot) =>
                 _receiver[side] != slot && (_receiver[0] >= 0 || _receiver[1] >= 0);
 
-            /// <summary>Where this man would meet the ball, for the V11 brain.</summary>
-            public void InterceptFor(int side, int slot, out int x, out int y) => InterceptSpot(side * _n + slot, out x, out y);
+            /// <summary>Where this man would meet the ball, for the V11 brain; false when he cannot within the lookahead.</summary>
+            public bool InterceptFor(int side, int slot, out int x, out int y) => InterceptSpot(side * _n + slot, out x, out y);
+
+            /// <summary>The man of this side going for a loose ball or a pass, -1 for none.</summary>
+            public int ChaserOf(int side) => _chaser[side];
 
             /// <summary>Where this side's supporting run is going, for the V11 brain.</summary>
             public void SupportSpot(int side, out int x, out int y)

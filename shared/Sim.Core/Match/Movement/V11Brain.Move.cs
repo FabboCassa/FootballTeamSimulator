@@ -44,6 +44,12 @@ namespace Sim.Core.Match.Movement
                 if (job == BaseJob.Chase && ChasesAPassOutOfReach(side, slot)) job = BaseJob.None;
                 bool leashed = job == BaseJob.Press || job == BaseJob.Cover || job == BaseJob.Mark;
                 _sim.TraceJob(k, (MovementJob)(int)asked, (MovementJob)(int)job);
+                if (job == BaseJob.Chase && RunsOnto(side, slot))
+                {
+                    EndSpell(side, slot);
+                    return;
+                }
+
                 if (job != BaseJob.None && job != BaseJob.Support && !leashed)
                 {
                     EndSpell(side, slot);

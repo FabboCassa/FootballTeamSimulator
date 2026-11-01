@@ -42,6 +42,9 @@ namespace Sim.Core.Match.Movement
 
         /// <summary>A pressed man's ball to a free team-mate (real-match spec R9), rather than his own pick.</summary>
         public bool Release;
+
+        /// <summary>A pass's or a cross's aim: to feet, ahead of him, or behind the line (free-ball spec R4).</summary>
+        public V11PassShape Shape;
     }
 
     /// <summary>
@@ -368,9 +371,10 @@ namespace Sim.Core.Match.Movement
         }
 
         /// <summary>
-        /// The best ball to a team-mate: to his feet, or into his path toward goal. From the wide
-        /// channel of the final stretch a ball to a man in the box is a cross. The odds are the
-        /// lane's and the receiver's under pitch control, times the passer's execution.
+        /// The best ball to a team-mate: to his feet, ahead of him or behind the line
+        /// (<see cref="V11PassTarget"/>). From the wide channel of the final stretch a ball to a
+        /// man in the box is a cross. The odds are the lane's and the receiver's under pitch
+        /// control, times the passer's execution.
         /// </summary>
         public int PassValue(V11Scene s, out V11Choice best) => PassValue(s, NoOption, 0, _models, out best);
 
@@ -397,11 +401,9 @@ namespace Sim.Core.Match.Movement
                 PitchActor mate = s.Mates[m];
                 if (dir * mate.XDm > dir * s.OffsideLineXDm) continue;
 
-                for (int option = 0; option < 2; option++)
+                for (int shape = 0; shape < V11PassTarget.Shapes; shape++)
                 {
-                    int tx = Pitch.ClampX(mate.XDm + (option == 1 ? dir * _cfg.V11PassLeadDm : 0));
-                    int ty = mate.YDm;
-                    if (option == 1 && s.MateIsKeeper[m]) continue;
+                    if (!V11PassTarget.Aim(s, mate, s.MateIsKeeper[m], (V11PassShape)shape, _cfg, out int tx, out int ty)) continue;
 
                     int distance = MovementGeometry.Distance(s.BallXDm, s.BallYDm, tx, ty);
                     if (distance < _cfg.MinPassDm || distance > s.MaxPassDm) continue;
@@ -431,7 +433,8 @@ namespace Sim.Core.Match.Movement
                         best = new V11Choice
                         {
                             Kind = cross ? V11ActionKind.Cross : V11ActionKind.Pass,
-                            Mate = m, XDm = tx, YDm = ty, SafetyPermille = safety, ValuePer10k = value
+                            Mate = m, XDm = tx, YDm = ty, SafetyPermille = safety, ValuePer10k = value,
+                            Shape = (V11PassShape)shape
                         };
                     }
                 }

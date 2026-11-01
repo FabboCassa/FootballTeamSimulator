@@ -267,6 +267,7 @@ namespace Sim.Core.Match.Movement
                 _sim._receiver[side] = target;
                 _sim._receiveX[side] = aimX;
                 _sim._receiveY[side] = aimY;
+                _sim._runOn[side] = false;
                 _ctx.Sheet.Record(tick, BallActionKind.Cross, side == 0, slot, target);
             }
 
