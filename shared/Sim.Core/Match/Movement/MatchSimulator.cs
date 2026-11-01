@@ -427,6 +427,7 @@ namespace Sim.Core.Match.Movement
             _dribbleReportU = U.Units(_cfg.DribbleReportDm);
             _controlU = U.Units(_cfg.ControlRadiusDm);
             InitTouch();
+            InitAerial();
             _cutOutU = U.Units(_cfg.PassCutOutReachDm);
             if (_cutOutU > _controlU) _cutOutU = _controlU;
             _keeperReachU = _controlU + U.Units(_cfg.KeeperSaveReachDm);
@@ -1188,8 +1189,13 @@ namespace Sim.Core.Match.Movement
             BallActionKind kind = distance > U.Units(_cfg.LongBallFromDm)
                 ? BallActionKind.LongBall
                 : IsCross(side, k) ? BallActionKind.Cross : BallActionKind.Pass;
-            // Never lofted back to his own keeper: he may not handle it, and over his head is in the net.
-            if (kind == BallActionKind.LongBall && !_keeper[side * _n + choice.Slot])
+            // Long balls and switches are lofted (free-ball spec R4); never back to his own keeper: he
+            // may not handle it, and over his head is in the net.
+            int across = aimY - _ball.Y;
+            if (across < 0) across = -across;
+            bool lofted = kind == BallActionKind.LongBall
+                          || (kind == BallActionKind.Pass && across >= U.Units(_cfg.SwitchLoftAcrossDm));
+            if (lofted && !_keeper[side * _n + choice.Slot])
                 _ball.Loft(U.Distance(_ball.X, _ball.Y, aimX, aimY), 0);
             else if (kind == BallActionKind.Cross)
                 _ball.Loft(U.Distance(_ball.X, _ball.Y, aimX, aimY), MatchBall.HeadHeightDm);
@@ -1578,6 +1584,7 @@ namespace Sim.Core.Match.Movement
             // out, and the goal kick is the referee's business.
             if (_ctx.ShotLive && !_shotOnTarget) return;
             int keeperOnly = _ctx.ShotLive ? (_ctx.ShotHome ? 1 : 0) : -1;
+            if (AerialDuel(tick, justStruck)) return;
 
             // Loose ball: the man nearest it along this tick's flight takes it, and only within
             // reach (free-ball spec R3): his feet within ControlRadiusDm of the ball's path, the ball
@@ -1595,6 +1602,7 @@ namespace Sim.Core.Match.Movement
                     if (keeperOnly >= 0 && (side != keeperOnly || !_keeper[k])) continue;
 
                     if (k == _releasedBy && tick < _releasedUntil) continue;
+                    if (Grounded(tick, k)) continue;
 
                     // A pass on its way to a team-mate is cut out from no further than a loose ball
                     // is picked up: the defender has to read it and get a foot to a moving ball.
@@ -1628,6 +1636,7 @@ namespace Sim.Core.Match.Movement
 
             bool wasShot = _ctx.ShotLive;
             bool interception = _ball.LastTouchSide >= 0 && _ball.LastTouchSide != bestSide;
+            bool secondBall = !interception && SecondBallWon(bestSide);
             bool claimed = KeeperClaims(bestSide, bestSide * _n + bestSlot);
 
             // The keeper's hands (engine phase 4). A save used to end the move by definition:
@@ -1763,6 +1772,7 @@ namespace Sim.Core.Match.Movement
                 return;
             }
 
+            if (secondBall) _sheet.Record(tick, BallActionKind.Recovery, bestSide == 0, bestSlot, -1);
             if (!interception) return;
 
             // Not every ball a defender gets to is a ball he controls. Sometimes he just gets

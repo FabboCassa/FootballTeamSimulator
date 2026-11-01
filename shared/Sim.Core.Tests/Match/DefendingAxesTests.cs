@@ -35,6 +35,11 @@ namespace Sim.Core.Tests.Match
         // The line's offside shift, measured over 256 seeds (#178): +1.04 a match, and +0.71 over
         // the first 64, so 64 were a coin toss on its 0.8 margin.
         private const int LineSeeds = 256;
+
+        // The line of engagement's low shift (#181): aerial duels win the drop of a long ball with a
+        // header and the second ball further up, so it reads 1.70 over 1024 seeds (1.98 over 128
+        // without the duels) and read 1.49 over 128 - its 1.5 margin is the dice at 128.
+        private const int EngagementSeeds = 1024;
         private const ulong FirstSeed = 9100;
 
         // Final third and wide channel (from the centre line), in decimetres.
@@ -101,9 +106,9 @@ namespace Sim.Core.Tests.Match
         [Test]
         public void LineOfEngagement_MovesWhereTheBallIsWonBack()
         {
-            double neutral = Neutral.RecoveryHeightM;
-            double high = Of(engagement: LineOfEngagement.High).RecoveryHeightM;
-            double low = Of(engagement: LineOfEngagement.Low).RecoveryHeightM;
+            double neutral = Of(seeds: EngagementSeeds).RecoveryHeightM;
+            double high = Of(engagement: LineOfEngagement.High, seeds: EngagementSeeds).RecoveryHeightM;
+            double low = Of(engagement: LineOfEngagement.Low, seeds: EngagementSeeds).RecoveryHeightM;
 
             Print("engagement", "where the ball is won back, m from own goal", high, neutral, low, "high", "low");
 

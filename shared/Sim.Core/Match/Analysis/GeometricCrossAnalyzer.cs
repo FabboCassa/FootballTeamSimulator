@@ -64,10 +64,10 @@ namespace Sim.Core.Match.Analysis
                 while (from < events.Count && _eventFrames[from] < f) from++;
                 if (f < 1 || f >= ticks || _dead[f - 1] || _dead[f]) continue;
 
-                int kick = Kick(events, from, f, a.Home ? 0 : 1, a.Slot);
+                int kick = Kick(events, _eventFrames, from, f, a.Home ? 0 : 1, a.Slot);
                 if (kick < 0 || !WideInFinalThird(a.Home, events[kick].XDm, events[kick].YDm)) continue;
 
-                Arrival(s, events, kick, f, out int endFrame, out int endX, out int endY);
+                Arrival(s, _dead, _eventFrames, events, kick, f, out int endFrame, out int endX, out int endY);
                 if (!InAttackedBox(a.Home, endX, endY)) continue;
 
                 bool high = Peak(s, f, endFrame) >= HighPeakDm;
@@ -84,24 +84,25 @@ namespace Sim.Core.Match.Analysis
         }
 
         /// <summary>The passer's last touch filed on frame <paramref name="f"/>, -1 if the sink heard none.</summary>
-        private int Kick(IReadOnlyList<BallEvent> events, int from, int f, int side, int slot)
+        internal static int Kick(IReadOnlyList<BallEvent> events, int[] eventFrames, int from, int f, int side, int slot)
         {
             int kick = -1;
-            for (int i = from; i < events.Count && _eventFrames[i] == f; i++)
+            for (int i = from; i < events.Count && eventFrames[i] == f; i++)
                 if (events[i].Kind == BallEventKind.Touch && events[i].Side == side && events[i].Slot == slot) kick = i;
             return kick;
         }
 
-        private void Arrival(PositionStream s, IReadOnlyList<BallEvent> events, int kick, int f,
+        /// <summary>Where the pass of <paramref name="kick"/> ended: the next touch, deflection or post, else the last frame in play.</summary>
+        internal static void Arrival(PositionStream s, bool[] dead, int[] eventFrames, IReadOnlyList<BallEvent> events, int kick, int f,
             out int endFrame, out int endX, out int endY)
         {
             int ticks = s.TickCount, deadAt = f + 1;
-            while (deadAt < ticks && !_dead[deadAt]) deadAt++;
+            while (deadAt < ticks && !dead[deadAt]) deadAt++;
 
-            for (int i = kick + 1; i < events.Count && _eventFrames[i] <= deadAt; i++)
+            for (int i = kick + 1; i < events.Count && eventFrames[i] <= deadAt; i++)
             {
                 if (events[i].Kind == BallEventKind.Bounce) continue;
-                endFrame = _eventFrames[i];
+                endFrame = eventFrames[i];
                 endX = events[i].XDm;
                 endY = events[i].YDm;
                 return;
@@ -112,7 +113,7 @@ namespace Sim.Core.Match.Analysis
             endY = s.BallXY[endFrame * 2 + 1];
         }
 
-        private static int Peak(PositionStream s, int from, int to)
+        internal static int Peak(PositionStream s, int from, int to)
         {
             int peak = 0;
             for (int t = from; t <= to; t++)
@@ -120,7 +121,7 @@ namespace Sim.Core.Match.Analysis
             return peak;
         }
 
-        private static bool IsPass(BallActionKind k) =>
+        internal static bool IsPass(BallActionKind k) =>
             k == BallActionKind.Pass || k == BallActionKind.LongBall || k == BallActionKind.Cross;
 
         /// <summary>The final third the side attacks, outside the penalty area's side lines (13.84 m from the touchline).</summary>

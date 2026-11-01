@@ -40,6 +40,9 @@ namespace Sim.Core.Match.Movement
         /// <summary>Height above the grass, in decimetres.</summary>
         public int Z => _z / Milli;
 
+        /// <summary>In the air and coming down: where a high ball drops, it is contested in the air.</summary>
+        public bool Dropping => _z > 0 && _vz < 0;
+
         /// <summary>Its height <paramref name="ticks"/> ticks on if nobody touches it, in decimetres (0 once it has come down).</summary>
         public int ZAfter(int ticks)
         {

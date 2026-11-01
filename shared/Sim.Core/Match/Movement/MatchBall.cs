@@ -81,6 +81,9 @@ namespace Sim.Core.Match.Movement
 
         public bool Free => OwnerSide < 0;
 
+        /// <summary>Every strike and gather so far: whether anybody has touched it since a given one.</summary>
+        public int Touches;
+
         public MatchBall(MatchBalance cfg)
         {
             int perSecond = cfg.BallSpeedKeptPermillePerSecond;
@@ -177,6 +180,7 @@ namespace Sim.Core.Match.Movement
             LastTouchSlot = slot;
             Dead = false;
             JustStruck = true;
+            Touches++;
             Heard(BallEventKind.Touch, side, slot);
         }
 
@@ -191,6 +195,7 @@ namespace Sim.Core.Match.Movement
             Dead = false;
             JustStruck = false;
             Drive();
+            Touches++;
             Heard(BallEventKind.Touch, side, slot);
         }
 
