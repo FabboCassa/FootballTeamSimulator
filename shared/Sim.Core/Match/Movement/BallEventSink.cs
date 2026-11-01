@@ -59,5 +59,8 @@ namespace Sim.Core.Match.Movement
 
         /// <summary>The man was a keeper, whose hands reach further than feet.</summary>
         public bool Keeper;
+
+        /// <summary>A header that won an aerial duel (free-ball spec R4): one event per duel.</summary>
+        public bool AerialDuel;
     }
 }

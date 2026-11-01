@@ -2742,6 +2742,57 @@ namespace Sim.Core.Config
         /// </summary>
         public int ChaseOwnBallAimDm { get; set; } = 160;
 
+        // --- Lofted balls, aerial duels and second balls (free-ball spec R4, issue #181) ---
+
+        /// <summary>
+        /// A pass played this far across the pitch is a switch, and is lofted like a long ball
+        /// (over LongBallFromDm): it comes down at its target.
+        /// </summary>
+        public int SwitchLoftAcrossDm { get; set; } = 250;
+
+        /// <summary>
+        /// A dropping ball between this height and TouchHeightDm is a header. With a man of each
+        /// side under it, one within ControlRadiusDm of its path and the other within
+        /// AerialContestDm, they go up for it together: an aerial duel. 17 since issue #181: at 20 (13.8
+        /// duels a team-match) a duel took the tightest moments off a pressed side's own third and the
+        /// high press's grip on it fell under its 0.3 m test bar (DefensiveDutyTests); at 15, 8.3 duels.
+        /// </summary>
+        public int AerialDuelFromDm { get; set; } = 10;
+        public int AerialContestDm { get; set; } = 17;
+
+        /// <summary>
+        /// How good a man is in the air, out of ten: Strength (the jump and the shoulder), Positioning
+        /// (the timing) and Technique (the heading itself). There is no Heading or Jumping attribute.
+        /// </summary>
+        public int AerialStrengthWeight { get; set; } = 6;
+        public int AerialPositioningWeight { get; set; } = 2;
+        public int AerialTechniqueWeight { get; set; } = 2;
+
+        /// <summary>
+        /// The odds a man wins an aerial duel, in permille: an even 500 moved by this per point his
+        /// aerial rating is above his opponent's, kept AerialDuelMinPermille from either end.
+        /// </summary>
+        public int AerialDuelPermillePerPoint { get; set; } = 12;
+        public int AerialDuelMinPermille { get; set; } = 100;
+
+        /// <summary>
+        /// The winner heads it this far toward the goal he attacks, scattered sideways by up to
+        /// AerialHeaderSpreadPermille at Technique 0 (none at 100). A winner out of reach of the ball
+        /// has only spoiled the other man's header: it comes off that man's head AerialSpoiledHeaderDm,
+        /// anywhere. Either way the second ball is free, and neither man may touch it for the release
+        /// lock: the others contest it.
+        /// </summary>
+        public int AerialHeaderDm { get; set; } = 140;
+        public int AerialHeaderSpreadPermille { get; set; } = 600;
+        public int AerialSpoiledHeaderDm { get; set; } = 60;
+
+        /// <summary>
+        /// A header is nodded down: it comes to the grass within this and runs on, rather than hanging
+        /// in the air like the long ball it came off (which held the ball over everybody's head for
+        /// six seconds and more).
+        /// </summary>
+        public int AerialHeaderLandDm { get; set; } = 30;
+
         // --- Striking it (engine phase 4) ---
 
         /// <summary>

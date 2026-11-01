@@ -20,12 +20,16 @@ namespace Sim.Core.Match.Movement
         /// <summary>The tick the simulation is on, stamped on every event.</summary>
         public int EventTick;
 
+        /// <summary>Stamped on the touch it heads as <see cref="BallEvent.AerialDuel"/>: the duel's one event.</summary>
+        public bool AerialDuel;
+
         public void Heard(BallEventKind kind, int side, int slot)
         {
             if (EventSink == null) return;
             var e = new BallEvent
             {
-                Tick = EventTick, Kind = kind, Side = side, Slot = slot, XDm = U.Dm(X), YDm = U.Dm(Y), ZDm = Z
+                Tick = EventTick, Kind = kind, Side = side, Slot = slot, XDm = U.Dm(X), YDm = U.Dm(Y), ZDm = Z,
+                AerialDuel = AerialDuel && kind != BallEventKind.Bounce,
             };
             if (kind != BallEventKind.Bounce && side >= 0 && Feet != null)
             {

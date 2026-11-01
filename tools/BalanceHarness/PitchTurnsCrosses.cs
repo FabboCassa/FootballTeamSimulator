@@ -8,7 +8,8 @@ namespace Fts.BalanceHarness;
 /// <summary>
 /// The pitch scenario's free-ball turn and cross block (free-ball spec R2, issue #175): the cause of
 /// every fast free-ball turn off the engine's own ball events, every turn with no cause listed as a
-/// defect, and the crosses by geometry per team-match, each against its R1 band. Report only, but
+/// defect, the crosses by geometry per team-match, and the long-pass and high-pass shares and aerial
+/// duels (R4, issue #181), each against its R1 band. Report only, but
 /// for the touches made from beyond reach (R3, issue #178): every one of them is a defect, checked.
 /// </summary>
 internal sealed class PitchTurnsCrosses
@@ -16,6 +17,8 @@ internal sealed class PitchTurnsCrosses
     private readonly FreeBallTurnAnalyzer _turns = new();
     private readonly GeometricCrossAnalyzer _crosses = new();
     private readonly TurnCrossTally _tally = new();
+    private readonly AerialPassAnalyzer _aerial = new();
+    private readonly AerialPassTally _aerialTally = new();
     private readonly int _ticksPerFrame;
     private readonly MatchBalance _cfg;
     private int _touches, _beyondReach;
@@ -34,6 +37,8 @@ internal sealed class PitchTurnsCrosses
 
         FreeBallTurnMetrics? t = _turns.Measure(report, events.Records, _ticksPerFrame);
         GeometricCrossMetrics? c = _crosses.Measure(report, events.Records, _ticksPerFrame);
+        AerialPassMetrics? a = _aerial.Measure(report, events.Records, _ticksPerFrame);
+        if (a != null) _aerialTally.Add(a);
         if (t == null || c == null) return;
         _tally.Add(match, t);
         _tally.Add(c);
@@ -43,6 +48,8 @@ internal sealed class PitchTurnsCrosses
     {
         Console.WriteLine();
         Console.Write(_tally.Format("pitch"));
+        Console.WriteLine();
+        Console.Write(_aerialTally.Format("pitch"));
         checks.Info($"{_tally.Defects.Count} fast free-ball turns with no cause over {_tally.Matches} matches (defects, listed above)");
         double perMatch = _tally.Matches <= 0 ? 0 : _beyondReach / (double)_tally.Matches;
         Console.WriteLine($"  touches from beyond reach/match {Fmt.N(perMatch, 2)} (of {Fmt.N(_tally.Matches <= 0 ? 0 : _touches / (double)_tally.Matches, 1)} touches; feet {_cfg.ControlRadiusDm} dm, head {_cfg.TouchHeightDm} dm, keeper +{_cfg.KeeperSaveReachDm} dm, +{_cfg.KeeperArmHeightDm} dm up)");
