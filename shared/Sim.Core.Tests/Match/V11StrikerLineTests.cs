@@ -6,6 +6,7 @@ using Sim.Core.Domain;
 using Sim.Core.Generation;
 using Sim.Core.Match;
 using Sim.Core.Match.Movement;
+using Sim.Core.Match.Movement.Models;
 using Sim.Core.Random;
 
 namespace Sim.Core.Tests.Match
@@ -14,7 +15,7 @@ namespace Sim.Core.Tests.Match
     /// Free-ball spec R6, issue #184: in possession the striker holds the second-last defender's
     /// line (no more than 0.5 m beyond it) while the ball is not playable to him, starts a run in
     /// behind when the team-mate on the ball has a lane to the space behind, and a run he cannot
-    /// pull out of in time is still flagged. Played on a simulator set up for a real match (private,
+    /// pull out of in time, or one the passer reads a stride late, is still flagged. Played on a simulator set up for a real match (private,
     /// so through reflection): a home team-mate holds the ball, the away back four stands flat at
     /// x = <see cref="Line"/> with the keeper on his line, every other man is heaped in the home
     /// corner, and each tick the striker moves by his brain. Home attacks toward x = Pitch.LengthDm.
@@ -117,6 +118,45 @@ namespace Sim.Core.Tests.Match
                 "at a sprint he cannot stop on the line when no ball comes");
             scene.Pass(scene.Striker);
             Assert.That(scene.FlaggedOffside(scene.Striker), Is.True, "a ball played to him then is offside");
+        }
+
+        [Test]
+        public void ARunTimedAStrideLate_LooksOnsideToThePasser_AndIsFlagged()
+        {
+            // The passer's read of the line, as V11Brain gives it him: the flag's margin and his misread.
+            int read = Line + Cfg.OffsideMarginDm + Cfg.V11OffsideMisreadDm;
+            int past = Line + Cfg.OffsideMarginDm + 5;   // half a metre past the flag
+            int sprint = 70;                             // dm/s, at goal
+            Assert.That(sprint * Cfg.V11OffsideReadLagMs / 1000, Is.GreaterThan(past - read),
+                "the premise: at a sprint he is read a stride back, onside");
+
+            Assert.That(PassedTo(new PitchActor(past, Mid, sprint, 0, 75), read), Is.True,
+                "a man flying at goal is read where he was when the passer looked up: the ball is on");
+            Assert.That(PassedTo(new PitchActor(past, Mid, 0, 0, 75), read), Is.False,
+                "the same man standing there is read where he is: no ball to him");
+
+            var scene = new Scene(_league);
+            scene.Reset();
+            scene.Place(scene.Carrier, 500, Mid);
+            scene.Place(scene.Striker, past, Mid, sprint);
+            scene.GiveBall(scene.Carrier);
+            scene.Pass(scene.Striker);
+            Assert.That(scene.FlaggedOffside(scene.Striker), Is.True, "and the assistant, who sees where he is, flags it");
+        }
+
+        /// <summary>Whether the passer, on the ball 20 m short of the line and with the line at <paramref name="read"/> to his eye, prices a ball to <paramref name="mate"/>.</summary>
+        private static bool PassedTo(PitchActor mate, int read)
+        {
+            var s = new V11Scene
+            {
+                BallXDm = 500, BallYDm = Mid, Passing = 70, Technique = 70, MaxPassDm = 600,
+                OffsideLineXDm = read, OffsideReadLagMs = Cfg.V11OffsideReadLagMs,
+            };
+            s.AddFoe(new PitchActor(Pitch.LengthDm - 5, Mid, 0, 0, 75), keeper: true);
+            foreach (int y in LineY) s.AddFoe(new PitchActor(Line, y, 0, 0, 75), keeper: false);
+            s.AddMate(mate, keeper: false);
+            new V11ActionValuation(Cfg).PassValue(s, out V11Choice best);
+            return best.Mate == 0;
         }
 
         // ---------------------------------------------------------------- the scene

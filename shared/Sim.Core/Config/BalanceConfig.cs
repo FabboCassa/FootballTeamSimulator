@@ -1517,6 +1517,14 @@ namespace Sim.Core.Config
         /// </summary>
         public int V11OffsideMisreadDm { get; set; } = 1;
 
+        /// <summary>
+        /// Free-ball spec R6 (issue #184): the passer reads a team-mate running at goal where he
+        /// was this long before the ball is struck, so a run timed a fraction late is flagged and
+        /// the faster the run the likelier. With the striker no longer camped beyond the line, the
+        /// runs in behind a high line leaves room for are where its offsides come from.
+        /// </summary>
+        public int V11OffsideReadLagMs { get; set; } = 150;
+
         /// <summary>How far beyond the offside line a run in behind is aimed.</summary>
         public int V11RunDepthDm { get; set; } = 120;
 
