@@ -1500,8 +1500,13 @@ namespace Sim.Core.Config
         /// </summary>
         public int V11PassChaseLeashDm { get; set; } = 220;
 
-        /// <summary>How far short of the offside line a man in possession holds when he is not running.</summary>
-        public int V11OnsideHoldDm { get; set; } = 16;
+        /// <summary>
+        /// How far short of the offside line a man in possession holds when he is not running.
+        /// 8 since issue #184 (was 16): the striker waits on the line (free-ball spec R6); with his
+        /// every target held, 1.6 m short left him in an offside position 6.4% of his side's
+        /// possession against R1's 6.84-9.94%, 0.8 m short 7.1%.
+        /// </summary>
+        public int V11OnsideHoldDm { get; set; } = 8;
 
         /// <summary>
         /// How far beyond the flag a team-mate can stand and still look onside to the man on the
@@ -1539,6 +1544,14 @@ namespace Sim.Core.Config
         /// <summary>How long a run in behind lasts if the ball is not played into it.</summary>
         public int V11RunMs { get; set; } = 3000;
         public int V11RunTicks => TicksOfMs(V11RunMs);
+
+        /// <summary>
+        /// Free-ball spec R6 (issue #184): with his side on the ball and none played to him, the
+        /// striker stands no further than this beyond the offside line, and beyond it he runs
+        /// straight back. A run in behind ends there too: the ball has to come before the runner
+        /// crosses (a run kept for its whole window parked him 12 m offside).
+        /// </summary>
+        public int V11HoldBeyondDm { get; set; } = 5;
 
         /// <summary>Overlap appetite by Width (narrow · normal · wide); added to the Mentality one.</summary>
         public int[] V11OverlapWidthScore { get; set; } = { 0, 1, 2 };
