@@ -1017,7 +1017,7 @@ namespace Sim.Core.Match.Movement
 
             _shotQuality = ShotQuality(side, slot);
 
-            int reach = half - U.Units(6);
+            int reach = half - U.Units(_cfg.ShotAimInsidePostDm);
             int centre = reach * _cfg.ShotPlacementCentrePermille / 1000;
             int placed = centre + (reach - centre) * _shotQuality / 1000;
             int aimY = U.CenterYU + (_rng.NextInt(0, 2) == 0 ? -placed : placed);

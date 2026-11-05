@@ -1755,15 +1755,14 @@ namespace Sim.Core.Config
         public int V11OpenGoalRangeDm { get; set; } = 200;
 
         /// <summary>
-        /// How much of a shot appetite above 100 adds to <see cref="V11ShotFromDistancePercent"/>'s
-        /// credit for a clear sight from outside the box, in percent: at 400 a side with an appetite
-        /// of 125 credits it twice over. Until issue #81 it stretched <see cref="V11OpenGoalRangeDm"/>
-        /// (a keen side's shortcut from 25 m); R10 holds the shortcut to 20 m, so a keen side's long
-        /// sight is now a priced shot. 400: at 100 eager sides took 6.6 shots a match from outside
-        /// the box against patient ones' 4.8 (InstructionsTests wants 2 more), at 400 7.8.
-        /// 800 since issue #206: with V11ShotFromDistancePercent at 75 the credit it stretches is smaller.
+        /// How much of a shot appetite above 100 adds to the value of a shot from outside the box,
+        /// in percent: at 400 a side with an appetite of 125 credits it twice over (a style bias on
+        /// the shot's value, the identity at an appetite of 100). Until issue #81 it stretched
+        /// <see cref="V11OpenGoalRangeDm"/>; R10 holds the shortcut to 20 m, so a keen side's long
+        /// sight is a priced shot. 400: at 100 eager sides took 6.6 shots a match from outside the
+        /// box against patient ones' 4.8 (InstructionsTests wants 2 more), at 400 7.8.
         /// </summary>
-        public int V11ShotAppetiteRangePercent { get; set; } = 800;
+        public int V11ShotAppetiteRangePercent { get; set; } = 400;
 
         /// <summary>
         /// ...and with the goal mouth in view: the sine of the angle between the lines to the two
@@ -1814,73 +1813,25 @@ namespace Sim.Core.Config
         public int V11RoundKeeperSideDm { get; set; } = 30;
 
         /// <summary>
-        /// How much of a chance's xG the man on the ball credits a shot with, in percent. The xG
-        /// table stays a real-scale model; the simulator's keeper and blocks turn a real-scale
-        /// chance into a goal less often than that, and at the full xG every touch in the box
-        /// was a strike.
-        /// 105 since issue #81 (was 10): with the open-goal shortcut only for a genuinely open goal
-        /// the priced shot is where shots come from, and the man on the shooter square in the lane
-        /// now vetoes it (V11ShotCloseBlocker*); at 10 a match had 10.6 shots and 1.2 goals.
-        /// 75 since issue #87 (was 105): with the merged v12 mechanisms the side keeps the ball
-        /// and reaches the box far more often, and at 105 a match had 29 shots.
-        /// 62 since issue #178: a defender touches the ball only within a metre of it (free-ball
-        /// spec R3), so fewer strikes are charged down (blocked 13% against 20% before) and more
-        /// reach the keeper; at 75 a match had 3.3 goals over 192 (R2: 2.5-3.2), at 62 2.9.
-        /// 300 since issue #206: with the carrier no longer walking into the zone (central-zone
-        /// spells 76 to 26 a team-match) the priced shot is where a chance goes; at 62 that left 16.8
-        /// shots and 1.5 goals, at 300 with the distance credit gone 28.9 and 2.68. Issue #182 replaces
-        /// this weight with the honest price.
+        /// What a strike that does not go in still leaves the side, in ten-thousandths of a goal
+        /// (believable-match R3, issue #182: "+ the expected value of the rebound or corner"):
+        /// the corner a save or a block gives away, the rebound the side picks up, less the goal
+        /// kick it hands over. Engine: about 10.9 corners a match off 21.4 shots, and a corner is
+        /// worth about 0.03 goals; a rebound kept in the box about 0.1 in one shot in ten; a goal
+        /// kick gives the other side its own six-yard box (xT about 0.006) in about half the misses.
+        /// The sum is about 0.01 a miss.
         /// </summary>
-        public int V11ShotValuePercent { get; set; } = 300;
+        public int V11ShotFollowUpPer10k { get; set; } = 100;
 
         /// <summary>
-        /// What each outfield defender in the way of a shot leaves of its value, in percent: in the
-        /// ball-to-posts triangle or within V11ShotBlockerMarginDm of it, where he blocks it. The
-        /// man on the shooter is priced by V11ShotCloseBlocker* instead.
-        /// 25 since issue #80 (was 20): a real striker also hits it through a crowded box, which is
-        /// where a quarter of real shots hit a defender; at 20 one body all but vetoed the shot.
-        /// Much higher pushes shots/match past R7's 28 (40: 28.8).
-        /// 30 since issue #87: against a deep five-man block nothing was ever on, and the 5-3-2 low
-        /// block took 68% of the tactic tournament's points (R14: at most 55%).
+        /// A shot one action away — the receiver's after a ball to him, the carrier's after a carry
+        /// — is worth this percent of the same shot now (believable-match R3, issue #182): the
+        /// discount of a decision one step on. The scene the man reads is frozen; while the ball
+        /// travels the keeper sets himself and the lane can close, so a chance in hand beats the
+        /// same chance a touch later. Without it a free man 11 m out ran two metres across for a
+        /// better angle instead of shooting.
         /// </summary>
-        public int V11ShotBlockerPercent { get; set; } = 30;
-        public int V11ShotBlockerMarginDm { get; set; } = 80;
-
-        /// <summary>
-        /// The man on the shooter (within PressureRadiusDm) in the ball-to-posts triangle or within
-        /// V11ShotCloseBlockerMarginDm of it leaves the shot this much of its value (issue #81): he
-        /// charges a strike down nearly every time (ShotBlock's close range), so a striker with a
-        /// man square in front of him seldom shoots into him. Uncounted, he made three blocks in
-        /// four of R2's blocked share (42% of shots); at 0 the share fell under R2's 20% floor.
-        /// 30 since issue #178 (was 10): he blocks only within a metre of the strike's line now
-        /// (free-ball spec R3), and with the presser goal-side at PressDistanceDm 14 (then) the striker
-        /// who never shot into him left 7% of shots blocked (R2: 20-30%).
-        /// </summary>
-        public int V11ShotCloseBlockerMarginDm { get; set; } = 35;
-        public int V11ShotCloseBlockerPercent { get; set; } = 30;
-
-        /// <summary>
-        /// A shot from outside the box at a clear sight — no outfield defender in the ball-to-posts
-        /// triangle or within V11ShotClearSightMarginDm of it — is credited this percent of its
-        /// value (issue #81, R10 shot selection). The xG table is real-scale, but a ball into this
-        /// engine's box is completed far more often than football's, so at the plain xG the shot
-        /// from distance never beat the ball in: with the shortcut gone 87% of shots came from
-        /// inside the box (R2: 60-72%). Only at a clear sight, so that a man in the lane still
-        /// sends the ball to the team-mate free in the box (R10's scripted case); the 8 m blocker
-        /// margin is wider than any block's reach, so the sight uses a block's own reach.
-        /// 4200 since issue #87 (was 900): longer possession puts the ball in the box
-        /// more often, and at 900 three shots in four came from inside it (R2: 60-72%).
-        /// Since issue #178 a block reaches ControlRadiusDm (free-ball spec R3), so the clear sight
-        /// is 10 (was 30) and the credit back to 900: at 4200 over the wider sight 55% of a
-        /// match's 48 shots came from outside the box; at 900, 37% of 31. At the 3 m sight an
-        /// eager side shot from distance only 0.7 times a match more than a patient one
-        /// (InstructionsTests: 2), since no block reached a man stood 1-3 m off the lane.
-        /// 75 (no credit, a discount) since issue #206, with V11ShotValuePercent at 300: at 350
-        /// a blocked man at the edge of the box had a go instead of walking in, and 52% of the shots
-        /// came from inside it.
-        /// </summary>
-        public int V11ShotFromDistancePercent { get; set; } = 75;
-        public int V11ShotClearSightMarginDm { get; set; } = 10;
+        public int V11DeferredShotPercent { get; set; } = 85;
 
         /// <summary>
         /// The keeper on V11, in percent of the base Keeper* figures: the odds he holds a strike he
@@ -2989,6 +2940,9 @@ namespace Sim.Core.Config
         /// is a balloon into the stand.
         /// </summary>
         public int ShotPlacementCentrePermille { get; set; } = 380;
+
+        /// <summary>How far inside the post the best-placed strike is aimed (the V11 brain prices a block on the same aims).</summary>
+        public int ShotAimInsidePostDm { get; set; } = 6;
 
         /// <summary>
         /// Does the keeper HOLD it? Goalkeeping says how often; a fierce strike is parried more

@@ -211,10 +211,10 @@ namespace Sim.Core.Tests.Match
 
             int clear = Shot(null);
             int onHim = _cfg.PressureRadiusDm / 2;
-            Assert.That(Shot(GoalX - 60), Is.EqualTo(clear * _cfg.V11ShotBlockerPercent / 100), "a blocker 10 m ahead");
+            Assert.That(Shot(GoalX - 60), Is.LessThan(clear * 3 / 4), "a blocker 10 m ahead, square on the line");
             Assert.That(Shot(GoalX - 160, Mid + _cfg.PressureRadiusDm - 8), Is.EqualTo(clear),
                 "the man on him at his shoulder is the pressure the xG reads, not a second discount");
-            Assert.That(Shot(GoalX - 160 + onHim), Is.EqualTo(clear * _cfg.V11ShotCloseBlockerPercent / 100),
+            Assert.That(Shot(GoalX - 160 + onHim), Is.LessThan(clear / 10),
                 "R10: the man on him square in the line of it charges it down");
         }
 
@@ -474,9 +474,10 @@ namespace Sim.Core.Tests.Match
         }
 
         /// <summary>
-        /// R10's shot selection from distance: from outside the box a clear sight is credited
-        /// V11ShotFromDistancePercent of its value; a man in the lane takes that away as well as
-        /// cutting the shot, so the ball goes to the man free in the box instead.
+        /// R10's shot selection from distance, priced since issue #182 in the one unit (believable-match
+        /// R3): a clear sight from outside the box is worth its xG and what a miss leaves, no credit
+        /// on top; a man square in the lane charges most of it down, so the ball goes to the man free
+        /// in the box instead.
         /// </summary>
         [Test]
         public void FromOutsideTheBox_AClearSightIsWorthTheShot_AManInTheLaneIsNot()
@@ -492,16 +493,13 @@ namespace Sim.Core.Tests.Match
             {
                 V11Scene s = Scene(ballX, Mid);
                 int xg = ExpectedGoals.Permille(s.BallXDm, s.BallYDm, s.AttacksHighX, s.PressurePermille,
-                    s.Shooting, s.Technique, _cfg.ActionModels);
-                return xg * 10 * _cfg.V11ShotValuePercent / 100;
+                    s.Shooting, s.Technique, _cfg.ActionModels) * 10;
+                return xg + (10_000 - xg) * _cfg.V11ShotFollowUpPer10k / 10_000;
             }
 
-            int far = Plain(GoalX - 200);
-            Assert.That(Shot(GoalX - 200, blocker: false), Is.EqualTo(far * _cfg.V11ShotFromDistancePercent / 100),
-                "a clear sight from 20 m");
-            Assert.That(Shot(GoalX - 200, blocker: true), Is.EqualTo(far * _cfg.V11ShotBlockerPercent / 100),
-                "a man in the lane: no credit for distance, and the block's cut");
-            Assert.That(Shot(GoalX - 120, blocker: false), Is.EqualTo(Plain(GoalX - 120)), "inside the box the xG alone");
+            Assert.That(Shot(GoalX - 200, blocker: false), Is.EqualTo(Plain(GoalX - 200)), "a clear sight from 20 m: its xG");
+            Assert.That(Shot(GoalX - 200, blocker: true), Is.LessThan(Plain(GoalX - 200) * 3 / 4), "a man in the lane cuts it");
+            Assert.That(Shot(GoalX - 120, blocker: false), Is.EqualTo(Plain(GoalX - 120)), "inside the box the same unit");
         }
 
         [Test]

@@ -171,7 +171,7 @@ namespace Sim.Core.Match.Movement
             private DecisionOption Option(in V11Choice c) => new DecisionOption
             {
                 Kind = c.Kind, MateSlot = c.Mate >= 0 ? _mateSlot[c.Mate] : -1, XDm = c.XDm, YDm = c.YDm,
-                CompletionPermille = c.SafetyPermille, ValuePer10k = c.ValuePer10k
+                CompletionPermille = c.SafetyPermille, ValuePer10k = c.ValuePer10k, Option = c.Option
             };
 
             private void Pass(int tick, int side, int slot, V11Choice choice, int pressure)
@@ -265,7 +265,7 @@ namespace Sim.Core.Match.Movement
                 {
                     int mk = side * n + j;
                     if (j == slot || sim._sentOff[mk]) continue;
-                    _mateSlot[s.AddMate(Actor(mk), sim._keeper[mk])] = j;
+                    _mateSlot[s.AddMate(Actor(mk), sim._keeper[mk], sim._skShooting[mk], sim._skTechnique[mk])] = j;
                 }
             }
 
