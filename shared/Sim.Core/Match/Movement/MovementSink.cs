@@ -63,7 +63,10 @@ namespace Sim.Core.Match.Movement
         HoldBehind = 20,
 
         /// <summary>In possession (R7): a central midfielder arrives in the box for a cross or cut-back.</summary>
-        BoxArrival = 21
+        BoxArrival = 21,
+
+        /// <summary>Out of possession (issue #206): the man nearest where a pass into the central zone is met closes the receiver.</summary>
+        ZoneClose = 22
     }
 
     /// <summary>

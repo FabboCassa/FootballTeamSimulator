@@ -180,6 +180,29 @@ namespace Sim.Core.Match.Movement
             yDm = Pitch.CenterY;
         }
 
+        /// <summary>
+        /// Issue #206: whether a point (where a pass to an opponent arrives) is in the central zone
+        /// this side guards, within V11ZoneGuardRangeDm of its own goal's centre.
+        /// </summary>
+        public bool InGuardedZone(bool home, int xDm, int yDm)
+        {
+            long range = _cfg.V11ZoneGuardRangeDm;
+            return U.DistanceSq(xDm, yDm, MovementGeometry.OwnGoalX(home), Pitch.CenterY) <= range * range;
+        }
+
+        /// <summary>
+        /// Issue #206: where the man closing that point stands, V11ZoneCloseStandOffDm off it on the
+        /// line to the centre of his own goal, so the receiver is pressed the moment he arrives and
+        /// has the defender between him and the goal.
+        /// </summary>
+        public void ZoneClose(bool home, int threatXDm, int threatYDm, out int xDm, out int yDm)
+        {
+            U.Scaled(MovementGeometry.OwnGoalX(home) - threatXDm, Pitch.CenterY - threatYDm, _cfg.V11ZoneCloseStandOffDm,
+                out int dx, out int dy);
+            xDm = Pitch.ClampX(threatXDm + dx);
+            yDm = Pitch.ClampY(threatYDm + dy);
+        }
+
         /// <summary>The opponent nearest this side's own goal line: the one the screen guards.</summary>
         public static int MostAdvanced(bool home, int[] foeXDm, int foes)
         {

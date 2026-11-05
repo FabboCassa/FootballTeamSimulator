@@ -1612,6 +1612,18 @@ namespace Sim.Core.Config
         public int V11ScreenLeashDm { get; set; } = 120;
 
         /// <summary>
+        /// Defending the central zone (issue #206, free-ball spec R7/R8). When the point an opponent
+        /// meets a pass at is within <see cref="V11ZoneGuardRangeDm"/> of the centre of a side's own
+        /// goal, its outfielder nearest that point closes it at a sprint,
+        /// <see cref="V11ZoneCloseStandOffDm"/> off it on the goal side: the receiver is pressed on
+        /// arrival. The range is a little past the 16 m zone so the ball about to enter it is met
+        /// too. A man already on the ball is left to the press and its instructions. Read only by
+        /// the V11 brain.
+        /// </summary>
+        public int V11ZoneGuardRangeDm { get; set; } = 200;
+        public int V11ZoneCloseStandOffDm { get; set; } = 10;
+
+        /// <summary>
         /// A run bends round an opponent within <see cref="V11CurveTriggerDm"/> of its straight
         /// line, passing him at <see cref="V11CurveClearanceDm"/>.
         /// </summary>

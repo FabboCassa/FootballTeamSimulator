@@ -1152,76 +1152,76 @@ The first table is the league split, the second the league x team-tier split, th
 splits (§11.4). "SB cross flag" is StatsBomb's own cross flag, for comparison with the geometric
 cross of §11.3. Passes per team-match on Premier League 2015/16 reproduce §2.2's 485.
 
-| League, season | Matches | Team-matches | Coverage | Passes | Long % | High % | High crosses | Low crosses | SB cross flag | Through balls | Aerial duels | Offsides |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| Bundesliga 2023/24 | 34 | 68 | Bayer Leverkusen | 576.7 | 11.20 | 15.26 | 4.50 | 4.34 | 9.38 | 2.65 | 25.65 | 1.60 |
-| Ligue 1 2022/23 | 32 | 64 | Paris Saint-Germain | 576.2 | 8.92 | 11.11 | 3.75 | 3.84 | 7.92 | 4.25 | 13.66 | 1.84 |
-| Ligue 1 2021/22 | 26 | 52 | Paris Saint-Germain | 559.4 | 10.45 | 11.82 | 4.58 | 3.90 | 8.65 | 5.25 | 13.04 | 2.54 |
-| La Liga 2020/21 | 35 | 70 | Barcelona | 576.2 | 11.78 | 14.84 | 4.03 | 4.33 | 9.29 | 4.07 | 19.14 | 1.80 |
-| Premier League 2015/16 | 380 | 760 | full season | 485.0 | 16.77 | 25.01 | 6.94 | 4.43 | 11.47 | 2.13 | 44.33 | 1.96 |
-| Serie A 2015/16 | 380 | 760 | full season | 491.7 | 15.94 | 24.67 | 7.43 | 4.17 | 11.71 | 2.08 | 39.16 | 2.37 |
+| League, season | Matches | Team-matches | Coverage | Passes | Long % | High % | High crosses | Low crosses | SB cross flag | Through balls | Aerial duels | Offsides | Box spells | Zone spells | Zone unpressed % |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Bundesliga 2023/24 | 34 | 68 | Bayer Leverkusen | 576.7 | 11.20 | 15.26 | 4.50 | 4.34 | 9.38 | 2.65 | 25.65 | 1.60 | 25.10 | 15.47 | 70.06 |
+| Ligue 1 2022/23 | 32 | 64 | Paris Saint-Germain | 576.2 | 8.92 | 11.11 | 3.75 | 3.84 | 7.92 | 4.25 | 13.66 | 1.84 | 23.42 | 14.75 | 74.26 |
+| Ligue 1 2021/22 | 26 | 52 | Paris Saint-Germain | 559.4 | 10.45 | 11.82 | 4.58 | 3.90 | 8.65 | 5.25 | 13.04 | 2.54 | 21.92 | 13.25 | 72.57 |
+| La Liga 2020/21 | 35 | 70 | Barcelona | 576.2 | 11.78 | 14.84 | 4.03 | 4.33 | 9.29 | 4.07 | 19.14 | 1.80 | 24.34 | 14.29 | 72.90 |
+| Premier League 2015/16 | 380 | 760 | full season | 485.0 | 16.77 | 25.01 | 6.94 | 4.43 | 11.47 | 2.13 | 44.33 | 1.96 | 21.13 | 13.04 | 73.38 |
+| Serie A 2015/16 | 380 | 760 | full season | 491.7 | 15.94 | 24.67 | 7.43 | 4.17 | 11.71 | 2.08 | 39.16 | 2.37 | 18.37 | 11.29 | 69.05 |
 
-| League, season | Team tier | Team-matches | Passes | Long % | High % | High crosses | Low crosses | SB cross flag | Through balls | Aerial duels | Offsides |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| Bundesliga 2023/24 | top | 44 | 675.5 | 8.51 | 11.67 | 4.61 | 5.34 | 10.86 | 3.36 | 25.34 | 1.80 |
-| Bundesliga 2023/24 | middle | 12 | 410.4 | 15.16 | 20.70 | 5.17 | 2.75 | 7.75 | 2.08 | 25.00 | 0.92 |
-| Bundesliga 2023/24 | bottom | 12 | 380.6 | 17.11 | 22.97 | 3.42 | 2.25 | 5.58 | 0.58 | 27.42 | 1.58 |
-| Ligue 1 2022/23 | top | 40 | 654.4 | 7.42 | 9.28 | 3.02 | 3.85 | 7.12 | 5.60 | 14.15 | 2.05 |
-| Ligue 1 2022/23 | middle | 14 | 468.8 | 11.23 | 13.97 | 4.36 | 4.64 | 9.43 | 2.43 | 12.36 | 1.86 |
-| Ligue 1 2022/23 | bottom | 10 | 413.9 | 11.69 | 14.46 | 5.80 | 2.70 | 9.00 | 1.40 | 13.50 | 1.00 |
-| Ligue 1 2021/22 | top | 34 | 650.3 | 8.74 | 9.42 | 4.79 | 4.18 | 9.03 | 6.88 | 13.29 | 2.65 |
-| Ligue 1 2021/22 | middle | 10 | 405.4 | 12.73 | 15.57 | 3.30 | 3.90 | 8.10 | 2.00 | 12.60 | 2.50 |
-| Ligue 1 2021/22 | bottom | 8 | 365.8 | 14.88 | 17.32 | 5.25 | 2.75 | 7.75 | 2.38 | 12.50 | 2.12 |
-| La Liga 2020/21 | top | 45 | 690.2 | 8.73 | 10.71 | 3.36 | 4.91 | 9.38 | 5.62 | 19.11 | 2.13 |
-| La Liga 2020/21 | middle | 16 | 387.8 | 16.32 | 21.11 | 5.44 | 3.44 | 9.50 | 1.50 | 18.44 | 1.19 |
-| La Liga 2020/21 | bottom | 9 | 341.7 | 18.96 | 24.30 | 4.89 | 3.00 | 8.44 | 0.89 | 20.56 | 1.22 |
-| Premier League 2015/16 | top | 228 | 529.2 | 15.18 | 23.07 | 7.06 | 5.18 | 12.38 | 2.58 | 43.29 | 1.91 |
-| Premier League 2015/16 | middle | 304 | 485.5 | 16.64 | 24.58 | 6.58 | 4.27 | 10.93 | 2.25 | 43.41 | 2.04 |
-| Premier League 2015/16 | bottom | 228 | 440.2 | 18.54 | 27.52 | 7.31 | 3.89 | 11.29 | 1.53 | 46.60 | 1.91 |
-| Serie A 2015/16 | top | 228 | 585.4 | 12.93 | 19.44 | 7.46 | 4.73 | 12.54 | 2.83 | 35.11 | 2.32 |
-| Serie A 2015/16 | middle | 304 | 480.7 | 15.86 | 24.29 | 7.13 | 4.21 | 11.48 | 1.89 | 40.16 | 2.38 |
-| Serie A 2015/16 | bottom | 228 | 412.6 | 19.06 | 30.41 | 7.78 | 3.54 | 11.20 | 1.58 | 41.86 | 2.42 |
+| League, season | Team tier | Team-matches | Passes | Long % | High % | High crosses | Low crosses | SB cross flag | Through balls | Aerial duels | Offsides | Box spells | Zone spells | Zone unpressed % |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Bundesliga 2023/24 | top | 44 | 675.5 | 8.51 | 11.67 | 4.61 | 5.34 | 10.86 | 3.36 | 25.34 | 1.80 | 31.70 | 19.27 | 68.63 |
+| Bundesliga 2023/24 | middle | 12 | 410.4 | 15.16 | 20.70 | 5.17 | 2.75 | 7.75 | 2.08 | 25.00 | 0.92 | 13.67 | 9.17 | 66.36 |
+| Bundesliga 2023/24 | bottom | 12 | 380.6 | 17.11 | 22.97 | 3.42 | 2.25 | 5.58 | 0.58 | 27.42 | 1.58 | 12.33 | 7.83 | 87.23 |
+| Ligue 1 2022/23 | top | 40 | 654.4 | 7.42 | 9.28 | 3.02 | 3.85 | 7.12 | 5.60 | 14.15 | 2.05 | 28.25 | 18.05 | 73.13 |
+| Ligue 1 2022/23 | middle | 14 | 468.8 | 11.23 | 13.97 | 4.36 | 4.64 | 9.43 | 2.43 | 12.36 | 1.86 | 16.57 | 9.57 | 78.36 |
+| Ligue 1 2022/23 | bottom | 10 | 413.9 | 11.69 | 14.46 | 5.80 | 2.70 | 9.00 | 1.40 | 13.50 | 1.00 | 13.70 | 8.80 | 77.27 |
+| Ligue 1 2021/22 | top | 34 | 650.3 | 8.74 | 9.42 | 4.79 | 4.18 | 9.03 | 6.88 | 13.29 | 2.65 | 25.47 | 15.47 | 71.67 |
+| Ligue 1 2021/22 | middle | 10 | 405.4 | 12.73 | 15.57 | 3.30 | 3.90 | 8.10 | 2.00 | 12.60 | 2.50 | 18.00 | 10.80 | 75.93 |
+| Ligue 1 2021/22 | bottom | 8 | 365.8 | 14.88 | 17.32 | 5.25 | 2.75 | 7.75 | 2.38 | 12.50 | 2.12 | 11.75 | 6.88 | 74.55 |
+| La Liga 2020/21 | top | 45 | 690.2 | 8.73 | 10.71 | 3.36 | 4.91 | 9.38 | 5.62 | 19.11 | 2.13 | 30.13 | 17.42 | 72.45 |
+| La Liga 2020/21 | middle | 16 | 387.8 | 16.32 | 21.11 | 5.44 | 3.44 | 9.50 | 1.50 | 18.44 | 1.19 | 15.12 | 9.56 | 75.82 |
+| La Liga 2020/21 | bottom | 9 | 341.7 | 18.96 | 24.30 | 4.89 | 3.00 | 8.44 | 0.89 | 20.56 | 1.22 | 11.78 | 7.00 | 71.43 |
+| Premier League 2015/16 | top | 228 | 529.2 | 15.18 | 23.07 | 7.06 | 5.18 | 12.38 | 2.58 | 43.29 | 1.91 | 25.01 | 15.59 | 72.20 |
+| Premier League 2015/16 | middle | 304 | 485.5 | 16.64 | 24.58 | 6.58 | 4.27 | 10.93 | 2.25 | 43.41 | 2.04 | 20.59 | 12.54 | 73.76 |
+| Premier League 2015/16 | bottom | 228 | 440.2 | 18.54 | 27.52 | 7.31 | 3.89 | 11.29 | 1.53 | 46.60 | 1.91 | 17.98 | 11.17 | 74.44 |
+| Serie A 2015/16 | top | 228 | 585.4 | 12.93 | 19.44 | 7.46 | 4.73 | 12.54 | 2.83 | 35.11 | 2.32 | 20.88 | 12.88 | 68.74 |
+| Serie A 2015/16 | middle | 304 | 480.7 | 15.86 | 24.29 | 7.13 | 4.21 | 11.48 | 1.89 | 40.16 | 2.38 | 17.81 | 10.77 | 68.94 |
+| Serie A 2015/16 | bottom | 228 | 412.6 | 19.06 | 30.41 | 7.78 | 3.54 | 11.20 | 1.58 | 41.86 | 2.42 | 16.60 | 10.38 | 69.58 |
 
-| Split | League, season | Team tier - opponent tier | Team-matches | Passes | Long % | High % | High crosses | Low crosses | SB cross flag | Through balls | Aerial duels | Offsides |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| E1 | Bundesliga 2023/24 | top-top | 20 | 564.8 | 10.25 | 14.40 | 4.30 | 4.05 | 8.85 | 3.25 | 24.30 | 1.65 |
-| E2 | Bundesliga 2023/24 | top-middle | 12 | 755.3 | 7.23 | 9.70 | 5.25 | 6.25 | 13.50 | 4.08 | 25.00 | 1.92 |
-| E3 | Bundesliga 2023/24 | top-bottom | 12 | 780.2 | 6.88 | 9.11 | 4.50 | 6.58 | 11.58 | 2.83 | 27.42 | 1.92 |
-| E4 | Bundesliga 2023/24 | middle-top | 12 | 410.4 | 15.16 | 20.70 | 5.17 | 2.75 | 7.75 | 2.08 | 25.00 | 0.92 |
-| E5 | Bundesliga 2023/24 | bottom-top | 12 | 380.6 | 17.11 | 22.97 | 3.42 | 2.25 | 5.58 | 0.58 | 27.42 | 1.58 |
-| E6 | Ligue 1 2022/23 | top-top | 16 | 549.2 | 9.13 | 11.53 | 4.00 | 3.12 | 7.25 | 3.62 | 16.12 | 1.88 |
-| E7 | Ligue 1 2022/23 | top-middle | 14 | 692.4 | 6.24 | 8.01 | 2.21 | 3.93 | 5.93 | 5.93 | 12.36 | 1.93 |
-| E8 | Ligue 1 2022/23 | top-bottom | 10 | 769.5 | 6.34 | 7.44 | 2.60 | 4.90 | 8.60 | 8.30 | 13.50 | 2.50 |
-| E9 | Ligue 1 2022/23 | middle-top | 14 | 468.8 | 11.23 | 13.97 | 4.36 | 4.64 | 9.43 | 2.43 | 12.36 | 1.86 |
-| E10 | Ligue 1 2022/23 | bottom-top | 10 | 413.9 | 11.69 | 14.46 | 5.80 | 2.70 | 9.00 | 1.40 | 13.50 | 1.00 |
-| E11 | Ligue 1 2021/22 | top-top | 16 | 559.9 | 10.68 | 11.80 | 5.44 | 4.06 | 9.31 | 6.25 | 14.12 | 3.00 |
-| E12 | Ligue 1 2021/22 | top-middle | 10 | 728.9 | 6.83 | 7.35 | 3.50 | 4.80 | 8.20 | 5.60 | 12.60 | 1.60 |
-| (E13) | Ligue 1 2021/22 | top-bottom | 8 | 732.9 | 7.25 | 7.26 | 5.12 | 3.62 | 9.50 | 9.75 | 12.50 | 3.25 |
-| E14 | Ligue 1 2021/22 | middle-top | 10 | 405.4 | 12.73 | 15.57 | 3.30 | 3.90 | 8.10 | 2.00 | 12.60 | 2.50 |
-| (E15) | Ligue 1 2021/22 | bottom-top | 8 | 365.8 | 14.88 | 17.32 | 5.25 | 2.75 | 7.75 | 2.38 | 12.50 | 2.12 |
-| E16 | La Liga 2020/21 | top-top | 20 | 570.9 | 10.56 | 13.18 | 2.95 | 4.20 | 7.90 | 4.40 | 19.00 | 1.90 |
-| E17 | La Liga 2020/21 | top-middle | 16 | 762.8 | 7.66 | 9.25 | 4.25 | 5.94 | 12.12 | 5.94 | 18.44 | 2.38 |
-| (E18) | La Liga 2020/21 | top-bottom | 9 | 826.1 | 6.57 | 7.82 | 2.67 | 4.67 | 7.78 | 7.78 | 20.56 | 2.22 |
-| E19 | La Liga 2020/21 | middle-top | 16 | 387.8 | 16.32 | 21.11 | 5.44 | 3.44 | 9.50 | 1.50 | 18.44 | 1.19 |
-| (E20) | La Liga 2020/21 | bottom-top | 9 | 341.7 | 18.96 | 24.30 | 4.89 | 3.00 | 8.44 | 0.89 | 20.56 | 1.22 |
-| E21 | Premier League 2015/16 | top-top | 60 | 484.4 | 16.59 | 25.68 | 6.72 | 4.68 | 11.13 | 2.30 | 44.23 | 1.87 |
-| E22 | Premier League 2015/16 | top-middle | 96 | 525.2 | 15.06 | 22.97 | 6.97 | 5.33 | 12.32 | 2.40 | 42.83 | 1.84 |
-| E23 | Premier League 2015/16 | top-bottom | 72 | 571.8 | 14.15 | 21.02 | 7.46 | 5.39 | 13.50 | 3.06 | 43.11 | 2.04 |
-| E24 | Premier League 2015/16 | middle-top | 96 | 465.6 | 17.09 | 25.71 | 6.04 | 3.80 | 9.77 | 1.90 | 42.83 | 2.39 |
-| E25 | Premier League 2015/16 | middle-middle | 112 | 484.0 | 16.51 | 24.06 | 7.21 | 4.45 | 11.65 | 2.46 | 41.98 | 1.92 |
-| E26 | Premier League 2015/16 | middle-bottom | 96 | 507.2 | 16.36 | 24.06 | 6.36 | 4.53 | 11.25 | 2.35 | 45.65 | 1.82 |
-| E27 | Premier League 2015/16 | bottom-top | 72 | 418.1 | 19.07 | 27.88 | 6.75 | 3.38 | 10.12 | 1.22 | 43.11 | 1.82 |
-| E28 | Premier League 2015/16 | bottom-middle | 96 | 446.4 | 18.07 | 26.98 | 7.53 | 3.93 | 11.70 | 1.69 | 45.65 | 2.01 |
-| E29 | Premier League 2015/16 | bottom-bottom | 60 | 456.9 | 18.66 | 27.97 | 7.62 | 4.43 | 12.03 | 1.65 | 52.30 | 1.85 |
-| E30 | Serie A 2015/16 | top-top | 60 | 532.9 | 13.80 | 21.12 | 6.95 | 3.43 | 10.50 | 2.65 | 31.13 | 2.55 |
-| E31 | Serie A 2015/16 | top-middle | 96 | 583.7 | 13.00 | 19.57 | 7.12 | 4.41 | 12.18 | 2.85 | 36.28 | 2.29 |
-| E32 | Serie A 2015/16 | top-bottom | 72 | 631.4 | 12.11 | 17.86 | 8.35 | 6.24 | 14.72 | 2.94 | 36.86 | 2.15 |
-| E33 | Serie A 2015/16 | middle-top | 96 | 432.8 | 16.74 | 25.75 | 6.19 | 3.77 | 9.58 | 1.65 | 36.28 | 2.50 |
-| E34 | Serie A 2015/16 | middle-middle | 112 | 488.0 | 16.04 | 24.65 | 7.12 | 4.11 | 11.38 | 2.03 | 40.57 | 2.39 |
-| E35 | Serie A 2015/16 | middle-bottom | 96 | 520.0 | 14.76 | 22.42 | 8.09 | 4.77 | 13.49 | 1.99 | 43.55 | 2.25 |
-| E36 | Serie A 2015/16 | bottom-top | 72 | 378.7 | 19.87 | 30.97 | 6.00 | 3.39 | 8.61 | 1.67 | 36.86 | 2.75 |
-| E37 | Serie A 2015/16 | bottom-middle | 96 | 409.8 | 19.22 | 30.75 | 7.94 | 3.31 | 11.45 | 1.46 | 43.55 | 2.36 |
-| E38 | Serie A 2015/16 | bottom-bottom | 60 | 457.6 | 17.82 | 29.20 | 9.67 | 4.10 | 13.92 | 1.68 | 45.17 | 2.10 |
+| Split | League, season | Team tier - opponent tier | Team-matches | Passes | Long % | High % | High crosses | Low crosses | SB cross flag | Through balls | Aerial duels | Offsides | Box spells | Zone spells | Zone unpressed % |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| E1 | Bundesliga 2023/24 | top-top | 20 | 564.8 | 10.25 | 14.40 | 4.30 | 4.05 | 8.85 | 3.25 | 24.30 | 1.65 | 25.00 | 15.00 | 71.33 |
+| E2 | Bundesliga 2023/24 | top-middle | 12 | 755.3 | 7.23 | 9.70 | 5.25 | 6.25 | 13.50 | 4.08 | 25.00 | 1.92 | 38.75 | 24.08 | 67.47 |
+| E3 | Bundesliga 2023/24 | top-bottom | 12 | 780.2 | 6.88 | 9.11 | 4.50 | 6.58 | 11.58 | 2.83 | 27.42 | 1.92 | 35.83 | 21.58 | 66.80 |
+| E4 | Bundesliga 2023/24 | middle-top | 12 | 410.4 | 15.16 | 20.70 | 5.17 | 2.75 | 7.75 | 2.08 | 25.00 | 0.92 | 13.67 | 9.17 | 66.36 |
+| E5 | Bundesliga 2023/24 | bottom-top | 12 | 380.6 | 17.11 | 22.97 | 3.42 | 2.25 | 5.58 | 0.58 | 27.42 | 1.58 | 12.33 | 7.83 | 87.23 |
+| E6 | Ligue 1 2022/23 | top-top | 16 | 549.2 | 9.13 | 11.53 | 4.00 | 3.12 | 7.25 | 3.62 | 16.12 | 1.88 | 22.75 | 15.31 | 71.02 |
+| E7 | Ligue 1 2022/23 | top-middle | 14 | 692.4 | 6.24 | 8.01 | 2.21 | 3.93 | 5.93 | 5.93 | 12.36 | 1.93 | 29.71 | 18.29 | 72.66 |
+| E8 | Ligue 1 2022/23 | top-bottom | 10 | 769.5 | 6.34 | 7.44 | 2.60 | 4.90 | 8.60 | 8.30 | 13.50 | 2.50 | 35.00 | 22.10 | 76.02 |
+| E9 | Ligue 1 2022/23 | middle-top | 14 | 468.8 | 11.23 | 13.97 | 4.36 | 4.64 | 9.43 | 2.43 | 12.36 | 1.86 | 16.57 | 9.57 | 78.36 |
+| E10 | Ligue 1 2022/23 | bottom-top | 10 | 413.9 | 11.69 | 14.46 | 5.80 | 2.70 | 9.00 | 1.40 | 13.50 | 1.00 | 13.70 | 8.80 | 77.27 |
+| E11 | Ligue 1 2021/22 | top-top | 16 | 559.9 | 10.68 | 11.80 | 5.44 | 4.06 | 9.31 | 6.25 | 14.12 | 3.00 | 20.25 | 11.38 | 74.18 |
+| E12 | Ligue 1 2021/22 | top-middle | 10 | 728.9 | 6.83 | 7.35 | 3.50 | 4.80 | 8.20 | 5.60 | 12.60 | 1.60 | 30.30 | 18.50 | 69.19 |
+| (E13) | Ligue 1 2021/22 | top-bottom | 8 | 732.9 | 7.25 | 7.26 | 5.12 | 3.62 | 9.50 | 9.75 | 12.50 | 3.25 | 29.88 | 19.88 | 71.70 |
+| E14 | Ligue 1 2021/22 | middle-top | 10 | 405.4 | 12.73 | 15.57 | 3.30 | 3.90 | 8.10 | 2.00 | 12.60 | 2.50 | 18.00 | 10.80 | 75.93 |
+| (E15) | Ligue 1 2021/22 | bottom-top | 8 | 365.8 | 14.88 | 17.32 | 5.25 | 2.75 | 7.75 | 2.38 | 12.50 | 2.12 | 11.75 | 6.88 | 74.55 |
+| E16 | La Liga 2020/21 | top-top | 20 | 570.9 | 10.56 | 13.18 | 2.95 | 4.20 | 7.90 | 4.40 | 19.00 | 1.90 | 24.25 | 13.70 | 70.07 |
+| E17 | La Liga 2020/21 | top-middle | 16 | 762.8 | 7.66 | 9.25 | 4.25 | 5.94 | 12.12 | 5.94 | 18.44 | 2.38 | 36.88 | 21.19 | 79.06 |
+| (E18) | La Liga 2020/21 | top-bottom | 9 | 826.1 | 6.57 | 7.82 | 2.67 | 4.67 | 7.78 | 7.78 | 20.56 | 2.22 | 31.22 | 19.00 | 63.16 |
+| E19 | La Liga 2020/21 | middle-top | 16 | 387.8 | 16.32 | 21.11 | 5.44 | 3.44 | 9.50 | 1.50 | 18.44 | 1.19 | 15.12 | 9.56 | 75.82 |
+| (E20) | La Liga 2020/21 | bottom-top | 9 | 341.7 | 18.96 | 24.30 | 4.89 | 3.00 | 8.44 | 0.89 | 20.56 | 1.22 | 11.78 | 7.00 | 71.43 |
+| E21 | Premier League 2015/16 | top-top | 60 | 484.4 | 16.59 | 25.68 | 6.72 | 4.68 | 11.13 | 2.30 | 44.23 | 1.87 | 22.28 | 14.20 | 72.42 |
+| E22 | Premier League 2015/16 | top-middle | 96 | 525.2 | 15.06 | 22.97 | 6.97 | 5.33 | 12.32 | 2.40 | 42.83 | 1.84 | 25.00 | 15.24 | 71.29 |
+| E23 | Premier League 2015/16 | top-bottom | 72 | 571.8 | 14.15 | 21.02 | 7.46 | 5.39 | 13.50 | 3.06 | 43.11 | 2.04 | 27.29 | 17.21 | 73.12 |
+| E24 | Premier League 2015/16 | middle-top | 96 | 465.6 | 17.09 | 25.71 | 6.04 | 3.80 | 9.77 | 1.90 | 42.83 | 2.39 | 17.92 | 11.07 | 75.45 |
+| E25 | Premier League 2015/16 | middle-middle | 112 | 484.0 | 16.51 | 24.06 | 7.21 | 4.45 | 11.65 | 2.46 | 41.98 | 1.92 | 21.53 | 12.90 | 73.98 |
+| E26 | Premier League 2015/16 | middle-bottom | 96 | 507.2 | 16.36 | 24.06 | 6.36 | 4.53 | 11.25 | 2.35 | 45.65 | 1.82 | 22.16 | 13.57 | 72.14 |
+| E27 | Premier League 2015/16 | bottom-top | 72 | 418.1 | 19.07 | 27.88 | 6.75 | 3.38 | 10.12 | 1.22 | 43.11 | 1.82 | 15.68 | 9.78 | 76.56 |
+| E28 | Premier League 2015/16 | bottom-middle | 96 | 446.4 | 18.07 | 26.98 | 7.53 | 3.93 | 11.70 | 1.69 | 45.65 | 2.01 | 19.03 | 11.73 | 73.18 |
+| E29 | Premier League 2015/16 | bottom-bottom | 60 | 456.9 | 18.66 | 27.97 | 7.62 | 4.43 | 12.03 | 1.65 | 52.30 | 1.85 | 19.07 | 11.95 | 74.34 |
+| E30 | Serie A 2015/16 | top-top | 60 | 532.9 | 13.80 | 21.12 | 6.95 | 3.43 | 10.50 | 2.65 | 31.13 | 2.55 | 15.82 | 9.40 | 69.86 |
+| E31 | Serie A 2015/16 | top-middle | 96 | 583.7 | 13.00 | 19.57 | 7.12 | 4.41 | 12.18 | 2.85 | 36.28 | 2.29 | 20.01 | 12.36 | 68.49 |
+| E32 | Serie A 2015/16 | top-bottom | 72 | 631.4 | 12.11 | 17.86 | 8.35 | 6.24 | 14.72 | 2.94 | 36.86 | 2.15 | 26.26 | 16.47 | 68.47 |
+| E33 | Serie A 2015/16 | middle-top | 96 | 432.8 | 16.74 | 25.75 | 6.19 | 3.77 | 9.58 | 1.65 | 36.28 | 2.50 | 13.86 | 8.16 | 66.92 |
+| E34 | Serie A 2015/16 | middle-middle | 112 | 488.0 | 16.04 | 24.65 | 7.12 | 4.11 | 11.38 | 2.03 | 40.57 | 2.39 | 17.18 | 10.56 | 69.57 |
+| E35 | Serie A 2015/16 | middle-bottom | 96 | 520.0 | 14.76 | 22.42 | 8.09 | 4.77 | 13.49 | 1.99 | 43.55 | 2.25 | 22.48 | 13.62 | 69.57 |
+| E36 | Serie A 2015/16 | bottom-top | 72 | 378.7 | 19.87 | 30.97 | 6.00 | 3.39 | 8.61 | 1.67 | 36.86 | 2.75 | 13.74 | 8.12 | 70.09 |
+| E37 | Serie A 2015/16 | bottom-middle | 96 | 409.8 | 19.22 | 30.75 | 7.94 | 3.31 | 11.45 | 1.46 | 43.55 | 2.36 | 16.75 | 10.77 | 68.96 |
+| E38 | Serie A 2015/16 | bottom-bottom | 60 | 457.6 | 17.82 | 29.20 | 9.67 | 4.10 | 13.92 | 1.68 | 45.17 | 2.10 | 19.78 | 12.47 | 70.05 |
 
 ### 11.3 Definitions
 
@@ -1251,6 +1251,21 @@ shoot-outs (period 5) are left out; the six seasons have no extra time.
   (12.36-27.42 per split) than in 2015/16 (31.13-52.30).
 - **Offsides:** the team's passes with outcome "Pass Offside" plus its Offside events (offsides
   not called on a pass).
+- **On-ball spell** (issue #206; the harness's `CentralZoneAnalyzer` counts the same thing off the
+  engine stream): a run of one player's on-ball events (completed Ball Receipt, Carry, Pass, Shot,
+  Dribble, Miscontrol, Dispossessed, successful Ball Recovery, Clearance, won Interception) that no
+  other player's on-ball event breaks. A spell opened by a set piece (a set-piece pass, a penalty
+  or free-kick shot) is left out. A Carry's end location is one of its points.
+- **Box spells** (penalty-area touches): spells with a point inside the opponent's penalty area
+  (StatsBomb's box lines, as for the cross). A spell is counted once however many touches it has,
+  as FBref/Opta count a receive-dribble-pass as one touch.
+- **Zone spells:** spells with a point within 16 m of the centre of the goal attacked (the central
+  zone; inside the width of the penalty area by construction). **Zone unpressed %:** of the zone
+  spells, the share whose first event in the zone does not carry StatsBomb's `under_pressure` flag,
+  pooled over the split's team-matches (unpressed spells / zone spells), not a mean of
+  per-team-match shares. It is information only: StatsBomb sets the flag when one of its Pressure
+  events overlaps the action, which is not the harness's "no defender within 3 m" (a tracking
+  measure); no open tracking source on disk measures that (§10 cached 2 of the 7 DFL matches).
 
 ### 11.4 Splits and band rule
 
@@ -1276,6 +1291,9 @@ shoot-outs (period 5) are left out; the six seasons have no extra time.
 | Through balls per team-match (`ThroughBallsPerTeamMatch`) | 0.58 (E5) | 8.30 (E8) | 0.00-9.08 |
 | Aerial duels per team-match (`AerialDuelsPerTeamMatch`) | 12.36 (E7) | 52.30 (E29) | 8.36-56.30 |
 | Offsides per team-match (`OffsidesPerTeamMatch`) | 0.92 (E4) | 3.00 (E11) | 0.70-3.21 |
+| On-ball spells touching the opponent's penalty area per team-match (`PenaltyAreaTouchesPerTeamMatch`) | 12.33 (E5) | 38.75 (E2) | 9.69-41.40 |
+| On-ball spells in the central zone per team-match (`CentralZonePossessionsPerTeamMatch`) | 7.83 (E5) | 24.08 (E2) | 6.20-25.71 |
+| Central-zone spells not under StatsBomb's pressure flag, % of them (information, no constant) | 66.36 (E4) | 87.23 (E5) | 64.27-89.33 |
 
 - **Spread.** The bands span dominant clubs and their opponents: Leverkusen, PSG and Barcelona
   make 692-780 passes per team-match against middle and bottom sides (splits of 10 or more), who
@@ -1284,6 +1302,13 @@ shoot-outs (period 5) are left out; the six seasons have no extra time.
 - **Through balls** floor at 0.00: the lowest split (0.58, bottom sides against Leverkusen) minus
   10% of the range is below 0.
 - **Aerial duels** mix StatsBomb's two scales (§11.3).
+- **Penalty-area and central-zone spells** (issue #206): bottom sides against Leverkusen have the
+  fewest (12.33 and 7.83 per team-match), Leverkusen against middle sides the most (38.75 and
+  24.08). The engine on eb00b0f read 88.2 and 76.5 (pitch harness, 100 matches, seed 20260803):
+  2-3x the top of the bands.
+- **Central-zone spells not under pressure** (information): 66-87% of them by StatsBomb's flag.
+  The engine's "no defender within 3 m" share (49.4% on eb00b0f) is a different instrument and is
+  printed by the harness without a band.
 - **Crosses:** the geometric cross gives 7.59-11.60 per team-match (high + low) on the league
   split, StatsBomb's flag 7.92-11.71. The counts are close but not the same passes: the flag has
   no origin or arrival rule, the geometry no intent rule.

@@ -44,6 +44,17 @@ namespace Sim.Core.Match.Movement
                 if (job == BaseJob.Chase && ChasesAPassOutOfReach(side, slot)) job = BaseJob.None;
                 bool leashed = job == BaseJob.Press || job == BaseJob.Cover || job == BaseJob.Mark;
                 _sim.TraceJob(k, (MovementJob)(int)asked, (MovementJob)(int)job);
+                // Issue #206: the opponent in the central zone is closed before anything else, unless
+                // the man closing him can get to the ball itself first.
+                if ((job != BaseJob.Chase || !_base.InterceptFor(side, slot, out _, out _))
+                    && ZoneCloser(side, slot, out int zx, out int zy))
+                {
+                    _sim.TraceJob(k, MovementJob.ZoneClose);
+                    EndSpell(side, slot);
+                    _sim.Steer(k, zx, zy, sprint: true);
+                    return;
+                }
+
                 if (job == BaseJob.Chase && RunsOnto(side, slot))
                 {
                     EndSpell(side, slot);
