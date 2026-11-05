@@ -1,3 +1,4 @@
+using Sim.Core.Config;
 using Sim.Core.Tactics;
 
 namespace Sim.Core.Match.Movement
@@ -239,11 +240,28 @@ namespace Sim.Core.Match.Movement
                 int k = side * _sim._n + slot;
                 _sim.ManOnTheBall(out int bx, out int by);
                 int goalX = U.Units(MovementGeometry.OwnGoalX(side == 0));
-                int standOff = _sim._tactics[side].PressStandOffU * _sim._cfg.V11PressStandOffPercent / 100;
+                int standOff = _sim._tactics[side].PressStandOffU * _sim._cfg.V11PressStandOffPercent / 100
+                               - ZonePressCloseInU(goalX, bx, by);
+                if (standOff < 0) standOff = 0;
                 U.Scaled(goalX - bx, U.CenterYU - by, standOff, out int dx, out int dy);
                 int tx = bx + dx, ty = by + dy + PressTouchlineU(side, by);
                 Leash(spotX, spotY, leash, ref tx, ref ty);
                 _sim.Steer(k, U.ClampX(tx), _sim._ctx.Inside(ty), sprint: true);
+            }
+
+            /// <summary>
+            /// Issue #206: how much closer than his instruction's stand-off the presser stands (units):
+            /// none far from his own goal, up to V11ZonePressCloseInDm as the man on the ball nears
+            /// the central zone.
+            /// </summary>
+            private int ZonePressCloseInU(int goalX, int bx, int by)
+            {
+                MatchBalance cfg = _sim._cfg;
+                int from = cfg.V11ZonePressFromDm, to = cfg.V11ZonePressToDm, closeIn = cfg.V11ZonePressCloseInDm;
+                int d = U.Dm(U.Length(bx - goalX, by - U.CenterYU));
+                if (d >= from || from <= to) return 0;
+                if (d <= to) return U.Units(closeIn);
+                return U.Units(closeIn * (from - d) / (from - to));
             }
 
             /// <summary>

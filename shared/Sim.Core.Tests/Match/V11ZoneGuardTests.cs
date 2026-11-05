@@ -99,6 +99,26 @@ namespace Sim.Core.Tests.Match
             Assert.That(farthest, Is.LessThanOrEqualTo(Cfg.V11ZoneGuardRangeDm), "the centre-backs stay inside the zone they guard");
         }
 
+        [Test]
+        public void ACarrierNearingTheCentralZone_IsClosedTighterThanOneFarOut()
+        {
+            // The man on the ball held centrally at 30 m and at 15 m from the goal centre: the
+            // goal-side presser jockeys off him far out but stops giving ground near the zone.
+            var scene = new ZoneScene();
+            int far = 0, near = 0;
+            for (ulong seed = 0; seed < 8; seed++)
+            {
+                far += scene.PressGap(Pitch.LengthDm - 300, seed);
+                near += scene.PressGap(Pitch.LengthDm - 150, seed);
+            }
+
+            far /= 8;
+            near /= 8;
+            TestContext.Out.WriteLine($"[zone-guard] presser off the carrier: {far} dm at 30 m, {near} dm at 15 m");
+            Assert.That(near, Is.LessThanOrEqualTo(30), "near the zone the carrier is pressed (a defender within 3 m)");
+            Assert.That(near, Is.LessThan(far), "and closer than he is far out");
+        }
+
         /// <summary>
         /// A home central midfielder and the home striker against the away centre-backs, central
         /// midfielders and keeper; every other man heaped in the home corner, standing.
@@ -239,6 +259,24 @@ namespace Sim.Core.Tests.Match
                 }
 
                 return int.MaxValue;
+            }
+
+            /// <summary>
+            /// The passer on the ball at (x, centre) for 3 s with the away centre-backs and midfield
+            /// moving by their brain; the gap (dm) from him to the nearest of them at the end.
+            /// </summary>
+            public int PressGap(int xDm, ulong seed)
+            {
+                Reset(seed);
+                Place(Passer, xDm, Mid);
+                for (int i = 0; i < 2; i++) Place(CentreBacks[i], BackX, BackY[i]);
+                for (int i = 0; i < Midfield.Length; i++) Place(Midfield[i], MidfieldX, MidfieldY[i]);
+                Place(Keeper, Pitch.LengthDm - 10, Mid);
+                Hold(Passer);
+                Settle(3 * Cfg.TicksPerSecond, Passer, Defenders);
+                int[] px = Field<int[]>("_px"), py = Field<int[]>("_py");
+                return Defenders.Min(d => (int)Math.Round(Math.Sqrt(
+                    Math.Pow((px[d] - px[Passer]) / (double)UnitsPerDm, 2) + Math.Pow((py[d] - py[Passer]) / (double)UnitsPerDm, 2))));
             }
 
             /// <summary>

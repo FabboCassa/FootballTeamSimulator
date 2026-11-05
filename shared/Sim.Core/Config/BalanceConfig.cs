@@ -1624,6 +1624,20 @@ namespace Sim.Core.Config
         public int V11ZoneCloseStandOffDm { get; set; } = 10;
 
         /// <summary>
+        /// Issue #206: the goal-side presser stops jockeying back as the man on the ball nears the
+        /// zone. Within <see cref="V11ZonePressFromDm"/> of the centre of his own goal his stand-off
+        /// (<see cref="V11PressStandOffPercent"/> of the Pressing instruction's) loses up to
+        /// <see cref="V11ZonePressCloseInDm"/>, all of it at <see cref="V11ZonePressToDm"/> and
+        /// closer, linearly between. A fixed amount off the instruction's stand-off, so the low
+        /// block still leaves the man the same metres more than the high press does there.
+        /// Measured (pitch trace, 12 matches): 70% of the central-zone spells were carries begun
+        /// outside it, nearly all with a goal-side presser retreating in front of the carrier.
+        /// </summary>
+        public int V11ZonePressFromDm { get; set; } = 300;
+        public int V11ZonePressToDm { get; set; } = 160;
+        public int V11ZonePressCloseInDm { get; set; } = 25;
+
+        /// <summary>
         /// A run bends round an opponent within <see cref="V11CurveTriggerDm"/> of its straight
         /// line, passing him at <see cref="V11CurveClearanceDm"/>.
         /// </summary>
