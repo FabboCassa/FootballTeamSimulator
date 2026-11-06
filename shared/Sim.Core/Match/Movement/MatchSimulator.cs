@@ -264,6 +264,9 @@ namespace Sim.Core.Match.Movement
                 if (t % _streamStride == 0) WriteFrame(t / _streamStride);
             }
 
+            // Nobody is still landing after the whistle: a scene played on this simulator (AerialDuelTests)
+            // would otherwise find the last duel's loser barred from every ball, by ticks it never reaches.
+            _groundedUntil = -1;
             return _stream;
         }
 

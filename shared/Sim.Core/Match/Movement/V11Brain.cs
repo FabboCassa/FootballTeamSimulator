@@ -65,6 +65,15 @@ namespace Sim.Core.Match.Movement
             private readonly int[] _runY = new int[SideCount];
             private readonly int[] _runs = new int[SideCount];
             private readonly int[] _overlaps = new int[SideCount];
+
+            // R7's in-possession jobs held for a spell, per side: the full-back on the overlap and the
+            // midfielder arriving in the box, until when, and the overlap's target (units).
+            private readonly int[] _overlapper = new int[SideCount];
+            private readonly int[] _overlapUntil = new int[SideCount];
+            private readonly int[] _overlapX = new int[SideCount];
+            private readonly int[] _overlapY = new int[SideCount];
+            private readonly int[] _arriver = new int[SideCount];
+            private readonly int[] _arriveUntil = new int[SideCount];
             private readonly int[] _offerTicks = new int[SideCount];
             private readonly int[] _releases = new int[SideCount];
 
@@ -132,6 +141,8 @@ namespace Sim.Core.Match.Movement
                 for (int side = 0; side < SideCount; side++)
                 {
                     _runner[side] = -1;
+                    _overlapper[side] = -1;
+                    _arriver[side] = -1;
                     _expansion[side] = 0;
                     _runs[side] = 0;
                     _overlaps[side] = 0;
@@ -163,6 +174,7 @@ namespace Sim.Core.Match.Movement
                     Expand(side);
                     ReadOpponents(side);
                     UpdateOffers(tick, side);
+                    UpdateHeldJobs(tick, side);
                 }
             }
 

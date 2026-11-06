@@ -100,14 +100,36 @@ namespace Sim.Core.Match.Movement
             if (!inPossession)
                 depth += DefendingAxes.FrontLinePushDm(_cfg.DefendingAxes, instructions, man.LineRank, lines);
 
-            int widthPercent = InstructionTable.Percent(_cfg.WidthSpreadPercent, (int)instructions.Width, _cfg.V11WidthSpreadPercent)
-                               * (inPossession ? _cfg.V11AttackWidthPercent : _cfg.V11DefendWidthPercent) / 100;
+            int widthPercent = WidthPercent(instructions, inPossession);
             int shift = MovementGeometry.Clamp(
                 ballYDm - Pitch.CenterY, -_cfg.BlockLateralShiftMaxDm, _cfg.BlockLateralShiftMaxDm);
             int spread = (man.BaseYPermille - 500) * Pitch.WidthDm / 1000;
 
             xDm = Pitch.ClampX(home ? depth : Pitch.LengthDm - depth);
             yDm = Pitch.ClampY(Pitch.CenterY + shift + MovementGeometry.Direction(home) * spread * widthPercent / 100);
+        }
+
+        private int WidthPercent(TacticInstructions instructions, bool inPossession) =>
+            InstructionTable.Percent(_cfg.WidthSpreadPercent, (int)instructions.Width, _cfg.V11WidthSpreadPercent)
+            * (inPossession ? _cfg.V11AttackWidthPercent : _cfg.V11DefendWidthPercent) / 100;
+
+        /// <summary>
+        /// His place across the pitch as the instructions spread the shape, without the block's
+        /// slide toward the ball: the lane a wide man holds. Part-way between the two shapes, as
+        /// the phase spot is. With the ball on his side he comes in off the line by
+        /// V11WideLaneLeanPercent of its offset from the centre.
+        /// </summary>
+        public int LaneY(V11Slot man, bool home, int expansionPermille, TacticInstructions instructions, int ballYDm)
+        {
+            int e = MovementGeometry.Clamp(expansionPermille, 0, 1000);
+            int without = WidthPercent(instructions, false), with = WidthPercent(instructions, true);
+            int widthPercent = (without + (with - without) * e / 1000) * _cfg.V11WideLanePercent / 100;
+            int spread = (man.BaseYPermille - 500) * Pitch.WidthDm / 1000;
+            int lane = Pitch.CenterY + MovementGeometry.Direction(home) * spread * widthPercent / 100;
+            int ballOff = ballYDm - Pitch.CenterY;
+            if ((long)ballOff * (lane - Pitch.CenterY) > 0) lane -= ballOff * _cfg.V11WideLaneLeanPercent / 100;
+            int gap = _cfg.V11WideLaneTouchlineGapDm;
+            return MovementGeometry.Clamp(lane, gap, Pitch.WidthDm - gap);
         }
 
         /// <summary>A spot beyond the offside line is pulled back to just onside of it.</summary>

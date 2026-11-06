@@ -103,12 +103,29 @@ namespace Sim.Core.Match.Movement
                 int tx = spotX, ty = spotY;
                 bool sprint = false;
                 bool running = RunTarget(tick, side, slot, man, inPossession, out int rx, out int ry);
+                bool arriving = !running && _arriver[side] == slot;
                 if (running)
                 {
                     tx = rx;
                     ty = ry;
                     sprint = true;
                     _sim.TraceJob(k, MovementJob.Run);
+                }
+                else if (arriving)
+                {
+                    _roleJobs.BoxSpot(home, out int ax, out int ay);
+                    tx = U.ClampX(U.Units(ax));
+                    ty = _sim._ctx.Inside(U.Units(ay));
+                    sprint = true;
+                    _sim.TraceJob(k, MovementJob.BoxArrival);
+                }
+                else if (OverlapTarget(tick, side, slot, man, phase, inPossession, instructions, sx, out int ox, out int oy))
+                {
+                    tx = ox;
+                    ty = oy;
+                    Leash(spotX, spotY, U.Units(_sim._cfg.V11SupportLeashDm), ref tx, ref ty);
+                    _overlaps[side]++;
+                    _sim.TraceJob(k, MovementJob.Overlap);
                 }
                 else if (inPossession && OfferTarget(side, slot, out int fx, out int fy))
                 {
@@ -121,6 +138,14 @@ namespace Sim.Core.Match.Movement
                     _offerTicks[side]++;
                     _sim.TraceJob(k, MovementJob.Offer);
                 }
+                else if (inPossession && _roleJobs.HoldWidth(man, home, _expansion[side], instructions, U.Dm(_seenBallY[k]), out int laneY))
+                {
+                    // Before the supporting run: the run's shared grid spot is what pulled him off his
+                    // flank and back again (oscillation trace section 1).
+                    tx = U.ClampX(U.Units(_roleJobs.WideManX(home, sx, rawSx)));
+                    ty = _sim._ctx.Inside(U.Units(laneY));
+                    _sim.TraceJob(k, MovementJob.Width);
+                }
                 else if (job == BaseJob.Support)
                 {
                     // He offers the angle the base brain found, on a leash from his own spot: a supporting
@@ -130,14 +155,6 @@ namespace Sim.Core.Match.Movement
                     Leash(spotX, spotY, U.Units(_sim._cfg.V11SupportLeashDm), ref tx, ref ty);
                     sprint = U.DistanceSq(_sim._px[k], _sim._py[k], tx, ty) > (long)_sim._approachU * _sim._approachU;
                 }
-                else if (OverlapTarget(side, slot, man, phase, inPossession, instructions, sx, out int ox, out int oy))
-                {
-                    tx = ox;
-                    ty = oy;
-                    Leash(spotX, spotY, U.Units(_sim._cfg.V11SupportLeashDm), ref tx, ref ty);
-                    _overlaps[side]++;
-                    _sim.TraceJob(k, MovementJob.Overlap);
-                }
                 else if (!inPossession && RoleJob(side, man, k, spotX, spotY, out int jx, out int jy, out sprint, out MovementJob role))
                 {
                     tx = jx;
@@ -146,8 +163,13 @@ namespace Sim.Core.Match.Movement
                 }
 
                 int viaX = -1, viaY = -1;
-                bool back = inPossession && !running && man.Role == Domain.PositionRole.Striker
+                bool back = inPossession && !running && (man.Role == Domain.PositionRole.Striker || arriving)
                             && HoldOnside(home, side, k, ref tx, ref sprint, out viaX, out viaY);
+                if (inPossession && !running && _roleJobs.HoldBehind(man, home, U.Dm(tx), U.Dm(_seenBallX[k]), out int behindX))
+                {
+                    tx = U.Units(behindX);
+                    _sim.TraceJob(k, MovementJob.HoldBehind);
+                }
 
                 // Far from where he is going he runs, whichever side has the ball: a shape that
                 // re-forms at a jog is a shape with holes in it for a dozen seconds.
@@ -309,24 +331,42 @@ namespace Sim.Core.Match.Movement
                 return true;
             }
 
+            /// <summary>
+            /// R7's overlap: one full-back a side, started by <see cref="V11Positioning.Overlap"/> and
+            /// held for V11OverlapCommitMs with the ball alive and his side keeping it, on a target
+            /// fixed when it starts and never beyond the offside line.
+            /// </summary>
             private bool OverlapTarget(
-                int side, int slot, V11Slot man, TeamPhase phase, bool inPossession, TacticInstructions instructions,
+                int tick, int side, int slot, V11Slot man, TeamPhase phase, bool inPossession, TacticInstructions instructions,
                 int spotXDm, out int x, out int y)
             {
                 x = 0;
                 y = 0;
                 MatchBall ball = _sim._ball;
-                if (ball.Dead || ball.OwnerSide != side || ball.OwnerSlot == slot) return false;
+                if (!inPossession || ball.Dead) return false;
 
-                int n = _sim._n;
-                int carrier = side * n + ball.OwnerSlot;
-                if (!_positioning.Overlap(man, side == 0, phase, inPossession, instructions,
+                bool home = side == 0;
+                if (_overlapper[side] == slot)
+                {
+                    x = U.Units(_positioning.Onside(home, U.Dm(_overlapX[side]), _lineX[side]));
+                    y = _overlapY[side];
+                    return true;
+                }
+
+                if (_overlapper[side] >= 0 || ball.OwnerSide != side || ball.OwnerSlot == slot) return false;
+
+                int carrier = side * _sim._n + ball.OwnerSlot;
+                if (!_positioning.Overlap(man, home, phase, inPossession, instructions,
                         spotXDm, U.Dm(_sim._px[carrier]), U.Dm(_sim._py[carrier]),
                         out int ox, out int oy))
                     return false;
 
-                x = U.Units(ox);
-                y = U.Units(oy);
+                _overlapper[side] = slot;
+                _overlapUntil[side] = tick + _sim._cfg.V11OverlapCommitTicks;
+                _overlapX[side] = U.Units(ox);
+                _overlapY[side] = U.Units(oy);
+                x = U.Units(_positioning.Onside(home, ox, _lineX[side]));
+                y = _overlapY[side];
                 return true;
             }
         }

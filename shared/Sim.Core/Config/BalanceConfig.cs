@@ -1626,6 +1626,81 @@ namespace Sim.Core.Config
         public int V11ReReadFastMs { get; set; } = 200;
         public int V11ReReadSlowMs { get; set; } = 500;
 
+        // --- V11 role jobs in possession (free-ball spec R7, issue #185; see V11RoleJobs). Read only
+        // by the V11 brain. ---
+
+        /// <summary>
+        /// A man this far (permille of the width) off the centre in his formation is a wide man, a
+        /// winger or the outside man of a flat midfield four, and holds the width with the ball; a
+        /// midfielder nearer the centre is the one who arrives in the box.
+        /// </summary>
+        public int V11WideManPermille { get; set; } = 250;
+
+        /// <summary>
+        /// A wide man's lane, percent of his place in the shape across the pitch without the block's
+        /// slide: 12 m inside the touchline at neutral width. On the attacking shape's own width (100)
+        /// he stood on the touchline, and with the far-side lane always open long balls doubled,
+        /// accuracy fell to 73% and throw-ins rose to 56 a match (#185, 200 matches: 70 keeps them
+        /// at 77% and 39). Wider also closes the zonal marking gap: 0.44 at 70, 0.35 at 75, 0.21 at
+        /// 80 (1024 seeds, no lean). Never nearer the line than <see cref="V11WideLaneTouchlineGapDm"/>.
+        /// </summary>
+        public int V11WideLanePercent { get; set; } = 70;
+        public int V11WideLaneTouchlineGapDm { get; set; } = 30;
+
+        /// <summary>
+        /// How far a wide man comes in off the line with the ball on his side, percent of its offset
+        /// from the centre. Two men left out of the block's slide make the other eight move more as
+        /// one: direction agreement read 0.881 (R1 tops out at 0.879, 0.877 before #185). His step
+        /// runs against the slide and brings it back to 0.878 (#185, 200 matches). Leaning the far-side
+        /// man out as well does it too, but costs the zonal marking gap and the pass flight time.
+        /// </summary>
+        public int V11WideLaneLeanPercent { get; set; } = 30;
+
+        /// <summary>
+        /// How far back (from his own goal line) the onside hold can pull a wide man: a line higher
+        /// than this he stands beyond. With no floor the wingers just dropped with a very high line,
+        /// and the shift it wins in offsides fell from 1.04 a match to 0.69, the zonal marking gap
+        /// from 0.43 to 0.33 (#185, 1024 seeds). With the lean 720 reads 0.96 and 0.39, 0.46 on the
+        /// bar's 256 seeds; 700 leaves the gap at 0.34. The price: wingers beyond the line 13.7% of
+        /// neutral possession, against 9.6% before #185 (200 matches).
+        /// </summary>
+        public int V11WideManFloorDm { get; set; } = 720;
+
+        /// <summary>
+        /// How long a full-back stays on an overlap once he has started it, the ball moved on or not:
+        /// the overlap read off the carrier tick by tick dropped at every pass and sent him back.
+        /// </summary>
+        public int V11OverlapCommitMs { get; set; } = 3000;
+        public int V11OverlapCommitTicks => TicksOfMs(V11OverlapCommitMs);
+
+        /// <summary>
+        /// The holding midfielder stays this far behind the ball, down to
+        /// <see cref="V11HoldingFloorDm"/> from his own goal line: with the ball that deep he has
+        /// nowhere further back to go and stands in his place.
+        /// </summary>
+        public int V11HoldingBehindBallDm { get; set; } = 30;
+        public int V11HoldingFloorDm { get; set; } = 350;
+
+        /// <summary>
+        /// A cross is on from this close to the touchline (the harness's wide channel, R2), this far
+        /// up the pitch by the Final-third approach instruction (work into the box, mixed, cross
+        /// early): the man arriving is what the cross is priced on, so how soon he goes is how early
+        /// the side crosses. A cut-back is on from this close to the goal line and at least
+        /// <see cref="V11CutBackOffCentreDm"/> off the centre.
+        /// </summary>
+        public int V11CrossChannelDm { get; set; } = 138;
+        public int[] V11CrossOnDepthDm { get; set; } = { 820, 760, 700 };
+        public int V11CutBackGoalLineDm { get; set; } = 165;
+        public int V11CutBackOffCentreDm { get; set; } = 80;
+
+        /// <summary>
+        /// When a cross or cut-back is on, one central midfielder runs at the penalty spot, this far
+        /// from the goal line, and keeps at it this long after it last was on.
+        /// </summary>
+        public int V11BoxArrivalGoalLineDm { get; set; } = 110;
+        public int V11BoxArrivalMs { get; set; } = 3000;
+        public int V11BoxArrivalTicks => TicksOfMs(V11BoxArrivalMs);
+
         // --- V11 action selection (R3-R5). Read only by the V11 brain. Every option is priced in
         // ten-thousandths of a goal: xT for moving the ball, xG for the shot (ActionModels). ---
 

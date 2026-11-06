@@ -1,16 +1,25 @@
 using Sim.Core.Config;
 using Sim.Core.Domain;
+using Sim.Core.Tactics;
 
 namespace Sim.Core.Match.Movement
 {
     /// <summary>
-    /// Role jobs out of possession (free-ball spec R7, believable-match R4). Pure and draw-free, in
-    /// decimetres on the pitch, so each job can be scripted in a test:
+    /// Role jobs (free-ball spec R7, believable-match R4). Pure and draw-free, in decimetres on the
+    /// pitch, so each job can be scripted in a test.
     ///
+    /// Out of possession:
     /// - <see cref="Step"/>: the near-side full-back steps out to a wide man on the ball;
     /// - <see cref="Tuck"/>: with the ball on the other flank, the far-side full-back tucks in;
     /// - <see cref="Screen"/>: the holding midfielder stands on the passing lane to the most
     ///   advanced opponent.
+    ///
+    /// In possession:
+    /// - <see cref="HoldWidth"/>: a wide man holds his lane, in off the line with the ball on his side;
+    /// - <see cref="HoldBehind"/>: the holding midfielder stays behind the ball;
+    /// - <see cref="CrossOn"/> and <see cref="BoxSpot"/>: a central midfielder arrives in the box
+    ///   when a cross or cut-back is on.
+    /// (The full-back's overlap is <see cref="V11Positioning.Overlap"/>.)
     ///
     /// Each job is a target that moves with the ball and the men it reads, so it changes
     /// continuously rather than jumping between grid spots.
@@ -18,10 +27,12 @@ namespace Sim.Core.Match.Movement
     public sealed class V11RoleJobs
     {
         private readonly MatchBalance _cfg;
+        private readonly V11Positioning _positioning;
 
         public V11RoleJobs(MatchBalance cfg)
         {
             _cfg = cfg;
+            _positioning = new V11Positioning(cfg);
         }
 
         /// <summary>
@@ -95,6 +106,78 @@ namespace Sim.Core.Match.Movement
             xDm = Pitch.ClampX(x);
             yDm = Pitch.ClampY(y);
             return true;
+        }
+
+        /// <summary>A winger, or a midfielder on the outside of his line: the man who gives the side its width.</summary>
+        public bool IsWideMan(V11Slot man)
+        {
+            bool mayBe = man.Role == PositionRole.Winger || man.Role == PositionRole.CentralMidfielder
+                         || man.Role == PositionRole.AttackingMidfielder;
+            return mayBe && System.Math.Abs(man.BaseYPermille - 500) >= _cfg.V11WideManPermille;
+        }
+
+        /// <summary>
+        /// With the ball, a wide man stands on his lane (<see cref="V11Positioning.LaneY"/>), not
+        /// wherever the ball slides the block: the far-side one is the switch, the near-side one
+        /// comes in off the line and leaves the outside to the man on the ball and the overlap.
+        /// </summary>
+        public bool HoldWidth(V11Slot man, bool home, int expansionPermille, TacticInstructions instructions, int ballYDm, out int yDm)
+        {
+            yDm = Pitch.CenterY;
+            if (!IsWideMan(man)) return false;
+            yDm = _positioning.LaneY(man, home, expansionPermille, instructions, ballYDm);
+            return true;
+        }
+
+        /// <summary>
+        /// How far up a wide man holds: his place, held onside of the line, but a very high line
+        /// pulls him back only as far as V11WideManFloorDm.
+        /// </summary>
+        public int WideManX(bool home, int heldXDm, int rawXDm)
+        {
+            int depth = System.Math.Min(Depth(home, rawXDm), System.Math.Max(Depth(home, heldXDm), _cfg.V11WideManFloorDm));
+            return home ? depth : Pitch.LengthDm - depth;
+        }
+
+        /// <summary>
+        /// The holding midfielder going further upfield than V11HoldingBehindBallDm behind the ball
+        /// (a target of any job) is held there. The limit never comes back past V11HoldingFloorDm
+        /// and it moves with the ball, so it pulls his target continuously.
+        /// </summary>
+        public bool HoldBehind(V11Slot man, bool home, int xDm, int ballXDm, out int heldXDm)
+        {
+            heldXDm = xDm;
+            if (man.Role != PositionRole.DefensiveMidfielder) return false;
+            int limit = Depth(home, ballXDm) - _cfg.V11HoldingBehindBallDm;
+            if (limit < _cfg.V11HoldingFloorDm) limit = _cfg.V11HoldingFloorDm;
+            if (Depth(home, xDm) <= limit) return false;
+            heldXDm = home ? limit : Pitch.LengthDm - limit;
+            return true;
+        }
+
+        /// <summary>
+        /// Whether a man on the ball here can cross or cut back: up the wide channel, as far up as
+        /// the side's Final-third approach asks, or near the goal line off the centre.
+        /// </summary>
+        public bool CrossOn(bool home, int carrierXDm, int carrierYDm, FinalThirdApproach approach)
+        {
+            int depth = Depth(home, carrierXDm);
+            int off = System.Math.Abs(carrierYDm - Pitch.CenterY);
+            if (depth >= Pitch.LengthDm - _cfg.V11CutBackGoalLineDm && off >= _cfg.V11CutBackOffCentreDm) return true;
+            return depth >= MovementTactics.Pick(_cfg.V11CrossOnDepthDm, (int)approach)
+                   && off >= Pitch.CenterY - _cfg.V11CrossChannelDm;
+        }
+
+        /// <summary>A central midfielder, on or in front of the middle of his line: who may arrive in the box.</summary>
+        public bool ArrivesInTheBox(V11Slot man) =>
+            (man.Role == PositionRole.CentralMidfielder || man.Role == PositionRole.AttackingMidfielder) && !IsWideMan(man);
+
+        /// <summary>Where the man arriving in the box is going: the penalty spot.</summary>
+        public void BoxSpot(bool home, out int xDm, out int yDm)
+        {
+            int depth = Pitch.LengthDm - _cfg.V11BoxArrivalGoalLineDm;
+            xDm = home ? depth : Pitch.LengthDm - depth;
+            yDm = Pitch.CenterY;
         }
 
         /// <summary>The opponent nearest this side's own goal line: the one the screen guards.</summary>
