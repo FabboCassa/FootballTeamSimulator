@@ -1305,7 +1305,7 @@ shoot-outs (period 5) are left out; the six seasons have no extra time.
 - **Penalty-area and central-zone spells** (issue #206): bottom sides against Leverkusen have the
   fewest (12.33 and 7.83 per team-match), Leverkusen against middle sides the most (38.75 and
   24.08). The engine on eb00b0f read 88.2 and 76.5 (pitch harness, 100 matches, seed 20260803):
-  2-3x the top of the bands.
+  2-3x the top of the bands. With the central zone defended (issue #206) it reads about 46 and 26.
 - **Central-zone spells not under pressure** (information): 66-87% of them by StatsBomb's flag.
   The engine's "no defender within 3 m" share (49.4% on eb00b0f) is a different instrument and is
   printed by the harness without a band.

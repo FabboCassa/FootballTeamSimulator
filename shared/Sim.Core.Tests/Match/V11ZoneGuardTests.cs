@@ -8,6 +8,7 @@ using Sim.Core.Domain;
 using Sim.Core.Generation;
 using Sim.Core.Match;
 using Sim.Core.Match.Movement;
+using Sim.Core.Match.Movement.Models;
 using Sim.Core.Random;
 
 namespace Sim.Core.Tests.Match
@@ -119,6 +120,102 @@ namespace Sim.Core.Tests.Match
             Assert.That(near, Is.LessThan(far), "and closer than he is far out");
         }
 
+        [Test]
+        public void AManGoalSideOfTheCarrier_CapsHisRun_OnlyInFrontOfGoal()
+        {
+            var scene = new ZoneScene();
+            scene.Reset(1);
+            int carrier = scene.Passer, man = scene.CentreBacks[0];
+            int goal = Pitch.LengthDm, near = Cfg.V11CarrierBlockedDm - 5;
+
+            int Top(int x, int y, int foeX, int foeY)
+            {
+                scene.Place(carrier, x, y);
+                scene.Place(man, foeX, foeY);
+                scene.Hold(carrier);
+                return scene.CarrierTop(carrier, 1000);
+            }
+
+            int capped = 1000 * Cfg.V11CarrierBlockedSpeedPercent / 100;
+            Assert.That(Top(goal - 250, Mid, goal - 250 + near, Mid), Is.EqualTo(capped), "goal-side, 25 m out: his run stops");
+            Assert.That(Top(goal - 250, Mid, goal - 250 - near, Mid), Is.EqualTo(1000), "behind him: he runs on");
+            Assert.That(Top(goal - 250, Mid, goal - 250, Mid + near), Is.EqualTo(1000), "beside him: he runs on");
+            Assert.That(Top(goal - 250, Mid, goal - 250 + Cfg.V11CarrierBlockedDm + 20, Mid), Is.EqualTo(1000), "out of reach: he runs on");
+            Assert.That(Top(goal - Cfg.V11CarrierBlockedRangeDm - 50, Mid, goal - Cfg.V11CarrierBlockedRangeDm - 50 + near, Mid), Is.EqualTo(1000),
+                "far from goal it is the press's business, not the zone's");
+
+            Assert.That(scene.CarrierTop(man, 1000), Is.EqualTo(1000), "a man without the ball is not a carrier");
+        }
+
+        [Test]
+        public void ABlockedCarrier_ReleasesDuringHisHold_AndAFreeOneRunsOn()
+        {
+            var scene = new ZoneScene();
+            int released = 0, freeReleased = 0;
+            for (ulong seed = 0; seed < 8; seed++)
+            {
+                if (scene.ReleasesDuringHold(seed, Cfg.V11CarrierBlockedDm - 15)) released++;
+                if (scene.ReleasesDuringHold(seed, -(Cfg.V11CarrierBlockedDm - 15))) freeReleased++;
+            }
+
+            TestContext.Out.WriteLine($"[zone-guard] released in the hold: blocked {released}/8, man behind him {freeReleased}/8");
+            Assert.That(released, Is.EqualTo(8), "a man goal-side of him: he plays the free man");
+            Assert.That(freeReleased, Is.Zero, "nobody in front of him: the hold runs");
+        }
+
+        [Test]
+        public void ABlockedCarrier_HasNoCarryNorClearance_ButStillPassOrShot()
+        {
+            var valuation = new V11ActionValuation(Cfg);
+            var scene = new V11Scene
+            {
+                BallXDm = Pitch.LengthDm - 250,
+                BallYDm = Mid,
+                Shooting = 60,
+                Technique = 60,
+                Passing = 60,
+                CarryTouchDm = 100,
+                CanClear = true,
+                ClearXDm = Pitch.LengthDm - 60,
+                ClearYDm = 60
+            };
+            scene.AddFoe(new PitchActor(Pitch.LengthDm - 5, Mid, 0, 0, 75), keeper: true);
+            scene.AddMate(new PitchActor(Pitch.LengthDm - 300, Mid + 200, 0, 0, 75), keeper: false);
+
+            Assert.That(valuation.CarryValue(scene, out _, out _), Is.GreaterThan(V11ActionValuation.NoOption), "free, he can carry");
+            Assert.That(valuation.ClearValue(scene), Is.GreaterThan(V11ActionValuation.NoOption), "and hoof it");
+            Assert.That(valuation.Choose(scene, holding: true).Kind, Is.EqualTo(V11ActionKind.Hold), "and sits out his hold");
+
+            scene.GoalSideBlocked = true;
+            Assert.That(valuation.CarryValue(scene, out _, out _), Is.EqualTo(V11ActionValuation.NoOption));
+            Assert.That(valuation.ClearValue(scene), Is.EqualTo(V11ActionValuation.NoOption));
+            V11Choice held = valuation.Choose(scene, holding: true);
+            Assert.That(held.Kind, Is.EqualTo(V11ActionKind.Pass), "blocked, the free man gets it during the hold");
+            Assert.That(held.Release, Is.False, "and that is not R9's pressed release");
+            Assert.That(valuation.Choose(scene, holding: false).Kind, Is.AnyOf(V11ActionKind.Pass, V11ActionKind.Shot));
+        }
+
+        [Test]
+        public void ADefendersLooseFirstTouch_IsFiled_SoTheFeedSaysWhoPutTheBallOut()
+        {
+            var scene = new ZoneScene();
+            int loose = 0;
+            for (ulong seed = 0; seed < Seeds; seed++)
+            {
+                scene.Reset(seed);
+                int defender = scene.CentreBacks[0];
+                scene.Place(scene.Passer, 600, Mid);
+                scene.Place(defender, 700, Mid);
+                if (!scene.StrikeAtHisFeet(defender)) continue;
+
+                loose++;
+                Assert.That(scene.FiledFor(defender), Is.True, "seed " + seed + ": his touch is the feed's last word on the ball");
+            }
+
+            TestContext.Out.WriteLine($"[zone-guard] loose first touches filed {loose}/{Seeds}");
+            Assert.That(loose, Is.GreaterThan(0), "sanity: a ball that fast comes off some of his touches loose");
+        }
+
         /// <summary>
         /// A home central midfielder and the home striker against the away centre-backs, central
         /// midfielders and keeper; every other man heaped in the home corner, standing.
@@ -188,6 +285,7 @@ namespace Sim.Core.Tests.Match
                 offside.GetType().GetMethod("ClearFlags")!.Invoke(offside, null);
                 Set(_ball, "Dead", false);
                 Set(_ball, "EventSink", _log);
+                ((PositionStream)Get(_sim, "_stream")).Actions.Clear();
                 _tick = 1;
             }
 
@@ -232,6 +330,67 @@ namespace Sim.Core.Tests.Match
                 choiceType.GetField("RunOn")!.SetValue(choice, true);
                 typeof(MatchSimulator).GetMethod("PlayPass", Any)!.Invoke(_sim, new[] { _tick, 0, Passer % _n, choice, 0 });
                 ((List<BallEvent>)Get(_log, "_events")).Clear();
+            }
+
+            /// <summary>
+            /// The passer strikes it along the ground at full force at this opponent, who cannot help
+            /// meeting it. True when his first touch left it loose (it is free and off him).
+            /// </summary>
+            public bool StrikeAtHisFeet(int defender)
+            {
+                PutBallAt(Passer);
+                object[] kick = { 0, Passer % _n, 1, 0, Get(_sim, "_maxPassForce") };
+                _ball.GetType().GetMethod("Kick")!.Invoke(_ball, kick);
+                ((List<BallEvent>)Get(_log, "_events")).Clear();
+                for (int i = 0; i < Cfg.TicksPerSecond; i++)
+                {
+                    Step(Array.Empty<int>());
+                    if (_log.Records.Any(e => e.Kind == BallEventKind.Touch && e.Side == defender / _n && e.Slot == defender % _n))
+                        return (bool)_ball.GetType().GetProperty("Free")!.GetValue(_ball)!;
+                }
+
+                return false;
+            }
+
+            /// <summary>The simulator's speed cap for this man (see MatchSimulator.CarrierTop), from a top speed.</summary>
+            public int CarrierTop(int k, int top) =>
+                (int)typeof(MatchSimulator).GetMethod("CarrierTop", Any)!.Invoke(_sim, new object[] { k, top })!;
+
+            /// <summary>
+            /// The man on the ball 25 m out with a long hold still to run, a free team-mate wide of him
+            /// and a centre-back standing <paramref name="offsetDm"/> goal-side of him (behind him when
+            /// negative): whether, by his brain and his feet held still, he plays it inside 1.5 s.
+            /// </summary>
+            public bool ReleasesDuringHold(ulong seed, int offsetDm)
+            {
+                Reset(seed);
+                int x = Pitch.LengthDm - 250;
+                Place(Passer, x, Mid);
+                Place(Receiver, x - 40, Mid + 200);
+                Place(CentreBacks[0], x + offsetDm, Mid);
+                Place(Keeper, Pitch.LengthDm - 10, Mid);
+                Hold(Passer);
+                Field<int[]>("_hold")[Passer] = 10 * Cfg.TicksPerSecond;
+                MethodInfo update = _brain.GetType().GetMethod("UpdateTeams")!;
+                MethodInfo act = _brain.GetType().GetMethod("Act")!;
+                List<BallAction> actions = ((PositionStream)Get(_sim, "_stream")).Actions;
+                for (int i = 0; i < 3 * Cfg.TicksPerSecond / 2; i++)
+                {
+                    _tick++;
+                    Set(_ball, "EventTick", _tick);
+                    update.Invoke(_brain, new object[] { _tick });
+                    act.Invoke(_brain, new object[] { _tick, Passer / _n, Passer % _n });
+                    if (actions.Any(a => a.Kind == BallActionKind.Pass)) return true;
+                }
+
+                return false;
+            }
+
+            /// <summary>Whether the last action in the feed is this man's.</summary>
+            public bool FiledFor(int k)
+            {
+                List<BallAction> actions = ((PositionStream)Get(_sim, "_stream")).Actions;
+                return actions.Count > 0 && actions[actions.Count - 1].Home == (k / _n == 0) && actions[actions.Count - 1].Slot == k % _n;
             }
 
             /// <summary>
