@@ -1736,6 +1736,9 @@ namespace Sim.Core.Match.Movement
                         _offside.ClearFlags();
                     }
 
+                    // His touch, loose or not: the ball may run out off him, and the feed's last word
+                    // on it has to be his, not the other side's pass or clearance before it.
+                    if (interception) _sheet.Record(tick, BallActionKind.Interception, bestSide == 0, bestSlot, -1);
                     LooseTouch(tick, bestSide, bestSlot, inVx, inVy, residual);
                     return;
                 }

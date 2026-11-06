@@ -51,6 +51,7 @@ internal static class PitchScenario
         var analyzer = new MatchAnalyzer();
         var ballFreedom = new BallFreedomAnalyzer();
         var ballFreedomTally = new BallFreedomTally();
+        var centralZone = new CentralZoneTally();
         var totals = new PitchTotals();
         var perf = new PerfTotals();
         var strikerOscillation = new PitchStrikerOscillation();
@@ -104,6 +105,10 @@ internal static class PitchScenario
             // Ball freedom, passes and loose balls (free-ball-real-movement R2), against doc §10.5.
             BallFreedomMetrics? freedom = ballFreedom.Measure(report);
             if (freedom != null) ballFreedomTally.Add(freedom);
+
+            // The central zone near goal and the penalty area (issue #206), against doc §11.5.
+            CentralZoneMetrics? zone = CentralZoneAnalyzer.Analyze(report);
+            if (zone != null) centralZone.Add(zone);
         }
 
         clock.Stop();
@@ -132,6 +137,9 @@ internal static class PitchScenario
 
         Console.WriteLine();
         Console.Write(ballFreedomTally.Format("pitch"));
+
+        Console.WriteLine();
+        Console.Write(centralZone.Format("pitch"));
 
         // --- contract, not calibration -------------------------------------------------------
         checks.Check(

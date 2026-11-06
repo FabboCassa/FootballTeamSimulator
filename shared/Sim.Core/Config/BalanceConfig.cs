@@ -1612,6 +1612,53 @@ namespace Sim.Core.Config
         public int V11ScreenLeashDm { get; set; } = 120;
 
         /// <summary>
+        /// Defending the central zone (issue #206, free-ball spec R7/R8). When the point an opponent
+        /// meets a pass at is within <see cref="V11ZoneGuardRangeDm"/> of the centre of a side's own
+        /// goal, its outfielder nearest that point closes it at a sprint,
+        /// <see cref="V11ZoneCloseStandOffDm"/> off it on the goal side: the receiver is pressed on
+        /// arrival. The range is a little past the 16 m zone so the ball about to enter it is met
+        /// too. A man already on the ball is left to the press and its instructions. Read only by
+        /// the V11 brain.
+        /// </summary>
+        public int V11ZoneGuardRangeDm { get; set; } = 200;
+        public int V11ZoneCloseStandOffDm { get; set; } = 10;
+
+        /// <summary>
+        /// Issue #206: the goal-side presser stops jockeying back as the man on the ball nears the
+        /// zone. Within <see cref="V11ZonePressFromDm"/> of the centre of his own goal his stand-off
+        /// (<see cref="V11PressStandOffPercent"/> of the Pressing instruction's) loses up to
+        /// <see cref="V11ZonePressCloseInDm"/>, all of it at <see cref="V11ZonePressToDm"/> and
+        /// closer, linearly between. A fixed amount off the instruction's stand-off, so the low
+        /// block still leaves the man the same metres more than the high press does there.
+        /// Measured (pitch trace, 12 matches): 70% of the central-zone spells were carries begun
+        /// outside it, nearly all with a goal-side presser retreating in front of the carrier.
+        /// </summary>
+        public int V11ZonePressFromDm { get; set; } = 300;
+        public int V11ZonePressToDm { get; set; } = 160;
+        public int V11ZonePressCloseInDm { get; set; } = 33;
+
+        /// <summary>
+        /// Issue #206: the man on the ball walks no further into a man goal-side of him. Within
+        /// <see cref="V11CarrierBlockedRangeDm"/> of the centre of the goal he attacks and within
+        /// <see cref="V11CarrierBlockedHalfWidthDm"/> of its axis, an outfielder within
+        /// <see cref="V11CarrierBlockedDm"/> of him and inside the cone round the line to that goal
+        /// (<see cref="V11CarrierBlockedConePermille"/>, a cosine) stops the run: capped at
+        /// <see cref="V11CarrierBlockedSpeedPercent"/> of his top speed, he looks for a pass once he
+        /// has had it V11ReleaseSettleMs, and neither running on nor hoofing it is an option.
+        /// Measured (pitch trace, 24 matches): 49 of the 68 central-zone spells a team-match were
+        /// carried in, at full pace through the tempo's hold; 29 of them had a man within 3 m goal-side
+        /// of the carrier on the way, 15 from 25 m and further out. The half-width stops at the
+        /// touchline channel (a quarter of the pitch's width): a blocked man inside it plays what the
+        /// feed labels a cross, 42 of them a team-match against 30, and the Width and final-third
+        /// instructions lose their order to them. Tighter than this cap fouls go past R2's 28.
+        /// </summary>
+        public int V11CarrierBlockedRangeDm { get; set; } = 350;
+        public int V11CarrierBlockedHalfWidthDm { get; set; } = 170;
+        public int V11CarrierBlockedDm { get; set; } = 55;
+        public int V11CarrierBlockedConePermille { get; set; } = 500;
+        public int V11CarrierBlockedSpeedPercent { get; set; } = 30;
+
+        /// <summary>
         /// A run bends round an opponent within <see cref="V11CurveTriggerDm"/> of its straight
         /// line, passing him at <see cref="V11CurveClearanceDm"/>.
         /// </summary>
@@ -1714,8 +1761,9 @@ namespace Sim.Core.Config
         /// (a keen side's shortcut from 25 m); R10 holds the shortcut to 20 m, so a keen side's long
         /// sight is now a priced shot. 400: at 100 eager sides took 6.6 shots a match from outside
         /// the box against patient ones' 4.8 (InstructionsTests wants 2 more), at 400 7.8.
+        /// 800 since issue #206: with V11ShotFromDistancePercent at 75 the credit it stretches is smaller.
         /// </summary>
-        public int V11ShotAppetiteRangePercent { get; set; } = 400;
+        public int V11ShotAppetiteRangePercent { get; set; } = 800;
 
         /// <summary>
         /// ...and with the goal mouth in view: the sine of the angle between the lines to the two
@@ -1778,8 +1826,12 @@ namespace Sim.Core.Config
         /// 62 since issue #178: a defender touches the ball only within a metre of it (free-ball
         /// spec R3), so fewer strikes are charged down (blocked 13% against 20% before) and more
         /// reach the keeper; at 75 a match had 3.3 goals over 192 (R2: 2.5-3.2), at 62 2.9.
+        /// 300 since issue #206: with the carrier no longer walking into the zone (central-zone
+        /// spells 76 to 26 a team-match) the priced shot is where a chance goes; at 62 that left 16.8
+        /// shots and 1.5 goals, at 300 with the distance credit gone 28.9 and 2.68. Issue #182 replaces
+        /// this weight with the honest price.
         /// </summary>
-        public int V11ShotValuePercent { get; set; } = 62;
+        public int V11ShotValuePercent { get; set; } = 300;
 
         /// <summary>
         /// What each outfield defender in the way of a shot leaves of its value, in percent: in the
@@ -1823,8 +1875,11 @@ namespace Sim.Core.Config
         /// match's 48 shots came from outside the box; at 900, 37% of 31. At the 3 m sight an
         /// eager side shot from distance only 0.7 times a match more than a patient one
         /// (InstructionsTests: 2), since no block reached a man stood 1-3 m off the lane.
+        /// 75 (no credit, a discount) since issue #206, with V11ShotValuePercent at 300: at 350
+        /// a blocked man at the edge of the box had a go instead of walking in, and 52% of the shots
+        /// came from inside it.
         /// </summary>
-        public int V11ShotFromDistancePercent { get; set; } = 900;
+        public int V11ShotFromDistancePercent { get; set; } = 75;
         public int V11ShotClearSightMarginDm { get; set; } = 10;
 
         /// <summary>

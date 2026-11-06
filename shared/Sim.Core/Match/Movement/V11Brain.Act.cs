@@ -58,7 +58,8 @@ namespace Sim.Core.Match.Movement
                 // scene is read once there is a choice to make.
                 int raw = _sim.RawPressurePermille(side, slot);
                 bool settled = tick - _possessedSince >= _sim._cfg.TicksOfMs(_sim._cfg.V11ReleaseSettleMs);
-                if (holding && (raw < _sim._cfg.V11PressedReleasePermille || !settled))
+                bool blocked = _sim.CarrierBlocked(k);
+                if (holding && (!settled || (raw < _sim._cfg.V11PressedReleasePermille && !blocked)))
                 {
                     ReadGoalward(side, slot);
                     TrackOpenGoal(tick, k);
@@ -77,6 +78,7 @@ namespace Sim.Core.Match.Movement
                 // that calms him makes him surer on the ball, not bolder with it.
                 int pressure = _sim.PressurePermille(side, slot);
                 Read(side, slot, raw);
+                _scene.GoalSideBlocked = blocked;
                 TrackOpenGoal(tick, k);
                 V11Choice choice = _valuation.Choose(_scene, holding);
                 int strikeU = choice.Kind == V11ActionKind.Shot ? _sim._maxShootForce

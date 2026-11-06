@@ -37,12 +37,19 @@ namespace Sim.Core.Match.Analysis
             // doc §11.5 Event bands
             public static readonly RealismBand OffsidesPerTeamMatch =
                 new RealismBand("offsides/team-match", 0.70, 3.21);
+            // doc §11.5 Event bands
+            public static readonly RealismBand PenaltyAreaTouchesPerTeamMatch =
+                new RealismBand("penalty-area spells/team-match", 9.69, 41.40);
+            // doc §11.5 Event bands
+            public static readonly RealismBand CentralZonePossessionsPerTeamMatch =
+                new RealismBand("central-zone spells/team-match", 6.20, 25.71);
 
             /// <summary>Every event band above, in doc §11.5 table order.</summary>
             public static readonly IReadOnlyList<RealismBand> All = new[]
             {
                 PassesPerTeamMatch, LongPassPercent, HighPassPercent, HighCrossesPerTeamMatch,
                 LowCrossesPerTeamMatch, ThroughBallsPerTeamMatch, AerialDuelsPerTeamMatch, OffsidesPerTeamMatch,
+                PenaltyAreaTouchesPerTeamMatch, CentralZonePossessionsPerTeamMatch,
             };
         }
     }

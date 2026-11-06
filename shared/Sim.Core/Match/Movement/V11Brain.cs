@@ -167,6 +167,7 @@ namespace Sim.Core.Match.Movement
                     _phaseTicks[side * TeamPhaseMachine.PhaseCount + (int)_phases.PhaseOf(side)]++;
 
                 _base.UpdateTeams(tick);
+                UpdateZoneGuard();
                 EndOpenGoalSpell();
 
                 for (int side = 0; side < SideCount; side++)

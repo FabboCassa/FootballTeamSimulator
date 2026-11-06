@@ -101,6 +101,10 @@ namespace Sim.Core.Match.Movement
         public static long PressDirectionReach(DefendingAxesBalance c, TacticInstructions i, bool wide, long reach) =>
             Scale(reach, wide ? c.PressDirectionWideReachPercent : c.PressDirectionCentralReachPercent, (int)i.PressDirection);
 
+        /// <summary>The press direction on the reach at which a man goal-side of the man on the ball stops his run.</summary>
+        public static long CarrierBlockReach(DefendingAxesBalance c, TacticInstructions i, long reach) =>
+            Scale(reach, c.PressDirectionCarrierBlockPercent, (int)i.PressDirection);
+
         private static int Offset(int[] table, int level) => level == Middle ? 0 : MovementTactics.Pick(table, level);
 
         private static int AtLeastOne(long ticks) => ticks < 1 ? 1 : (int)ticks;

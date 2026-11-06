@@ -60,6 +60,9 @@ namespace Sim.Core.Match.Movement
         /// <summary>How far one touch takes him.</summary>
         public int CarryTouchDm { get; set; } = 100;
 
+        /// <summary>A man goal-side of him stops his run (issue #206): he looks for a pass, and running on is no option.</summary>
+        public bool GoalSideBlocked { get; set; }
+
         /// <summary>Where a clearance would land, when there is room to clear it at all.</summary>
         public bool CanClear { get; set; }
         public int ClearXDm { get; set; }
@@ -104,6 +107,7 @@ namespace Sim.Core.Match.Movement
         public void Reset()
         {
             _laneSet = false;
+            GoalSideBlocked = false;
             MateCount = 0;
             FoeCount = 0;
             FoeKeeper = -1;

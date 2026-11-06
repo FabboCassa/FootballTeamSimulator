@@ -83,6 +83,11 @@ WIDE_M = 13.84   # spec R2 wide channel: within 13.84 m of a touchline, in metre
 LONG_M = 30.0
 SET_PIECES = {"Corner", "Free Kick", "Goal Kick", "Kick Off", "Throw-in"}
 MIN_SPLIT = 10   # team-matches; a smaller split is printed in parentheses and is not in the band
+# Doc §11.3 on-ball spells: the events that put the ball on a player's foot (or head). A Ball
+# Receipt with an outcome (incomplete) and a failed Ball Recovery are not on the ball.
+ON_BALL = {"Ball Receipt*", "Carry", "Pass", "Shot", "Dribble", "Miscontrol", "Dispossessed", "Ball Recovery",
+           "Clearance", "Interception"}
+ZONE_M = 16.0   # central zone: within 16 m of the attacked goal's centre (inside the box width by construction)
 
 
 def tier(position, teams):
@@ -162,6 +167,69 @@ def is_cross(p):
             and x1 >= BOX_X and BOX_Y0 <= y1 <= BOX_Y1)
 
 
+def on_ball(e):
+    name = e["type"]["name"]
+    if name not in ON_BALL or "location" not in e:
+        return False
+    if name == "Ball Receipt*":
+        return "outcome" not in e.get("ball_receipt", {})
+    if name == "Ball Recovery":
+        return not e.get("ball_recovery", {}).get("recovery_failure")
+    if name == "Interception":
+        return (e["interception"].get("outcome") or {}).get("name") in ("Won", "Success", "Success In Play", "Success Out")
+    return True
+
+
+def is_restart(e):
+    """A set piece's first touch: a set-piece pass, or a penalty or free-kick shot."""
+    if e["type"]["name"] == "Pass":
+        return not is_open_play(e)
+    if e["type"]["name"] == "Shot":
+        return (e["shot"].get("type") or {}).get("name") in ("Penalty", "Free Kick", "Corner", "Kick Off")
+    return False
+
+
+def spell_points(e):
+    pts = [e["location"][:2]]
+    if e["type"]["name"] == "Carry":
+        pts.append(e["carry"]["end_location"][:2])
+    return pts
+
+
+def in_box(x, y):
+    return x >= BOX_X and BOX_Y0 <= y <= BOX_Y1
+
+
+def in_zone(x, y):
+    return math.hypot((120.0 - x) * X_M, (y - 40.0) * Y_M) <= ZONE_M
+
+
+def spells(events, team_id):
+    """Doc §11.3: the team's on-ball spells, each a run of one player's on-ball events that nobody
+    else's on-ball event breaks; a spell opened by a set piece is left out. Returns, per spell,
+    (touched the box, reached the zone, unpressed on its first event in the zone)."""
+    out = []
+    current, rows = None, []
+
+    def close():
+        if current is None or current[0] != team_id or current[2]:
+            return
+        box = any(in_box(x, y) for e in rows for x, y in spell_points(e))
+        first = next((e for e in rows if any(in_zone(x, y) for x, y in spell_points(e))), None)
+        out.append((box, first is not None, first is not None and not first.get("under_pressure")))
+
+    for e in sorted(events, key=lambda e: e["index"]):
+        if e["period"] > 4 or not on_ball(e):
+            continue
+        key = (e["team"]["id"], e["player"]["id"])
+        if current is None or current[:2] != key:
+            close()
+            current, rows = (key[0], key[1], is_restart(e)), []
+        rows.append(e)
+    close()
+    return out
+
+
 def team_match(events, team_id):
     mine = [e for e in events if e["team"]["id"] == team_id and e["period"] <= 4]
     passes = [e for e in mine if e["type"]["name"] == "Pass"]
@@ -174,7 +242,11 @@ def team_match(events, team_id):
                       and e["duel"].get("type", {}).get("name") == "Aerial Lost")
     offsides = sum(1 for p in passes if (p["pass"].get("outcome") or {}).get("name") == "Pass Offside")
     offsides += sum(1 for e in mine if e["type"]["name"] == "Offside")
+    on_ball_spells = spells(events, team_id)
     return dict(
+        box=sum(1 for b, _, _ in on_ball_spells if b),
+        zone=sum(1 for _, z, _ in on_ball_spells if z),
+        zone_free=sum(1 for _, z, f in on_ball_spells if z and f),
         passes=len(passes),
         long=100.0 * sum(1 for p in passes if length(p) > LONG_M) / len(passes),
         high=100.0 * sum(1 for p in passes if high(p)) / len(passes),
@@ -235,13 +307,27 @@ METRICS = [   # label, constant (None: information only), key, cap, digits
     ("Through balls per team-match", "ThroughBallsPerTeamMatch", "through", None, 2),
     ("Aerial duels per team-match", "AerialDuelsPerTeamMatch", "aerial", None, 2),
     ("Offsides per team-match", "OffsidesPerTeamMatch", "offside", None, 2),
+    ("On-ball spells touching the opponent's penalty area per team-match", "PenaltyAreaTouchesPerTeamMatch", "box", None, 2),
+    ("On-ball spells in the central zone per team-match", "CentralZonePossessionsPerTeamMatch", "zone", None, 2),
+    ("Central-zone spells not under StatsBomb's pressure flag, % of them", None, "zone_free_pct", 100.0, 2),
 ]
+# A share pooled over the team-matches of a split (sum of the part / sum of the whole), not a mean
+# of per-team-match shares: a team-match can have no central-zone spell.
+POOLED = {"zone_free_pct": ("zone_free", "zone")}
 HEADS = ["Passes", "Long %", "High %", "High crosses", "Low crosses", "SB cross flag", "Through balls",
-         "Aerial duels", "Offsides"]
+         "Aerial duels", "Offsides", "Box spells", "Zone spells", "Zone unpressed %"]
 
 
 def means(rows):
-    return {key: float(np.mean([r[5][key] for r in rows])) for _, _, key, _, _ in METRICS}
+    out = {}
+    for _, _, key, _, _ in METRICS:
+        if key in POOLED:
+            part, whole = POOLED[key]
+            total = sum(r[5][whole] for r in rows)
+            out[key] = 100.0 * sum(r[5][part] for r in rows) / total if total else 0.0
+        else:
+            out[key] = float(np.mean([r[5][key] for r in rows]))
+    return out
 
 
 def cells(values):

@@ -143,7 +143,7 @@ namespace Sim.Core.Match.Movement
         }
 
         /// <summary>Whether the man on the ball is pressed hard enough to look for a release.</summary>
-        public bool Pressed(V11Scene s) => s.PressurePermille >= _cfg.V11PressedReleasePermille;
+        public bool Pressed(V11Scene s) => s.GoalSideBlocked || s.PressurePermille >= _cfg.V11PressedReleasePermille;
 
         /// <summary>
         /// Real-match spec R9: a pressed man gives it to a free man, the dearest ball whose odds are
@@ -162,7 +162,7 @@ namespace Sim.Core.Match.Movement
                 : _cfg.V11PressedReleaseSafetyPermille;
             int pass = PassValue(s, NoOption, minSafety, _releaseModels, out V11Choice release);
             if (pass == NoOption) return hold;
-            release.Release = true;
+            release.Release = s.PressurePermille >= _cfg.V11PressedReleasePermille;
             return release;
         }
 
@@ -349,7 +349,7 @@ namespace Sim.Core.Match.Movement
             }
 
             // A keeper runs with it only when there is nothing else to do with it.
-            if (s.CarrierIsKeeper) return NoOption;
+            if (s.CarrierIsKeeper || s.GoalSideBlocked) return NoOption;
 
             // In the last stretch the carry goes to a point in front of goal: once he is on it, or
             // past it, running with it would take him nowhere or away from goal, and choosing
@@ -365,7 +365,7 @@ namespace Sim.Core.Match.Movement
         /// <summary>Hoofing it upfield: kept now and then, and lost forty metres from his own goal.</summary>
         public int ClearValue(V11Scene s)
         {
-            if (s.CarrierIsKeeper || !s.CanClear) return NoOption;
+            if (s.CarrierIsKeeper || !s.CanClear || s.GoalSideBlocked) return NoOption;
             int keep = _cfg.ClearanceRetentionPermille;
             return MoveValue(s, s.ClearXDm, s.ClearYDm, keep, s.ClearXDm, s.ClearYDm, GainPercent(s, false, false));
         }
