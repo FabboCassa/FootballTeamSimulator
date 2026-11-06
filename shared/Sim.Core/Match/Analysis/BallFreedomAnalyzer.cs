@@ -34,6 +34,12 @@ namespace Sim.Core.Match.Analysis
     ///     the receiver's first; flights over 6 s are dropped. Flight p50/p90 and the receiver's
     ///     distance at release to the ball at arrival (p50, and the share at or over 3 m), per match,
     ///     with numpy's linear percentile.
+    ///   * Through ball (free-ball spec R4, against the event band
+    ///     <see cref="RealismReference.Events.ThroughBallsPerTeamMatch"/>): a pass into space (above)
+    ///     struck from behind the line of the second-last opponent at release (keeper included) to
+    ///     a receiver not beyond it then, and taken beyond it; a geometric cross (doc §11.3) is not
+    ///     one. The event data's "Through Ball" is the analyst's call; this is its geometry, on
+    ///     completed passes only.
     ///   * Loose-ball episode: a free run of at least 1 s whose last holder held the ball under
     ///     0.4 s, either in a duel (both teams within reach on one of the 0.5 s of frames before it)
     ///     or, failing that, after a holder of the other team than his predecessor.
@@ -62,7 +68,7 @@ namespace Sim.Core.Match.Analysis
         private int[] _sentOffFrom = Array.Empty<int>();
         private readonly List<double> _flights = new List<double>();
         private readonly List<double> _spaces = new List<double>();
-        private int _n;
+        private int _n, _throughBalls;
 
         /// <summary>Measures one match. Returns null when the report carries no position stream.</summary>
         public static BallFreedomMetrics? Analyze(MatchReport report) => new BallFreedomAnalyzer().Measure(report);
@@ -174,6 +180,7 @@ namespace Sim.Core.Match.Analysis
             double flightMax = (double)FlightMaxMs * s.TicksPerMinute / 60_000;
             _flights.Clear();
             _spaces.Clear();
+            _throughBalls = 0;
 
             int prevEnd = 0, prevLabel = Dead;
             bool clean = true;
@@ -205,6 +212,7 @@ namespace Sim.Core.Match.Analysis
             }
 
             m.Passes = _flights.Count;
+            m.ThroughBalls = _throughBalls;
             if (_flights.Count == 0) return;
             foreach (double d in _spaces)
                 if (d >= SpaceDm / 10.0) m.PassesIntoSpace++;
@@ -219,9 +227,45 @@ namespace Sim.Core.Match.Analysis
             int[] xy = receiver < _n ? s.HomeXY : s.AwayXY;
             double dx = s.PlayerX(xy, release, receiver % _n) - s.BallXY[arrival * 2];
             double dy = s.PlayerY(xy, release, receiver % _n) - s.BallXY[arrival * 2 + 1];
+            double space = Math.Sqrt(dx * dx + dy * dy) / 10.0;
             _flights.Add((arrival - release) * 60.0 / s.TicksPerMinute);
-            _spaces.Add(Math.Sqrt(dx * dx + dy * dy) / 10.0);
+            _spaces.Add(space);
+            if (space >= SpaceDm / 10.0 && IsThroughBall(s, release, arrival, receiver)) _throughBalls++;
         }
+
+        /// <summary>
+        /// Struck from behind the second-last opponent's line at release to a man not beyond it,
+        /// and taken beyond it; not a cross.
+        /// </summary>
+        private bool IsThroughBall(PositionStream s, int release, int arrival, int receiver)
+        {
+            bool home = receiver < _n;
+            int fromX = s.BallXY[release * 2], toX = s.BallXY[arrival * 2];
+            if (GeometricCrossAnalyzer.WideInFinalThird(home, fromX, s.BallXY[release * 2 + 1])
+                && GeometricCrossAnalyzer.InAttackedBox(home, toX, s.BallXY[arrival * 2 + 1]))
+                return false;
+
+            int[] own = home ? s.HomeXY : s.AwayXY;
+            int[] opp = home ? s.AwayXY : s.HomeXY;
+            int last = int.MinValue, line = int.MinValue;
+            for (int j = 0; j < _n; j++)
+            {
+                if (release >= _sentOffFrom[(home ? _n : 0) + j]) continue;
+                int d = Depth(home, s.PlayerX(opp, release, j));
+                if (d > last)
+                {
+                    line = last;
+                    last = d;
+                }
+                else if (d > line) line = d;
+            }
+
+            return line != int.MinValue && Depth(home, fromX) < line && Depth(home, toX) > line
+                   && Depth(home, s.PlayerX(own, release, receiver % _n)) <= line;
+        }
+
+        /// <summary>How far toward the goal a side attacks, from its own goal line (home toward X = LengthDm).</summary>
+        private static int Depth(bool home, int x) => home ? x : Pitch.LengthDm - x;
 
         /// <summary>numpy's default percentile: linear between the closest ranks of the sorted values.</summary>
         private static double Percentile(List<double> values, double p)

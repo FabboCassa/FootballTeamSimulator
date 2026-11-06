@@ -103,6 +103,9 @@ namespace Sim.Core.Match.Movement
         private readonly int[] _receiveX = new int[SideCount];
         private readonly int[] _receiveY = new int[SideCount];
 
+        /// <summary>The pass on its way to <see cref="_receiver"/> is a through ball: he runs onto it at its aim (free-ball spec R4).</summary>
+        private readonly bool[] _runOn = new bool[SideCount];
+
         /// <summary>The tick the first half ends on, and which side kicked the match off.</summary>
         private int _halfTime;
         private int _kickedOffFirst;
@@ -1124,6 +1127,9 @@ namespace Sim.Core.Match.Movement
             public int Y;
             public int Force;
             public int Completion;
+
+            /// <summary>A through ball (free-ball spec R4): he runs onto it at its aim, not to meet it earliest.</summary>
+            public bool RunOn;
         }
 
         /// <summary>
@@ -1185,6 +1191,7 @@ namespace Sim.Core.Match.Movement
             _receiver[side] = choice.Slot;
             _receiveX[side] = aimX;
             _receiveY[side] = aimY;
+            _runOn[side] = choice.RunOn;
 
             BallActionKind kind = distance > U.Units(_cfg.LongBallFromDm)
                 ? BallActionKind.LongBall
@@ -1278,13 +1285,15 @@ namespace Sim.Core.Match.Movement
         /// <summary>
         /// The legs, toward (<paramref name="tx"/>, <paramref name="ty"/>). With a waypoint
         /// (<paramref name="viaX"/> at least 0) the pace is still read off the target but the run
-        /// heads for the waypoint: a run bent round an opponent (<see cref="RunCurve"/>).
+        /// heads for the waypoint: a run bent round an opponent (<see cref="RunCurve"/>). A
+        /// <paramref name="pace"/> caps his speed, in units per tick: a run timed to the ball.
         /// </summary>
-        private void SteerVia(int k, int tx, int ty, bool sprint, int viaX, int viaY)
+        private void SteerVia(int k, int tx, int ty, bool sprint, int viaX, int viaY, int pace = int.MaxValue)
         {
             // Flat out only when the ball is the reason; otherwise a jog. A match where every
             // man ran at eight metres a second for ninety minutes would cover forty kilometres.
             int top = CarrierTop(k, sprint ? _maxSpeed[k] : _cruise[k]);
+            if (top > pace) top = pace;
             if (top < 1) top = 1;
 
             // R5: an outfield man sent at a spot beyond a line runs to the line, not into it.

@@ -236,7 +236,8 @@ namespace Sim.Core.Match.Movement
                 return true;
             }
 
-            private void InterceptSpot(int k, out int x, out int y)
+            /// <summary>Where he meets the ball; false when he cannot within the lookahead, and it is where the ball will be by then.</summary>
+            private bool InterceptSpot(int k, out int x, out int y)
             {
                 // Run to where the ball will be, not to where it is. The roll is stepped forward once
                 // rather than replayed from scratch for every horizon, which at 10 Hz matters.
@@ -258,12 +259,13 @@ namespace Sim.Core.Match.Movement
                     {
                         x = U.ClampX(bx);
                         y = U.ClampY(by);
-                        return;
+                        return true;
                     }
                 }
 
                 x = U.ClampX(bx);
                 y = U.ClampY(by);
+                return false;
             }
 
             /// <summary>Ground a man covers in <paramref name="ticks"/> ticks from <paramref name="speed"/>, gaining <paramref name="accel"/> a tick up to <paramref name="top"/>.</summary>

@@ -40,6 +40,9 @@ namespace Sim.Core.Tests.Match
         // header and the second ball further up, so it reads 1.70 over 1024 seeds (1.98 over 128
         // without the duels) and read 1.49 over 128 - its 1.5 margin is the dice at 128.
         private const int EngagementSeeds = 1024;
+        // The zonal gap, measured over 256 seeds (#180): 0.52 on main and 0.53 with #180, while the
+        // first 128 read 0.44 with #180 against its 0.5 margin - the dice, not the lever.
+        private const int MarkingSeeds = 256;
         private const ulong FirstSeed = 9100;
 
         // Final third and wide channel (from the centre line), in decimetres.
@@ -155,9 +158,9 @@ namespace Sim.Core.Tests.Match
         [Test]
         public void Marking_ManOrientedStaysTightToItsMen_ZonalDoesNot()
         {
-            double neutral = Neutral.TightPercent;
-            double man = Of(marking: MarkingScheme.ManOriented).TightPercent;
-            double zonal = Of(marking: MarkingScheme.Zonal).TightPercent;
+            double neutral = Of(seeds: MarkingSeeds).TightPercent;
+            double man = Of(marking: MarkingScheme.ManOriented, seeds: MarkingSeeds).TightPercent;
+            double zonal = Of(marking: MarkingScheme.Zonal, seeds: MarkingSeeds).TightPercent;
 
             Print("marking", "defending outfielders within 3 m of an opponent, %", man, neutral, zonal, "man-oriented", "zonal");
 

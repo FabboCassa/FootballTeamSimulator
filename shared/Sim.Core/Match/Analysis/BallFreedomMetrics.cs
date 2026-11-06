@@ -23,6 +23,9 @@ namespace Sim.Core.Match.Analysis
         public int Passes { get; set; }
         public int PassesIntoSpace { get; set; }
 
+        /// <summary>Tracking-derived passes into space that beat the second-last opponent's line (not crosses), both sides.</summary>
+        public int ThroughBalls { get; set; }
+
         /// <summary>The match's pass percentiles; 0 with no passes.</summary>
         public double FlightP50Seconds { get; set; }
         public double FlightP90Seconds { get; set; }

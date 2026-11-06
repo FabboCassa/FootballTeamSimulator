@@ -179,6 +179,63 @@ namespace Sim.Core.Tests.Match
         }
 
         [Test]
+        public void ThroughBall_IsAPassFromBehindTheLineThatArrivesBeyondIt_AndOneShortOfItIsNot()
+        {
+            // The away stack (second-last opponent, the keeper last) holds the line at x = 625.
+            Assert.That(Measure(LineBall(arrivalX: 700)).ThroughBalls, Is.EqualTo(1), "played from 600, taken at 700: in behind");
+            Assert.That(Measure(LineBall(arrivalX: 620)).ThroughBalls, Is.EqualTo(0), "taken at 620: short of the line");
+        }
+
+        [Test]
+        public void ThroughBall_FromAPasserAlreadyBeyondTheLine_ToAManAlreadyInBehind_OrToHisFeet_IsNot()
+        {
+            BallFreedomMetrics passerBeyond = Measure(LineBall(arrivalX: 760, fromX: 700));
+            BallFreedomMetrics manInBehind = Measure(LineBall(arrivalX: 700, receiverX: 690));
+            BallFreedomMetrics toFeet = Measure(LineBall(arrivalX: 700, receiverX: 700, receiverY: 190));
+
+            Assert.That((passerBeyond.Passes, manInBehind.Passes, toFeet.Passes), Is.EqualTo((1, 1, 1)));
+            Assert.That(passerBeyond.ThroughBalls, Is.EqualTo(0), "the line was behind the ball already");
+            Assert.That(manInBehind.ThroughBalls, Is.EqualTo(0), "he was in behind before it was played");
+            Assert.That(toFeet.ThroughBalls, Is.EqualTo(0), "a ball to his feet is no ball into space");
+        }
+
+        [Test]
+        public void ThroughBall_ACrossBeyondTheLine_IsNot()
+        {
+            // From the wide final third (x 760, y 100) into the box beyond the line, with the away
+            // stack on the edge of the area (x 860).
+            PositionStream s = LineBall(arrivalX: 960, fromX: 760, fromY: 100, receiverX: 850, receiverY: 300, arrivalY: 300);
+            for (int t = 0; t < 20; t++)
+                for (int i = 1; i < Ten + 1; i++) Put(s, false, t, i, 860, 600);
+
+            BallFreedomMetrics m = Measure(s);
+
+            Assert.That(m.Passes, Is.EqualTo(1));
+            Assert.That(m.ThroughBalls, Is.EqualTo(0));
+        }
+
+        /// <summary>
+        /// Home 9 holds at (<paramref name="fromX"/>, <paramref name="fromY"/>) frames 0-2; the ball
+        /// runs free 3-7 to home 10, who stands at (<paramref name="receiverX"/>,
+        /// <paramref name="receiverY"/>) at release and takes it at (<paramref name="arrivalX"/>,
+        /// <paramref name="arrivalY"/>).
+        /// </summary>
+        private static PositionStream LineBall(int arrivalX, int fromX = 600, int fromY = 200,
+            int receiverX = 620, int receiverY = 160, int arrivalY = 200)
+        {
+            PositionStream s = Stream(20);
+            Carry(s, 0, 2, true, Nine, fromX, fromY);
+            Stay(s, 3, 19, true, Nine, fromX - 100, fromY);
+            for (int i = 0; i < 5; i++)
+                Ball(s, 3 + i, fromX + (arrivalX - fromX) * (i + 1) / 6, fromY + (arrivalY - fromY) * (i + 1) / 6);
+            Stay(s, 0, 7, true, Ten, receiverX, receiverY);
+            Carry(s, 8, 10, true, Ten, arrivalX, arrivalY);
+            Stay(s, 11, 19, true, Ten, arrivalX, arrivalY);
+            BallAt(s, 11, 19, arrivalX, 600);
+            return s;
+        }
+
+        [Test]
         public void PassPercentiles_AreNumpysLinearOnes_AndAPassToTheMansFeetIsNotIntoSpace()
         {
             // Flights of 1, 2, 3, 4 and 10 frames: 0.2-0.8 s and 2.0 s.
@@ -303,7 +360,7 @@ namespace Sim.Core.Tests.Match
             var a = new BallFreedomMetrics
             {
                 InPlayFrames = 100, Free15Frames = 40, Free3Frames = 20, Above1mFrames = 30,
-                Within5Sum = 160, Within10Sum = 350, Passes = 10, PassesIntoSpace = 4,
+                Within5Sum = 160, Within10Sum = 350, Passes = 10, PassesIntoSpace = 4, ThroughBalls = 6,
                 FlightP50Seconds = 1.0, FlightP90Seconds = 2.0, ReceiverToArrivalP50Meters = 2.5,
                 LooseDuels = 100, LooseDeflections = 20,
             };
@@ -327,6 +384,8 @@ namespace Sim.Core.Tests.Match
             Assert.That(rows[RealismReference.Tracking.ReceiverToArrivalP50Meters.Name].Value, Is.EqualTo(2.5).Within(1e-9));
             Assert.That(rows[RealismReference.Tracking.PassIntoSpacePercent.Name].Value, Is.EqualTo(40.0).Within(1e-9));
             Assert.That(rows[BallFreedomTally.PassesName].Value, Is.EqualTo(5.0).Within(1e-9));
+            Assert.That(rows[RealismReference.Events.ThroughBallsPerTeamMatch.Name].Value, Is.EqualTo(1.5).Within(1e-9),
+                "6 in one match and none in the other: 3 a match, 1.5 a team-match");
             Assert.That(rows[RealismReference.Tracking.LooseBallsPerMatch.Name].Value, Is.EqualTo(90.0).Within(1e-9));
             Assert.That(rows[RealismReference.Tracking.LooseBallsPerMatch.Name].InBand, Is.True);
             Assert.That(rows[BallFreedomTally.LooseDuelsName].Value, Is.EqualTo(80.0).Within(1e-9));

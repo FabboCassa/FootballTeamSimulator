@@ -125,14 +125,14 @@ namespace Sim.Core.Match.Analysis
             k == BallActionKind.Pass || k == BallActionKind.LongBall || k == BallActionKind.Cross;
 
         /// <summary>The final third the side attacks, outside the penalty area's side lines (13.84 m from the touchline).</summary>
-        private static bool WideInFinalThird(bool home, int x, int y)
+        internal static bool WideInFinalThird(bool home, int x, int y)
         {
             bool finalThird = home ? x >= 2 * Pitch.LengthDm / 3 : x <= Pitch.LengthDm / 3;
             int across = y - Pitch.CenterY;
             return finalThird && (across > MovementGeometry.BoxHalfWidthDm || -across > MovementGeometry.BoxHalfWidthDm);
         }
 
-        private static bool InAttackedBox(bool home, int x, int y)
+        internal static bool InAttackedBox(bool home, int x, int y)
         {
             bool deep = home ? x >= Pitch.LengthDm - MovementGeometry.BoxDepthDm : x <= MovementGeometry.BoxDepthDm;
             int across = y - Pitch.CenterY;

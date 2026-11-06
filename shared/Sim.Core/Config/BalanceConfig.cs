@@ -1776,6 +1776,27 @@ namespace Sim.Core.Config
         public int PassRunLeadMaxDm { get; set; } = 80;
 
         /// <summary>
+        /// Free-ball spec R4 (issue #180): a team-mate moving at least this fast is led along his
+        /// run (a lead pass, see V11PassTarget); a slower one is led V11PassLeadDm toward goal.
+        /// </summary>
+        public int LeadPassMinSpeedDmPerSecond { get; set; } = 20;
+
+        /// <summary>A through ball (free-ball spec R4) is on for an onside man no further than this behind the offside line.</summary>
+        public int ThroughBallRunInDm { get; set; } = 120;
+
+        /// <summary>How far behind the offside line a through ball is aimed.</summary>
+        public int ThroughBallDepthDm { get; set; } = 80;
+
+        /// <summary>A through ball is never aimed nearer the goal line than this: inside it the keeper has it.</summary>
+        public int ThroughBallGoalLineGapDm { get; set; } = 110;
+
+        /// <summary>
+        /// How far ahead the man a through ball is meant for reads its roll to time his run onto it
+        /// (V11Brain.RunsOnto); a ball that has not reached its aim by then is chased instead.
+        /// </summary>
+        public int RunOnLookaheadMs { get; set; } = 4000;
+
+        /// <summary>
         /// Tempo: the weight on the xT a move gains (slow · normal · fast). A quick side takes the
         /// forward ball a patient one would pass up for a safe one.
         /// </summary>

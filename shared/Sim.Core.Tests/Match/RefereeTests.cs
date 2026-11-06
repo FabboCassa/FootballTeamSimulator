@@ -324,8 +324,23 @@ namespace Sim.Core.Tests.Match
 
                     // He WALKS off rather than vanishing — nothing in this engine may teleport — so
                     // where he has to be is at the touchline by the halfway line by the end of it,
-                    // and standing still there.
+                    // and standing still there. A walk takes time: 40 frames to turn round, then
+                    // the way to the touchline at 2 m/s, below the slowest man's jog. A card too
+                    // late in the match for that leaves him on his way, nearer it than he was.
                     if (card.Tick + 40 >= frames) continue;
+                    int fromX = stream.PlayerX(side, card.Tick, card.Slot);
+                    int fromY = stream.PlayerY(side, card.Tick, card.Slot);
+                    double walkDm = Math.Sqrt((double)(fromX - Pitch.CenterX) * (fromX - Pitch.CenterX)
+                                              + (double)(fromY - touchline) * (fromY - touchline));
+                    int walkFrames = (int)(walkDm / (20.0 * 60 / stream.TicksPerMinute));
+                    if (card.Tick + 40 + walkFrames >= frames)
+                    {
+                        Assert.That(Math.Abs(stream.PlayerY(side, frames - 1, card.Slot) - touchline),
+                            Is.LessThan(Math.Abs(fromY - touchline)),
+                            "a man sent off too late to reach the touchline is on his way to it");
+                        continue;
+                    }
+
                     for (int t = frames - 5; t < frames; t++)
                     {
                         Assert.That(stream.PlayerY(side, t, card.Slot), Is.EqualTo(touchline),
