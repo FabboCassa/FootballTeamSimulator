@@ -1813,25 +1813,33 @@ namespace Sim.Core.Config
         public int V11RoundKeeperSideDm { get; set; } = 30;
 
         /// <summary>
-        /// What a strike that does not go in still leaves the side, in ten-thousandths of a goal
-        /// (believable-match R3, issue #182: "+ the expected value of the rebound or corner"):
-        /// the corner a save or a block gives away, the rebound the side picks up, less the goal
-        /// kick it hands over. Engine: about 10.9 corners a match off 21.4 shots, and a corner is
-        /// worth about 0.03 goals; a rebound kept in the box about 0.1 in one shot in ten; a goal
-        /// kick gives the other side its own six-yard box (xT about 0.006) in about half the misses.
-        /// The sum is about 0.01 a miss.
+        /// What a strike that does not go in leaves the side (believable-match R3, issue #182: "+ the
+        /// expected value of the rebound or corner"), each share read off the engine at this pricing:
+        /// of the strikes that do not score 10% end in a corner, worth about 0.035 goals over the next
+        /// 30 s (so 35 in ten-thousandths of a goal); 6% come back to the side, which then has the
+        /// threat of about where it struck from; and 84% are a ball lost at the other side's goal,
+        /// priced like any ball lost (<see cref="V11LossWeightPercent"/>).
         /// </summary>
-        public int V11ShotFollowUpPer10k { get; set; } = 100;
+        public int V11ShotMissCornerPer10k { get; set; } = 35;
+        public int V11ShotMissKeptPercent { get; set; } = 6;
+        public int V11ShotMissLostPercent { get; set; } = 84;
 
         /// <summary>
-        /// A shot one action away — the receiver's after a ball to him, the carrier's after a carry
-        /// — is worth this percent of the same shot now (believable-match R3, issue #182): the
-        /// discount of a decision one step on. The scene the man reads is frozen; while the ball
-        /// travels the keeper sets himself and the lane can close, so a chance in hand beats the
-        /// same chance a touch later. Without it a free man 11 m out ran two metres across for a
-        /// better angle instead of shooting.
+        /// A shot one touch away, the carrier's after a carry, is worth this percent of the same shot
+        /// now (believable-match R3, issue #182): the scene he reads is frozen, and the lane can close
+        /// while he runs. Without it a free man 11 m out ran two metres across for a better angle
+        /// instead of shooting. Measured: a carry priced 0.097 goals was worth 0.090 in the next 30 s.
         /// </summary>
         public int V11DeferredShotPercent { get; set; } = 85;
+
+        /// <summary>
+        /// The receiver's shot after a ball to him, in percent of the same shot now (issue #182). At 85
+        /// a ball priced 0.15 goals was worth 0.037 over the next 30 s: fewer than half of those balls
+        /// are kept, one in seven is followed by the shot, and the first touch and the man closing him
+        /// take the rest. Measured value over the priced value of a kept ball is 14-39%; from 60 to 35
+        /// the goals and the shots do not move, because the threat of the spot takes over.
+        /// </summary>
+        public int V11ReceiverShotPercent { get; set; } = 35;
 
         /// <summary>
         /// The keeper on V11, in percent of the base Keeper* figures: the odds he holds a strike he

@@ -100,7 +100,8 @@ namespace Sim.Core.Match.Movement
     /// comes off are pitch control's (Spearman) for a pass and a cross, the duel's for a carry. A
     /// shot is worth its xG less the blocks and plus what a miss leaves (believable-match R3, issue
     /// #182), and a ball or a carry that ends where the man's own shot is dearer than the threat of
-    /// the spot is worth that shot, one action deferred. The instructions weigh the terms: Tempo the gain, and its directness
+    /// the spot is worth that shot, deferred. A shot is only taken when it beats the threat of the
+    /// spot, the possession it ends. The instructions weigh the terms: Tempo the gain, and its directness
     /// the long forward ball; Mentality the risk; Mentality times Tempo the shot; Width the cross.
     /// The R16 in-possession axes weigh the same terms (issue #90): passing directness the long
     /// forward ball, build-up the long ball out of the own third, final-third approach the cross
@@ -176,7 +177,7 @@ namespace Sim.Core.Match.Movement
             if (pass > NoOption && pass >= best.ValuePer10k) best = bestPass;
 
             int shot = ShotValue(s);
-            if (shot > NoOption && shot >= best.ValuePer10k)
+            if (shot >= best.ValuePer10k && ShotBeatsPossession(s, shot))
                 best = new V11Choice { Kind = V11ActionKind.Shot, Mate = -1, XDm = GoalX(s), YDm = Pitch.CenterY, ValuePer10k = shot };
 
             // Running at the man closing him down is how a chain ends: pressed, the free man gets it.
@@ -420,7 +421,7 @@ namespace Sim.Core.Match.Movement
                     if (!s.MateIsKeeper[m])
                     {
                         int pressure = PressureAt(s, tx, ty, 0, distance * 1000 / Math.Max(1, _cfg.V11PassBallSpeedDmPerSecond));
-                        keep = Math.Max(keep, Deferred(ShotAt(s, tx, ty, pressure, s.MateShooting[m], s.MateTechnique[m])));
+                        keep = Math.Max(keep, ReceiverShot(ShotAt(s, tx, ty, pressure, s.MateShooting[m], s.MateTechnique[m])));
                     }
                     int execution = Execution(s, distance);
                     if (execution < minSafety) continue;
@@ -473,10 +474,16 @@ namespace Sim.Core.Match.Movement
             if (gain > 0) gain = gain * gainPercent / 100;
             keep = here + gain;
 
-            int theirs = ExpectedThreat.ValuePer10k(lostX, lostY, !s.AttacksHighX, _models);
+            lost = LostWeight(s, lostX, lostY);
+        }
+
+        /// <summary>What the other side is given by a ball lost at (x, y), as this man weighs it.</summary>
+        private int LostWeight(V11Scene s, int x, int y)
+        {
+            int theirs = ExpectedThreat.ValuePer10k(x, y, !s.AttacksHighX, _models);
             int risk = MovementTactics.Percent(_cfg.V11MentalityRiskPercent, (int)s.Instructions.Mentality)
                        * _cfg.V11LossWeightPercent / 100 * s.RiskPercent / 100;
-            lost = theirs * risk / 100 * BallSkill.Clamp(s.VisionPercent, 0, 100) / 100;
+            return theirs * risk / 100 * BallSkill.Clamp(s.VisionPercent, 0, 100) / 100;
         }
 
         private static int Worth(int keep, int lost, int safety)

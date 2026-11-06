@@ -494,7 +494,7 @@ namespace Sim.Core.Tests.Match
                 V11Scene s = Scene(ballX, Mid);
                 int xg = ExpectedGoals.Permille(s.BallXDm, s.BallYDm, s.AttacksHighX, s.PressurePermille,
                     s.Shooting, s.Technique, _cfg.ActionModels) * 10;
-                return xg + (10_000 - xg) * _cfg.V11ShotFollowUpPer10k / 10_000;
+                return xg + (10_000 - xg) * _valuation.MissValue(s, ballX, Mid) / 10_000;
             }
 
             Assert.That(Shot(GoalX - 200, blocker: false), Is.EqualTo(Plain(GoalX - 200)), "a clear sight from 20 m: its xG");

@@ -8,7 +8,7 @@ namespace Sim.Core.Match.Movement
         /// <summary>
         /// Having a go (believable-match R3, issue #182): what it is worth in goals. Its xG, less the
         /// strikes the bodies in the lane charge down (<see cref="ShotBlockPermille"/>), plus what a
-        /// strike that does not go in still leaves (<see cref="Config.MatchBalance.V11ShotFollowUpPer10k"/>).
+        /// strike that does not go in leaves (<see cref="MissValue"/>).
         /// The side's shot appetite is a bias on it, the identity at the middle level. NoOption out
         /// of range or for a keeper.
         /// </summary>
@@ -31,7 +31,7 @@ namespace Sim.Core.Match.Movement
 
             int xg = ExpectedGoals.Permille(x, y, s.AttacksHighX, pressure, shooting, technique, _models) * 10;
             int scored = (int)((long)xg * (1000 - ShotBlockPermille(s, x, y)) / 1000);
-            int value = scored + (int)((long)(10_000 - scored) * _cfg.V11ShotFollowUpPer10k / 10_000);
+            int value = scored + (int)((long)(10_000 - scored) * MissValue(s, x, y) / 10_000);
 
             value = value * Math.Max(0, s.ShotAppetitePercent) / 100;
             bool outsideBox = Math.Abs(goalX - x) > MovementGeometry.BoxDepthDm
@@ -40,8 +40,31 @@ namespace Sim.Core.Match.Movement
             return value;
         }
 
-        /// <summary>A shot one action away, after the ball or the carry gets there: <see cref="Config.MatchBalance.V11DeferredShotPercent"/> of one now.</summary>
+        /// <summary>
+        /// What a strike from (x, y) that does not go in leaves: the corner, the rebound the side
+        /// keeps, less the ball lost at the other side's goal, priced as a pass's lost ball is.
+        /// </summary>
+        public int MissValue(V11Scene s, int x, int y)
+        {
+            int here = ExpectedThreat.ValuePer10k(x, y, s.AttacksHighX, _models);
+            return _cfg.V11ShotMissCornerPer10k
+                   + here * _cfg.V11ShotMissKeptPercent / 100
+                   - LostWeight(s, GoalX(s), Pitch.CenterY) * _cfg.V11ShotMissLostPercent / 100;
+        }
+
+        /// <summary>
+        /// A shot ends the possession, so it has to be worth more than the possession it ends: the
+        /// threat of the spot, which already holds the shots, passes and losses that follow from
+        /// there. Every other option keeps the ball, and is priced on where it ends up.
+        /// </summary>
+        public bool ShotBeatsPossession(V11Scene s, int shot) =>
+            shot > NoOption && shot >= ExpectedThreat.ValuePer10k(s.BallXDm, s.BallYDm, s.AttacksHighX, _models);
+
+        /// <summary>A shot one touch on, after the carry: <see cref="Config.MatchBalance.V11DeferredShotPercent"/> of one now.</summary>
         private int Deferred(int shot) => shot <= NoOption ? NoOption : shot * _cfg.V11DeferredShotPercent / 100;
+
+        /// <summary>The receiver's shot after a ball to him: <see cref="Config.MatchBalance.V11ReceiverShotPercent"/> of one now.</summary>
+        private int ReceiverShot(int shot) => shot <= NoOption ? NoOption : shot * _cfg.V11ReceiverShotPercent / 100;
 
         /// <summary>
         /// The odds a strike from (x, y) is charged down, in permille, by the simulator's own block

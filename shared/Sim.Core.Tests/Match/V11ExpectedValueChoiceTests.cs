@@ -207,7 +207,7 @@ namespace Sim.Core.Tests.Match
         {
             V11Scene s = Scene(GoalX - 140, Mid);
             int xg = ExpectedGoals.Permille(s.BallXDm, s.BallYDm, true, 0, s.Shooting, s.Technique, _cfg.ActionModels) * 10;
-            int expected = xg + (10_000 - xg) * _cfg.V11ShotFollowUpPer10k / 10_000;
+            int expected = xg + (10_000 - xg) * _valuation.MissValue(s, s.BallXDm, s.BallYDm) / 10_000;
             Assert.That(_valuation.ShotValue(s), Is.EqualTo(expected), "no body in the way: the xG and the follow-up");
 
             V11Scene blocked = Scene(GoalX - 140, Mid);
@@ -219,8 +219,39 @@ namespace Sim.Core.Tests.Match
             int pressure = 1000 - 1000 * 32 / _cfg.PressureRadiusDm;
             shoulder.PressurePermille = pressure;
             int pressed = ExpectedGoals.Permille(s.BallXDm, s.BallYDm, true, pressure, s.Shooting, s.Technique, _cfg.ActionModels) * 10;
-            Assert.That(_valuation.ShotValue(shoulder), Is.EqualTo(pressed + (10_000 - pressed) * _cfg.V11ShotFollowUpPer10k / 10_000),
+            Assert.That(_valuation.ShotValue(shoulder), Is.EqualTo(pressed + (10_000 - pressed) * _valuation.MissValue(s, s.BallXDm, s.BallYDm) / 10_000),
                 "a man at his shoulder, behind the ball, is the pressure the xG reads, never a block");
+        }
+
+        [Test]
+        public void AMiss_PaysTheBallItLoses_AsAPassDoes()
+        {
+            V11Scene s = Scene(GoalX - 280, Mid);
+            int threat = ExpectedThreat.ValuePer10k(s.BallXDm, s.BallYDm, true, _cfg.ActionModels);
+            int theirs = ExpectedThreat.ValuePer10k(GoalX, Mid, false, _cfg.ActionModels);
+            int lost = theirs * _cfg.V11LossWeightPercent / 100;
+            int expected = _cfg.V11ShotMissCornerPer10k + threat * _cfg.V11ShotMissKeptPercent / 100
+                           - lost * _cfg.V11ShotMissLostPercent / 100;
+            Assert.That(_valuation.MissValue(s, s.BallXDm, s.BallYDm), Is.EqualTo(expected));
+            Assert.That(expected, Is.LessThan(0), "from long range a miss costs the side more than it leaves");
+        }
+
+        [Test]
+        public void AShotWorthLessThanThePossession_IsNotTaken_EvenWhenNothingElseIsOn()
+        {
+            // 28 m out with nobody to pass to and the way blocked: the shot beats the only other
+            // option there is, but it ends a possession worth more than the shot.
+            V11Scene s = Scene(GoalX - 280, Mid);
+            s.AddFoe(At(GoalX - 262, Mid), keeper: false);
+            s.GoalSideBlocked = true;
+            int shot = _valuation.ShotValue(s);
+            int threat = ExpectedThreat.ValuePer10k(s.BallXDm, s.BallYDm, true, _cfg.ActionModels);
+            Assert.That(shot, Is.LessThan(threat));
+            Assert.That(_valuation.Choose(s, holding: false).Kind, Is.Not.EqualTo(V11ActionKind.Shot));
+
+            V11Scene near = Scene(GoalX - 90, Mid);
+            Assert.That(_valuation.Choose(near, holding: false).Kind, Is.EqualTo(V11ActionKind.Shot),
+                "9 m out the shot is worth more than the threat of the spot");
         }
 
         [Test]
@@ -239,8 +270,9 @@ namespace Sim.Core.Tests.Match
         {
             int Ball(int finishing)
             {
-                V11Scene s = Scene(GoalX - 200, Mid + 100);
-                s.AddMate(At(GoalX - 70, Mid), keeper: false, shooting: finishing, technique: finishing);
+                // Nobody near him: the odds are the same, and 3 m out his shot can beat the threat of the spot.
+                var s = new V11Scene { BallXDm = GoalX - 200, BallYDm = Mid + 100, Shooting = 60, Technique = 60, Passing = 60, CarryTouchDm = 100 };
+                s.AddMate(At(GoalX - 30, Mid), keeper: false, shooting: finishing, technique: finishing);
                 return _valuation.PassValue(s, out _);
             }
 

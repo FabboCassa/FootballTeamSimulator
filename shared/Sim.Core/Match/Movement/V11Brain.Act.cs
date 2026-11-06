@@ -63,7 +63,11 @@ namespace Sim.Core.Match.Movement
                 {
                     ReadGoalward(side, slot);
                     TrackOpenGoal(tick, k);
-                    if (_scene.CarrierIsKeeper || !_valuation.IsOpenGoal(_scene)) return;
+                    if (_scene.CarrierIsKeeper || !_valuation.IsOpenGoal(_scene))
+                    {
+                        if (settled && !_scene.CarrierIsKeeper && _sim.BallAtFeet(k)) StrikeIfDearest(tick, side, slot, raw, blocked);
+                        return;
+                    }
                 }
 
                 // He plays it only with it at his feet: running with it, it is ahead of him between
@@ -117,6 +121,26 @@ namespace Sim.Core.Match.Movement
                         _sim.Carry(tick, side, slot);
                         return;
                 }
+            }
+
+            /// <summary>
+            /// The tempo's hold is how long a man waits for something better, and he does not wait when
+            /// the shot already is it (believable-match R3): a free man 10 m out who sits on the ball
+            /// for two seconds is closed down and plays it back.
+            /// </summary>
+            private void StrikeIfDearest(int tick, int side, int slot, int raw, bool blocked)
+            {
+                Read(side, slot, raw);
+                _scene.GoalSideBlocked = blocked;
+                if (!_valuation.ShotBeatsPossession(_scene, _valuation.ShotValue(_scene))) return;
+
+                V11Choice choice = _valuation.Choose(_scene, holding: false);
+                if (choice.Kind != V11ActionKind.Shot) return;
+                if (!_sim.MayStrikeOffTheGather(tick, side * _sim._n + slot, _sim._maxShootForce)) return;
+                if (_sim.DecisionSink != null) Explain(tick, side, slot, choice);
+                _sim._v11Carrier = -1;
+                if (_sim._ctx.ShotLive) _sim.ForceResolveShot(tick);
+                _sim.TakeShot(tick, side, slot);
             }
 
             /// <summary>
