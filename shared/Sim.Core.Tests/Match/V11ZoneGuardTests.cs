@@ -10,6 +10,7 @@ using Sim.Core.Match;
 using Sim.Core.Match.Movement;
 using Sim.Core.Match.Movement.Models;
 using Sim.Core.Random;
+using Sim.Core.Tactics;
 
 namespace Sim.Core.Tests.Match
 {
@@ -148,6 +149,27 @@ namespace Sim.Core.Tests.Match
         }
 
         [Test]
+        public void AManForcingHimInside_DoesNotStopHisRun_AManForcingHimOutsideDoes()
+        {
+            int Top(PressDirection direction)
+            {
+                var scene = new ZoneScene(direction);
+                scene.Reset(1);
+                int carrier = scene.Passer, man = scene.CentreBacks[0];
+                int x = Pitch.LengthDm - 250;
+                scene.Place(carrier, x, Mid);
+                scene.Place(man, x + Cfg.V11CarrierBlockedDm - 5, Mid);
+                scene.Hold(carrier);
+                return scene.CarrierTop(carrier, 1000);
+            }
+
+            int capped = 1000 * Cfg.V11CarrierBlockedSpeedPercent / 100;
+            Assert.That(Top(PressDirection.None), Is.EqualTo(capped), "no press direction: his run stops");
+            Assert.That(Top(PressDirection.ForceOutside), Is.EqualTo(capped), "forced outside: his run stops");
+            Assert.That(Top(PressDirection.ForceInside), Is.EqualTo(1000), "forced inside: the side lets him come");
+        }
+
+        [Test]
         public void ABlockedCarrier_ReleasesDuringHisHold_AndAFreeOneRunsOn()
         {
             var scene = new ZoneScene();
@@ -229,13 +251,13 @@ namespace Sim.Core.Tests.Match
             private readonly int _n;
             private int _tick;
 
-            public ZoneScene()
+            public ZoneScene(PressDirection awayDirection = PressDirection.None)
             {
                 _sim = new MatchSimulator(Cfg);
                 Lineup home = LineupSelector.BestEleven(_league.Clubs[2]), away = LineupSelector.BestEleven(_league.Clubs[5]);
                 var report = new MatchReport { HomeClubId = home.ClubId, AwayClubId = away.ClubId };
                 Set(_sim, "_rng", new Pcg32(206));
-                typeof(MatchSimulator).GetMethod("Setup", Any)!.Invoke(_sim, new object?[] { home, away, report, null, 90 * Cfg.TicksPerMinute });
+                typeof(MatchSimulator).GetMethod("Setup", Any)!.Invoke(_sim, new object?[] { home, away, report, awayDirection == PressDirection.None ? null : AwayPressing(awayDirection), 90 * Cfg.TicksPerMinute });
                 _ball = Get(_sim, "_ball");
                 _brain = Get(_sim, "_brain");
                 _n = Field<int[]>("_px").Length / 2;
@@ -249,6 +271,18 @@ namespace Sim.Core.Tests.Match
                     .Where(i => away.Slots[i].Role == PositionRole.CentralMidfielder || away.Slots[i].Role == PositionRole.DefensiveMidfielder)
                     .Take(MidfieldY.Length).Select(i => _n + i).ToArray();
                 Defenders = CentreBacks.Concat(Midfield).ToArray();
+            }
+
+            private static MatchTactics AwayPressing(PressDirection direction)
+            {
+                var instructions = new TacticInstructions(
+                    Mentality.Balanced, PassingDirectness.Mixed, Tempo.Normal, Width.Normal,
+                    BuildUp.Mixed, FinalThirdApproach.Mixed, ShotSelection.Normal, DribbleFrequency.Normal,
+                    OnBallLost.Normal, OnBallWon.Normal, LineOfEngagement.Mid, DefensiveLine.Normal,
+                    Pressing.Medium, MarkingScheme.Mixed, direction);
+                return new MatchTactics(
+                    TacticContext.Neutral(new BalanceConfig().Tactics.FamiliarityMax),
+                    new TacticContext(new Tactic(Formation.F433, instructions), new BalanceConfig().Tactics.FamiliarityMax));
             }
 
             // Men as k = side * n + slot.

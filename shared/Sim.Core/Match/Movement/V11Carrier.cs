@@ -45,8 +45,8 @@ namespace Sim.Core.Match.Movement
             int halfWidth = U.Units(_cfg.V11CarrierBlockedHalfWidthDm);
             if (gy > halfWidth || -gy > halfWidth) return false;
 
-            int reach = U.Units(_cfg.V11CarrierBlockedDm);
             int opponent = 1 - side;
+            int reach = (int)DefendingAxes.CarrierBlockReach(_cfg.DefendingAxes, _tactics[opponent].Instructions, U.Units(_cfg.V11CarrierBlockedDm));
             for (int j = 0; j < _n; j++)
             {
                 int ok = opponent * _n + j;

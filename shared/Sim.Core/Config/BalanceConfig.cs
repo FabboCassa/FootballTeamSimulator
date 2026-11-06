@@ -1761,7 +1761,7 @@ namespace Sim.Core.Config
         /// (a keen side's shortcut from 25 m); R10 holds the shortcut to 20 m, so a keen side's long
         /// sight is now a priced shot. 400: at 100 eager sides took 6.6 shots a match from outside
         /// the box against patient ones' 4.8 (InstructionsTests wants 2 more), at 400 7.8.
-        /// 800 since issue #206: with V11ShotFromDistancePercent at 80 the credit it stretches is smaller.
+        /// 800 since issue #206: with V11ShotFromDistancePercent at 75 the credit it stretches is smaller.
         /// </summary>
         public int V11ShotAppetiteRangePercent { get; set; } = 800;
 
@@ -1826,12 +1826,12 @@ namespace Sim.Core.Config
         /// 62 since issue #178: a defender touches the ball only within a metre of it (free-ball
         /// spec R3), so fewer strikes are charged down (blocked 13% against 20% before) and more
         /// reach the keeper; at 75 a match had 3.3 goals over 192 (R2: 2.5-3.2), at 62 2.9.
-        /// 290 since issue #206: with the carrier no longer walking into the zone (central-zone
+        /// 300 since issue #206: with the carrier no longer walking into the zone (central-zone
         /// spells 76 to 26 a team-match) the priced shot is where a chance goes; at 62 that left 16.8
-        /// shots and 1.5 goals, at 290 with the distance credit gone 26.5 and 2.65. Issue #182 replaces
+        /// shots and 1.5 goals, at 300 with the distance credit gone 28.9 and 2.68. Issue #182 replaces
         /// this weight with the honest price.
         /// </summary>
-        public int V11ShotValuePercent { get; set; } = 290;
+        public int V11ShotValuePercent { get; set; } = 300;
 
         /// <summary>
         /// What each outfield defender in the way of a shot leaves of its value, in percent: in the
@@ -1875,11 +1875,11 @@ namespace Sim.Core.Config
         /// match's 48 shots came from outside the box; at 900, 37% of 31. At the 3 m sight an
         /// eager side shot from distance only 0.7 times a match more than a patient one
         /// (InstructionsTests: 2), since no block reached a man stood 1-3 m off the lane.
-        /// 80 (no credit, a little discount) since issue #206, with V11ShotValuePercent at 290: at 350
+        /// 75 (no credit, a discount) since issue #206, with V11ShotValuePercent at 300: at 350
         /// a blocked man at the edge of the box had a go instead of walking in, and 52% of the shots
         /// came from inside it.
         /// </summary>
-        public int V11ShotFromDistancePercent { get; set; } = 80;
+        public int V11ShotFromDistancePercent { get; set; } = 75;
         public int V11ShotClearSightMarginDm { get; set; } = 10;
 
         /// <summary>

@@ -99,5 +99,15 @@ namespace Sim.Core.Config
         /// </summary>
         public int[] PressDirectionWideReachPercent { get; set; } = { 170, 100, 60 };
         public int[] PressDirectionCentralReachPercent { get; set; } = { 75, 100, 140 };
+
+        /// <summary>
+        /// Percent on the reach at which a man goal-side of the man on the ball stops his run near
+        /// goal (MatchBalance.V11CarrierBlockedDm). Forcing inside invites him into the middle to
+        /// win it there, so its man does not stop the run. Issue #206, measured over 512 fixtures:
+        /// at 100 the carrier passed instead of being tackled in the middle, a forcing-inside side's
+        /// recoveries in its own third fell from 31 to 23 a match, and the share of the ball it won
+        /// out wide stood 2.1 points under a side with no press direction; at 0 it is 3.7.
+        /// </summary>
+        public int[] PressDirectionCarrierBlockPercent { get; set; } = { 100, 100, 0 };
     }
 }
