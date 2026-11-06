@@ -102,7 +102,8 @@ namespace Sim.Core.Match.Movement
 
                 int tx = spotX, ty = spotY;
                 bool sprint = false;
-                if (RunTarget(tick, side, slot, man, inPossession, out int rx, out int ry))
+                bool running = RunTarget(tick, side, slot, man, inPossession, out int rx, out int ry);
+                if (running)
                 {
                     tx = rx;
                     ty = ry;
@@ -144,6 +145,10 @@ namespace Sim.Core.Match.Movement
                     _sim.TraceJob(k, role);
                 }
 
+                int viaX = -1, viaY = -1;
+                bool back = inPossession && !running && man.Role == Domain.PositionRole.Striker
+                            && HoldOnside(home, side, k, ref tx, ref sprint, out viaX, out viaY);
+
                 // Far from where he is going he runs, whichever side has the ball: a shape that
                 // re-forms at a jog is a shape with holes in it for a dozen seconds.
                 tx = U.ClampX(tx);
@@ -153,10 +158,33 @@ namespace Sim.Core.Match.Movement
                     sprint = true;
 
                 // R7: a run bends round an opponent in its way; a man jogging into his place does not.
-                int viaX = -1, viaY = -1;
-                if (sprint) CurveVia(side, k, tx, ty, out viaX, out viaY);
+                if (sprint && !back) CurveVia(side, k, tx, ty, out viaX, out viaY);
                 _sim.SteerVia(k, tx, ty, sprint, viaX, viaY);
                 CountOffTarget(k, spotX, spotY);
+            }
+
+            /// <summary>
+            /// Free-ball spec R6: with his side on the ball and none played to him, the striker waits
+            /// on the offside line, not beyond it. The hold binds where he is going, a supporting
+            /// run or a short offer as much as his place in the shape (it bound only the place, and
+            /// the support spot that replaced it parked him offside for 18-22% of his side's
+            /// possession, docs/engine/oscillation-trace.md). Caught beyond the line, he runs back,
+            /// straight to it first (the waypoint), rather than easing onto his spot at a walk or
+            /// crossing the pitch offside. True when he is running back.
+            /// </summary>
+            private bool HoldOnside(bool home, int side, int k, ref int tx, ref bool sprint, out int viaX, out int viaY)
+            {
+                viaX = -1;
+                viaY = -1;
+                int line = _lineX[side];
+                int held = _positioning.Onside(home, U.Dm(tx), line);
+                if (held != U.Dm(tx)) tx = U.Units(held);
+                int x = U.Dm(_sim._px[k]);
+                if (V11Positioning.BeyondLine(home, x, line) <= _sim._cfg.V11HoldBeyondDm) return false;
+                viaX = U.Units(_positioning.Onside(home, x, line));
+                viaY = _sim._py[k];
+                sprint = true;
+                return true;
             }
 
             private V11Slot SlotOf(int side, int slot)
@@ -247,7 +275,11 @@ namespace Sim.Core.Match.Movement
 
                 if (_runner[side] == slot)
                 {
-                    if (tick < _runUntil[side])
+                    // R6: the ball must come before he is past the line; once he is, the run is over.
+                    int me = side * _sim._n + slot;
+                    bool overran = V11Positioning.BeyondLine(side == 0, U.Dm(_sim._px[me]), _lineX[side])
+                                   > _sim._cfg.V11HoldBeyondDm;
+                    if (tick < _runUntil[side] && !overran)
                     {
                         x = _runX[side];
                         y = _runY[side];

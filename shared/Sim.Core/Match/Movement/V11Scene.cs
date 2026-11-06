@@ -71,6 +71,12 @@ namespace Sim.Core.Match.Movement
         /// <summary>The offside line he plays to: a team-mate beyond it (toward the attacked goal) is not an option.</summary>
         public int OffsideLineXDm { get; set; } = Pitch.LengthDm;
 
+        /// <summary>
+        /// How far behind a team-mate running at goal he reads him, in ms of that run: he sees the
+        /// runner where he was when he looked up, not where he is when the ball is struck.
+        /// </summary>
+        public int OffsideReadLagMs { get; set; }
+
         /// <summary>The longest pass he can hit.</summary>
         public int MaxPassDm { get; set; } = 500;
 

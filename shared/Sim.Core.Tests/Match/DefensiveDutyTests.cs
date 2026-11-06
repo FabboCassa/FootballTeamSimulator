@@ -185,6 +185,7 @@ namespace Sim.Core.Tests.Match
         private static double SpaceInOwnThird(Pressing pressing)
         {
             MatchTactics tactics = Both(pressing);
+            Lineup homeXi = LineupSelector.BestEleven(_midA), awayXi = LineupSelector.BestEleven(_midB);
             double total = 0;
             int matches = 0;
 
@@ -197,6 +198,9 @@ namespace Sim.Core.Tests.Match
                 for (int t = 0; t <= stream.LastTick; t++)
                 {
                     if (!stream.TryOwner(stream.Owner[t], out bool home, out int slot)) continue;
+
+                    // Owner decision 2026-11-05: outfield men only; a keeper's room measures back passes, not the press.
+                    if ((home ? homeXi : awayXi).Slots[slot].Role == PositionRole.Goalkeeper) continue;
 
                     PitchPoint carrier = home ? stream.HomeAt(t, slot) : stream.AwayAt(t, slot);
                     int depth = home ? carrier.X : Pitch.LengthDm - carrier.X;

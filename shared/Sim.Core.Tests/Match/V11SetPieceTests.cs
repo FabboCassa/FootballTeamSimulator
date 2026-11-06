@@ -340,10 +340,18 @@ namespace Sim.Core.Tests.Match
                     int next = NextKick(a, i);
                     if (next < 0 || a[next].Kind != BallActionKind.Pass || a[next].Home != a[i].Home) continue;
 
-                    shortKicks++;
                     bool home = a[i].Home;
-                    int before = Math.Max(a[i].Tick, a[next].Tick - 1);
                     Lineup lineup = LineupOf(m, home);
+
+                    // Two corners need two centre-backs: with one sent off the shape cannot be made
+                    // (#184's engine sent one off in this sample, and he left the other alone in the middle).
+                    int centreBacks = 0;
+                    for (int j = 0; j < s.PlayerCount; j++)
+                        if (lineup.Slots[j].Role == PositionRole.CentreBack && !SentOffBy(a, home, j, a[next].Tick)) centreBacks++;
+                    if (centreBacks < 2) continue;
+
+                    shortKicks++;
+                    int before = Math.Max(a[i].Tick, a[next].Tick - 1);
                     int goalX = home ? 0 : Pitch.LengthDm;
                     bool lowCorner = false, highCorner = false, wide = true;
                     for (int j = 0; j < s.PlayerCount; j++)

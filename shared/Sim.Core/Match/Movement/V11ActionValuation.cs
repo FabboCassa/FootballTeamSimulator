@@ -399,7 +399,7 @@ namespace Sim.Core.Match.Movement
             for (int m = onlyMate < 0 ? 0 : onlyMate; m < end; m++)
             {
                 PitchActor mate = s.Mates[m];
-                if (dir * mate.XDm > dir * s.OffsideLineXDm) continue;
+                if (dir * SeenX(s, mate, dir) > dir * s.OffsideLineXDm) continue;
 
                 for (int shape = 0; shape < V11PassTarget.Shapes; shape++)
                 {
@@ -545,6 +545,18 @@ namespace Sim.Core.Match.Movement
 
         private static bool InOwnThird(V11Scene s) =>
             (s.AttacksHighX ? s.BallXDm : Pitch.LengthDm - s.BallXDm) < Pitch.LengthDm / 3;
+
+        /// <summary>
+        /// Free-ball spec R6: where he reads a team-mate against the line. A runner flying at goal
+        /// is a stride on by the time the ball is struck, so a timed run is flagged now and then,
+        /// and the faster the run the likelier; a man standing on the line is read where he is.
+        /// </summary>
+        private static int SeenX(V11Scene s, in PitchActor mate, int dir)
+        {
+            int goalward = dir * mate.VxDmPerSecond;
+            if (goalward <= 0) return mate.XDm;
+            return mate.XDm - dir * (int)((long)goalward * s.OffsideReadLagMs / 1000);
+        }
 
         private static bool IsWideChannel(int yDm) => yDm < Pitch.WidthDm / 4 || yDm > Pitch.WidthDm * 3 / 4;
 

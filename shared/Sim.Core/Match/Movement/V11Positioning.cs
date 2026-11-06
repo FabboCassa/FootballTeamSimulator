@@ -117,6 +117,9 @@ namespace Sim.Core.Match.Movement
             return Depth(home, xDm) > limit ? Undepth(home, limit) : xDm;
         }
 
+        /// <summary>How far beyond the offside line a man at <paramref name="xDm"/> stands, in dm; negative when he is onside of it.</summary>
+        public static int BeyondLine(bool home, int xDm, int offsideLineXDm) => Depth(home, xDm) - Depth(home, offsideLineXDm);
+
         /// <summary>
         /// Whether a forward, onside, starts a run in behind: there is room between the line and
         /// the goal, nobody is already in it, and no opponent stands on the pass from the ball to

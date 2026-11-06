@@ -166,7 +166,8 @@ namespace Sim.Core.Tests.Match
 
             // Measured: man-oriented 20.47, mixed 15.60, zonal 14.49%.
             Assert.That(man, Is.GreaterThan(neutral + 2.0), "man-oriented marking stays tight to the opponents");
-            Assert.That(zonal, Is.LessThan(neutral - 0.5), "zonal marking keeps its places instead");
+            // Owner decision 2026-11-05: bar 0.5 -> 0.4, the striker hold (#184) tightens both settings.
+            Assert.That(zonal, Is.LessThan(neutral - 0.4), "zonal marking keeps its places instead");
         }
 
         [Test]
