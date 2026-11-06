@@ -86,6 +86,48 @@ namespace Sim.Core.Match.Movement
                 return true;
             }
 
+            /// <summary>
+            /// R7's held jobs, read once a tick. An overlap ends when its spell does or the side loses
+            /// the ball. With a cross or cut-back on, the central midfielder nearest the penalty spot
+            /// goes, one a side, and keeps going for a spell after it stops being on: the cross itself
+            /// is what ends it being on, and it is what he is running for.
+            /// </summary>
+            private void UpdateHeldJobs(int tick, int side)
+            {
+                MatchBall ball = _sim._ball;
+                int n = _sim._n;
+                if (!_phases.InPossession(side) || ball.Dead
+                    || (_arriver[side] >= 0 && (tick >= _arriveUntil[side] || _sim._sentOff[side * n + _arriver[side]])))
+                    _arriver[side] = -1;
+                if (_overlapper[side] >= 0 && (!_phases.InPossession(side) || ball.Dead || tick >= _overlapUntil[side]
+                                               || _sim._sentOff[side * n + _overlapper[side]]))
+                    _overlapper[side] = -1;
+
+                bool home = side == 0;
+                if (!_phases.InPossession(side) || ball.Dead || ball.OwnerSide != side
+                    || !_roleJobs.CrossOn(home, U.Dm(_sim._px[side * n + ball.OwnerSlot]), U.Dm(_sim._py[side * n + ball.OwnerSlot]),
+                        _sim._tactics[side].Instructions.FinalThirdApproach))
+                    return;
+
+                _arriveUntil[side] = tick + _sim._cfg.V11BoxArrivalTicks;
+                if (_arriver[side] == ball.OwnerSlot) _arriver[side] = -1;
+                if (_arriver[side] >= 0) return;
+
+                _roleJobs.BoxSpot(home, out int sx, out int sy);
+                long best = long.MaxValue;
+                for (int j = 0; j < n; j++)
+                {
+                    int k = side * n + j;
+                    if (j == ball.OwnerSlot || _sim._sentOff[k] || !_roleJobs.ArrivesInTheBox(SlotOf(side, j))) continue;
+                    long d = U.DistanceSq(_sim._px[k], _sim._py[k], U.Units(sx), U.Units(sy));
+                    if (d < best)
+                    {
+                        best = d;
+                        _arriver[side] = j;
+                    }
+                }
+            }
+
             private bool ScreenTarget(int side, V11Slot man, int sx, int sy, int bx, int by, out int x, out int y)
             {
                 x = sx;

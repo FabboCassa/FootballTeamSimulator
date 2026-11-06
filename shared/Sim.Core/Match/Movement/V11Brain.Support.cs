@@ -96,7 +96,8 @@ namespace Sim.Core.Match.Movement
                 for (int j = 0; j < n; j++)
                 {
                     int k = side * n + j;
-                    if (j == ball.OwnerSlot || j == _runner[side] || _sim._keeper[k] || _sim._sentOff[k]) continue;
+                    if (j == ball.OwnerSlot || j == _runner[side] || j == _overlapper[side] || j == _arriver[side]
+                        || _sim._keeper[k] || _sim._sentOff[k]) continue;
                     bool taken = false;
                     for (int o = side * MaxOffers; o < upTo; o++) taken |= _offerer[o] == j;
                     if (taken) continue;

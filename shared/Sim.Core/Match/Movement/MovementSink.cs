@@ -54,7 +54,16 @@ namespace Sim.Core.Match.Movement
         Tuck = 17,
 
         /// <summary>Out of possession (R7): the holding midfielder screens the lane to the most advanced opponent.</summary>
-        Screen = 18
+        Screen = 18,
+
+        /// <summary>In possession (R7): a wide man holds his lane, whichever side the ball is on.</summary>
+        Width = 19,
+
+        /// <summary>In possession (R7): the holding midfielder, held behind the ball.</summary>
+        HoldBehind = 20,
+
+        /// <summary>In possession (R7): a central midfielder arrives in the box for a cross or cut-back.</summary>
+        BoxArrival = 21
     }
 
     /// <summary>

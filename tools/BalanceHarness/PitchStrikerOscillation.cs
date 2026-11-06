@@ -15,11 +15,15 @@ internal sealed class PitchStrikerOscillation
     private readonly StrikerOffsideAnalyzer _striker = new();
     private readonly OscillationAnalyzer _oscillation = new();
     private readonly StrikerOscillationTally _tally = new();
+    private readonly MovementFeelAnalyzer _movement = new();
+    private readonly MovementFeelTally _feel = new();
 
     public void Add(MatchReport report, Lineup home, Lineup away)
     {
         StrikerOffsideMetrics? s = _striker.Measure(report, Roles(home), Roles(away));
         OscillationMetrics? o = _oscillation.Measure(report);
+        MovementFeelMetrics? f = _movement.Measure(report);
+        if (f != null) _feel.Add(f);
         if (s == null || o == null) return;
         _tally.Add(s);
         _tally.Add(o);
@@ -29,6 +33,8 @@ internal sealed class PitchStrikerOscillation
     {
         Console.WriteLine();
         Console.Write(_tally.Format("pitch"));
+        Console.WriteLine();
+        Console.Write(_feel.Format("pitch"));
     }
 
     private static List<PositionRole> Roles(Lineup xi) => xi.Slots.Select(slot => slot.Role).ToList();
