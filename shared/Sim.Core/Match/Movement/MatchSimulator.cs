@@ -1347,6 +1347,9 @@ namespace Sim.Core.Match.Movement
         /// <summary>Keeps team-mates off each other, so eleven men never stand in one heap.</summary>
         private void Separate(int k, ref int wx, ref int wy, int top)
         {
+            // A man sent off is off the field of play: nobody on it pushes him off his spot by the
+            // halfway line, as nobody on it is pushed by him.
+            if (_sentOff[k]) return;
             int side = k / _n;
             int pushX = 0, pushY = 0;
 

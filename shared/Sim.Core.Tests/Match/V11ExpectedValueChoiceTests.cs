@@ -255,6 +255,39 @@ namespace Sim.Core.Tests.Match
         }
 
         [Test]
+        public void AFreeManWithin12m_IsNotHeldToTheThreatOfTheSpot_APressedOrFartherOneIs()
+        {
+            // 11 m out with three defenders across his lanes to the posts 5 m in front of him: the
+            // bodies take the shot under the threat of the spot. Free (nobody within 3 m) his shot is still his to take;
+            // pressed, or from 15 m, the possession is worth more.
+            V11Scene free = Wall(GoalX - 110, GoalX - 60, 14);
+            int shot = _valuation.ShotValue(free);
+            int threat = ExpectedThreat.ValuePer10k(free.BallXDm, free.BallYDm, true, _cfg.ActionModels);
+            Assert.That(shot, Is.LessThan(threat), "the bodies in the lane take the shot under the threat of the spot");
+            Assert.That(free.PressurePermille, Is.LessThan(_cfg.V11FreeShotPressurePermille), "nobody within 3 m");
+            Assert.That(_valuation.ShotBeatsPossession(free, shot), Is.True, "free in front of goal the threat there is his own shot");
+
+            V11Scene pressed = Wall(GoalX - 110, GoalX - 60, 14);
+            pressed.PressurePermille = _cfg.V11FreeShotPressurePermille;
+            Assert.That(_valuation.ShotBeatsPossession(pressed, _valuation.ShotValue(pressed)), Is.False, "pressed, the floor holds");
+
+            V11Scene farther = Wall(GoalX - 150, GoalX - 100, 10);
+            int far = _valuation.ShotValue(farther);
+            Assert.That(far, Is.LessThan(ExpectedThreat.ValuePer10k(farther.BallXDm, farther.BallYDm, true, _cfg.ActionModels)));
+            Assert.That(_valuation.ShotBeatsPossession(farther, far), Is.False, "beyond 12 m, the floor holds");
+        }
+
+        /// <summary>A central carrier at <paramref name="ballX"/> and three defenders at <paramref name="wallX"/>, on his axis and <paramref name="spread"/> either side.</summary>
+        private static V11Scene Wall(int ballX, int wallX, int spread)
+        {
+            V11Scene s = Scene(ballX, Mid);
+            s.AddFoe(At(wallX, Mid), keeper: false);
+            s.AddFoe(At(wallX, Mid - spread), keeper: false);
+            s.AddFoe(At(wallX, Mid + spread), keeper: false);
+            return s;
+        }
+
+        [Test]
         public void TheOldShotMultipliers_AreGoneFromTheConfig()
         {
             string[] removed =

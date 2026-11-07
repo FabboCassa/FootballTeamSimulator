@@ -55,10 +55,18 @@ namespace Sim.Core.Match.Movement
         /// <summary>
         /// A shot ends the possession, so it has to be worth more than the possession it ends: the
         /// threat of the spot, which already holds the shots, passes and losses that follow from
-        /// there. Every other option keeps the ball, and is priced on where it ends up.
+        /// there. Every other option keeps the ball, and is priced on where it ends up. Not for a free
+        /// man in front of goal (<see cref="Config.MatchBalance.V11FreeShotRangeDm"/>): the threat
+        /// there is mostly his own shot, and his carry and passes already price keeping the ball.
         /// </summary>
         public bool ShotBeatsPossession(V11Scene s, int shot) =>
-            shot > NoOption && shot >= ExpectedThreat.ValuePer10k(s.BallXDm, s.BallYDm, s.AttacksHighX, _models);
+            shot > NoOption
+            && ((s.PressurePermille < _cfg.V11FreeShotPressurePermille && Within(s, _cfg.V11FreeShotRangeDm))
+                || shot >= ExpectedThreat.ValuePer10k(s.BallXDm, s.BallYDm, s.AttacksHighX, _models));
+
+        /// <summary>Whether the ball is within <paramref name="rangeDm"/> of the centre of the goal the man on it attacks.</summary>
+        public bool Within(V11Scene s, int rangeDm) =>
+            DistanceSq(s.BallXDm, s.BallYDm, GoalX(s), Pitch.CenterY) <= (long)rangeDm * rangeDm;
 
         /// <summary>A shot one touch on, after the carry: <see cref="Config.MatchBalance.V11DeferredShotPercent"/> of one now.</summary>
         private int Deferred(int shot) => shot <= NoOption ? NoOption : shot * _cfg.V11DeferredShotPercent / 100;

@@ -84,7 +84,10 @@ namespace Sim.Core.Match.Movement
                 Read(side, slot, raw);
                 _scene.GoalSideBlocked = blocked;
                 TrackOpenGoal(tick, k);
-                V11Choice choice = _valuation.Choose(_scene, holding);
+                // Near goal a pressed or blocked man does not wait for a release: he takes the
+                // dearest option, the shot included (issue #182).
+                bool waits = holding && !_valuation.Within(_scene, _sim._cfg.V11NearGoalChooseRangeDm);
+                V11Choice choice = _valuation.Choose(_scene, waits);
                 int strikeU = choice.Kind == V11ActionKind.Shot ? _sim._maxShootForce
                     : choice.Kind == V11ActionKind.Clear ? _sim._maxClearForce : _sim._maxPassForce;
                 if (choice.Kind != V11ActionKind.Hold && !_sim.MayStrikeOffTheGather(tick, k, strikeU)) return;

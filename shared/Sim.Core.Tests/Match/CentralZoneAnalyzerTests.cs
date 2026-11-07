@@ -151,5 +151,106 @@ namespace Sim.Core.Tests.Match
             Assert.That(tally.ZoneUnpressedPercent, Is.EqualTo(50.0));
             Assert.That(tally.Format("t"), Does.Contain(RealismReference.Events.CentralZonePossessionsPerTeamMatch.Name));
         }
+        // ---- issue #210: where the zone and box spells come from ----
+
+        /// <summary>The receiver holds the ball from frame 16 to 18 at (x, y), after a pass played on frame 13.</summary>
+        private static PositionStream Reception(int fromX, int fromY, BallActionKind kind, int toX, int toY)
+        {
+            PositionStream s = NewStream(40);
+            Carry(s, 10, 12, true, Mate, fromX, fromY);
+            Act(s, 13, kind, true, Mate, Striker);
+            Carry(s, 16, 18, true, Striker, toX, toY);
+            return s;
+        }
+
+        [Test]
+        public void ACarryIntoTheZone_IsACarry_AndItsShotAndGoalAreCreditedToIt()
+        {
+            PositionStream s = NewStream(40);
+            Carry(s, 10, 12, true, Striker, 820, CY);
+            Carry(s, 13, 15, true, Striker, 940, CY);
+            Act(s, 16, BallActionKind.Shot, true, Striker);
+            Act(s, 17, BallActionKind.Goal, true, Striker);
+
+            CentralZoneMetrics m = Measure(s);
+
+            Assert.That(m.ZoneSpells(true, ChanceSource.Carry), Is.EqualTo(1));
+            Assert.That(m.BoxSpells(true, ChanceSource.Carry), Is.EqualTo(1));
+            Assert.That(m.Shots(true, ChanceSource.Carry), Is.EqualTo(1));
+            Assert.That(m.Goals(true, ChanceSource.Carry), Is.EqualTo(1));
+            Assert.That(m.XgPermille(true, ChanceSource.Carry), Is.GreaterThan(100), "11 m out, straight on");
+            Assert.That(m.ZoneCarriesFromBand(true, 1), Is.EqualTo(1), "the carry began 23 m from the goal centre");
+        }
+
+        [Test]
+        public void APassReceivedInTheZone_IsAPass_AndPressedWithADefenderWithin3mOnArrival()
+        {
+            PositionStream s = Reception(750, CY, BallActionKind.Pass, 950, CY);
+            Put(s, false, 16, Defender, 950, CY + 20);
+
+            CentralZoneMetrics m = Measure(s);
+
+            Assert.That(m.ZoneSpells(true, ChanceSource.Pass), Is.EqualTo(1));
+            Assert.That(m.ZonePressed(true, ChanceSource.Pass), Is.EqualTo(1));
+            Assert.That(m.ZoneSpells(true, ChanceSource.Carry), Is.Zero, "he had it in the zone from his first frame");
+        }
+
+        [Test]
+        public void APassStruckFromBehindTheLineToAManTakingItBeyondIt_IsAThroughBall()
+        {
+            // The away outfielders stand at x = 625 (the second-last line); the passer is behind it,
+            // the receiver level with it on release and beyond it when he takes the ball.
+            PositionStream s = Reception(600, CY, BallActionKind.Pass, 950, CY);
+            Put(s, true, 12, Striker, 610, CY + 50);
+
+            Assert.That(Measure(s).ZoneSpells(true, ChanceSource.ThroughBall), Is.EqualTo(1));
+        }
+
+        [Test]
+        public void ABallFromTheWideFinalThirdIntoTheBox_IsACross()
+        {
+            PositionStream s = Reception(900, CY + 260, BallActionKind.Cross, 960, CY);
+
+            Assert.That(Measure(s).ZoneSpells(true, ChanceSource.Cross), Is.EqualTo(1));
+        }
+
+        [Test]
+        public void ABallPlayedBackFromTheByline_IsACutBack()
+        {
+            PositionStream s = Reception(1010, CY + 150, BallActionKind.Pass, 930, CY);
+
+            Assert.That(Measure(s).ZoneSpells(true, ChanceSource.CutBack), Is.EqualTo(1));
+        }
+
+        [Test]
+        public void ABallOffTheKeepersSave_IsARebound_AndOneOffTheirClearance_ASecondBall()
+        {
+            PositionStream s = NewStream(60);
+            Carry(s, 10, 12, true, Striker, 950, CY);
+            Act(s, 13, BallActionKind.Shot, true, Striker);
+            Act(s, 14, BallActionKind.Save, false, Keeper);
+            Carry(s, 16, 18, true, Mate, 955, CY + 20);
+            Act(s, 19, BallActionKind.Pass, true, Mate, Striker);
+            Act(s, 21, BallActionKind.Clearance, false, Defender);
+            Carry(s, 24, 26, true, Striker, 945, CY - 20);
+
+            CentralZoneMetrics m = Measure(s);
+
+            Assert.That(m.ZoneSpells(true, ChanceSource.Rebound), Is.EqualTo(1));
+            Assert.That(m.ZoneSpells(true, ChanceSource.SecondBall), Is.EqualTo(1));
+        }
+
+        [Test]
+        public void TheTally_PrintsEverySource()
+        {
+            var tally = new CentralZoneTally();
+            tally.Add(Measure(Reception(750, CY, BallActionKind.Pass, 950, CY)));
+
+            string text = tally.Format("t");
+
+            Assert.That(tally.ZoneSpellsFrom(ChanceSource.Pass), Is.EqualTo(0.5));
+            foreach (ChanceSource source in System.Enum.GetValues(typeof(ChanceSource)))
+                Assert.That(text, Does.Contain(source.ToString()));
+        }
     }
 }

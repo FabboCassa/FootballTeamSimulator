@@ -1334,9 +1334,13 @@ namespace Sim.Core.Config
         /// Issue #87: 250 and 30 (were 200 and 20). With a third of the challenges the ball is
         /// held longer whatever the instruction, and at 200 / 20 eager over patient read +1.6 shots
         /// and fast over slow +18 passes (InstructionsTests: +2.5 and +30).
+        /// Issue #182: the hold's spread 60 (was 30). With the shot priced honestly a fast side's
+        /// appetite ends its possessions with a shot sooner, which cost it the passes its shorter
+        /// hold gave: fast over slow read +24 passes and normal above fast (594 / 587). At 60:
+        /// slow 516, normal 600, fast 644. Neutral is the identity, so no neutral match moves.
         /// </summary>
         public int V11ShotAppetiteSpreadPercent { get; set; } = 250;
-        public int V11TempoHoldSpreadPercent { get; set; } = 30;
+        public int V11TempoHoldSpreadPercent { get; set; } = 60;
 
         /// <summary>
         /// How long a side takes to open from its block into its attacking shape. 8 s since issue
@@ -1361,8 +1365,13 @@ namespace Sim.Core.Config
         /// How far off the man on the ball the presser stands, goal-side of him, in percent of
         /// the Pressing instruction's stand-off: further off he jockeys and makes the carrier beat
         /// him, touch-tight he dives in (a duel, and now and then a foul, every tick).
+        /// 340 since issue #182/#210 (was 280): the carry is where the central chances came from
+        /// (docs/engine/chance-sources.md), and a presser who dives in is beaten and leaves the
+        /// carrier through on goal; jockeying further off he stays goal-side. Measured with the
+        /// honest shot price (pitch, 4 seeds x 200 matches, the rest of the #182 tuning in place):
+        /// goals 3.06 at 280, 2.74 at 340; fouls 27.1 to 23.9.
         /// </summary>
-        public int V11PressStandOffPercent { get; set; } = 280;
+        public int V11PressStandOffPercent { get; set; } = 340;
 
 
         /// <summary>
@@ -1475,6 +1484,29 @@ namespace Sim.Core.Config
         public int V11PressedReleaseSafetyPermille { get; set; } = 850;
         public int V11PressedReleaseDeepSafetyPermille { get; set; } = 900;
         public int V11ReleaseSettleMs { get; set; } = 300;
+
+        /// <summary>
+        /// Issue #182: within this of the centre of the goal he attacks, a man who is pressed or
+        /// whom a goal-side defender blocks (V11CarrierBlocked*) does not sit out the tempo's hold
+        /// waiting for a release once settled: he takes the dearest of shot, pass and carry. Held to
+        /// the release, 43% of the men free within 12 m played the ball back (believable-match R3:
+        /// at most 15% within 16 m), and a pressed man in the box never had a go. Measured (pitch,
+        /// 4 seeds x 200 matches): free within 12 m shot share 60% without it, 84% at 21 m;
+        /// pass-back share within 16 m 22% to 8%; goals 2.53 to 2.74.
+        /// </summary>
+        public int V11NearGoalChooseRangeDm { get; set; } = 210;
+
+        /// <summary>
+        /// Issue #182: a shot ends the possession, so it has to beat the threat of the spot
+        /// (V11ActionValuation.ShotBeatsPossession); not for a man within this of the centre of the
+        /// goal he attacks and pressed less than <see cref="V11FreeShotPressurePermille"/> (nobody
+        /// within 2 m of him): there the threat of the spot is made of his own shot, and his carry
+        /// and passes already price keeping the ball. Measured (pitch, 4 seeds x 200 matches): with
+        /// the floor everywhere 28% of the men free within 12 m did not shoot (believable-match R3:
+        /// at least 80% do); without it there 16% do not, and the pass-back share is 11% to 8%.
+        /// </summary>
+        public int V11FreeShotRangeDm { get; set; } = 120;
+        public int V11FreeShotPressurePermille { get; set; } = 600;
 
         /// <summary>
         /// R9: the release is read with pitch control at this reach and reaction, nearer the engine's
@@ -1619,8 +1651,12 @@ namespace Sim.Core.Config
         /// arrival. The range is a little past the 16 m zone so the ball about to enter it is met
         /// too. A man already on the ball is left to the press and its instructions. Read only by
         /// the V11 brain.
+        /// 260 since issue #210 (was 200): a pass met in front of the box, 20-26 m from the goal
+        /// centre, is closed too; its receivers shot from the edge of the box or carried it in.
+        /// Measured with the honest shot price (pitch, 4 seeds x 200 matches): goals 2.92 at 200,
+        /// 2.74 at 260; penalty-area spells 37.8 to 35.8 a team-match.
         /// </summary>
-        public int V11ZoneGuardRangeDm { get; set; } = 200;
+        public int V11ZoneGuardRangeDm { get; set; } = 260;
         public int V11ZoneCloseStandOffDm { get; set; } = 10;
 
         /// <summary>
@@ -1651,10 +1687,17 @@ namespace Sim.Core.Config
         /// touchline channel (a quarter of the pitch's width): a blocked man inside it plays what the
         /// feed labels a cross, 42 of them a team-match against 30, and the Width and final-third
         /// instructions lose their order to them. Tighter than this cap fouls go past R2's 28.
+        /// 105 since issue #182/#210 (was 55): with the honest shot price the carry was the largest
+        /// source of goals (0.67 a team-match off 8.7 central-zone carries, 71% of them with no
+        /// defender goal-side within 10 m on arrival; docs/engine/chance-sources.md). A man
+        /// goal-side within 10.5 m now stops the run. Measured (pitch, 4 seeds x 200 matches, the
+        /// rest of the #182 tuning in place): goals 3.13 at 55, 2.74 at 105, shots 28.1 to 23.5;
+        /// a forcing-inside side, whose man lets the run come, wins 2.2 points less of the ball
+        /// out wide than a neutral one (DefendingAxesTests: at least 2).
         /// </summary>
         public int V11CarrierBlockedRangeDm { get; set; } = 350;
         public int V11CarrierBlockedHalfWidthDm { get; set; } = 170;
-        public int V11CarrierBlockedDm { get; set; } = 55;
+        public int V11CarrierBlockedDm { get; set; } = 105;
         public int V11CarrierBlockedConePermille { get; set; } = 500;
         public int V11CarrierBlockedSpeedPercent { get; set; } = 30;
 
