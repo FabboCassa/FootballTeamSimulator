@@ -26,6 +26,13 @@ namespace Sim.Core.Tests.Match
         /// <summary>A lofted ball is back on the grass well inside this many frames of its peak.</summary>
         private static int LandingFrames => Cfg.MaxFlightTicks / Cfg.StreamTicksPerFrame;
 
+        /// <summary>
+        /// The fewest lofted balls of a kind that must land untouched for the landing to be judged
+        /// at all: over 31 seeds on this engine and the one before issue #182 a match had 10 to 32
+        /// untouched crosses and 33 to 72 untouched long balls (this seed: 20 and 52).
+        /// </summary>
+        private const int MinUntouchedLandings = 10;
+
         private static League _league = null!;
         private static MatchReport _report = null!;
 
@@ -56,7 +63,7 @@ namespace Sim.Core.Tests.Match
         {
             PositionStream s = Stream;
             List<BallAction> actions = s.Actions;
-            int played = 0, rose = 0;
+            int played = 0, rose = 0, landedUntouched = 0, metInTheAir = 0;
 
             for (int i = 0; i < actions.Count; i++)
             {
@@ -74,17 +81,59 @@ namespace Sim.Core.Tests.Match
 
                 int landed = Array.IndexOf(s.BallZ, 0, peakFrame);
 
+                // The flight ends on the grass or at the first touch, whichever comes first. A ball
+                // met in the air never landed: the grass it reaches later is another ball's.
+                int touched = FirstTouchAfter(s, i);
+                if (touched >= 0 && (landed < 0 || touched < landed))
+                {
+                    metInTheAir++;
+                    continue;
+                }
+
                 // Struck in the last seconds: the final whistle ends the stream before it can land.
                 if (landed < 0 && peakFrame + LandingFrames > s.LastTick) continue;
                 Assert.That(landed, Is.GreaterThan(peakFrame), $"{kind} at frame {from} never comes down");
                 Assert.That(landed - peakFrame, Is.LessThanOrEqualTo(LandingFrames),
                     $"{kind} at frame {from} hangs in the air");
+                landedUntouched++;
             }
 
-            TestContext.Out.WriteLine($"[ball-height] {kind}: {rose}/{played} rose above {AboveHeadDm} dm");
+            TestContext.Out.WriteLine($"[ball-height] {kind}: {rose}/{played} rose above {AboveHeadDm} dm, " +
+                                      $"{landedUntouched} landed untouched, {metInTheAir} met in the air");
             Assert.That(played, Is.GreaterThan(0), $"the match plays at least one {kind}");
             Assert.That(rose * 2, Is.GreaterThanOrEqualTo(played), $"most of the {kind}es rise above head height");
+            Assert.That(landedUntouched, Is.GreaterThanOrEqualTo(MinUntouchedLandings),
+                $"enough {kind}es land untouched for their landing to be judged");
         }
+
+        /// <summary>
+        /// The frame of the first touch of the ball by anybody after the action at
+        /// <paramref name="index"/>: a man on it, or a touch in the feed; -1 for none.
+        /// </summary>
+        private static int FirstTouchAfter(PositionStream s, int index)
+        {
+            int from = s.Actions[index].Tick;
+            int touch = -1;
+            for (int j = index + 1; j < s.Actions.Count; j++)
+            {
+                if (!IsTouch(s.Actions[j].Kind)) continue;
+                touch = s.Actions[j].Tick;
+                break;
+            }
+
+            int last = touch >= 0 ? touch : s.LastTick;
+            for (int f = from + 1; f < last; f++)
+                if (s.Owner[f] != PositionStream.NoOwner) return f;
+            return touch;
+        }
+
+        private static bool IsTouch(BallActionKind kind) => kind switch
+        {
+            BallActionKind.Pass or BallActionKind.LongBall or BallActionKind.Cross or BallActionKind.Dribble
+                or BallActionKind.Recovery or BallActionKind.Interception or BallActionKind.Clearance
+                or BallActionKind.Shot or BallActionKind.Save or BallActionKind.Block => true,
+            _ => false,
+        };
 
         [Test]
         public void APass_StaysOnTheGrass()
