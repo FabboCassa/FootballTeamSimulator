@@ -8,8 +8,11 @@ namespace Sim.Core.Match.Movement
     /// </summary>
     public sealed class DecisionLog : IDecisionSink
     {
-        /// <summary>Ints per record in <see cref="Flat"/>: tick, side, slot, ball x, ball y, the choice, the count, three options.</summary>
-        public const int Stride = 5 + OptionInts + 1 + 3 * OptionInts;
+        /// <summary>
+        /// Ints per record in <see cref="Flat"/>: tick, side, slot, ball x, ball y, the choice, the count,
+        /// three options, then the option kinds of the choice and the three options (issue #182).
+        /// </summary>
+        public const int Stride = 5 + OptionInts + 1 + 3 * OptionInts + 4;
 
         private const int OptionInts = 6;
 
@@ -46,6 +49,8 @@ namespace Sim.Core.Match.Movement
                 at = Write(flat, at, r.Chosen);
                 flat[at++] = r.OptionCount;
                 for (int i = 0; i < 3; i++) at = Write(flat, at, r.Option(i));
+                flat[at++] = (int)r.Chosen.Option;
+                for (int i = 0; i < 3; i++) flat[at++] = (int)r.Option(i).Option;
             }
 
             return flat;

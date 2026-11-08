@@ -15,6 +15,8 @@ namespace Sim.Core.Match.Movement
         {
             Mates = new PitchActor[capacity];
             MateIsKeeper = new bool[capacity];
+            MateShooting = new int[capacity];
+            MateTechnique = new int[capacity];
             Foes = new PitchActor[capacity];
         }
 
@@ -96,6 +98,10 @@ namespace Sim.Core.Match.Movement
 
         public PitchActor[] Mates { get; }
         public bool[] MateIsKeeper { get; }
+
+        /// <summary>Each team-mate's finishing (1-100): what his shot after a ball to him is worth (R3).</summary>
+        public int[] MateShooting { get; }
+        public int[] MateTechnique { get; }
         public int MateCount { get; private set; }
 
         public PitchActor[] Foes { get; }
@@ -114,10 +120,12 @@ namespace Sim.Core.Match.Movement
         }
 
         /// <summary>A team-mate he could play it to (not himself); returns his index.</summary>
-        public int AddMate(in PitchActor mate, bool keeper)
+        public int AddMate(in PitchActor mate, bool keeper, int shooting = 50, int technique = 50)
         {
             Mates[MateCount] = mate;
             MateIsKeeper[MateCount] = keeper;
+            MateShooting[MateCount] = shooting;
+            MateTechnique[MateCount] = technique;
             return MateCount++;
         }
 

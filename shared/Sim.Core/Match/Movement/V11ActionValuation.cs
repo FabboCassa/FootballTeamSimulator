@@ -23,6 +23,26 @@ namespace Sim.Core.Match.Movement
         Drive
     }
 
+    /// <summary>
+    /// An option as the explained replay names it (free-ball spec R7, issue #182): the action, with a
+    /// ball to a team-mate told apart by its shape and length. The simulator executes the
+    /// <see cref="V11ActionKind"/>; this only names it.
+    /// </summary>
+    public enum V11OptionKind
+    {
+        Hold = 0,
+        Carry,
+        Pass,
+        LeadPass,
+        ThroughBall,
+        LongBall,
+        Cross,
+        Clear,
+        Shot,
+        RoundKeeper,
+        Drive
+    }
+
     /// <summary>One option, and what it is worth in ten-thousandths of a goal.</summary>
     public struct V11Choice
     {
@@ -45,6 +65,31 @@ namespace Sim.Core.Match.Movement
 
         /// <summary>A pass's or a cross's aim: to feet, ahead of him, or behind the line (free-ball spec R4).</summary>
         public V11PassShape Shape;
+
+        /// <summary>A ball to a team-mate over <see cref="Sim.Core.Config.MatchBalance.LongBallFromDm"/>: lofted, as the simulator plays it.</summary>
+        public bool LongBall;
+
+        /// <summary>The option's name: a cross, then a through ball, then a long ball, then a lead pass, before a plain pass.</summary>
+        public V11OptionKind Option
+        {
+            get
+            {
+                switch (Kind)
+                {
+                    case V11ActionKind.Hold: return V11OptionKind.Hold;
+                    case V11ActionKind.Carry: return V11OptionKind.Carry;
+                    case V11ActionKind.Cross: return V11OptionKind.Cross;
+                    case V11ActionKind.Clear: return V11OptionKind.Clear;
+                    case V11ActionKind.Shot: return V11OptionKind.Shot;
+                    case V11ActionKind.RoundKeeper: return V11OptionKind.RoundKeeper;
+                    case V11ActionKind.Drive: return V11OptionKind.Drive;
+                }
+
+                if (Shape == V11PassShape.Through) return V11OptionKind.ThroughBall;
+                if (LongBall) return V11OptionKind.LongBall;
+                return Shape == V11PassShape.Lead ? V11OptionKind.LeadPass : V11OptionKind.Pass;
+            }
+        }
     }
 
     /// <summary>
@@ -53,7 +98,10 @@ namespace Sim.Core.Match.Movement
     /// a carry, a clearance — is worth the expected threat (Karun Singh's xT) where it ends up if
     /// it comes off, less the threat the other side gets from there if it does not; the odds it
     /// comes off are pitch control's (Spearman) for a pass and a cross, the duel's for a carry. A
-    /// shot is worth its xG. The instructions weigh the terms: Tempo the gain, and its directness
+    /// shot is worth its xG less the blocks and plus what a miss leaves (believable-match R3, issue
+    /// #182), and a ball or a carry that ends where the man's own shot is dearer than the threat of
+    /// the spot is worth that shot, deferred. A shot is only taken when it beats the threat of the
+    /// spot, the possession it ends. The instructions weigh the terms: Tempo the gain, and its directness
     /// the long forward ball; Mentality the risk; Mentality times Tempo the shot; Width the cross.
     /// The R16 in-possession axes weigh the same terms (issue #90): passing directness the long
     /// forward ball, build-up the long ball out of the own third, final-third approach the cross
@@ -129,7 +177,7 @@ namespace Sim.Core.Match.Movement
             if (pass > NoOption && pass >= best.ValuePer10k) best = bestPass;
 
             int shot = ShotValue(s);
-            if (shot > NoOption && shot >= best.ValuePer10k)
+            if (shot >= best.ValuePer10k && ShotBeatsPossession(s, shot))
                 best = new V11Choice { Kind = V11ActionKind.Shot, Mate = -1, XDm = GoalX(s), YDm = Pitch.CenterY, ValuePer10k = shot };
 
             // Running at the man closing him down is how a chain ends: pressed, the free man gets it.
@@ -262,61 +310,13 @@ namespace Sim.Core.Match.Movement
                 goalX, Pitch.CenterY - half, goalX, Pitch.CenterY + half);
         }
 
-        /// <summary>
-        /// A keen side has a go from distance more readily: the appetite above 100, at
-        /// <see cref="MatchBalance.V11ShotAppetiteRangePercent"/>, on top of the clear sight's credit.
-        /// Never below 100 — a patient side's shot is already priced down by its appetite.
-        /// </summary>
-        private int DistanceReachPercent(V11Scene s)
-        {
-            int over = s.ShotAppetitePercent > 100 ? s.ShotAppetitePercent - 100 : 0;
-            return 100 + over * _cfg.V11ShotAppetiteRangePercent / 100;
-        }
-
         // ------------------------------------------------------------------ the options
-
-        /// <summary>
-        /// Having a go: the xG of it, weighed by his side's shot appetite and, from outside the box,
-        /// <see cref="MatchBalance.V11ShotFromDistancePercent"/>. NoOption out of range or for a keeper.
-        /// </summary>
-        public int ShotValue(V11Scene s)
-        {
-            if (s.CarrierIsKeeper) return NoOption;
-            int goalX = GoalX(s);
-            int range = _cfg.V11ShotRangeDm;
-            if (DistanceSq(s.BallXDm, s.BallYDm, goalX, Pitch.CenterY) > (long)range * range) return NoOption;
-
-            int xg = ExpectedGoals.Permille(
-                s.BallXDm, s.BallYDm, s.AttacksHighX, s.PressurePermille, s.Shooting, s.Technique, _models);
-            int value = xg * 10 * Math.Max(0, s.ShotAppetitePercent) / 100 * _cfg.V11ShotValuePercent / 100;
-            bool clear = true;
-
-            // Every body in the way is a shot that may never reach the keeper. The man on him is
-            // the pressure the xG has already read — unless he is square in the line of it (R10):
-            // closing the striker down there he charges the strike down nearly every time.
-            long onHim = (long)_cfg.PressureRadiusDm * _cfg.PressureRadiusDm;
-            for (int i = 0; i < s.FoeCount; i++)
-            {
-                if (i == s.FoeKeeper) continue;
-                PitchActor foe = s.Foes[i];
-                bool close = DistanceSq(foe.XDm, foe.YDm, s.BallXDm, s.BallYDm) < onHim;
-                int margin = close ? _cfg.V11ShotCloseBlockerMarginDm : _cfg.V11ShotBlockerMarginDm;
-                if (OpenGoalLane.Closes(foe.XDm, foe.YDm, s.BallXDm, s.BallYDm, goalX, _cfg.V11ShotClearSightMarginDm, 0))
-                    clear = false;
-                if (OpenGoalLane.Closes(foe.XDm, foe.YDm, s.BallXDm, s.BallYDm, goalX, margin, 0))
-                    value = value * (close ? _cfg.V11ShotCloseBlockerPercent : _cfg.V11ShotBlockerPercent) / 100;
-            }
-
-            bool outsideBox = Math.Abs(goalX - s.BallXDm) > MovementGeometry.BoxDepthDm
-                              || Math.Abs(s.BallYDm - Pitch.CenterY) > MovementGeometry.BoxHalfWidthDm;
-            if (clear && outsideBox) value = value * _cfg.V11ShotFromDistancePercent / 100 * DistanceReachPercent(s) / 100;
-            return value;
-        }
 
         /// <summary>
         /// Running with it, one touch on: straight on, drifting in off the touchline, and at the
         /// goal mouth once he is in the last stretch — the carry the simulator will execute. Lost,
-        /// it is lost where he stands.
+        /// it is lost where he stands. Kept, it is worth the threat there or his shot from there,
+        /// with whoever can close him down while he runs on him (R3).
         /// </summary>
         public int CarryValue(V11Scene s, out int x, out int y)
         {
@@ -359,7 +359,10 @@ namespace Sim.Core.Match.Movement
                 return NoOption;
             int gain = GainPercent(s, false, false)
                        * MovementTactics.Percent(_cfg.V11DribbleCarryPercent, (int)s.Instructions.DribbleFrequency) / 100;
-            return MoveValue(s, x, y, s.CarryKeepPermille, s.BallXDm, s.BallYDm, gain);
+            MoveTerms(s, x, y, s.BallXDm, s.BallYDm, gain, out int keep, out int lost);
+            int carried = MovementGeometry.Distance(s.BallXDm, s.BallYDm, x, y);
+            int shot = Deferred(ShotAt(s, x, y, PressureAt(s, x, y, carried, 0), s.Shooting, s.Technique));
+            return Worth(Math.Max(keep, shot), lost, s.CarryKeepPermille);
         }
 
         /// <summary>Hoofing it upfield: kept now and then, and lost forty metres from his own goal.</summary>
@@ -414,6 +417,12 @@ namespace Sim.Core.Match.Movement
                                    < (long)(Pitch.LengthDm / 3) * (Pitch.LengthDm / 3);
 
                     MoveTerms(s, tx, ty, tx, ty, GainPercent(s, longForward, cross, outWide), out int keep, out int lost);
+                    // R3: the value at the receiver is the dearer of the threat of his spot and his own shot from it.
+                    if (!s.MateIsKeeper[m])
+                    {
+                        int pressure = PressureAt(s, tx, ty, 0, distance * 1000 / Math.Max(1, _cfg.V11PassBallSpeedDmPerSecond));
+                        keep = Math.Max(keep, ReceiverShot(ShotAt(s, tx, ty, pressure, s.MateShooting[m], s.MateTechnique[m])));
+                    }
                     int execution = Execution(s, distance);
                     if (execution < minSafety) continue;
                     if (CannotWin(keep, lost, execution, best.ValuePer10k, floor)) continue;
@@ -434,7 +443,7 @@ namespace Sim.Core.Match.Movement
                         {
                             Kind = cross ? V11ActionKind.Cross : V11ActionKind.Pass,
                             Mate = m, XDm = tx, YDm = ty, SafetyPermille = safety, ValuePer10k = value,
-                            Shape = (V11PassShape)shape
+                            Shape = (V11PassShape)shape, LongBall = distance > _cfg.LongBallFromDm
                         };
                     }
                 }
@@ -465,10 +474,16 @@ namespace Sim.Core.Match.Movement
             if (gain > 0) gain = gain * gainPercent / 100;
             keep = here + gain;
 
-            int theirs = ExpectedThreat.ValuePer10k(lostX, lostY, !s.AttacksHighX, _models);
+            lost = LostWeight(s, lostX, lostY);
+        }
+
+        /// <summary>What the other side is given by a ball lost at (x, y), as this man weighs it.</summary>
+        private int LostWeight(V11Scene s, int x, int y)
+        {
+            int theirs = ExpectedThreat.ValuePer10k(x, y, !s.AttacksHighX, _models);
             int risk = MovementTactics.Percent(_cfg.V11MentalityRiskPercent, (int)s.Instructions.Mentality)
                        * _cfg.V11LossWeightPercent / 100 * s.RiskPercent / 100;
-            lost = theirs * risk / 100 * BallSkill.Clamp(s.VisionPercent, 0, 100) / 100;
+            return theirs * risk / 100 * BallSkill.Clamp(s.VisionPercent, 0, 100) / 100;
         }
 
         private static int Worth(int keep, int lost, int safety)

@@ -63,7 +63,11 @@ namespace Sim.Core.Match.Movement
                 {
                     ReadGoalward(side, slot);
                     TrackOpenGoal(tick, k);
-                    if (_scene.CarrierIsKeeper || !_valuation.IsOpenGoal(_scene)) return;
+                    if (_scene.CarrierIsKeeper || !_valuation.IsOpenGoal(_scene))
+                    {
+                        if (settled && !_scene.CarrierIsKeeper && _sim.BallAtFeet(k)) StrikeIfDearest(tick, side, slot, raw, blocked);
+                        return;
+                    }
                 }
 
                 // He plays it only with it at his feet: running with it, it is ahead of him between
@@ -80,7 +84,10 @@ namespace Sim.Core.Match.Movement
                 Read(side, slot, raw);
                 _scene.GoalSideBlocked = blocked;
                 TrackOpenGoal(tick, k);
-                V11Choice choice = _valuation.Choose(_scene, holding);
+                // Near goal a pressed or blocked man does not wait for a release: he takes the
+                // dearest option, the shot included (issue #182).
+                bool waits = holding && !_valuation.Within(_scene, _sim._cfg.V11NearGoalChooseRangeDm);
+                V11Choice choice = _valuation.Choose(_scene, waits);
                 int strikeU = choice.Kind == V11ActionKind.Shot ? _sim._maxShootForce
                     : choice.Kind == V11ActionKind.Clear ? _sim._maxClearForce : _sim._maxPassForce;
                 if (choice.Kind != V11ActionKind.Hold && !_sim.MayStrikeOffTheGather(tick, k, strikeU)) return;
@@ -117,6 +124,26 @@ namespace Sim.Core.Match.Movement
                         _sim.Carry(tick, side, slot);
                         return;
                 }
+            }
+
+            /// <summary>
+            /// The tempo's hold is how long a man waits for something better, and he does not wait when
+            /// the shot already is it (believable-match R3): a free man 10 m out who sits on the ball
+            /// for two seconds is closed down and plays it back.
+            /// </summary>
+            private void StrikeIfDearest(int tick, int side, int slot, int raw, bool blocked)
+            {
+                Read(side, slot, raw);
+                _scene.GoalSideBlocked = blocked;
+                if (!_valuation.ShotBeatsPossession(_scene, _valuation.ShotValue(_scene))) return;
+
+                V11Choice choice = _valuation.Choose(_scene, holding: false);
+                if (choice.Kind != V11ActionKind.Shot) return;
+                if (!_sim.MayStrikeOffTheGather(tick, side * _sim._n + slot, _sim._maxShootForce)) return;
+                if (_sim.DecisionSink != null) Explain(tick, side, slot, choice);
+                _sim._v11Carrier = -1;
+                if (_sim._ctx.ShotLive) _sim.ForceResolveShot(tick);
+                _sim.TakeShot(tick, side, slot);
             }
 
             /// <summary>
@@ -171,7 +198,7 @@ namespace Sim.Core.Match.Movement
             private DecisionOption Option(in V11Choice c) => new DecisionOption
             {
                 Kind = c.Kind, MateSlot = c.Mate >= 0 ? _mateSlot[c.Mate] : -1, XDm = c.XDm, YDm = c.YDm,
-                CompletionPermille = c.SafetyPermille, ValuePer10k = c.ValuePer10k
+                CompletionPermille = c.SafetyPermille, ValuePer10k = c.ValuePer10k, Option = c.Option
             };
 
             private void Pass(int tick, int side, int slot, V11Choice choice, int pressure)
@@ -265,7 +292,7 @@ namespace Sim.Core.Match.Movement
                 {
                     int mk = side * n + j;
                     if (j == slot || sim._sentOff[mk]) continue;
-                    _mateSlot[s.AddMate(Actor(mk), sim._keeper[mk])] = j;
+                    _mateSlot[s.AddMate(Actor(mk), sim._keeper[mk], sim._skShooting[mk], sim._skTechnique[mk])] = j;
                 }
             }
 

@@ -26,6 +26,9 @@ namespace Sim.Core.Match.Movement
 
         /// <summary>Ten-thousandths of a goal.</summary>
         public int ValuePer10k;
+
+        /// <summary>The option's name: a ball to a team-mate told apart as pass, lead pass, through ball, long ball or cross.</summary>
+        public V11OptionKind Option;
     }
 
     /// <summary>One carrier decision: who, when, where, his three dearest options and what he chose.</summary>

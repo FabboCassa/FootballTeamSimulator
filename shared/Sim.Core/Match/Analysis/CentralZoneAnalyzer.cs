@@ -22,8 +22,10 @@ namespace Sim.Core.Match.Analysis
     ///   * Penalty-area spell: any of its frames inside the opponent's penalty area.
     ///   * A set-piece taker's first spell (the restart itself, a penalty included) is left out.
     ///     Each side attacks the same goal all match: the engine does not swap ends.
+    ///   * Source (issue #210): how the ball reached the zone and the box, and what came of the
+    ///     spell (shots, goals, location xG), see the Sources part.
     /// </summary>
-    public sealed class CentralZoneAnalyzer
+    public sealed partial class CentralZoneAnalyzer
     {
         public const int ZoneRangeDm = 160;
         public const int FreeRadiusDm = 30;
@@ -36,6 +38,7 @@ namespace Sim.Core.Match.Analysis
 
         private int _carrier;
         private bool _countable, _box, _zone, _free;
+        private bool _boxFree;
 
         /// <summary>Measures one match. Returns null when the report carries no position stream.</summary>
         public static CentralZoneMetrics? Analyze(MatchReport report) => new CentralZoneAnalyzer().Measure(report);
@@ -52,6 +55,7 @@ namespace Sim.Core.Match.Analysis
             _keeper[0] = MatchAnalyzer.InferKeeperSlot(s, s.TickCount, home: true);
             _keeper[1] = MatchAnalyzer.InferKeeperSlot(s, s.TickCount, home: false);
             FindSentOff(s);
+            ResetSources();
             Walk(s.TickCount);
             return _m;
         }
@@ -88,6 +92,7 @@ namespace Sim.Core.Match.Analysis
                     {
                         Close();
                         afterRestart = true;
+                        _restartPending = true;
                         continue;
                     }
 
@@ -97,20 +102,35 @@ namespace Sim.Core.Match.Analysis
                         // A first-time kick: a spell of one frame, where he stood before it.
                         Close();
                         int code = _s.OwnerCode(a.Home, a.Slot);
-                        Open(code, ref afterRestart);
-                        Visit(a.Tick > 0 ? a.Tick - 1 : 0, code);
+                        int before = a.Tick > 0 ? a.Tick - 1 : 0;
+                        Open(code, before, ref afterRestart);
+                        Visit(before, code);
+                        EndWith(a);
                         Close();
                         ended = code;
                         endedAt = a.Tick;
+                        Heard(a);
                         continue;
                     }
 
-                    if (_carrier == PositionStream.NoOwner) continue;
+                    if (_carrier == PositionStream.NoOwner)
+                    {
+                        Heard(a);
+                        continue;
+                    }
+
                     // His own touch filed late (the recovery that won him the ball) leaves the spell going.
-                    if (own && !IsKick(a.Kind) && !IsStoppage(a.Kind)) continue;
+                    if (own && !IsKick(a.Kind) && !IsStoppage(a.Kind))
+                    {
+                        Heard(a);
+                        continue;
+                    }
+
                     ended = _carrier;
                     endedAt = a.Tick;
+                    if (own) EndWith(a);
                     Close();
+                    Heard(a);
                 }
 
                 int owner = _s.Owner[t];
@@ -120,21 +140,26 @@ namespace Sim.Core.Match.Analysis
                 if (owner != _carrier)
                 {
                     Close();
-                    Open(owner, ref afterRestart);
+                    Open(owner, t, ref afterRestart);
                 }
 
                 Visit(t, owner);
+                _lastHolder = owner;
+                _lastHeldAt = t;
             }
 
             Close();
         }
 
-        private void Open(int code, ref bool afterRestart)
+        private void Open(int code, int frame, ref bool afterRestart)
         {
+            _lastFrame = frame;
             _carrier = code;
             _countable = !afterRestart;
             afterRestart = false;
-            _box = _zone = _free = false;
+            _box = _zone = _free = _boxFree = false;
+            _visited = false;
+            if (_countable) _source = Classify(code);
         }
 
         private void Visit(int t, int code)
@@ -147,11 +172,20 @@ namespace Sim.Core.Match.Analysis
 
             int depth = goalX > x ? goalX - x : x - goalX;
             int off = y > Pitch.CenterY ? y - Pitch.CenterY : Pitch.CenterY - y;
-            if (depth <= MovementGeometry.BoxDepthDm && off <= MovementGeometry.BoxHalfWidthDm) _box = true;
+            bool first = !_visited;
+            _visited = true;
+            if (first) _startDm = (int)Math.Sqrt(DistanceSq(x, y, goalX, Pitch.CenterY));
+            if (!_box && depth <= MovementGeometry.BoxDepthDm && off <= MovementGeometry.BoxHalfWidthDm)
+            {
+                _box = true;
+                _boxFree = IsFree(t, home, x, y);
+                _boxSource = first ? _source : ChanceSource.Carry;
+            }
 
             if (_zone || DistanceSq(x, y, goalX, Pitch.CenterY) > (long)ZoneRangeDm * ZoneRangeDm) return;
             _zone = true;
             _free = IsFree(t, home, x, y);
+            _zoneSource = first ? _source : ChanceSource.Carry;
         }
 
         private void Close()
@@ -160,10 +194,12 @@ namespace Sim.Core.Match.Analysis
             {
                 _s.TryOwner(_carrier, out bool home, out _);
                 _m.Add(home, _box, _zone, _free);
+                AddSources(home);
             }
 
             _carrier = PositionStream.NoOwner;
             _countable = false;
+            _shot = false;
         }
 
         private bool IsFree(int t, bool home, int x, int y)

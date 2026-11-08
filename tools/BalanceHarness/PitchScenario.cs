@@ -52,6 +52,7 @@ internal static class PitchScenario
         var ballFreedom = new BallFreedomAnalyzer();
         var ballFreedomTally = new BallFreedomTally();
         var centralZone = new CentralZoneTally();
+        var chances = new ChanceDecisionTally();
         var totals = new PitchTotals();
         var perf = new PerfTotals();
         var strikerOscillation = new PitchStrikerOscillation();
@@ -109,6 +110,9 @@ internal static class PitchScenario
             // The central zone near goal and the penalty area (issue #206), against doc §11.5.
             CentralZoneMetrics? zone = CentralZoneAnalyzer.Analyze(report);
             if (zone != null) centralZone.Add(zone);
+            // What a carrier near goal does next (believable-match R2/R3, issue #182).
+            ChanceDecisionMetrics? chance = new ChanceDecisionAnalyzer().Measure(report);
+            if (chance != null) chances.Add(chance);
         }
 
         clock.Stop();
@@ -140,6 +144,10 @@ internal static class PitchScenario
 
         Console.WriteLine();
         Console.Write(centralZone.Format("pitch"));
+        Console.Write(chances.Format("pitch"));
+        Console.WriteLine(
+            $"  free <=12 m shot share {Fmt.N(100 * chances.FreeNearShotShare, 1)}% (want >= 80%)   " +
+            $"free <=16 m pass-back share {Fmt.N(100 * chances.FreePassBackShare, 1)}% (want <= 15%)");
 
         // --- contract, not calibration -------------------------------------------------------
         checks.Check(

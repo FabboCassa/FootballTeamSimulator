@@ -186,6 +186,26 @@ namespace Sim.Core.Tests.Match
         }
 
         [Test]
+        public void ABlockedCarrierNearGoal_TakesHisDearestOptionInTheHold_AndFurtherOutWaitsForTheRelease()
+        {
+            // Issue #182: within V11NearGoalChooseRangeDm a blocked man does not sit out the tempo's
+            // hold for a release. 15 m out with the centre-back goal-side but off the lane to the
+            // posts the shot is his dearest option, and he takes it; 26 m out he still waits.
+            var scene = new ZoneScene();
+            int near = 0, far = 0;
+            for (ulong seed = 0; seed < 8; seed++)
+            {
+                if (scene.FirstActionDuringHold(seed, 150, 60, 60) == BallActionKind.Shot) near++;
+                if (scene.FirstActionDuringHold(seed, 260, 60, 60) == BallActionKind.Shot) far++;
+            }
+
+            TestContext.Out.WriteLine($"[zone-guard] shot in the hold: 15 m {near}/8, 26 m {far}/8");
+            Assert.That(Cfg.V11NearGoalChooseRangeDm, Is.InRange(151, 259), "the two spots straddle the range");
+            Assert.That(near, Is.EqualTo(8), "near goal he does not wait for a release");
+            Assert.That(far, Is.Zero, "further out the hold runs to a release");
+        }
+
+        [Test]
         public void ABlockedCarrier_HasNoCarryNorClearance_ButStillPassOrShot()
         {
             var valuation = new V11ActionValuation(Cfg);
@@ -418,6 +438,37 @@ namespace Sim.Core.Tests.Match
                 }
 
                 return false;
+            }
+
+            /// <summary>
+            /// The man on the ball <paramref name="fromGoalDm"/> out, central, with a long hold still to
+            /// run, a free team-mate wide of him and a centre-back at (dx, dy) from him, goal-side: the
+            /// first pass or shot he plays inside 1.5 s by his brain, his feet held still; null for none.
+            /// </summary>
+            public BallActionKind? FirstActionDuringHold(ulong seed, int fromGoalDm, int dxDm, int dyDm)
+            {
+                Reset(seed);
+                int x = Pitch.LengthDm - fromGoalDm;
+                Place(Passer, x, Mid);
+                Place(Receiver, x - 40, Mid + 200);
+                Place(CentreBacks[0], x + dxDm, Mid + dyDm);
+                Place(Keeper, Pitch.LengthDm - 10, Mid);
+                Hold(Passer);
+                Field<int[]>("_hold")[Passer] = 10 * Cfg.TicksPerSecond;
+                MethodInfo update = _brain.GetType().GetMethod("UpdateTeams")!;
+                MethodInfo act = _brain.GetType().GetMethod("Act")!;
+                List<BallAction> actions = ((PositionStream)Get(_sim, "_stream")).Actions;
+                for (int i = 0; i < 3 * Cfg.TicksPerSecond / 2; i++)
+                {
+                    _tick++;
+                    Set(_ball, "EventTick", _tick);
+                    update.Invoke(_brain, new object[] { _tick });
+                    act.Invoke(_brain, new object[] { _tick, Passer / _n, Passer % _n });
+                    foreach (BallAction a in actions)
+                        if (a.Kind == BallActionKind.Pass || a.Kind == BallActionKind.Shot) return a.Kind;
+                }
+
+                return null;
             }
 
             /// <summary>Whether the last action in the feed is this man's.</summary>

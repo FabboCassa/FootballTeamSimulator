@@ -24,6 +24,29 @@ namespace Sim.Core.Match.Analysis
             _sum = _sum == null ? match.Plus(new ChanceDecisionMetrics { Matches = 0 }) : _sum.Plus(match);
         }
 
+        /// <summary>Believable-match R3's first harness gate: the share of free carriers within 12 m who shoot.</summary>
+        public double FreeNearShotShare
+        {
+            get
+            {
+                ChanceDecisionMetrics t = _sum ?? new ChanceDecisionMetrics { Matches = 0 };
+                int chances = t.Chances(true, true);
+                return chances == 0 ? 0 : (double)t.Count(true, true, ChanceAction.Shot) / chances;
+            }
+        }
+
+        /// <summary>Believable-match R3's second harness gate: the share of free carriers within 16 m who play it back.</summary>
+        public double FreePassBackShare
+        {
+            get
+            {
+                ChanceDecisionMetrics t = _sum ?? new ChanceDecisionMetrics { Matches = 0 };
+                int chances = t.Chances(true, true) + t.Chances(true, false);
+                int back = t.Count(true, true, ChanceAction.PassBack) + t.Count(true, false, ChanceAction.PassBack);
+                return chances == 0 ? 0 : (double)back / chances;
+            }
+        }
+
         /// <summary>The row's name: a bucket's chances per match when <paramref name="action"/> is null, else that action's.</summary>
         public static string RowName(bool free, bool near, ChanceAction? action) =>
             $"{Bucket(free, near)} {(action == null ? "chances" : ActionNames[(int)action.Value])}/match";

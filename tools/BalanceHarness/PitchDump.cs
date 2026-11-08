@@ -511,11 +511,12 @@ function caption(t) {
 // ---------------------------------------------------------------- the decisions (R13)
 
 // Per record: tick, side, slot, ball x, ball y, the choice (6), the option count, three options
-// (6 each: kind, mate slot, x, y, completion permille, value in ten-thousandths of a goal).
+// (6 each: kind, mate slot, x, y, completion permille, value in ten-thousandths of a goal), then the
+// option kinds of the choice and the three options (pass, lead pass, through ball, long ball, cross...).
 const DEC = [__DECISIONS__];
 const DSTRIDE = __DECISION_STRIDE__, TICKS_PER_FRAME = __TICKS_PER_FRAME__;
 const CHANCE_RANGE = __CHANCE_RANGE__, CHANCE_HALF_WIDTH = __CHANCE_HALF_WIDTH__;
-const DKINDS = ["hold","carry","pass","cross","clear","shot","round the keeper","drive in"];
+const DKINDS = ["hold","carry","pass","lead pass","through ball","long ball","cross","clear","shot","round the keeper","drive in"];
 const DCOUNT = DEC.length / DSTRIDE;
 const dFrame = r => Math.floor(DEC[r*DSTRIDE] / TICKS_PER_FRAME);
 
@@ -542,8 +543,11 @@ function decisionAt(t) {
   return -1;
 }
 
-function option(o) {
-  return { kind: DEC[o], mate: DEC[o+1], x: DEC[o+2], y: DEC[o+3], odds: DEC[o+4], value: DEC[o+5] };
+// The option kind of the choice (i = -1) or of option i, from the tail of record r.
+function optionKind(r, i) { return DEC[(r+1)*DSTRIDE - 4 + (i + 1)]; }
+
+function option(o, r, i) {
+  return { kind: optionKind(r, i), mate: DEC[o+1], x: DEC[o+2], y: DEC[o+3], odds: DEC[o+4], value: DEC[o+5] };
 }
 
 function describe(side, op) {
@@ -557,7 +561,7 @@ function same(a, b) { return a.kind === b.kind && a.mate === b.mate && a.x === b
 function drawDecision(t, r) {
   const o = r*DSTRIDE;
   const fx = sx(mx(t, DEC[o+3])), fy = sy(my(t, DEC[o+4]));
-  const chosen = option(o+5), count = DEC[o+11];
+  const chosen = option(o+5, r, -1), count = DEC[o+11];
   const arrow = (op, color, width) => {
     const tx = sx(mx(t, op.x)), ty = sy(my(t, op.y));
     ctx.strokeStyle = color; ctx.lineWidth = width;
@@ -566,7 +570,7 @@ function drawDecision(t, r) {
   };
   ctx.setLineDash([7,5]);
   for (let i = 0; i < count; i++) {
-    const op = option(o+12+i*6);
+    const op = option(o+12+i*6, r, i);
     if (same(op, chosen)) continue;
     arrow(op, "rgba(255,255,255,.75)", 2);
     ctx.fillStyle = "#fff"; ctx.font = "bold 12px system-ui"; ctx.textAlign = "center";
@@ -580,11 +584,11 @@ function decisionPanel(r) {
   const panel = document.getElementById("decision");
   if (r < 0) { panel.innerHTML = "<span class='muted'>no decision on the ball on this frame</span>"; return; }
   const o = r*DSTRIDE, side = DEC[o+1], slot = DEC[o+2];
-  const chosen = option(o+5), count = DEC[o+11];
+  const chosen = option(o+5, r, -1), count = DEC[o+11];
   let html = "<b style='color:" + COLOR[side] + "'>" + SHIRTS[side][slot] + " " + NAMES[side][slot] + "</b>"
     + (isChance(r) ? " <span class='chosen'>in the chance zone</span>" : "") + "<br>";
   for (let i = 0; i < count; i++) {
-    const op = option(o+12+i*6);
+    const op = option(o+12+i*6, r, i);
     html += "<span class='" + (same(op, chosen) ? "chosen" : "") + "'>" + (i+1) + ". " + describe(side, op) + "</span><br>";
   }
   html += "<span class='chosen'>chose: " + describe(side, chosen) + "</span>";
