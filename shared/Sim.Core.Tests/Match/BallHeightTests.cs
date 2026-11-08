@@ -29,23 +29,28 @@ namespace Sim.Core.Tests.Match
         /// <summary>
         /// The fewest lofted balls of a kind that must land untouched for the landing to be judged
         /// at all: over 31 seeds on this engine and the one before issue #182 a match had 10 to 32
-        /// untouched crosses and 33 to 72 untouched long balls (this seed: 20 and 52).
+        /// untouched crosses and 33 to 72 untouched long balls (this seed: 20 and 52). Since issue
+        /// #183 a lofted cross is aimed at a man attacking it in the box and more are met in the
+        /// air (on one #183 build this seed landed 9), so the landings are judged over this match
+        /// and the next seed's.
         /// </summary>
         private const int MinUntouchedLandings = 10;
 
         private static League _league = null!;
         private static MatchReport _report = null!;
+        private static MatchReport _next = null!;
 
         [OneTimeSetUp]
         public void PlayOnce()
         {
             _league = new LeagueGenerator().Generate(new Pcg32(20260611));
-            _report = Play();
+            _report = Play(Seed);
+            _next = Play(Seed + 1);
         }
 
-        private static MatchReport Play() => new MatchEngine().Simulate(
+        private static MatchReport Play(ulong seed) => new MatchEngine().Simulate(
             LineupSelector.BestEleven(_league.Clubs[9]),
-            LineupSelector.BestEleven(_league.Clubs[10]), new Pcg32(Seed));
+            LineupSelector.BestEleven(_league.Clubs[10]), new Pcg32(seed));
 
         private static PositionStream Stream => _report.Positions!.Unpack();
 
@@ -61,41 +66,42 @@ namespace Sim.Core.Tests.Match
         [TestCase(BallActionKind.LongBall)]
         public void ALoftedBall_RisesAboveHeadHeight_AndLandsAtZero(BallActionKind kind)
         {
-            PositionStream s = Stream;
-            List<BallAction> actions = s.Actions;
             int played = 0, rose = 0, landedUntouched = 0, metInTheAir = 0;
-
-            for (int i = 0; i < actions.Count; i++)
+            foreach (PositionStream s in new[] { Stream, _next.Positions!.Unpack() })
             {
-                if (actions[i].Kind != kind) continue;
-                played++;
-
-                int from = actions[i].Tick;
-                int to = i + 1 < actions.Count ? actions[i + 1].Tick : s.LastTick;
-                int peakFrame = from;
-                for (int f = from; f <= to; f++)
-                    if (s.BallZ[f] > s.BallZ[peakFrame]) peakFrame = f;
-
-                if (s.BallZ[peakFrame] <= AboveHeadDm) continue;
-                rose++;
-
-                int landed = Array.IndexOf(s.BallZ, 0, peakFrame);
-
-                // The flight ends on the grass or at the first touch, whichever comes first. A ball
-                // met in the air never landed: the grass it reaches later is another ball's.
-                int touched = FirstTouchAfter(s, i);
-                if (touched >= 0 && (landed < 0 || touched < landed))
+                List<BallAction> actions = s.Actions;
+                for (int i = 0; i < actions.Count; i++)
                 {
-                    metInTheAir++;
-                    continue;
-                }
+                    if (actions[i].Kind != kind) continue;
+                    played++;
 
-                // Struck in the last seconds: the final whistle ends the stream before it can land.
-                if (landed < 0 && peakFrame + LandingFrames > s.LastTick) continue;
-                Assert.That(landed, Is.GreaterThan(peakFrame), $"{kind} at frame {from} never comes down");
-                Assert.That(landed - peakFrame, Is.LessThanOrEqualTo(LandingFrames),
-                    $"{kind} at frame {from} hangs in the air");
-                landedUntouched++;
+                    int from = actions[i].Tick;
+                    int to = i + 1 < actions.Count ? actions[i + 1].Tick : s.LastTick;
+                    int peakFrame = from;
+                    for (int f = from; f <= to; f++)
+                        if (s.BallZ[f] > s.BallZ[peakFrame]) peakFrame = f;
+
+                    if (s.BallZ[peakFrame] <= AboveHeadDm) continue;
+                    rose++;
+
+                    int landed = Array.IndexOf(s.BallZ, 0, peakFrame);
+
+                    // The flight ends on the grass or at the first touch, whichever comes first. A ball
+                    // met in the air never landed: the grass it reaches later is another ball's.
+                    int touched = FirstTouchAfter(s, i);
+                    if (touched >= 0 && (landed < 0 || touched < landed))
+                    {
+                        metInTheAir++;
+                        continue;
+                    }
+
+                    // Struck in the last seconds: the final whistle ends the stream before it can land.
+                    if (landed < 0 && peakFrame + LandingFrames > s.LastTick) continue;
+                    Assert.That(landed, Is.GreaterThan(peakFrame), $"{kind} at frame {from} never comes down");
+                    Assert.That(landed - peakFrame, Is.LessThanOrEqualTo(LandingFrames),
+                        $"{kind} at frame {from} hangs in the air");
+                    landedUntouched++;
+                }
             }
 
             TestContext.Out.WriteLine($"[ball-height] {kind}: {rose}/{played} rose above {AboveHeadDm} dm, " +
@@ -146,7 +152,7 @@ namespace Sim.Core.Tests.Match
         [Test]
         public void TheHeight_SurvivesPacking_AndStaysOutOfTheHash()
         {
-            MatchReport report = Play();
+            MatchReport report = Play(Seed);
             int[] heights = report.Positions!.BallZ.ToArray();
             ulong hash = MatchReportHasher.Hash(report);
 
@@ -166,7 +172,7 @@ namespace Sim.Core.Tests.Match
         [Test]
         public void AStreamStoredWithoutHeights_StillLoads_WithTheBallOnTheGround()
         {
-            MatchReport report = Play();
+            MatchReport report = Play(Seed);
             int[] ball = report.Positions!.BallXY.ToArray();
 
             // A v12 replay: packed, and no height at all — neither the array nor its packed form.

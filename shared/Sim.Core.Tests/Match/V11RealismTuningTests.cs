@@ -150,7 +150,8 @@ namespace Sim.Core.Tests.Match
 
             double perMatch = (double)chances.Sum() / OpenGoalMatches;
             TestContext.Out.WriteLine($"[V11 open goals] {perMatch:F2} a match");
-            Assert.That(perMatch, Is.InRange(0.1, 12.0));
+            // 0.05, not 0.1: box marking on crosses and set pieces closes the post-cross open goals (owner decision #183).
+            Assert.That(perMatch, Is.InRange(0.05, 12.0));
         }
 
         [Test]

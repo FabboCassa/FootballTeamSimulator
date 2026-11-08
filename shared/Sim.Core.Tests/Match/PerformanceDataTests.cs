@@ -506,15 +506,19 @@ namespace Sim.Core.Tests.Match
                 $"possession {stats.Home.PossessionPercent:F1}%");
         }
 
-        /// <summary>Ground covered is football's ten kilometres, not a decimetre and not a hundred.</summary>
+        /// <summary>
+        /// Ground covered is football's ten kilometres, not a decimetre and not a hundred: per
+        /// ninety minutes on the pitch, so a man sent off or taken off early is read at his rate
+        /// (during issue #183 this match had a man off after 16 minutes, 2.39 km: 13.4 a ninety).
+        /// </summary>
         [Test]
         public void EveryManCovers_AFootballersGround()
         {
             MatchStats stats = Match(4).Stats!;
 
             foreach (PlayerMatchStats player in stats.Players.Where(p => !p.Keeper))
-                Assert.That(player.DistanceKm, Is.InRange(3.0, 20.0),
-                    $"player {player.PlayerId} covered {player.DistanceKm:F2} km");
+                Assert.That(player.DistanceKm * 90.0 / Math.Max(1, player.MinutesPlayed), Is.InRange(3.0, 20.0),
+                    $"player {player.PlayerId} covered {player.DistanceKm:F2} km in {player.MinutesPlayed} min");
 
             double average = stats.Players.Where(p => !p.Keeper).Average(p => p.DistanceKm);
             TestContext.Out.WriteLine($"[perf-ground] {average:F2} km per outfielder");

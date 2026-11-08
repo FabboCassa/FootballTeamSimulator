@@ -69,6 +69,9 @@ namespace Sim.Core.Match.Movement
         /// <summary>A ball to a team-mate over <see cref="Sim.Core.Config.MatchBalance.LongBallFromDm"/>: lofted, as the simulator plays it.</summary>
         public bool LongBall;
 
+        /// <summary>A cross lofted to the head (free-ball spec R5); a cross without it is driven low or cut back.</summary>
+        public bool HighCross;
+
         /// <summary>The option's name: a cross, then a through ball, then a long ball, then a lead pass, before a plain pass.</summary>
         public V11OptionKind Option
         {
@@ -139,7 +142,7 @@ namespace Sim.Core.Match.Movement
         /// </summary>
         public V11Choice Choose(V11Scene s, bool holding)
         {
-            if (!s.CarrierIsKeeper && IsOpenGoal(s))
+            if (!s.CarrierIsKeeper && !s.NoStrike && IsOpenGoal(s))
             {
                 if (KeeperOnTopOfHim(s, out int rx, out int ry))
                     return new V11Choice { Kind = V11ActionKind.RoundKeeper, Mate = -1, XDm = rx, YDm = ry };
@@ -416,35 +419,48 @@ namespace Sim.Core.Match.Movement
                     bool outWide = IsWideChannel(ty) && DistanceSq(tx, ty, GoalX(s), Pitch.CenterY)
                                    < (long)(Pitch.LengthDm / 3) * (Pitch.LengthDm / 3);
 
-                    MoveTerms(s, tx, ty, tx, ty, GainPercent(s, longForward, cross, outWide), out int keep, out int lost);
-                    // R3: the value at the receiver is the dearer of the threat of his spot and his own shot from it.
+                    MoveTerms(s, tx, ty, tx, ty, GainPercent(s, longForward, cross, outWide), out int spot, out int lost);
+                    int shot = NoOption;
                     if (!s.MateIsKeeper[m])
                     {
                         int pressure = PressureAt(s, tx, ty, 0, distance * 1000 / Math.Max(1, _cfg.V11PassBallSpeedDmPerSecond));
-                        keep = Math.Max(keep, ReceiverShot(ShotAt(s, tx, ty, pressure, s.MateShooting[m], s.MateTechnique[m])));
+                        shot = ReceiverShot(ShotAt(s, tx, ty, pressure, s.MateShooting[m], s.MateTechnique[m]));
                     }
-                    int execution = Execution(s, distance);
-                    if (execution < minSafety) continue;
-                    if (CannotWin(keep, lost, execution, best.ValuePer10k, floor)) continue;
 
-                    int receiver = PitchControl.ReceiverSafetyPermille(mate, foes, tx, ty, models);
-                    if (receiver * execution / 1000 < minSafety) continue;
-                    if (CannotWin(keep, lost, receiver * execution / 1000, best.ValuePer10k, floor)) continue;
-
-                    int lane = PitchControl.LaneSafetyPermille(
-                        s.BallXDm, s.BallYDm, tx, ty, _cfg.V11PassBallSpeedDmPerSecond, foes, models);
-                    int safety = lane * receiver / 1000 * execution / 1000;
-                    if (safety < minSafety) continue;
-
-                    int value = Worth(keep, lost, safety);
-                    if (value > best.ValuePer10k)
+                    // R5: a cross is priced lofted and driven low, and the dearer is the delivery.
+                    for (int high = cross ? 1 : 0; high >= 0; high--)
                     {
-                        best = new V11Choice
+                        // R3: the value at the receiver is the dearer of the threat of his spot and his
+                        // own shot from it; met in the air, a header and a ball not yet settled.
+                        int keep = high == 1
+                            ? Math.Max(spot * _cfg.V11HighCrossKeepPercent / 100, Header(shot))
+                            : Math.Max(spot, shot);
+                        int execution = Execution(s, distance, high == 1);
+                        if (execution < minSafety) continue;
+                        if (CannotWin(keep, lost, execution, best.ValuePer10k, floor)) continue;
+
+                        int receiver = PitchControl.ReceiverSafetyPermille(mate, foes, tx, ty, models);
+                        if (receiver * execution / 1000 < minSafety) continue;
+                        if (CannotWin(keep, lost, receiver * execution / 1000, best.ValuePer10k, floor)) continue;
+
+                        int lane = high == 1
+                            ? BlockSafety(s, tx, ty, distance, foes, models)
+                            : PitchControl.LaneSafetyPermille(s.BallXDm, s.BallYDm, tx, ty,
+                                cross ? _cfg.V11CrossBallSpeedDmPerSecond : _cfg.V11PassBallSpeedDmPerSecond, foes, models);
+                        int safety = lane * receiver / 1000 * execution / 1000;
+                        if (safety < minSafety) continue;
+
+                        int value = Worth(keep, lost, safety);
+                        if (value > best.ValuePer10k)
                         {
-                            Kind = cross ? V11ActionKind.Cross : V11ActionKind.Pass,
-                            Mate = m, XDm = tx, YDm = ty, SafetyPermille = safety, ValuePer10k = value,
-                            Shape = (V11PassShape)shape, LongBall = distance > _cfg.LongBallFromDm
-                        };
+                            best = new V11Choice
+                            {
+                                Kind = cross ? V11ActionKind.Cross : V11ActionKind.Pass,
+                                Mate = m, XDm = tx, YDm = ty, SafetyPermille = safety, ValuePer10k = value,
+                                Shape = (V11PassShape)shape, LongBall = distance > _cfg.LongBallFromDm,
+                                HighCross = high == 1
+                            };
+                        }
                     }
                 }
             }
@@ -544,17 +560,35 @@ namespace Sim.Core.Match.Movement
         /// <summary>
         /// The odds his own foot puts it where he means to, in permille: the pass error the
         /// simulator will draw, less the low-skill extra into their half, which he does not know
-        /// he has (real-match spec R3: a poor passer does not play safer to make up for it).
+        /// he has (real-match spec R3: a poor passer does not play safer to make up for it). A lofted
+        /// ball (a high cross, R5) misses as a long ball does.
         /// </summary>
-        private int Execution(V11Scene s, int distanceDm)
+        private int Execution(V11Scene s, int distanceDm, bool lofted = false)
         {
-            bool longBall = distanceDm > _cfg.LongBallFromDm;
+            bool longBall = lofted || distanceDm > _cfg.LongBallFromDm;
             int error = BallSkill.PassErrorPermille(s.Passing, s.Technique, s.PressurePermille, longBall, _cfg);
             int miss = (int)((long)distanceDm * error / 1000 * 375 / 1000);
             int tolerance = _cfg.ControlRadiusDm + _cfg.V11PassStepsDm;
             if (miss <= tolerance) return 1000;
             return BallSkill.Lerp(miss - tolerance, tolerance * 3, 1000, 250);
         }
+
+        /// <summary>
+        /// R5: the odds a lofted cross is not cut out on its way: only over its first
+        /// <see cref="MatchBalance.V11HighCrossBlockDm"/>, where a man closing the crosser can block
+        /// it. Past that it is over the bodies, and the drop is the receiver's contest.
+        /// </summary>
+        private int BlockSafety(V11Scene s, int tx, int ty, int distance, ReadOnlySpan<PitchActor> foes, ActionModelBalance models)
+        {
+            int block = Math.Min(_cfg.V11HighCrossBlockDm, distance);
+            if (block <= 0) return 1000;
+            int bx = s.BallXDm + (int)((long)(tx - s.BallXDm) * block / distance);
+            int by = s.BallYDm + (int)((long)(ty - s.BallYDm) * block / distance);
+            return PitchControl.LaneSafetyPermille(s.BallXDm, s.BallYDm, bx, by, _cfg.V11PassBallSpeedDmPerSecond, foes, models);
+        }
+
+        /// <summary>R5: the receiver's strike met in the air, <see cref="MatchBalance.V11HeaderShotPercent"/> of one with the foot.</summary>
+        private int Header(int shot) => shot <= NoOption ? NoOption : shot * _cfg.V11HeaderShotPercent / 100;
 
         private static int GoalX(V11Scene s) => MovementGeometry.AttackedGoalX(s.AttacksHighX);
 

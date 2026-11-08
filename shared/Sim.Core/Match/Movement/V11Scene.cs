@@ -65,6 +65,12 @@ namespace Sim.Core.Match.Movement
         /// <summary>A man goal-side of him stops his run (issue #206): he looks for a pass, and running on is no option.</summary>
         public bool GoalSideBlocked { get; set; }
 
+        /// <summary>He meets a cross in the air (free-ball spec R5): a strike now is a header.</summary>
+        public bool Header { get; set; }
+
+        /// <summary>The ball is up in the air off anything but a team-mate's cross (R5): no strike at goal until it is down.</summary>
+        public bool NoStrike { get; set; }
+
         /// <summary>Where a clearance would land, when there is room to clear it at all.</summary>
         public bool CanClear { get; set; }
         public int ClearXDm { get; set; }
@@ -114,6 +120,8 @@ namespace Sim.Core.Match.Movement
         {
             _laneSet = false;
             GoalSideBlocked = false;
+            Header = false;
+            NoStrike = false;
             MateCount = 0;
             FoeCount = 0;
             FoeKeeper = -1;

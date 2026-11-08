@@ -43,6 +43,10 @@ namespace Sim.Core.Tests.Match
         // The zonal gap, measured over 256 seeds (#180): 0.52 on main and 0.53 with #180, while the
         // first 128 read 0.44 with #180 against its 0.5 margin - the dice, not the lever.
         private const int MarkingSeeds = 256;
+        // The press direction's inside shift, over 1024 seeds (#183): the first 128 read 2.06 on main
+        // and 1.78 with #183's crosses and box runs against its 2.0 margin, 1024 read 2.14 (the v13
+        // mean was 2.27 over 1024) - the dice at 128. Its neutral is the engagement test's, cached.
+        private const int PressDirectionSeeds = 1024;
         private const ulong FirstSeed = 9100;
 
         // Final third and wide channel (from the centre line), in decimetres.
@@ -173,9 +177,9 @@ namespace Sim.Core.Tests.Match
         [Test]
         public void PressDirection_ForceOutsideWinsItOnTheFlank_ForceInsideInTheMiddle()
         {
-            double neutral = Neutral.WideRecoveryPercent;
-            double outside = Of(direction: PressDirection.ForceOutside).WideRecoveryPercent;
-            double inside = Of(direction: PressDirection.ForceInside).WideRecoveryPercent;
+            double neutral = Of(seeds: PressDirectionSeeds).WideRecoveryPercent;
+            double outside = Of(direction: PressDirection.ForceOutside, seeds: PressDirectionSeeds).WideRecoveryPercent;
+            double inside = Of(direction: PressDirection.ForceInside, seeds: PressDirectionSeeds).WideRecoveryPercent;
 
             Print("press-direction", "share of the ball won back in the wide channels, %", outside, neutral, inside,
                 "force outside", "force inside");

@@ -66,7 +66,19 @@ namespace Sim.Core.Match.Movement
         BoxArrival = 21,
 
         /// <summary>Out of possession (issue #206): the man nearest where a pass into the central zone is met closes the receiver.</summary>
-        ZoneClose = 22
+        ZoneClose = 22,
+
+        /// <summary>In possession (free-ball spec R5): the striker attacks the near post for a cross or cut-back.</summary>
+        NearPost = 23,
+
+        /// <summary>In possession (free-ball spec R5): the far-side wide man attacks the far post for a cross or cut-back.</summary>
+        FarPost = 24,
+
+        /// <summary>Out of possession (free-ball spec R5): a defender goes goal-side of a man arriving in the box for a cross.</summary>
+        BoxMark = 25,
+
+        /// <summary>Out of possession (free-ball spec R5): a defender steps into the shot line from where a cross is going.</summary>
+        ShotLine = 26
     }
 
     /// <summary>

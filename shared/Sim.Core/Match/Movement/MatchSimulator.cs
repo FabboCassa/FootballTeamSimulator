@@ -163,8 +163,17 @@ namespace Sim.Core.Match.Movement
         // it; the last man to gather it, the tick after, and how far it came to his feet (R5).
         private int _ballAgoX, _ballAgoY, _ballTwoAgoX, _ballTwoAgoY, _gatherU;
         private int _gatherer = -1, _gatheredNext = -1, _gatheredFromU;
+
+        /// <summary>The ball's touch count after the last cross was struck, and who crossed it (free-ball spec R5).</summary>
+        private int _crossTouch = -1, _crossSide = -1, _crossSlot = -1;
+
+        /// <summary>The last cross was played in open play (a set piece has its own marking).</summary>
+        private bool _crossOpenPlay;
+
+        /// <summary>Per side, the tick its last set piece was delivered into the box.</summary>
+        private readonly int[] _setPieceCrossTick = new int[2];
         private int _maxPassRange;
-        private int _arrivalStepU, _carryArrivalU;
+        private int _arrivalStepU, _carryArrivalU, _crossArrivalU;
         private int _streamStride, _lastFrame;
 
         // What a player is worth once the ball is at his feet (engine phase 4). Cached off the
@@ -434,6 +443,12 @@ namespace Sim.Core.Match.Movement
             _controlU = U.Units(_cfg.ControlRadiusDm);
             InitTouch();
             InitAerial();
+            _crossTouch = -1;
+            _crossSide = -1;
+            _crossSlot = -1;
+            _crossOpenPlay = false;
+            _setPieceCrossTick[0] = int.MinValue / 2;
+            _setPieceCrossTick[1] = int.MinValue / 2;
             _cutOutU = U.Units(_cfg.PassCutOutReachDm);
             if (_cutOutU > _controlU) _cutOutU = _controlU;
             _keeperReachU = _controlU + U.Units(_cfg.KeeperSaveReachDm);
@@ -461,6 +476,8 @@ namespace Sim.Core.Match.Movement
             _maxShootForce = U.PerTick(_cfg.MaxShootSpeedDmPerSecond, _cfg);
             _arrivalStepU = U.PerTick(_cfg.PassArrivalSpeedDmPerSecond, _cfg);
             if (_arrivalStepU < 1) _arrivalStepU = 1;
+            _crossArrivalU = U.PerTick(_cfg.V11CrossArrivalSpeedDmPerSecond, _cfg);
+            if (_crossArrivalU < 1) _crossArrivalU = 1;
             _carryArrivalU = U.PerTick(_cfg.CarryArrivalSpeedDmPerSecond, _cfg);
             if (_carryArrivalU < 1) _carryArrivalU = 1;
             _maxPassRange = _ball.RangeOf(_maxPassForce);
@@ -978,6 +995,7 @@ namespace Sim.Core.Match.Movement
                 _ball.Kick(side, slot, aimX - _ball.X, U.ClampY(aimY) - _ball.Y,
                     _ball.ForceForTicks(distance, _cfg.TicksOfMs(1200), _maxPassForce));
                 _ball.Loft(distance, MatchBall.HeadHeightDm);
+                Crossed(tick, side);
                 _sheet.Record(tick, BallActionKind.Cross, home, slot, -1);
             }
         }
@@ -1016,6 +1034,7 @@ namespace Sim.Core.Match.Movement
             int half = U.Units(MovementGeometry.GoalHalfWidthDm);
 
             _shotQuality = ShotQuality(side, slot);
+            if (_ball.Z >= MatchBall.HeadedFromDm) _shotQuality = _shotQuality * _cfg.V11HeaderShotPercent / 100;
 
             int reach = half - U.Units(_cfg.ShotAimInsidePostDm);
             int centre = reach * _cfg.ShotPlacementCentrePermille / 1000;
@@ -1133,6 +1152,16 @@ namespace Sim.Core.Match.Movement
 
             /// <summary>A through ball (free-ball spec R4): he runs onto it at its aim, not to meet it earliest.</summary>
             public bool RunOn;
+
+            /// <summary>A cross the brain chose the height of (free-ball spec R5); by its geometry otherwise.</summary>
+            public CrossHeight Cross;
+        }
+
+        private enum CrossHeight
+        {
+            ByGeometry = 0,
+            High,
+            Low
         }
 
         /// <summary>
@@ -1156,7 +1185,8 @@ namespace Sim.Core.Match.Movement
             bool longBall = distance > U.Units(_cfg.LongBallFromDm);
 
             int error = BallSkill.PassErrorPermille(
-                _skPassing[k], _skTechnique[k], pressure, longBall, _cfg, IntoTheirHalf(home, choice.X));
+                _skPassing[k], _skTechnique[k], pressure, longBall || choice.Cross == CrossHeight.High, _cfg,
+                IntoTheirHalf(home, choice.X));
             int sideways = (int)((long)distance * BallSkill.Spread(_rng, error) / 1000);
             int weight = BallSkill.Spread(_rng, error * _cfg.PassWeightErrorPermille / 1000);
 
@@ -1199,20 +1229,57 @@ namespace Sim.Core.Match.Movement
             BallActionKind kind = distance > U.Units(_cfg.LongBallFromDm)
                 ? BallActionKind.LongBall
                 : IsCross(side, k) ? BallActionKind.Cross : BallActionKind.Pass;
+            // R5: the brain's cross is filed as a cross whatever its length, and goes in the air
+            // to a head or along the grass, as it chose.
+            if (choice.Cross != CrossHeight.ByGeometry) kind = BallActionKind.Cross;
             // Long balls and switches are lofted (free-ball spec R4); never back to his own keeper: he
             // may not handle it, and over his head is in the net.
             int across = aimY - _ball.Y;
             if (across < 0) across = -across;
             bool lofted = kind == BallActionKind.LongBall
                           || (kind == BallActionKind.Pass && across >= U.Units(_cfg.SwitchLoftAcrossDm));
-            if (lofted && !_keeper[side * _n + choice.Slot])
-                _ball.Loft(U.Distance(_ball.X, _ball.Y, aimX, aimY), 0);
-            else if (kind == BallActionKind.Cross)
+            if (kind == BallActionKind.Cross && choice.Cross != CrossHeight.Low)
                 _ball.Loft(U.Distance(_ball.X, _ball.Y, aimX, aimY), MatchBall.HeadHeightDm);
+            else if (lofted && !_keeper[side * _n + choice.Slot])
+                _ball.Loft(U.Distance(_ball.X, _ball.Y, aimX, aimY), 0);
+            if (kind == BallActionKind.Cross) Crossed(tick, side, openPlay: true);
             _sheet.Record(tick, kind, home, slot, choice.Slot);
         }
 
         private static bool IntoTheirHalf(bool home, int xU) => home ? xU > U.LengthU / 2 : xU < U.LengthU / 2;
+
+        /// <summary>A cross has just been struck by <paramref name="side"/>: a team-mate who meets it first may head it at goal.</summary>
+        private void Crossed(int tick, int side, bool openPlay = false)
+        {
+            _crossOpenPlay = openPlay;
+            if (!openPlay) _setPieceCrossTick[side] = tick;
+            _crossTouch = _ball.Touches;
+            _crossSide = side;
+            _crossSlot = _ball.LastTouchSlot;
+        }
+
+        /// <summary>Free-ball spec R5: the ball is above the knee, where a strike at goal is a header.</summary>
+        private bool BallAloft => _ball.Z >= MatchBall.HeadedFromDm;
+
+        /// <summary>
+        /// R5: the man on the ball has just met a team-mate's cross, first time, nobody else having
+        /// touched it: the one ball up there he may head at goal.
+        /// </summary>
+        private bool MetTheCross(int tick, int side, int slot) =>
+            side == _crossSide && slot != _crossSlot && _ball.Touches == _crossTouch + 1
+            && _gatherer == side * _n + slot && tick <= _gatheredNext + 1;
+
+        /// <summary>The ball just gathered by this man is a team-mate's cross, met in the box he attacks.</summary>
+        private bool HeadableCross(int side, int slot) =>
+            side == _crossSide && slot != _crossSlot && _ball.Touches == _crossTouch + 1
+            && MovementGeometry.InOwnBox(side != 0, U.Dm(_ball.X), U.Dm(_ball.Y));
+
+        /// <summary>
+        /// An open-play cross of <paramref name="side"/> is on its way, nobody having touched it yet. A
+        /// set piece's delivery is not one: its box is the set-piece plan's (V11SetPieces).
+        /// </summary>
+        private bool CrossInFlight(int side) =>
+            _crossOpenPlay && _ball.Free && !_ball.Dead && side == _crossSide && _ball.Touches == _crossTouch;
 
         /// <summary>
         /// He has played it: for the next couple of ticks the ball is not his to pick up again.
@@ -1421,6 +1488,9 @@ namespace Sim.Core.Match.Movement
             _ball.Take(side, slot);
             _lastTouch[side] = slot;
             BallToFeet(k);
+            // R5: met in the air, a ball is brought down to his feet, but for a team-mate's cross
+            // met in the box he attacks, which he may head first time. A keeper holds it in his hands.
+            if (!_keeper[k] && !HeadableCross(side, slot)) _ball.Ground();
             if (!sameMan)
             {
                 _gotBallX[k] = _px[k];

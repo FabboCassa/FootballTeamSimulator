@@ -98,6 +98,22 @@ namespace Sim.Core.Match.Movement
                     return;
                 }
 
+                if (!inPossession && job != BaseJob.Press && ShotLine(side, slot, out int lx, out int ly))
+                {
+                    _sim.TraceJob(k, MovementJob.ShotLine);
+                    EndSpell(side, slot);
+                    _sim.Steer(k, lx, ly, sprint: true);
+                    return;
+                }
+
+                if (!inPossession && job != BaseJob.Press && BoxMark(side, slot, out int mx, out int my))
+                {
+                    _sim.TraceJob(k, MovementJob.BoxMark);
+                    EndSpell(side, slot);
+                    _sim.Steer(k, mx, my, sprint: true);
+                    return;
+                }
+
                 if (leashed)
                 {
                     // R4: the job is done from his place in the block, not wherever it leads him.
@@ -116,6 +132,9 @@ namespace Sim.Core.Match.Movement
                 bool sprint = false;
                 bool running = RunTarget(tick, side, slot, man, inPossession, out int rx, out int ry);
                 bool arriving = !running && _arriver[side] == slot;
+                int px = 0, py = 0;
+                MovementJob post = MovementJob.NearPost;
+                bool posting = !running && !arriving && PostRun(side, slot, out px, out py, out post);
                 if (running)
                 {
                     tx = rx;
@@ -130,6 +149,13 @@ namespace Sim.Core.Match.Movement
                     ty = _sim._ctx.Inside(U.Units(ay));
                     sprint = true;
                     _sim.TraceJob(k, MovementJob.BoxArrival);
+                }
+                else if (posting)
+                {
+                    tx = px;
+                    ty = py;
+                    sprint = true;
+                    _sim.TraceJob(k, post);
                 }
                 else if (OverlapTarget(tick, side, slot, man, phase, inPossession, instructions, sx, out int ox, out int oy))
                 {
@@ -175,7 +201,7 @@ namespace Sim.Core.Match.Movement
                 }
 
                 int viaX = -1, viaY = -1;
-                bool back = inPossession && !running && (man.Role == Domain.PositionRole.Striker || arriving)
+                bool back = inPossession && !running && (man.Role == Domain.PositionRole.Striker || arriving || posting)
                             && HoldOnside(home, side, k, ref tx, ref sprint, out viaX, out viaY);
                 if (inPossession && !running && _roleJobs.HoldBehind(man, home, U.Dm(tx), U.Dm(_seenBallX[k]), out int behindX))
                 {

@@ -16,7 +16,7 @@ namespace Sim.Core.Match.Movement
         public const int HeadHeightDm = 18;
 
         /// <summary>A header is aimed down; anything met above the knee counts as one here.</summary>
-        private const int HeadedFromDm = 9;
+        internal const int HeadedFromDm = 9;
         private const int HeadedArrivalDm = 3;
 
         /// <summary>
@@ -87,7 +87,8 @@ namespace Sim.Core.Match.Movement
         /// <summary>Struck or cushioned without being lifted: it keeps its height and gravity takes it.</summary>
         private void Drive() => _vz = 0;
 
-        private void Ground()
+        /// <summary>On the grass, at rest in height: brought down, or landed.</summary>
+        public void Ground()
         {
             _z = 0;
             _vz = 0;

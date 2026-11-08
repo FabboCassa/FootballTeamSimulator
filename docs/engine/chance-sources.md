@@ -164,3 +164,71 @@ labelled goals (0.40 of 1.09), against 76% before.
 
 Still open: passes per match read 1155 against the harness band's 1150 (main 1116); the fast tier's
 own pass and tempo bands hold.
+
+## Crosses and box arrival (issue #183, free-ball spec R5)
+
+What changed:
+- A ball from the wide final third to a man in the box is priced twice, lofted and driven low,
+  and the dearer goes:
+  - high: only the first `V11HighCrossBlockDm` of the lane can be cut out; the receiver's
+    header is worth `V11HeaderShotPercent` of the same strike with the foot; a ball met in the
+    air keeps `V11HighCrossKeepPercent` of the threat of the spot; struck with the long-ball error;
+  - low: the ground lane at `V11CrossBallSpeedDmPerSecond`, the receiver's foot shot.
+- Both are struck to arrive at `V11CrossArrivalSpeedDmPerSecond` and filed as `Cross`.
+- With a cross on, the striker attacks the near post, the far-side wide man the far post (both
+  held onside), and the central midfielder still arrives at the spot.
+- While the cross is on or in the air, and for `V11BoxMarkHoldMs` after, the nearest defender
+  goes goal-side of each of the three (`V11BoxMarkGoalSideDm`). For `V11BoxMarkAfterSetPieceMs`
+  after a set piece's delivery a cross from the recycled ball is not marked while it is on (its
+  flight still is): the scramble after a corner or crossed free kick is anybody's.
+- The cross itself is contested: as an open-play cross goes in, the defender nearest its shot
+  line steps into it, `V11CrossShotLineDm` goal-side of where it lands, and holds the line from
+  the ball until `V11CrossShotLineHoldMs` after it is met. Not the man closing the receiver
+  (#206): his job comes first, and he was the nearest man almost every time.
+- The runs and the marking are open play's: a corner or a crossed free kick is the set-piece
+  plan's box.
+- A ball met in the air is brought down to the feet. The exception is a team-mate's cross met in
+  the box he attacks: that one he may head first time. A high cross is struck with the long-ball
+  error.
+
+Pitch harness, 4 seeds x 200 matches (20260803, 1, 2, 3), main 83b6d21 against this change:
+
+| | main | #183 | band |
+|---|---|---|---|
+| goals | 2.74 (2.73 at 800 a seed) | 2.74 (2.58-2.95) | 2.4-3.0 |
+| shots | 23.5 | 23.3 | 20-30 |
+| high crosses/team-match | 3.93 | 4.15 | 1.46-10.42 |
+| low crosses and cut-backs/team-match | 0.76 | 1.85 (1.76-1.92) | 1.81-7.02 |
+| headed attempts/match, off a cross | - | 1.53, 100% | 3-5 |
+| free within 12 m: shot % | 83.6 | 80.0 (78.7-80.9) | >= 80 |
+
+Without the box marking the runs alone took the goals to 3.54 (to 3.20 in the final code); marking
+only once the cross is struck, to 2.96. The marking has a price: an open goal (keeper beaten, no
+defender within 5 m of the ball or by the triangle to the posts) mostly follows a cross, on main
+mostly a corner or a crossed free kick, and a man goal-side of each runner closes it. Clubs 9-10,
+768 matches: main 0.102 open goals a match; marking every cross 0.059; with the set-piece aftermath
+left unmarked (15 s) 0.082. Releasing the markers on any loose ball after the first contact in
+open play bought no measurable open goals (0.060-0.072) and pushed seed 2 over 3.0 goals in every
+form tried (3.04-3.22). `OpenGoals_AreRareChances_NotEveryTouchNearTheBox` reads 0.08 over its 48
+matches; its floor moved from 0.1 to 0.05 (owner decision #183). Blocked shots, 256 matches: main
+10.7%, this change 11.1%.
+
+Per team-match against main (measured before the shot-line man):
+- crosses give 0.04 more goals and passes into the box 0.08 more. Many low crosses start inside
+  the box's side lines, so the geometric label files them as passes;
+- through balls give 0.03 more and second balls 0.03 more;
+- carries give 0.05 fewer;
+- set pieces give 0.07 fewer, because a corner met in the air is now headed first time at a
+  header's price.
+
+Still open:
+- Low crosses read 1.76-1.81 a team-match on seeds 3 and 20260803, just under the band's 1.81 (main 0.76).
+- Open goals, above: 0.082 a match against main's 0.102.
+- Headed attempts are under their band.
+- Free men within 12 m shoot below 80% on two seeds (78.7%, 79.7%). The header discount makes some of them
+  nod it down instead.
+- A lofted cross peaks at 5-10 m. The engine's ball slows by rolling friction in the air too,
+  so a 27 m cross hangs about 2.5 s.
+- The ball is brought down at once when gathered (one frame from head height to the grass).
+- `ShotPassAnalyzer` still reads a headed shot as a shot within 1 s of a team-mate's `Cross`,
+  and low crosses are now filed as crosses, so its headed-shot row over-counts.

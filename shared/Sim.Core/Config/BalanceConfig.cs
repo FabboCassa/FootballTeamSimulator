@@ -1791,6 +1791,81 @@ namespace Sim.Core.Config
         public int V11BoxArrivalMs { get; set; } = 3000;
         public int V11BoxArrivalTicks => TicksOfMs(V11BoxArrivalMs);
 
+        /// <summary>
+        /// Free-ball spec R5 (issue #183): with a cross or cut-back on, the striker attacks the near
+        /// post, this far from the goal line and this far off the centre on the ball's side, and the
+        /// far-side wide man the far post, as far across on the other side. Both are held onside of
+        /// the line, and go while the cross is on and while it is in the air.
+        /// </summary>
+        public int V11NearPostGoalLineDm { get; set; } = 50;
+        public int V11NearPostOffCentreDm { get; set; } = 30;
+        public int V11FarPostGoalLineDm { get; set; } = 60;
+        public int V11FarPostOffCentreDm { get; set; } = 50;
+
+        /// <summary>
+        /// R5, the other side of it: while the cross is on or on its way, and for V11BoxMarkHoldMs
+        /// after, each man arriving in the box for it (near post, far post, penalty spot) is picked
+        /// up by the nearest defender, who stands this far goal-side of him. Without it the runs
+        /// took the goals from 2.62 to 3.54 a match (4 seeds x 200). Closer (6-8) or longer (2000)
+        /// marking cut the open goals of V11RealismTuningTests from 0.14 to 0.04 a match; marking
+        /// only while the cross is in the air left the blocked share at 8.5% (main 11.3%).
+        /// </summary>
+        public int V11BoxMarkGoalSideDm { get; set; } = 12;
+        public int V11BoxMarkHoldMs { get; set; } = 1000;
+        public int V11BoxMarkHoldTicks => TicksOfMs(V11BoxMarkHoldMs);
+
+        /// <summary>
+        /// R5: for this long after a set piece's delivery, a cross from the recycled ball is not
+        /// box-marked while it is on (its flight still is): the scramble after the first contact is
+        /// anybody's. Most of main's open goals follow a corner or crossed free kick; marking that
+        /// second phase took them from 0.102 to 0.059 a match (clubs 9-10, 768 matches); 15 s gives
+        /// 0.082 at main's goals (2.74, 4 seeds x 200) and blocked share (11.1%, main 10.7%).
+        /// </summary>
+        public int V11BoxMarkAfterSetPieceMs { get; set; } = 15000;
+        public int V11BoxMarkAfterSetPieceTicks => TicksOfMs(V11BoxMarkAfterSetPieceMs);
+
+        /// <summary>
+        /// R5: the cross itself is contested. As an open-play cross goes in, the defender nearest
+        /// the shot line from its landing point to his goal steps into it, this far goal-side of
+        /// the landing point (of the ball once met), and holds the line until V11CrossShotLineHoldMs
+        /// after the ball is met: a first-time finish off a cross is struck at a body.
+        /// </summary>
+        public int V11CrossShotLineDm { get; set; } = 20;
+        public int V11CrossShotLineHoldMs { get; set; } = 600;
+        public int V11CrossShotLineHoldTicks => TicksOfMs(V11CrossShotLineHoldMs);
+
+        /// <summary>
+        /// R5: a lofted cross is over the bodies once it has left the crosser, so only a man within
+        /// this of him along its line can cut it out (the block); the rest of its lane is not priced.
+        /// </summary>
+        public int V11HighCrossBlockDm { get; set; } = 30;
+
+        /// <summary>
+        /// R5: a cross is struck firmer than a pass: it arrives at this speed, high or low (a pass
+        /// arrives at PassArrivalSpeedDmPerSecond). Low, it is driven across the box and its lane is
+        /// priced at <see cref="V11CrossBallSpeedDmPerSecond"/>; high, a firmer strike hangs less
+        /// and peaks lower. Measured at 120: a 25 m cross averages 156 dm/s and a 35 m one 166 (a
+        /// 25 m pass averages 96, priced at V11PassBallSpeedDmPerSecond 160). Priced at 150 the low
+        /// crosses read 1.60 a team-match, under the R1 band (1.81-7.02); at 160, 1.88; at 180,
+        /// 2.30 with 0.1 more goals a match.
+        /// </summary>
+        public int V11CrossArrivalSpeedDmPerSecond { get; set; } = 120;
+        public int V11CrossBallSpeedDmPerSecond { get; set; } = 160;
+
+        /// <summary>
+        /// R5: a lofted cross met in the air cannot be settled at once: kept, it is worth this percent
+        /// of the threat of the spot it reaches, and that is the possession a header at goal has to
+        /// beat. The header itself is priced on its own.
+        /// </summary>
+        public int V11HighCrossKeepPercent { get; set; } = 70;
+
+        /// <summary>
+        /// R5: a header at goal is worth this percent of the same strike with the foot, and the
+        /// simulator strikes it with this percent of the man's shot quality. 60 read 0.05 more goals
+        /// a match.
+        /// </summary>
+        public int V11HeaderShotPercent { get; set; } = 50;
+
         // --- V11 action selection (R3-R5). Read only by the V11 brain. Every option is priced in
         // ten-thousandths of a goal: xT for moving the ball, xG for the shot (ActionModels). ---
 
