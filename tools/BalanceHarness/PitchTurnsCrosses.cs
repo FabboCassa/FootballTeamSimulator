@@ -9,7 +9,8 @@ namespace Fts.BalanceHarness;
 /// The pitch scenario's free-ball turn and cross block (free-ball spec R2, issue #175): the cause of
 /// every fast free-ball turn off the engine's own ball events, every turn with no cause listed as a
 /// defect, the crosses by geometry per team-match, and the long-pass and high-pass shares and aerial
-/// duels (R4, issue #181), each against its R1 band. Report only, but
+/// duels (R4, issue #181), each against its R1 band, and the headed attempts and the share of them
+/// off a cross (R5, issue #183). Report only, but
 /// for the touches made from beyond reach (R3, issue #178): every one of them is a defect, checked.
 /// </summary>
 internal sealed class PitchTurnsCrosses
@@ -22,6 +23,7 @@ internal sealed class PitchTurnsCrosses
     private readonly int _ticksPerFrame;
     private readonly MatchBalance _cfg;
     private int _touches, _beyondReach;
+    private int _headerMatches, _shots, _headed, _headedFromCross;
 
     public PitchTurnsCrosses(MatchBalance cfg)
     {
@@ -39,6 +41,14 @@ internal sealed class PitchTurnsCrosses
         GeometricCrossMetrics? c = _crosses.Measure(report, events.Records, _ticksPerFrame);
         AerialPassMetrics? a = _aerial.Measure(report, events.Records, _ticksPerFrame);
         if (a != null) _aerialTally.Add(a);
+        HeadedAttemptMetrics? h = HeadedAttemptAnalyzer.Analyze(report, events.Records, _ticksPerFrame);
+        if (h != null)
+        {
+            _headerMatches++;
+            _shots += h.Shots;
+            _headed += h.Headed;
+            _headedFromCross += h.HeadedFromCross;
+        }
         if (t == null || c == null) return;
         _tally.Add(match, t);
         _tally.Add(c);
@@ -50,6 +60,10 @@ internal sealed class PitchTurnsCrosses
         Console.Write(_tally.Format("pitch"));
         Console.WriteLine();
         Console.Write(_aerialTally.Format("pitch"));
+        double games = _headerMatches <= 0 ? 1 : _headerMatches;
+        Console.WriteLine($"  headed attempts/match (ball >= {HeadedAttemptAnalyzer.HeadedFromDm} dm at the strike) {Fmt.N(_headed / games, 2)}   " +
+                          $"band {RealismReference.HeadedShots.Min}-{RealismReference.HeadedShots.Max}   " +
+                          $"{Fmt.N(_shots <= 0 ? 0 : 100.0 * _headed / _shots, 1)}% of shots   off a cross {Fmt.N(_headed <= 0 ? 0 : 100.0 * _headedFromCross / _headed, 1)}% (R5)");
         checks.Info($"{_tally.Defects.Count} fast free-ball turns with no cause over {_tally.Matches} matches (defects, listed above)");
         double perMatch = _tally.Matches <= 0 ? 0 : _beyondReach / (double)_tally.Matches;
         Console.WriteLine($"  touches from beyond reach/match {Fmt.N(perMatch, 2)} (of {Fmt.N(_tally.Matches <= 0 ? 0 : _touches / (double)_tally.Matches, 1)} touches; feet {_cfg.ControlRadiusDm} dm, head {_cfg.TouchHeightDm} dm, keeper +{_cfg.KeeperSaveReachDm} dm, +{_cfg.KeeperArmHeightDm} dm up)");

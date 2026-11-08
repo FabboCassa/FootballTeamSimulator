@@ -14,8 +14,9 @@ namespace Sim.Core.Match.Movement
         /// </summary>
         public int ShotValue(V11Scene s)
         {
-            if (s.CarrierIsKeeper) return NoOption;
-            return ShotAt(s, s.BallXDm, s.BallYDm, s.PressurePermille, s.Shooting, s.Technique);
+            if (s.CarrierIsKeeper || s.NoStrike) return NoOption;
+            int shot = ShotAt(s, s.BallXDm, s.BallYDm, s.PressurePermille, s.Shooting, s.Technique);
+            return s.Header ? Header(shot) : shot;
         }
 
         /// <summary>
@@ -62,7 +63,14 @@ namespace Sim.Core.Match.Movement
         public bool ShotBeatsPossession(V11Scene s, int shot) =>
             shot > NoOption
             && ((s.PressurePermille < _cfg.V11FreeShotPressurePermille && Within(s, _cfg.V11FreeShotRangeDm))
-                || shot >= ExpectedThreat.ValuePer10k(s.BallXDm, s.BallYDm, s.AttacksHighX, _models));
+                || shot >= Possession(s));
+
+        /// <summary>The threat of the spot, the possession a shot ends; met in the air (R5) it is a ball not yet settled.</summary>
+        private int Possession(V11Scene s)
+        {
+            int here = ExpectedThreat.ValuePer10k(s.BallXDm, s.BallYDm, s.AttacksHighX, _models);
+            return s.Header ? here * _cfg.V11HighCrossKeepPercent / 100 : here;
+        }
 
         /// <summary>Whether the ball is within <paramref name="rangeDm"/> of the centre of the goal the man on it attacks.</summary>
         public bool Within(V11Scene s, int rangeDm) =>

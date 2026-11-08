@@ -44,7 +44,9 @@ namespace Sim.Core.Tests.Match
         /// visibly coming in from a distance, getting closer every frame. On engine v10 he stood on the
         /// ball until the kick, so this is the V11 behaviour and not a coincidence of steering.
         /// Penalties are made common here (every foul in the box stands) so a few matches carry
-        /// several of them.
+        /// several of them. Sixteen matches: since issue #183 (box runs and their markers) a match
+        /// carries fewer fouls in the box (on one #183 build 40 penalties over 64 matches against
+        /// 66), and eight matches held three.
         /// </summary>
         [Test]
         public void Penalty_HasVisibleRunUpFrames_BeforeTheStrike()
@@ -53,7 +55,7 @@ namespace Sim.Core.Tests.Match
             cfg.FoulInBoxPermille = 1000;
 
             int penalties = 0, withRunUp = 0, lastStepsMax = 0;
-            foreach (PositionStream s in PlayMany(cfg, 8, 35_000, null))
+            foreach (PositionStream s in PlayMany(cfg, 16, 35_000, null))
             {
                 List<BallAction> a = s.Actions;
                 for (int i = 0; i < a.Count; i++)

@@ -74,6 +74,28 @@ namespace Sim.Core.Match.Movement
             private readonly int[] _overlapY = new int[SideCount];
             private readonly int[] _arriver = new int[SideCount];
             private readonly int[] _arriveUntil = new int[SideCount];
+
+            // R5: the men attacking the near and far post for the cross, and the y (dm) of the man
+            // whose cross it is, which decides which post is which.
+            private readonly int[] _nearPost = new int[SideCount];
+            private readonly int[] _farPost = new int[SideCount];
+            private readonly int[] _crossFromY = new int[SideCount];
+            private readonly bool[] _crossOn = new bool[SideCount];
+
+            // R5: per defending side, who picks up each of the other side's box runners (near post,
+            // far post, penalty spot), -1 for nobody.
+            private const int BoxRunners = 3;
+            private readonly int[] _boxMarker = new int[SideCount * BoxRunners];
+
+            // R5: per attacking side, its box runners as the cross went in, and until when they are marked.
+            private readonly int[] _boxRunner = new int[SideCount * BoxRunners];
+            private readonly int[] _boxMarkUntil = new int[SideCount];
+
+            // R5: per defending side, the man stepping into the shot line of the other side's cross,
+            // the cross he took it for (its touch count) and until when he holds it.
+            private readonly int[] _shotLiner = new int[SideCount];
+            private readonly int[] _shotLineCross = new int[SideCount];
+            private readonly int[] _shotLineUntil = new int[SideCount];
             private readonly int[] _offerTicks = new int[SideCount];
             private readonly int[] _releases = new int[SideCount];
 
@@ -143,6 +165,19 @@ namespace Sim.Core.Match.Movement
                     _runner[side] = -1;
                     _overlapper[side] = -1;
                     _arriver[side] = -1;
+                    _nearPost[side] = -1;
+                    _farPost[side] = -1;
+                    _crossOn[side] = false;
+                    for (int r = 0; r < BoxRunners; r++)
+                    {
+                        _boxMarker[side * BoxRunners + r] = -1;
+                        _boxRunner[side * BoxRunners + r] = -1;
+                    }
+
+                    _boxMarkUntil[side] = 0;
+                    _shotLiner[side] = -1;
+                    _shotLineCross[side] = -1;
+                    _shotLineUntil[side] = 0;
                     _expansion[side] = 0;
                     _runs[side] = 0;
                     _overlaps[side] = 0;
@@ -177,6 +212,8 @@ namespace Sim.Core.Match.Movement
                     UpdateOffers(tick, side);
                     UpdateHeldJobs(tick, side);
                 }
+
+                for (int side = 0; side < SideCount; side++) UpdateBoxMarks(tick, side);
             }
 
             private void Expand(int side)

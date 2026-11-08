@@ -18,7 +18,8 @@ namespace Sim.Core.Match.Movement
     /// - <see cref="HoldWidth"/>: a wide man holds his lane, in off the line with the ball on his side;
     /// - <see cref="HoldBehind"/>: the holding midfielder stays behind the ball;
     /// - <see cref="CrossOn"/> and <see cref="BoxSpot"/>: a central midfielder arrives in the box
-    ///   when a cross or cut-back is on.
+    ///   when a cross or cut-back is on, the striker attacks the <see cref="NearPost"/> and the
+    ///   far-side wide man the <see cref="FarPost"/> (free-ball spec R5).
     /// (The full-back's overlap is <see cref="V11Positioning.Overlap"/>.)
     ///
     /// Each job is a target that moves with the ball and the men it reads, so it changes
@@ -179,6 +180,27 @@ namespace Sim.Core.Match.Movement
             xDm = home ? depth : Pitch.LengthDm - depth;
             yDm = Pitch.CenterY;
         }
+
+        /// <summary>The near post the striker attacks for a cross from <paramref name="ballYDm"/>: on the ball's side of the goal.</summary>
+        public void NearPost(bool home, int ballYDm, out int xDm, out int yDm)
+        {
+            int depth = Pitch.LengthDm - _cfg.V11NearPostGoalLineDm;
+            xDm = home ? depth : Pitch.LengthDm - depth;
+            yDm = Pitch.CenterY + BallFlank(ballYDm) * _cfg.V11NearPostOffCentreDm;
+        }
+
+        /// <summary>The far post the far-side wide man attacks for a cross from <paramref name="ballYDm"/>: across the goal from the ball.</summary>
+        public void FarPost(bool home, int ballYDm, out int xDm, out int yDm)
+        {
+            int depth = Pitch.LengthDm - _cfg.V11FarPostGoalLineDm;
+            xDm = home ? depth : Pitch.LengthDm - depth;
+            yDm = Pitch.CenterY - BallFlank(ballYDm) * _cfg.V11FarPostOffCentreDm;
+        }
+
+        /// <summary>A wide man whose flank is across the pitch from the ball: who attacks the far post.</summary>
+        public bool OnTheFarSide(V11Slot man, bool home, int ballYDm) => IsWideMan(man) && Flank(man, home) == -BallFlank(ballYDm);
+
+        private static int BallFlank(int ballYDm) => ballYDm < Pitch.CenterY ? -1 : 1;
 
         /// <summary>
         /// Issue #206: whether a point (where a pass to an opponent arrives) is in the central zone

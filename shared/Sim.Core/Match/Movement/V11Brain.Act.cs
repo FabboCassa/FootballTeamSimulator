@@ -45,6 +45,14 @@ namespace Sim.Core.Match.Movement
                 if (ball.OwnerSide != side || ball.OwnerSlot != slot) return;
                 if (_sim._closeIn == k) _sim._closeIn = -1;
 
+                // R5: up in the air a strike at goal is a header. He heads a team-mate's cross he has
+                // just met in the box first time, or not at all; off anything else he does not strike
+                // it until it is down.
+                bool aloft = !_sim._keeper[k] && _sim.BallAloft;
+                bool header = aloft && _sim.MetTheCross(tick, side, slot)
+                              && MovementGeometry.InOwnBox(side != 0, U.Dm(ball.X), U.Dm(ball.Y));
+                if (header) _sim._hold[k] = 0;
+
                 bool holding = _sim._hold[k] > 0;
                 if (holding) _sim._hold[k]--;
                 if (_possessor != k)
@@ -57,7 +65,7 @@ namespace Sim.Core.Match.Movement
                 // the other side alone — unless he is pressed, when a free man can (R9): the whole
                 // scene is read once there is a choice to make.
                 int raw = _sim.RawPressurePermille(side, slot);
-                bool settled = tick - _possessedSince >= _sim._cfg.TicksOfMs(_sim._cfg.V11ReleaseSettleMs);
+                bool settled = header || tick - _possessedSince >= _sim._cfg.TicksOfMs(_sim._cfg.V11ReleaseSettleMs);
                 bool blocked = _sim.CarrierBlocked(k);
                 if (holding && (!settled || (raw < _sim._cfg.V11PressedReleasePermille && !blocked)))
                 {
@@ -83,6 +91,8 @@ namespace Sim.Core.Match.Movement
                 int pressure = _sim.PressurePermille(side, slot);
                 Read(side, slot, raw);
                 _scene.GoalSideBlocked = blocked;
+                _scene.Header = header;
+                _scene.NoStrike = aloft && !header;
                 TrackOpenGoal(tick, k);
                 // Near goal a pressed or blocked man does not wait for a release: he takes the
                 // dearest option, the shot included (issue #182).
@@ -101,6 +111,10 @@ namespace Sim.Core.Match.Movement
                 }
 
                 if (choice.Release) _releases[side]++;
+                // R5: met in the air and not headed on, the cross is brought down to his feet.
+                if (header && choice.Kind != V11ActionKind.Shot && choice.Kind != V11ActionKind.Pass
+                    && choice.Kind != V11ActionKind.Cross && choice.Kind != V11ActionKind.Hold)
+                    _sim._ball.Ground();
                 switch (choice.Kind)
                 {
                     case V11ActionKind.Hold:
@@ -135,6 +149,7 @@ namespace Sim.Core.Match.Movement
             {
                 Read(side, slot, raw);
                 _scene.GoalSideBlocked = blocked;
+                _scene.NoStrike = !_sim._keeper[side * _sim._n + slot] && _sim.BallAloft;
                 if (!_valuation.ShotBeatsPossession(_scene, _valuation.ShotValue(_scene))) return;
 
                 V11Choice choice = _valuation.Choose(_scene, holding: false);
@@ -208,7 +223,8 @@ namespace Sim.Core.Match.Movement
                 // Aimed where the choice priced it (free-ball spec R4): to his feet, ahead of him or
                 // behind the line, his run already in the aim. He takes it within his reach (R3).
                 int distance = U.Distance(_sim._ball.X, _sim._ball.Y, tx, ty);
-                int force = _sim._ball.ForceToArrive(distance, _sim._arrivalStepU, _sim._maxPassForce, out _);
+                int arrival = choice.Kind == V11ActionKind.Cross ? _sim._crossArrivalU : _sim._arrivalStepU;
+                int force = _sim._ball.ForceToArrive(distance, arrival, _sim._maxPassForce, out _);
 
                 _sim.PlayPass(tick, side, slot, new PassChoice
                 {
@@ -217,7 +233,9 @@ namespace Sim.Core.Match.Movement
                     Y = ty,
                     Force = force,
                     Completion = choice.SafetyPermille,
-                    RunOn = choice.Shape == V11PassShape.Through
+                    RunOn = choice.Shape == V11PassShape.Through,
+                    Cross = choice.Kind != V11ActionKind.Cross ? CrossHeight.ByGeometry
+                        : choice.HighCross ? CrossHeight.High : CrossHeight.Low
                 }, pressure);
             }
 
