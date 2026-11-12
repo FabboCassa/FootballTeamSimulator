@@ -1422,7 +1422,8 @@ namespace Sim.Core.Match.Movement
 
             // A man in the wall stands shoulder to shoulder with the two beside him: the separation
             // that keeps team-mates six metres apart is the one rule a wall exists to break.
-            for (int j = 0; j < _n && !_freeKickWall.IsInWall(k); j++)
+            int mates = _freeKickWall.IsInWall(k) ? 0 : _n;
+            for (int j = 0; j < mates; j++)
             {
                 int other = side * _n + j;
                 if (other == k || _sentOff[other]) continue;

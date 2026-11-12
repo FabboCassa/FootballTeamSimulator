@@ -119,8 +119,11 @@ namespace Sim.Core.Match.Movement
                     // to a fixed point leaves him standing two or three metres off the line while
                     // the ball rolls past — and two or three metres is the whole of a footballer's
                     // control radius, which is why a pass into twelve metres of clear space was
-                    // still lost a quarter of the time.
-                    InterceptSpot(k, out tx, out ty);
+                    // still lost a quarter of the time. But a ball rolling to where he stands is waited
+                    // for on its line (issue #189), unless an opponent is near its way; one in the air
+                    // is still met where it drops.
+                    if (_receiver[side] != slot || _ball.Z > 0 || !WaitsOnItsLine(side, k, out tx, out ty))
+                        InterceptSpot(k, out tx, out ty);
                     sprint = true;
                 }
                 else if (job == BaseJob.Press)
@@ -251,10 +254,10 @@ namespace Sim.Core.Match.Movement
                 for (int ahead = 1; ahead <= horizon; ahead++)
                 {
                     _ball.StepPrediction(ref bx, ref by, ref vx, ref vy);
+                    if (!_keeper[k] && _ball.ZAfter(ahead) > _cfg.TouchHeightDm) continue;
                     int dx = U.ClampX(bx) - _px[k], dy = U.ClampY(by) - _py[k];
                     int distance = U.Length(dx, dy);
                     int toward = distance <= 0 ? 0 : (int)(((long)_sim._vx[k] * dx + (long)_sim._vy[k] * dy) / distance);
-                    if (!_keeper[k] && _ball.ZAfter(ahead) > _cfg.TouchHeightDm) continue;
                     if (distance - _sim._controlU <= Covered(toward, _sim._accel[k], _maxSpeed[k], ahead))
                     {
                         x = U.ClampX(bx);
@@ -266,6 +269,48 @@ namespace Sim.Core.Match.Movement
                 x = U.ClampX(bx);
                 y = U.ClampY(by);
                 return false;
+            }
+
+            /// <summary>
+            /// Issue #189: the man a pass is for, with its roll passing within ReceiverWaitDm of
+            /// where he stands and no opponent within ReceiverMeetThreatDm of its way there, steps
+            /// onto its line at (<paramref name="x"/>, <paramref name="y"/>) and lets it come to him.
+            /// Sprinting at it to meet it as early as he could made every pass a run at the ball:
+            /// the receiver met it 3.6 m from where he stood (tracking data: 2.1-2.9 m).
+            /// </summary>
+            private bool WaitsOnItsLine(int side, int k, out int x, out int y)
+            {
+                int bx = _ball.X, by = _ball.Y, vx = _ball.Vx, vy = _ball.Vy;
+                long nearest = long.MaxValue;
+                x = _px[k];
+                y = _py[k];
+                for (int ahead = 1; ahead <= _cfg.ReceiverReadAheadTicks; ahead++)
+                {
+                    _ball.StepPrediction(ref bx, ref by, ref vx, ref vy);
+                    if (!_keeper[k] && _ball.ZAfter(ahead) > _cfg.TouchHeightDm) continue;
+                    int cx = U.ClampX(bx), cy = U.ClampY(by);
+                    long d2 = U.DistanceSq(_px[k], _py[k], cx, cy);
+                    if (d2 < nearest)
+                    {
+                        nearest = d2;
+                        x = cx;
+                        y = cy;
+                    }
+                }
+
+                long wait = U.Units(_cfg.ReceiverWaitDm);
+                if (nearest > wait * wait) return false;
+
+                long threat = U.Units(_cfg.ReceiverMeetThreatDm);
+                for (int j = 0; j < _n; j++)
+                {
+                    int f = (1 - side) * _n + j;
+                    if (_sentOff[f]) continue;
+                    if (U.DistanceSqToSegment(_px[f], _py[f], _ball.X, _ball.Y, x, y) <= threat * threat)
+                        return false;
+                }
+
+                return true;
             }
 
             /// <summary>Ground a man covers in <paramref name="ticks"/> ticks from <paramref name="speed"/>, gaining <paramref name="accel"/> a tick up to <paramref name="top"/>.</summary>
