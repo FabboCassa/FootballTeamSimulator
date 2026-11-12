@@ -41,6 +41,7 @@ namespace Sim.Core.Match.Movement
         public int Desired(int dx, int dy, int top, bool sprint, out int wx, out int wy)
         {
             long gap = (long)dx * dx + (long)dy * dy;
+            int length = 0;
 
             // He WALKS to a place a few metres away and jogs to one across the pitch. Setting
             // off at a constant jog for a five-metre correction is a kilometre a match of
@@ -51,8 +52,8 @@ namespace Sim.Core.Match.Movement
             // replaced a 3 m arrival deadband that parked men off their places (R8).
             if (!sprint && gap < (long)_approachU * _approachU)
             {
-                int near = U.Length(dx, dy);
-                int paced = top * near / _approachU;
+                length = U.Length(dx, dy);
+                int paced = top * length / _approachU;
                 if (paced < 1) paced = 1;
                 top = paced;
             }
@@ -62,6 +63,12 @@ namespace Sim.Core.Match.Movement
                 // Within one step of the target the vector IS the step, so no root is needed.
                 wx = dx;
                 wy = dy;
+            }
+            else if (length > 0)
+            {
+                // U.Scaled with the root already taken above: the same step, one root fewer.
+                wx = (int)((long)dx * top / length);
+                wy = (int)((long)dy * top / length);
             }
             else
             {

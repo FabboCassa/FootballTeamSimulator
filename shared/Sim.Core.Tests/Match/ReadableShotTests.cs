@@ -347,7 +347,8 @@ namespace Sim.Core.Tests.Match
                 BallAction miss = actions[i], shot = actions[i - 1];
                 if (miss.Kind != BallActionKind.Miss || shot.Kind != BallActionKind.Shot) continue;
                 int t = miss.Tick + 1;
-                if (!shots.TryShotAt(t, out ShotMoment line)) continue;   // the whistle cut it short
+                // The whistle cut it short: no frame after the miss, or no line drawn to it.
+                if (t >= s.TickCount || !shots.TryShotAt(t, out ShotMoment line)) continue;
                 read++;
 
                 Assert.That(line.StrikeFrame, Is.EqualTo(shot.Tick));

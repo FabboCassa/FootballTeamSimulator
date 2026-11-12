@@ -114,8 +114,9 @@ namespace Sim.Core.Match.Movement
         /// digit-by-digit loop took sixteen rounds (engine v12's timing budget, real-match R15).
         /// It is only a GUESS here: any int is exact in a double and IEEE 754 rounds the root
         /// correctly, but the integer check below fixes the floor whatever the runtime's rounding,
-        /// so the result never depends on the float.
+        /// so the result never depends on the float. Inlined for the same reason (issue #189: generation time).
         /// </summary>
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public static int Sqrt(int value)
         {
             if (value <= 0) return 0;

@@ -905,13 +905,19 @@ namespace Sim.Core.Match.Analysis
             private static int Clamp(int value, int low, int high) =>
                 value < low ? low : (value > high ? high : value);
 
-            /// <summary>Integer square root (Newton). No Math.Sqrt: this number reaches a rating.</summary>
+            /// <summary>
+            /// Integer square root (Newton). No Math.Sqrt: this number reaches a rating. Started from
+            /// the power of two just above the root rather than from the value itself, which takes
+            /// the same floor in a third of the divisions (issue #189: generation time).
+            /// </summary>
             private static int Sqrt(long value)
             {
                 if (value <= 0) return 0;
 
-                long x = value;
-                long y = (x + 1) / 2;
+                int bits = 0;
+                while (bits < 62 && value >> bits != 0) bits += 2;
+                long x = 1L << (bits / 2);
+                long y = (x + value / x) / 2;
                 while (y < x)
                 {
                     x = y;

@@ -1382,8 +1382,12 @@ namespace Sim.Core.Config
         /// 56 on-target fell under 30%.
         /// 41 since issue #87 (was 45): with the keeper on his line and blocks in the lane,
         /// 45 left 27% of shots on target (R2: 30-38%) and goals at 1.4 a match.
+        /// 46 since issue #189: with the receiver waiting on the ball's line and the freer shot
+        /// below, 41 read 3.05 goals a match (2.4-3.0); 46, with V11RecoverySprintDm 85, 2.59 at 32%
+        /// on target (pitch, 4 seeds x 400 matches); 47 took the realism sample's 442 fixtures to
+        /// 1.67 goals (main 2.01).
         /// </summary>
-        public int V11ShotSpreadPercent { get; set; } = 41;
+        public int V11ShotSpreadPercent { get; set; } = 46;
 
         /// <summary>
         /// R9 on V11: what a side's skills lose at zero familiarity with its tactic, in permille,
@@ -1430,8 +1434,10 @@ namespace Sim.Core.Config
         /// one jogging back into his place arrives after the ball has gone past him: at 150 a
         /// 192-match sample read 3.03 goals and 27.8 shots, at 100 2.60 and 26.5, for 0.5 km a
         /// player more (11.3; R2: 9.5-11.5).
+        /// 85 since issue #189 (with the receiver waiting on the ball's line): at 100 the pitch
+        /// seeds read up to 3.05 goals a match (2.4-3.0), at 85 2.45-2.72 (4 seeds x 400 matches).
         /// </summary>
-        public int V11RecoverySprintDm { get; set; } = 100;
+        public int V11RecoverySprintDm { get; set; } = 85;
 
         /// <summary>A supporting run or an overlap goes no further than this from the man's phase target spot.</summary>
         public int V11SupportLeashDm { get; set; } = 200;
@@ -1504,9 +1510,12 @@ namespace Sim.Core.Config
         /// and passes already price keeping the ball. Measured (pitch, 4 seeds x 200 matches): with
         /// the floor everywhere 28% of the men free within 12 m did not shoot (believable-match R3:
         /// at least 80% do); without it there 16% do not, and the pass-back share is 11% to 8%.
+        /// 900 since issue #189 (was 600, nobody within 2 m): the harness calls a man free with no
+        /// defender within 3 m, and at 600 the free share that shot sat at 78.7-80.9% by seed;
+        /// at 900 (a defender a stride off still lets him shoot) 80.9-82.4% (4 seeds x 400).
         /// </summary>
         public int V11FreeShotRangeDm { get; set; } = 120;
-        public int V11FreeShotPressurePermille { get; set; } = 600;
+        public int V11FreeShotPressurePermille { get; set; } = 900;
 
         /// <summary>
         /// R9: the release is read with pitch control at this reach and reaction, nearer the engine's
@@ -1856,8 +1865,10 @@ namespace Sim.Core.Config
         /// R5: a lofted cross met in the air cannot be settled at once: kept, it is worth this percent
         /// of the threat of the spot it reaches, and that is the possession a header at goal has to
         /// beat. The header itself is priced on its own.
+        /// 65 since issue #189 (was 70): low crosses and cut-backs read 1.76-1.92 per team-match
+        /// by pitch seed (R1 band 1.81-7.02); at 65 2.05-2.24 (4 seeds x 400).
         /// </summary>
-        public int V11HighCrossKeepPercent { get; set; } = 70;
+        public int V11HighCrossKeepPercent { get; set; } = 65;
 
         /// <summary>
         /// R5: a header at goal is worth this percent of the same strike with the foot, and the
@@ -2513,6 +2524,32 @@ namespace Sim.Core.Config
         public int InterceptLookaheadMs { get; set; } = 1500;
         public int InterceptLookaheadTicks => TicksOfMs(InterceptLookaheadMs);
 
+        /// <summary>
+        /// Issue #189: the man a pass is for waits for it on its line when its roll passes within this
+        /// of where he stands, unless an opponent is within <see cref="ReceiverMeetThreatDm"/> of its
+        /// way to him or the ball is in the air; otherwise he runs to meet it (above). Every receiver
+        /// used to sprint at the ball to meet it as early as he could, so he met it 3.6 m from where he
+        /// stood (tracking: 2.1-2.9), 58% of passes read as into space (31-50%) and a match had 1160
+        /// passes (850-1150). Measured (pitch, 4 seeds x 400 matches, with the rest of the #189
+        /// tuning): 3.0 m, 50%, 1122 passes; at 2 m with no opponent check pass accuracy fell to 74%
+        /// (76-88) as balls were cut out, and waiting for lofted deliveries put 0.14 more set-piece
+        /// goals into a match.
+        /// </summary>
+        public int ReceiverWaitDm { get; set; } = 15;
+
+        /// <summary>
+        /// The opponent distance from the ball's way at which the receiver meets it rather than
+        /// waiting (above). Every waited-for pass flies longer: at 4 m the median pass flight read
+        /// 1.20 s by pitch seed (R1: 0.89-1.19 s); at 5.8 m 1.170-1.186 s with goals 2.50-2.84,
+        /// pass accuracy 76.6-77.0% and 1139-1143 passes a match (4 seeds x 400). At 6 m the
+        /// lowest-scoring seed fell to 2.30 goals (2.4-3.0).
+        /// </summary>
+        public int ReceiverMeetThreatDm { get; set; } = 58;
+
+        /// <summary>How far ahead the receiver reads the roll to know whether it comes to him.</summary>
+        public int ReceiverReadAheadMs { get; set; } = 3000;
+        public int ReceiverReadAheadTicks => TicksOfMs(ReceiverReadAheadMs);
+
         // --- Team shape ---
 
         /// <summary>The support-spot grid: how many places the team considers running into.</summary>
@@ -2911,8 +2948,10 @@ namespace Sim.Core.Config
         /// between), times a triangular draw from 0 to 2: so the error grows with the ball's speed
         /// and shrinks with Technique. A man's own knock-on, a keeper's hands and a strike are not
         /// first touches. 60/10 since issue #179: at 90/15 pass accuracy fell to 74.6% (76-88).
+        /// 45 at zero since issue #189: a receiver waiting on the ball's line rather than running
+        /// at it took pass accuracy to 76.5% at 60; 76.8% at 45 (pitch, 4 seeds x 200).
         /// </summary>
-        public int FirstTouchErrorPermilleAtZero { get; set; } = 60;
+        public int FirstTouchErrorPermilleAtZero { get; set; } = 45;
         public int FirstTouchErrorPermilleAtHundred { get; set; } = 10;
 
         /// <summary>

@@ -98,8 +98,11 @@ namespace Sim.Core.Tests.Match
             // STATISTICALLY FRAGILE: sixteen matches, eight per mirror, not the harness's thousand
             // each. Every R2 band the harness gates and #87 reached is widened by its own width on
             // either side, so that only a real regression trips it (before #87's tuning goals read
-            // 1.4 and PPDA 3.9).
-            const int PerMirror = 8;
+            // 1.4 and PPDA 3.9). Thirty-two per mirror since issue #189 (was eight): at sixteen the
+            // rows were the dice, not the engine - one shot-spread point moved goals by 0.7 and the
+            // save rate outside the box read 63.6-77.8 between settings whose 128-match readings
+            // are 74-80, while the harness-sized means moved by 0.1 and 6.
+            const int PerMirror = 32;
             const double BandSlack = 1.0;
             BalanceConfig cfg = Config();
             var realism = new RealismTally();

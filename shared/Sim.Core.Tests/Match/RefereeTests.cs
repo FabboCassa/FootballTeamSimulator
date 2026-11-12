@@ -163,9 +163,13 @@ namespace Sim.Core.Tests.Match
                     Assert.That(actions[a + 1].Home, Is.Not.EqualTo(actions[a].Home),
                         "and the free kick goes to the other side");
 
-                    // The ball is placed on the spot for the free kick, so the stream says where
-                    // the offence was: in the offending side's ATTACKING half, always.
-                    int frame = Math.Min(actions[a + 1].Tick, frames - 1);
+                    // The free kick is taken from the spot, so the stream says where the offence
+                    // was: in the offending side's ATTACKING half, always. Believable-match R5 rolls
+                    // the ball to the spot rather than placing it there, so it is read on the frame
+                    // before the kick that takes the free kick, not when the whistle goes (issue #189:
+                    // an offender who ran back over halfway to the ball had it there at the whistle).
+                    if (a + 2 >= actions.Count) continue;
+                    int frame = Math.Min(Math.Max(actions[a + 2].Tick - 1, actions[a + 1].Tick), frames - 1);
                     int spotX = stream.BallXY[frame * 2];
                     int depth = actions[a].Home ? spotX : Pitch.LengthDm - spotX;
                     Assert.That(depth, Is.GreaterThanOrEqualTo(Pitch.CenterX - 1),

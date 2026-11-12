@@ -174,6 +174,48 @@ namespace Sim.Core.Tests.Match
             Assert.That(further.receiver, Is.GreaterThanOrEqualTo(Seeds * 3 / 4), "and the receiver does when he is the nearer");
         }
 
+        [Test]
+        public void ABallToHisFeet_IsWaitedForOnItsLine_UnlessAnOpponentIsNearItsWay()
+        {
+            (int waited, int met) alone = Receive(defenderNear: false);
+            (int waited, int met) pressed = Receive(defenderNear: true);
+
+            TestContext.Out.WriteLine(
+                $"[receiver] alone: waited {alone.waited}/{Seeds}, ran to meet it {alone.met}; " +
+                $"an opponent 3 m off its way: waited {pressed.waited}, ran to meet it {pressed.met}");
+            Assert.That(alone.waited, Is.GreaterThanOrEqualTo(Seeds * 3 / 4),
+                "with nobody near, he takes it where he stands instead of sprinting at it");
+            Assert.That(pressed.met, Is.GreaterThanOrEqualTo(Seeds * 3 / 4), "with an opponent near its way, he goes to meet it");
+        }
+
+        /// <summary>
+        /// A 20 m ball to a standing receiver's feet; per seed, whether he took it within
+        /// ReceiverWaitDm (and half a metre of braking) of where he stood, or further toward the passer.
+        /// </summary>
+        private (int waited, int met) Receive(bool defenderNear)
+        {
+            const int receiverX = 600, braking = 5;
+            int waited = 0, met = 0;
+            var scene = NewScene();
+            for (ulong seed = 0; seed < Seeds; seed++)
+            {
+                scene.Reset(seed);
+                scene.Place(scene.Passer, 400, Mid);
+                scene.Place(scene.Receiver, receiverX, Mid);
+                if (defenderNear) scene.Place(scene.Line[1], 560, Mid + 30);
+                scene.Pass(receiverX, Mid, runOn: false);
+
+                BallEvent? first = scene.RunToFirstTouch(scene.Receiver);
+                if (first == null || first.Value.Side != 0 || first.Value.Slot != scene.Receiver.Slot) continue;
+                (int x, int y) = scene.Position(scene.Receiver);
+                double moved = Math.Sqrt((double)(x - receiverX) * (x - receiverX) + (double)(y - Mid) * (y - Mid));
+                if (moved <= Cfg.ReceiverWaitDm + braking) waited++;
+                else if (receiverX - x > Cfg.ReceiverWaitDm + braking) met++;
+            }
+
+            return (waited, met);
+        }
+
         private (int defender, int receiver) Race(int defenderOffDm, int receiverOffDm)
         {
             int defender = 0, receiver = 0;
@@ -313,6 +355,13 @@ namespace Sim.Core.Tests.Match
             }
 
             public void PlaceKeeper(int xDm, int yDm) => Place(Keeper, xDm, yDm);
+
+            /// <summary>Where the man stands, in dm.</summary>
+            public (int X, int Y) Position(Man m)
+            {
+                int k = m.Side * _n + m.Slot;
+                return (Field<int[]>("_px")[k] / UnitsPerDm, Field<int[]>("_py")[k] / UnitsPerDm);
+            }
 
             /// <summary>The scene as the passer at (x, y) reads it: the away men on the pitch, and the line.</summary>
             public V11Scene Read(int xDm, int yDm)
