@@ -1442,7 +1442,10 @@ namespace Sim.Core.Match.Movement
         {
             // A man sent off is off the field of play: nobody on it pushes him off his spot by the
             // halfway line, as nobody on it is pushed by him.
-            if (_sentOff[k]) return;
+            bool[] sentOff = _sentOff;
+            if (sentOff[k]) return;
+            int[] px = _px, py = _py;
+            int x = px[k], y = py[k];
             int side = k / _n;
             int pushX = 0, pushY = 0;
 
@@ -1452,18 +1455,18 @@ namespace Sim.Core.Match.Movement
             for (int j = 0; j < mates; j++)
             {
                 int other = side * _n + j;
-                if (other == k || _sentOff[other]) continue;
+                if (other == k || sentOff[other]) continue;
 
-                int dx = _px[k] - _px[other], dy = _py[k] - _py[other];
+                int dx = x - px[other], dy = y - py[other];
                 long sq = (long)dx * dx + (long)dy * dy;
                 if (sq >= _separationSq || sq <= 0) continue;   // no root for the pairs that are far apart
-                int distance = U.Length(dx, dy);
+                int distance = MovementGeometry.Sqrt((int)sq);   // U.Length: sq is under an int radius squared
                 if (distance <= 0) continue;
 
+                // U.Scaled with the root already taken: the same push, one root fewer.
                 int strength = (_separationU - distance) * top / _separationU;
-                U.Scaled(dx, dy, strength, out int sx, out int sy);
-                pushX += sx;
-                pushY += sy;
+                pushX += (int)((long)dx * strength / distance);
+                pushY += (int)((long)dy * strength / distance);
             }
 
             // And off the opposition (engine phase 3). Separation used to push team-mates apart
@@ -1476,17 +1479,16 @@ namespace Sim.Core.Match.Movement
             for (int j = 0; j < _n; j++)
             {
                 int other = foes + j;
-                if (_sentOff[other]) continue;
-                int dx = _px[k] - _px[other], dy = _py[k] - _py[other];
+                if (sentOff[other]) continue;
+                int dx = x - px[other], dy = y - py[other];
                 long sq = (long)dx * dx + (long)dy * dy;
                 if (sq >= _foeSeparationSq || sq <= 0) continue;
-                int distance = U.Length(dx, dy);
+                int distance = MovementGeometry.Sqrt(sq > int.MaxValue ? int.MaxValue : (int)sq);
                 if (distance <= 0) continue;
 
                 int strength = (_foeSeparationU - distance) * top / _foeSeparationU;
-                U.Scaled(dx, dy, strength, out int fx, out int fy);
-                foePushX += fx;
-                foePushY += fy;
+                foePushX += (int)((long)dx * strength / distance);
+                foePushY += (int)((long)dy * strength / distance);
             }
 
             wx += pushX * _cfg.SeparationStrengthPercent / 100

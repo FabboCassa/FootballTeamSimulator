@@ -16,8 +16,10 @@ namespace Sim.Core.Match.Movement
         private readonly int _fadePercent, _kneePercent;
 
         // A pace v that stops in d at a braking rate b is v = sqrt(2 b d): in units per tick that is
-        // sqrt(2 b[dm/s^2] x Scale x d[units] / tps^2); a b in cm/s^2 is divided by ten more.
-        private readonly int _jogBrake, _settleBrake, _perTick2, _settlePerTick2;
+        // sqrt(2 b[dm/s^2] x Scale x d[units] / tps^2); a b in cm/s^2 is divided by ten more. Read
+        // off a table by the gap (in units, under the approach) rather than rooted for most men
+        // every tick (issue #215: generation time).
+        private readonly int[] _jogPace, _settlePace;
 
         public PlayerSteering(MatchBalance cfg)
         {
@@ -33,10 +35,23 @@ namespace Sim.Core.Match.Movement
             RunGain = run < 1 ? 1 : run;
             _fadePercent = cfg.PlayerSprintFadePercent;
             _kneePercent = cfg.PlayerSprintFadeKneePercent;
-            _jogBrake = 2 * U.Scale * cfg.PlayerJogBrakeDmPerSecond2;
-            _settleBrake = 2 * U.Scale * cfg.PlayerSettleWalkCmPerSecond2;
-            _perTick2 = cfg.TicksPerSecond * cfg.TicksPerSecond;
-            _settlePerTick2 = 10 * _perTick2;
+            int perTick2 = cfg.TicksPerSecond * cfg.TicksPerSecond;
+            if (perTick2 < 1) perTick2 = 1;
+            _jogPace = StoppingPaces(_approachU, 2 * U.Scale * cfg.PlayerJogBrakeDmPerSecond2, perTick2);
+            _settlePace = StoppingPaces(_approachU, 2 * U.Scale * cfg.PlayerSettleWalkCmPerSecond2, 10 * perTick2);
+        }
+
+        /// <summary>The pace that stops a man in each gap under <paramref name="gaps"/>: floor(sqrt(brake x gap / perTick2)).</summary>
+        private static int[] StoppingPaces(int gaps, int brake, int perTick2)
+        {
+            var paces = new int[gaps];
+            for (int gap = 0; gap < gaps; gap++)
+            {
+                long q = (long)brake * gap / perTick2;
+                paces[gap] = MovementGeometry.Sqrt(q > int.MaxValue ? int.MaxValue : (int)q);
+            }
+
+            return paces;
         }
 
         /// <summary>The most a man who is not sprinting gains in speed in one tick, in units per tick.</summary>
@@ -80,21 +95,13 @@ namespace Sim.Core.Match.Movement
                 int paced;
                 if (jog)
                 {
-                    long q = (long)_jogBrake * length / _perTick2;
-                    // floor(sqrt(q)) >= top  <=>  q >= top*top: skip the root when it cannot win.
-                    paced = q >= (long)top * top ? top : MovementGeometry.Sqrt((int)q);
+                    paced = _jogPace[length];
                 }
                 else
                 {
                     paced = top * length / _approachU;
-                    long q = (long)_settleBrake * length / _settlePerTick2;
-                    // floor(sqrt(q)) > paced  <=>  q >= (paced+1)^2: skip the root when it cannot win.
-                    long need = (long)(paced + 1) * (paced + 1);
-                    if (q >= need)
-                    {
-                        int walk = MovementGeometry.Sqrt((int)q);
-                        if (walk > paced) paced = walk;
-                    }
+                    int walk = _settlePace[length];
+                    if (walk > paced) paced = walk;
                 }
 
                 if (paced > top) paced = top;
@@ -129,6 +136,7 @@ namespace Sim.Core.Match.Movement
         /// <paramref name="gain"/> his speed rises by no more than that a tick (see <see cref="Gain"/>).
         /// <paramref name="speed"/> is his speed when the caller has already measured it.
         /// </summary>
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public static void Accelerate(ref int vx, ref int vy, int wx, int wy, int accel, int top, int brake = int.MaxValue,
             int gain = int.MaxValue, int speed = -1)
         {
@@ -150,6 +158,7 @@ namespace Sim.Core.Match.Movement
         /// <paramref name="run"/> or at a jog he picks up pace under the 2 m/s^2 of a hard effort
         /// (a run fades the same way above the knee).
         /// </summary>
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public int Gain(bool sprint, bool run, int speed, int max)
         {
             int gain = run ? RunGain : sprint ? Accel : JogGain;
