@@ -76,6 +76,8 @@ namespace Sim.Core.Match.Movement
         private int[] _stepToY = System.Array.Empty<int>();
         private int[] _maxSpeed = System.Array.Empty<int>();
         private int[] _cruise = System.Array.Empty<int>();
+        private int[] _runPace = System.Array.Empty<int>();
+        private bool[] _jogging = System.Array.Empty<bool>();
         private int[] _accel = System.Array.Empty<int>();
         /// <summary>Which line of the block a man belongs to: 0 is the back line.</summary>
         private int[] _lineRank = System.Array.Empty<int>();
@@ -156,6 +158,7 @@ namespace Sim.Core.Match.Movement
         private int _recoveryU;
         private long _foeSeparationSq;
         private int _approachU;
+        private int _jogStartU, _jogStopU;
         private int _separationSq;
         private int _maxPassForce, _maxClearForce, _maxShootForce, _shootRangeU;
 
@@ -410,6 +413,8 @@ namespace Sim.Core.Match.Movement
             _stepToY = new int[total];
             _maxSpeed = new int[total];
             _cruise = new int[total];
+            _runPace = new int[total];
+            _jogging = new bool[total];
             _accel = new int[total];
             _lineRank = new int[total];
             _offsetXDm = new int[total];
@@ -439,6 +444,8 @@ namespace Sim.Core.Match.Movement
             _steering = new PlayerSteering(_cfg);
             _approachU = U.Units(_cfg.PlayerApproachDm);
             if (_approachU < 1) _approachU = 1;
+            _jogStartU = U.Units(_cfg.PlayerJogStartDm);
+            _jogStopU = U.Units(_cfg.PlayerJogStopDm);
             _dribbleReportU = U.Units(_cfg.DribbleReportDm);
             _controlU = U.Units(_cfg.ControlRadiusDm);
             InitTouch();
@@ -624,6 +631,8 @@ namespace Sim.Core.Match.Movement
             if (_maxSpeed[k] < 1) _maxSpeed[k] = 1;
             _cruise[k] = _maxSpeed[k] * _cfg.PlayerCruisePercent / 100;
             if (_cruise[k] < 1) _cruise[k] = 1;
+            _runPace[k] = _maxSpeed[k] * _cfg.PlayerRunPacePercent / 100;
+            if (_runPace[k] < _cruise[k]) _runPace[k] = _cruise[k];
             _accel[k] = _steering.Accel;
         }
 
@@ -1356,14 +1365,16 @@ namespace Sim.Core.Match.Movement
         /// The legs, toward (<paramref name="tx"/>, <paramref name="ty"/>). With a waypoint
         /// (<paramref name="viaX"/> at least 0) the pace is still read off the target but the run
         /// heads for the waypoint: a run bent round an opponent (<see cref="RunCurve"/>). A
-        /// <paramref name="pace"/> caps his speed, in units per tick: a run timed to the ball.
+        /// <paramref name="pace"/> caps his speed, in units per tick: a run timed to the ball. A
+        /// positional <paramref name="run"/> (issue #215) is a sprint held to his run pace and run gain.
         /// </summary>
-        private void SteerVia(int k, int tx, int ty, bool sprint, int viaX, int viaY, int pace = int.MaxValue)
+        private void SteerVia(int k, int tx, int ty, bool sprint, int viaX, int viaY, int pace = int.MaxValue, bool run = false)
         {
             // Flat out only when the ball is the reason; otherwise a jog. A match where every
             // man ran at eight metres a second for ninety minutes would cover forty kilometres.
             int top = CarrierTop(k, sprint ? _maxSpeed[k] : _cruise[k]);
             if (top > pace) top = pace;
+            if (run && top > _runPace[k]) top = _runPace[k];
             if (top < 1) top = 1;
 
             // R5: an outfield man sent at a spot beyond a line runs to the line, not into it.
@@ -1375,7 +1386,12 @@ namespace Sim.Core.Match.Movement
             }
 
             int wx, wy;
-            top = _steering.Desired(tx - _px[k], ty - _py[k], top, sprint, out wx, out wy);
+            // Issue #215: set off for his place once it is far enough away, settle once he is near it.
+            long gap2 = U.DistanceSq(_px[k], _py[k], tx, ty);
+            if (sprint || gap2 > (long)_jogStartU * _jogStartU) _jogging[k] = true;
+            else if (gap2 < (long)_jogStopU * _jogStopU) _jogging[k] = false;
+
+            top = _steering.Desired(tx - _px[k], ty - _py[k], top, sprint, out wx, out wy, _jogging[k]);
             if (viaX >= 0) U.Scaled(viaX - _px[k], viaY - _py[k], U.Length(wx, wy), out wx, out wy);
 
             int wantX = wx, wantY = wy;
@@ -1385,8 +1401,18 @@ namespace Sim.Core.Match.Movement
             // The man on the ball is held to the carrier's pace at once, the ball being at his feet,
             // and a keeper to his line and his dive (R6); every other man brakes within a limit.
             bool onBall = !_ball.Free && _ball.OwnerSide * _n + _ball.OwnerSlot == k;
-            PlayerSteering.Accelerate(ref _vx[k], ref _vy[k], wx, wy, _accel[k], top,
-                onBall || _keeper[k] ? int.MaxValue : _steering.Brake);
+            if (onBall || _keeper[k])
+            {
+                PlayerSteering.Accelerate(ref _vx[k], ref _vy[k], wx, wy, _accel[k], top);
+            }
+            else
+            {
+                // A man sent at a spot beyond a line (sent off, or taking a throw-in or corner) is
+                // stopped by it every tick: a capped gain would leave him crawling along it.
+                int speed = U.Length(_vx[k], _vy[k]);
+                int gain = _sentOff[k] || IsLineTaker(k) ? int.MaxValue : _steering.Gain(sprint, run, speed, _maxSpeed[k]);
+                PlayerSteering.Accelerate(ref _vx[k], ref _vy[k], wx, wy, _accel[k], top, _steering.Brake, gain, speed);
+            }
 
             // The step, before the pitch is allowed to have an opinion about it. A man who runs
             // over a line is put back on it; the ball he is holding is NOT, and the referee reads

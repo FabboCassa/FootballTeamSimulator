@@ -59,13 +59,15 @@ namespace Sim.Core.Config
         // --- Quick resolver (background leagues), fitted to engine v13 (free-ball R8, watchable-match R17) ---
         /// <summary>
         /// Expected goals for an evenly-matched side, fitted against the full engine
-        /// (FastModelHarnessTests, 1,000 matches of a generated league): v13 gives 2.68 goals,
-        /// 46.3 / 21.1 / 32.6 home-draw-away and 0.146 goal difference per strength point (v12 gave
+        /// (FastModelHarnessTests, 1,000 matches of a generated league): v13 gives 2.76 goals,
+        /// 48.4 / 20.7 / 30.9 home-draw-away and 0.145 goal difference per strength point since issue
+        /// #215's movement speed model (1.35 and -2 home strength read 2.72, 48.6 / 20.1 / 31.4; issue #190's
+        /// v13 gave 2.68, 46.3 / 21.1 / 32.6 and 0.146, fitted at 1.30 and -3; v12 gave
         /// 3.16, 45.3 / 21.1 / 33.6 and 0.119; V11 2.81, 42.6 / 22.6 / 34.8 and 0.100). The V13 prefix
         /// makes a stored balance document's older V12, V11 (or engine-v10) Quick* figures load and be
         /// ignored instead of read into this model.
         /// </summary>
-        public double QuickV13BaseGoals { get; set; } = 1.30;
+        public double QuickV13BaseGoals { get; set; } = 1.35;
 
         /// <summary>Expected goals gained per point of strength advantage (as a fraction of the base).</summary>
         public double QuickV13StrengthFactor { get; set; } = 0.054;
@@ -74,12 +76,12 @@ namespace Sim.Core.Config
         /// Flat strength points added to the home side, ON TOP of MatchBalance.HomeAdvantagePercent.
         /// Negative because the engine's home edge is smaller than HomeAdvantagePercent alone gives here.
         /// </summary>
-        public int QuickV13HomeAdvantageStrength { get; set; } = -3;
+        public int QuickV13HomeAdvantageStrength { get; set; } = -2;
 
         public double QuickMinExpectedGoals { get; set; } = 0.20;
 
         /// <summary>
-        /// Above every side's figure: v13's worst style shift (Tiki-taka concedes 6.69 a match against
+        /// Above every side's figure: v13's worst style shift (Tiki-taka concedes 5.68 a match against
         /// a Balanced side of the same club, FastModelStyleHarnessTests) must not be cut off.
         /// </summary>
         public double QuickMaxExpectedGoals { get; set; } = 8.0;
@@ -143,10 +145,12 @@ namespace Sim.Core.Config
         /// its first suggested formation against Balanced 4-3-3 (2,000 matches, FastModelStyleHarnessTests),
         /// as a share of the fast model's own even-match goals (QuickV13BaseGoals), fitted so that the
         /// style's goals and win/draw/loss shares land on the engine's, less that formation's own entry
-        /// so the two add back up.
+        /// so the two add back up. Refitted in issue #215 (movement speed model, forcing inside -32) where a
+        /// row left the gates: Tiki-taka against, Gegenpress against, Vertical tiki-taka for, Park the bus
+        /// for and against, Man-oriented press against.
         /// </summary>
-        public int[] QuickStyleGoalsForPercent { get; set; } = { 0, -42, 18, 33, 38, -42, 0, -9, 13, -14, -16, -28, -28, -37, 48 };
-        public int[] QuickStyleGoalsAgainstPercent { get; set; } = { 0, 411, 118, 136, 101, -3, -4, 11, 46, -10, -16, 9, 12, 0, 180 };
+        public int[] QuickStyleGoalsForPercent { get; set; } = { 0, -42, 18, 33, 25, -42, 0, -9, 13, -14, -16, -28, -28, -41, 48 };
+        public int[] QuickStyleGoalsAgainstPercent { get; set; } = { 0, 322, 118, 143, 101, -3, -4, 11, 46, -10, -16, 9, 12, -10, 195 };
 
         /// <summary>
         /// Indexed by <see cref="Tactics.Formation"/> value; 4-3-3 (index 0, the engine-identity shape) is 0.
@@ -1446,8 +1450,10 @@ namespace Sim.Core.Config
         /// player more (11.3; R2: 9.5-11.5).
         /// 85 since issue #189 (with the receiver waiting on the ball's line): at 100 the pitch
         /// seeds read up to 3.05 goals a match (2.4-3.0), at 85 2.45-2.72 (4 seeds x 400 matches).
+        /// 70 since issue #215: the recovery is now a positional run at PlayerRunPacePercent, and at 85
+        /// the busiest pitch seed read 3.02-3.16 goals (200 matches); at 70 2.50-2.99 (4 seeds x 400).
         /// </summary>
-        public int V11RecoverySprintDm { get; set; } = 85;
+        public int V11RecoverySprintDm { get; set; } = 70;
 
         /// <summary>A supporting run or an overlap goes no further than this from the man's phase target spot.</summary>
         public int V11SupportLeashDm { get; set; } = 200;
@@ -1611,6 +1617,14 @@ namespace Sim.Core.Config
         /// crosses (a run kept for its whole window parked him 12 m offside).
         /// </summary>
         public int V11HoldBeyondDm { get; set; } = 5;
+
+        /// <summary>
+        /// Issue #215: caught further than this beyond the line he sprints back flat out (R6: onside
+        /// within 2 s from 6 m); nearer it he gets back at his run pace (PlayerRunPacePercent). Flat out
+        /// every time took his offside-position share to 6.6% of his side's possession (R1:
+        /// 6.84-9.94); from 4.5 m 6.93-7.11 (pitch, 4 seeds x 400).
+        /// </summary>
+        public int V11HoldBackSprintDm { get; set; } = 45;
 
         /// <summary>Overlap appetite by Width (narrow · normal · wide); added to the Mentality one.</summary>
         public int[] V11OverlapWidthScore { get; set; } = { 0, 1, 2 };
@@ -1877,8 +1891,10 @@ namespace Sim.Core.Config
         /// beat. The header itself is priced on its own.
         /// 65 since issue #189 (was 70): low crosses and cut-backs read 1.76-1.92 per team-match
         /// by pitch seed (R1 band 1.81-7.02); at 65 2.05-2.24 (4 seeds x 400).
+        /// 56 since issue #215: with the movement speed model a seed read 1.75-1.78 at 60 (200 matches);
+        /// at 56 1.87-2.08 (4 seeds x 400).
         /// </summary>
-        public int V11HighCrossKeepPercent { get; set; } = 65;
+        public int V11HighCrossKeepPercent { get; set; } = 56;
 
         /// <summary>
         /// R5: a header at goal is worth this percent of the same strike with the foot, and the
@@ -2311,6 +2327,52 @@ namespace Sim.Core.Config
         /// </summary>
         public int PlayerBrakeDmPerSecond2 { get; set; } = 70;
 
+        // --- Players: how they choose and reach speed (issue #215, reference v2 speed bands) ---
+        // Measured on the pitch harness (4 seeds x 400): every sprint went flat out at the whole
+        // acceleration, so 3.1% of frames ran above 7 m/s (v2: 0.54-0.94), 9.1% at 5.5-7 (2.40-3.92) and
+        // a man made 6.8 hard accelerations a minute (1.25-2.70); and a man easing into his place
+        // crawled, 58% of frames at 0.2-2 m/s (34-51) against 21% at 2-4 (34-41). With the values
+        // below (and V11HoldBackSprintDm, ReceiverMeetThreatDm, V11RecoverySprintDm, V11HighCrossKeepPercent):
+        // 0.64 / 3.78 / 2.40 / 45.5 / 36.1, goals 2.50-2.99 by seed, 1142-1150 passes.
+
+        /// <summary>
+        /// Sprinting, a man has his whole acceleration up to this percent of his top speed; above it
+        /// his gain falls in a straight line to <see cref="PlayerSprintFadePercent"/> less at top
+        /// speed. The first second of a burst is unchanged (a fade from standing put goals at 4.3 a
+        /// match: defenders no longer closed); reaching top speed takes a long run.
+        /// </summary>
+        public int PlayerSprintFadeKneePercent { get; set; } = 50;
+        public int PlayerSprintFadePercent { get; set; } = 90;
+
+        /// <summary>
+        /// A positional sprint - back into the shape, a recovery or catch-up run, a support or offer
+        /// run, a role job, a restart offer - is run at this percent of top speed, and picks up pace at
+        /// <see cref="PlayerRunGainDmPerSecond2"/>. Going for the ball or at the man on it, a run in behind,
+        /// the box runs on a cross and a striker caught well offside (V11HoldBackSprintDm) stay flat out.
+        /// 2.5 m/s^2 here read 3.36 accelerations a player-minute:
+        /// a run must build under the 2 m/s^2 of a hard effort.
+        /// </summary>
+        public int PlayerRunPacePercent { get; set; } = 70;
+        public int PlayerRunGainDmPerSecond2 { get; set; } = 18;
+
+        /// <summary>The most a man who is not sprinting picks up pace, in dm/s^2: a jog, not an effort.</summary>
+        public int PlayerJogGainDmPerSecond2 { get; set; } = 15;
+
+        /// <summary>
+        /// A settled man sets off for his place when it is further than <see cref="PlayerJogStartDm"/>,
+        /// jogs until he has to brake at <see cref="PlayerJogBrakeDmPerSecond2"/> to stop on it, and
+        /// settles again within <see cref="PlayerJogStopDm"/>. Settled, he walks at the easing pace of
+        /// <see cref="PlayerApproachDm"/> but never slower than the pace that stops him on it at
+        /// <see cref="PlayerSettleWalkCmPerSecond2"/> (in cm/s^2). Without the hysteresis (the easing
+        /// alone, made steeper) the faster walk shuttled men round their places: 1.9-2.4 heading
+        /// reversals a player-minute (v2: 0.87-1.53); with it 1.22. 3-6 m starts ran 47-55% of frames
+        /// at 2-4 m/s; a settling walk at 7 cm/s^2 left 0.74% of frames standing (0.75-1.35).
+        /// </summary>
+        public int PlayerJogStartDm { get; set; } = 90;
+        public int PlayerJogStopDm { get; set; } = 40;
+        public int PlayerJogBrakeDmPerSecond2 { get; set; } = 6;
+        public int PlayerSettleWalkCmPerSecond2 { get; set; } = 6;
+
         /// <summary>
         /// Inside this distance from his position a player scales his pace down with the
         /// distance left, in decimetres: a walk for a few metres, a jog for twenty. Only
@@ -2553,8 +2615,11 @@ namespace Sim.Core.Config
         /// 1.20 s by pitch seed (R1: 0.89-1.19 s); at 5.8 m 1.170-1.186 s with goals 2.50-2.84,
         /// pass accuracy 76.6-77.0% and 1139-1143 passes a match (4 seeds x 400). At 6 m the
         /// lowest-scoring seed fell to 2.30 goals (2.4-3.0).
+        /// 6.5 m since issue #215: with the sprint fade (PlayerSprintFadeKneePercent) a receiver met the
+        /// ball later, 1.191-1.194 s on two seeds at 5.8 m (200 matches a seed); at 6.5 m 1.167-1.179 s,
+        /// and it takes 0.1 goals a match off the busiest seed (4 seeds x 400).
         /// </summary>
-        public int ReceiverMeetThreatDm { get; set; } = 58;
+        public int ReceiverMeetThreatDm { get; set; } = 65;
 
         /// <summary>How far ahead the receiver reads the roll to know whether it comes to him.</summary>
         public int ReceiverReadAheadMs { get; set; } = 3000;
