@@ -235,6 +235,39 @@ public class LiveMatchTests
         Assert.That(state.HomePresent, Is.False, "a refused client never joined the match");
     }
 
+    /// <summary>Engine v13 (free-ball spec R8): a client still on v12 builds the old director timeline, so it is
+    /// refused at open, join and change; a v13 client plays.</summary>
+    [Test]
+    public async Task AV12Client_IsRefusedAtOpenJoinAndChange_AndAV13ClientPlays()
+    {
+        Assert.That(MatchEngine.Version, Is.EqualTo(13), "the server's match engine is v13");
+        var fx = await SetUpLiveFixture();
+        var change = new SubmitLiveChangeRequest(30, null, null, TouchlineShout.PressHigh);
+
+        var open12 = await OpenRaw(fx.HomeAcc.Tok, fx.LeagueId, fx.FixtureId, 12);
+        var open13 = await OpenRaw(fx.HomeAcc.Tok, fx.LeagueId, fx.FixtureId, 13);
+        var join12 = await JoinRaw(fx.AwayAcc.Tok, fx.LeagueId, fx.FixtureId, 12);
+        var join13 = await JoinRaw(fx.AwayAcc.Tok, fx.LeagueId, fx.FixtureId, 13);
+        var change12 = await ChangeRaw(fx.HomeAcc.Tok, fx.LeagueId, fx.FixtureId, change, 12);
+        var change13 = await ChangeRaw(fx.HomeAcc.Tok, fx.LeagueId, fx.FixtureId, change, 13);
+
+        string open12Body = await open12.Content.ReadAsStringAsync();
+        string join12Body = await join12.Content.ReadAsStringAsync();
+        string change12Body = await change12.Content.ReadAsStringAsync();
+        Assert.Multiple(() =>
+        {
+            Assert.That(open12.StatusCode, Is.EqualTo(HttpStatusCode.Conflict), open12Body);
+            Assert.That(open12Body, Does.Contain("engine_version_mismatch").And.Contain("v12"));
+            Assert.That(join12.StatusCode, Is.EqualTo(HttpStatusCode.Conflict), join12Body);
+            Assert.That(join12Body, Does.Contain("engine_version_mismatch"));
+            Assert.That(change12.StatusCode, Is.EqualTo(HttpStatusCode.Conflict), change12Body);
+            Assert.That(change12Body, Does.Contain("engine_version_mismatch"));
+            Assert.That(open13.StatusCode, Is.EqualTo(HttpStatusCode.OK), "a v13 client opens");
+            Assert.That(join13.StatusCode, Is.EqualTo(HttpStatusCode.OK), "a v13 client joins");
+            Assert.That(change13.StatusCode, Is.EqualTo(HttpStatusCode.OK), "a v13 client changes the match");
+        });
+    }
+
     [Test]
     public async Task OpenAndJoin_WithoutAnEngineVersion_AreRefused()
     {

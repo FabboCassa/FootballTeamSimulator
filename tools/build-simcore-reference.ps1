@@ -1,5 +1,6 @@
 # Builds Sim.Core as it was at an older commit, for in-process comparisons such as
-# EngineTimingHarnessTests (real-match spec R15: v12 generation time vs v11 in the same run).
+# EngineTimingHarnessTests (free-ball spec R8: v13 generation time vs v12 in the same run, with
+# -Commit 6c2ed08, the last v12 commit; the fast model's R25 still reads the v11 default).
 # Default commit e3992bc is engine v11 on main just before Phase A. Prints the DLL path.
 # Run from anywhere: .\tools\build-simcore-reference.ps1 [-Commit <sha>]
 param([string]$Commit = "e3992bc")

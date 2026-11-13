@@ -17,7 +17,7 @@ namespace Sim.Core.Tests.Career
 {
     /// <summary>
     /// R17 of the watchable-match spec: the fast model (<see cref="QuickResultResolver"/>) against
-    /// the full engine (v12 since the real-match spec's R15). Two readings, both printed as a table:
+    /// the full engine (v13 since the free-ball spec's R8). Two readings, both printed as a table:
     ///   - outcomes: 1,000 fixtures of a generated league (every pairing, both venues) played by
     ///     the full engine, and the same fixtures through the fast model — mean goals within 0.15,
     ///     home/draw/away shares within 3 pp. The fast side is drawn many times per fixture so its

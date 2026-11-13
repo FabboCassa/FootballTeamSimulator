@@ -79,7 +79,12 @@ namespace Sim.Core.Match
         // block and width in possession, keeper positioning and zone saves, eased acceleration,
         // support angles and longer chains, blocked shots, restart shapes, players kept on the pitch,
         // a genuine open-goal shortcut and the realism retune. The fast model reads its V12 calibration.
-        public const int Version = 12;
+        // v13: the free ball and real movement (docs/specs/free-ball-real-movement.md) — no magnetism
+        // and an imperfect first touch, passes into space, lofted long balls and aerial duels, real
+        // crosses and box arrival, a striker on the last line, role jobs and a defended centre, the
+        // honest shot price and the balance step into the reference v2 bands. The fast model reads
+        // its v13 calibration.
+        public const int Version = 13;
 
         private const int MatchMinutes = 90;
 

@@ -11,18 +11,20 @@ using Sim.Core.Random;
 namespace Sim.Core.Tests.Match
 {
     /// <summary>
-    /// R15 of the real-match spec: generating a match on engine v12 costs at most 25% more than on
-    /// the v11 engine, measured in the same run. The v11 build is a Sim.Core.dll compiled from the
-    /// last v11 commit and loaded beside the current one (<see cref="SimCoreHandle"/>); each match
+    /// R8 of the free-ball spec (R15 of the real-match spec before it): generating a match on engine
+    /// v13 costs at most 25% more than on the v12 engine, measured in the same run. The v12 build is a
+    /// Sim.Core.dll compiled from the last v12 commit and loaded beside the current one (<see cref="SimCoreHandle"/>); each match
     /// is played on both builds back to back, in alternating order, so load on the machine and the
     /// process priority weigh on both alike. Two kinds of match are timed: the watched one (position
     /// stream on, the client's match screen) and the unwatched career fixture (stream off).
     ///
-    /// Explicit: it needs the reference DLL and a thousand matches per build. Build the reference with
-    ///   .\tools\build-simcore-reference.ps1            (prints the DLL path; default commit e3992bc, v11 before Phase A)
-    /// and run
+    /// Explicit: it needs the reference DLLs and a thousand matches per build. Build the references with
+    ///   .\tools\build-simcore-reference.ps1 -Commit 6c2ed08   (v12, the last commit on the v12 golden master)
+    ///   .\tools\build-simcore-reference.ps1                   (default commit e3992bc, v11 before Phase A: the fast model's R25)
+    /// (each prints its DLL path) and run
     ///   dotnet test shared/Sim.Core.Tests/Sim.Core.Tests.csproj -c Release --filter "TestCategory=EngineTimingHarness"
-    ///     --logger "console;verbosity=detailed" -- TestRunParameters.Parameter(name=\"v11SimCore\", value=\"PATH\")
+    ///     --logger "console;verbosity=detailed" -- TestRunParameters.Parameter(name=\"v12SimCore\", value=\"PATH\")
+    ///     TestRunParameters.Parameter(name=\"v11SimCore\", value=\"PATH\")
     /// Timing is noisy by nature: the user pastes the output and we judge it together.
     /// </summary>
     [TestFixture]
@@ -37,33 +39,33 @@ namespace Sim.Core.Tests.Match
         private const ulong FirstSeed = 30_000;
         private const int HomeClub = 9;
         private const int AwayClub = 10;
-        private const int ReferenceVersion = 11;
+        private const int ReferenceVersion = 12;
         private const double MaxCostRatio = 1.25;
         private const int Seasons = 100;
         // With 5 warm-up seasons the build timed first read up to 1.4x the other: JIT tiering, not the model.
         private const int SeasonWarmUp = 30;
 
         [Test, Explicit("Harness: a thousand matches on two engine builds."), Category("EngineTimingHarness")]
-        public void Harness_V12GenerationTime_IsWithin25PercentOfV11()
+        public void Harness_V13GenerationTime_IsWithin25PercentOfV12()
         {
-            string? path = TestContext.Parameters.Get("v11SimCore");
+            string? path = TestContext.Parameters.Get("v12SimCore");
             if (string.IsNullOrEmpty(path))
-                Assert.Fail("Pass the v11 Sim.Core.dll: -- TestRunParameters.Parameter(name=\"v11SimCore\", value=\"PATH\")");
+                Assert.Fail("Pass the v12 Sim.Core.dll: -- TestRunParameters.Parameter(name=\"v12SimCore\", value=\"PATH\")");
             int n = TestContext.Parameters.Get("timingMatches", Matches);
 
-            SimCoreHandle v11 = SimCoreHandle.Load(path!, HomeClub, AwayClub);
-            SimCoreHandle v12 = SimCoreHandle.Of(typeof(MatchEngine).Assembly, HomeClub, AwayClub);
-            Assert.That(v11.Version, Is.EqualTo(ReferenceVersion), "the reference must be a v11 build");
-            Assert.That(v12.Version, Is.EqualTo(MatchEngine.Version));
+            SimCoreHandle reference = SimCoreHandle.Load(path!, HomeClub, AwayClub);
+            SimCoreHandle now = SimCoreHandle.Of(typeof(MatchEngine).Assembly, HomeClub, AwayClub);
+            Assert.That(reference.Version, Is.EqualTo(ReferenceVersion), "the reference must be a v12 build");
+            Assert.That(now.Version, Is.EqualTo(MatchEngine.Version));
 
             var sb = new System.Text.StringBuilder();
-            sb.AppendLine(Inv($"[engine-timing] v{v11.Version} reference {path} vs v{v12.Version}, {n} matches each, same run"));
-            sb.AppendLine("  match kind          v11 ms   v12 ms   ratio   limit");
-            bool watchedInside = Measure(sb, "watched (stream)", v11, v12, n, WatchedWarmUp, generatePositions: true);
-            bool unwatchedInside = Measure(sb, "unwatched", v11, v12, n, UnwatchedWarmUp, generatePositions: false);
+            sb.AppendLine(Inv($"[engine-timing] v{reference.Version} reference {path} vs v{now.Version}, {n} matches each, same run"));
+            sb.AppendLine(Inv($"  match kind          v{reference.Version} ms   v{now.Version} ms   ratio   limit"));
+            bool watchedInside = Measure(sb, "watched (stream)", reference, now, n, WatchedWarmUp, generatePositions: true);
+            bool unwatchedInside = Measure(sb, "unwatched", reference, now, n, UnwatchedWarmUp, generatePositions: false);
             TestContext.Out.WriteLine(sb.ToString());
 
-            Assert.That(watchedInside && unwatchedInside, Is.True, "R15 generation time");
+            Assert.That(watchedInside && unwatchedInside, Is.True, "R8 generation time");
         }
 
         /// <summary>

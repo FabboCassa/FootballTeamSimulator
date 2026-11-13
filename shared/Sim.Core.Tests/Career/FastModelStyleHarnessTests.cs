@@ -45,25 +45,25 @@ namespace Sim.Core.Tests.Career
 
         /// <summary>
         /// The sign of each style's shift in the full engine (goals for, goals against), read off the
-        /// style harness at the full sample: 0 where the shift is inside two standard errors.
+        /// style harness at the full sample on engine v13: 0 where the shift is inside two standard errors.
         /// <see cref="QuickTacticPercentTests"/> pins the shipped tables to these.
         /// </summary>
         internal static readonly (PlayingStyle Style, int GoalsFor, int GoalsAgainst)[] EngineSigns =
         {
             (PlayingStyle.Balanced, 0, 0),
-            (PlayingStyle.TikiTaka, -1, 0),
+            (PlayingStyle.TikiTaka, -1, +1),
             (PlayingStyle.PositionalPlay, +1, +1),
             (PlayingStyle.Gegenpress, +1, +1),
             (PlayingStyle.VerticalTikiTaka, +1, +1),
-            (PlayingStyle.ControlPossession, 0, -1),
-            (PlayingStyle.WingPlay, +1, +1),
-            (PlayingStyle.RouteOne, +1, +1),
-            (PlayingStyle.Direct, +1, +1),
-            (PlayingStyle.FluidCounter, +1, +1),
-            (PlayingStyle.DirectCounter, 0, -1),
-            (PlayingStyle.MidBlock, 0, +1),
-            (PlayingStyle.Catenaccio, +1, 0),
-            (PlayingStyle.ParkTheBus, 0, -1),
+            (PlayingStyle.ControlPossession, -1, 0),
+            (PlayingStyle.WingPlay, -1, -1),
+            (PlayingStyle.RouteOne, -1, 0),
+            (PlayingStyle.Direct, -1, +1),
+            (PlayingStyle.FluidCounter, -1, -1),
+            (PlayingStyle.DirectCounter, -1, -1),
+            (PlayingStyle.MidBlock, -1, 0),
+            (PlayingStyle.Catenaccio, -1, -1),
+            (PlayingStyle.ParkTheBus, -1, -1),
             (PlayingStyle.ManOrientedPress, +1, +1)
         };
 
