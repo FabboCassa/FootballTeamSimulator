@@ -221,9 +221,11 @@ namespace Sim.Core.Match.Movement
                 if (sprint && !back) CurveVia(side, k, tx, ty, out viaX, out viaY);
                 // Issue #215: the run in behind, the box runs and a striker caught well beyond the line
                 // go flat out; any other sprint here is a positional run (PlayerRunPacePercent).
-                bool sprintBack = back
-                    && V11Positioning.BeyondLine(home, U.Dm(_sim._px[k]), _lineX[side]) > _sim._cfg.V11HoldBackSprintDm;
-                _sim.SteerVia(k, tx, ty, sprint, viaX, viaY, run: sprint && !running && !arriving && !posting && !sprintBack);
+                bool run = sprint && !running && !arriving && !posting;
+                if (run && back
+                    && V11Positioning.BeyondLine(home, U.Dm(_sim._px[k]), _lineX[side]) > _sim._cfg.V11HoldBackSprintDm)
+                    run = false;
+                _sim.SteerVia(k, tx, ty, sprint, viaX, viaY, run: run);
                 CountOffTarget(k, spotX, spotY);
             }
 
@@ -431,3 +433,4 @@ namespace Sim.Core.Match.Movement
         }
     }
 }
+

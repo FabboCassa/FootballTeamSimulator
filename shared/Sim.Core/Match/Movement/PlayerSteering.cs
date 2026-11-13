@@ -17,7 +17,7 @@ namespace Sim.Core.Match.Movement
 
         // A pace v that stops in d at a braking rate b is v = sqrt(2 b d): in units per tick that is
         // sqrt(2 b[dm/s^2] x Scale x d[units] / tps^2); a b in cm/s^2 is divided by ten more.
-        private readonly int _jogBrake, _settleBrake, _perTick2;
+        private readonly int _jogBrake, _settleBrake, _perTick2, _settlePerTick2;
 
         public PlayerSteering(MatchBalance cfg)
         {
@@ -36,6 +36,7 @@ namespace Sim.Core.Match.Movement
             _jogBrake = 2 * U.Scale * cfg.PlayerJogBrakeDmPerSecond2;
             _settleBrake = 2 * U.Scale * cfg.PlayerSettleWalkCmPerSecond2;
             _perTick2 = cfg.TicksPerSecond * cfg.TicksPerSecond;
+            _settlePerTick2 = 10 * _perTick2;
         }
 
         /// <summary>The most a man who is not sprinting gains in speed in one tick, in units per tick.</summary>
@@ -79,13 +80,21 @@ namespace Sim.Core.Match.Movement
                 int paced;
                 if (jog)
                 {
-                    paced = MovementGeometry.Sqrt((int)((long)_jogBrake * length / _perTick2));
+                    long q = (long)_jogBrake * length / _perTick2;
+                    // floor(sqrt(q)) >= top  <=>  q >= top*top: skip the root when it cannot win.
+                    paced = q >= (long)top * top ? top : MovementGeometry.Sqrt((int)q);
                 }
                 else
                 {
                     paced = top * length / _approachU;
-                    int walk = MovementGeometry.Sqrt((int)((long)_settleBrake * length / (10 * _perTick2)));
-                    if (walk > paced) paced = walk;
+                    long q = (long)_settleBrake * length / _settlePerTick2;
+                    // floor(sqrt(q)) > paced  <=>  q >= (paced+1)^2: skip the root when it cannot win.
+                    long need = (long)(paced + 1) * (paced + 1);
+                    if (q >= need)
+                    {
+                        int walk = MovementGeometry.Sqrt((int)q);
+                        if (walk > paced) paced = walk;
+                    }
                 }
 
                 if (paced > top) paced = top;
@@ -144,15 +153,22 @@ namespace Sim.Core.Match.Movement
         public int Gain(bool sprint, bool run, int speed, int max)
         {
             int gain = run ? RunGain : sprint ? Accel : JogGain;
-            int knee = max * _kneePercent / 100;
-            if (sprint && _fadePercent > 0 && max > knee)
+            if (sprint && _fadePercent > 0)
             {
-                int over = (speed < max ? speed : max) - knee;
-                int left = over <= 0 ? 100 : 100 - _fadePercent * over / (max - knee);
-                gain = gain * left / 100;
+                int knee = max * _kneePercent / 100;
+                if (max > knee)
+                {
+                    int over = (speed < max ? speed : max) - knee;
+                    if (over > 0)
+                    {
+                        int left = 100 - _fadePercent * over / (max - knee);
+                        gain = gain * left / 100;
+                    }
+                }
             }
 
             return gain < 1 ? 1 : gain;
         }
     }
 }
+
