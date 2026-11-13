@@ -12,7 +12,7 @@ namespace Sim.Core.Tests.Career
 {
     /// <summary>
     /// The fast model of the watchable-match spec (R17): the background resolver carries the engine
-    /// v12 calibration (real-match spec R15), and it reads the four instruction axes through
+    /// v13 calibration (free-ball spec R8), and it reads the four instruction axes through
     /// percent tables whose middle entry is the identity. The 1,000-match comparison against the
     /// full engine is <see cref="FastModelHarnessTests"/>.
     /// </summary>
@@ -31,17 +31,17 @@ namespace Sim.Core.Tests.Career
         private static readonly TacticInstructions Neutral = TacticInstructions.Neutral;
 
         [Test]
-        public void ExpectedGoals_AreTheV12CalibratedFormula()
+        public void ExpectedGoals_AreTheV13CalibratedFormula()
         {
             var cfg = new BalanceConfig();
             WorldBalance w = cfg.World;
-            double home = 70 * (100.0 + cfg.Match.HomeAdvantagePercent) / 100.0 + w.QuickV12HomeAdvantageStrength;
+            double home = 70 * (100.0 + cfg.Match.HomeAdvantagePercent) / 100.0 + w.QuickV13HomeAdvantageStrength;
             double difference = home - 62;
 
             QuickResultResolver.ExpectedGoals(70, 62, cfg, Neutral, Neutral, out double h, out double a);
 
-            Assert.That(h, Is.EqualTo(w.QuickV12BaseGoals * (1.0 + difference * w.QuickV12StrengthFactor)));
-            Assert.That(a, Is.EqualTo(w.QuickV12BaseGoals * (1.0 - difference * w.QuickV12StrengthFactor)));
+            Assert.That(h, Is.EqualTo(w.QuickV13BaseGoals * (1.0 + difference * w.QuickV13StrengthFactor)));
+            Assert.That(a, Is.EqualTo(w.QuickV13BaseGoals * (1.0 - difference * w.QuickV13StrengthFactor)));
         }
 
         [Test]
@@ -64,16 +64,15 @@ namespace Sim.Core.Tests.Career
             }
         }
 
-        [Test]
-        public void AnOlderDocument_WithTheEngineV11Calibration_LoadsAndIsIgnored()
+        // Balance revisions stored on engine v11 / v12 carry that engine's fit under its own names.
+        [TestCase("V11", "{\"World\":{\"QuickV11BaseGoals\":1.38,\"QuickV11StrengthFactor\":0.028,\"QuickV11HomeAdvantageStrength\":-3,\"QuickV11GoalTrials\":9}}")]
+        [TestCase("V12", "{\"World\":{\"QuickV12BaseGoals\":1.58,\"QuickV12StrengthFactor\":0.031,\"QuickV12HomeAdvantageStrength\":-2,\"QuickV12GoalTrials\":9}}")]
+        public void AnOlderDocument_WithAnOlderEngineCalibration_LoadsAndIsIgnored(string engine, string json)
         {
-            // Balance revisions stored on engine v11 carry its fit under the V11 names.
-            BalanceConfig older = JsonSerializer.Deserialize<BalanceConfig>(
-                "{\"World\":{\"QuickV11BaseGoals\":1.38,\"QuickV11StrengthFactor\":0.028," +
-                "\"QuickV11HomeAdvantageStrength\":-3,\"QuickV11GoalTrials\":9}}")!;
+            BalanceConfig older = JsonSerializer.Deserialize<BalanceConfig>(json)!;
             BalanceConfig current = new BalanceConfig();
 
-            Assert.That(QuickV11Of(older), Is.EqualTo(QuickV11Of(current)), "no V11 knob is left to read them into");
+            Assert.That(QuickKnobsOf(engine), Is.Zero, $"no {engine} knob is left to read them into");
             Assert.That(Expected(older, Neutral, Neutral), Is.EqualTo(Expected(current, Neutral, Neutral)));
             for (int id = 1; id <= 50; id++)
             {
@@ -85,8 +84,8 @@ namespace Sim.Core.Tests.Career
             }
         }
 
-        private static int QuickV11Of(BalanceConfig cfg) =>
-            typeof(WorldBalance).GetProperties().Count(p => p.Name.StartsWith("QuickV11", System.StringComparison.Ordinal));
+        private static int QuickKnobsOf(string engine) =>
+            typeof(WorldBalance).GetProperties().Count(p => p.Name.StartsWith("Quick" + engine, System.StringComparison.Ordinal));
 
         [Test]
         public void NeutralInstructions_AreTheIdentity()
@@ -159,16 +158,17 @@ namespace Sim.Core.Tests.Career
             Assert.That(Expected(cfg, fastWide, Neutral).Home, Is.EqualTo(home * 1.10).Within(1e-9));
         }
 
-        /// <summary>The sign of each shipped extreme: the v12 engine's measured shift against a neutral side (FastModelHarnessTests).</summary>
+        /// <summary>The sign of each shipped extreme: the v13 engine's measured shift against a neutral side
+        /// (FastModelHarnessTests, 1,000 matches a setting); 0 where the table reads the shift as nil.</summary>
         [TestCase(Mentality.Defensive, Pressing.Medium, Tempo.Normal, Width.Normal, -1, -1)]
         [TestCase(Mentality.Attacking, Pressing.Medium, Tempo.Normal, Width.Normal, +1, +1)]
         [TestCase(Mentality.Balanced, Pressing.High, Tempo.Normal, Width.Normal, -1, +1)]
         [TestCase(Mentality.Balanced, Pressing.Low, Tempo.Normal, Width.Normal, -1, +1)]
-        [TestCase(Mentality.Balanced, Pressing.Medium, Tempo.Slow, Width.Normal, -1, -1)]
-        [TestCase(Mentality.Balanced, Pressing.Medium, Tempo.Fast, Width.Normal, +1, +1)]
-        [TestCase(Mentality.Balanced, Pressing.Medium, Tempo.Normal, Width.Narrow, +1, +1)]
-        [TestCase(Mentality.Balanced, Pressing.Medium, Tempo.Normal, Width.Wide, -1, +1)]
-        public void ShippedTables_ShiftGoalsTheWayTheV12EngineDoes(Mentality m, Pressing p, Tempo t, Width w, int goalsFor, int goalsAgainst)
+        [TestCase(Mentality.Balanced, Pressing.Medium, Tempo.Slow, Width.Normal, +1, 0)]
+        [TestCase(Mentality.Balanced, Pressing.Medium, Tempo.Fast, Width.Normal, -1, +1)]
+        [TestCase(Mentality.Balanced, Pressing.Medium, Tempo.Normal, Width.Narrow, -1, -1)]
+        [TestCase(Mentality.Balanced, Pressing.Medium, Tempo.Normal, Width.Wide, +1, -1)]
+        public void ShippedTables_ShiftGoalsTheWayTheV13EngineDoes(Mentality m, Pressing p, Tempo t, Width w, int goalsFor, int goalsAgainst)
         {
             var cfg = new BalanceConfig();
             var set = new TacticInstructions(m, p, t, w);

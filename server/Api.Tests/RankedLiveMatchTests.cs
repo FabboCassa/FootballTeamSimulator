@@ -635,6 +635,34 @@ public class RankedLiveGuardTests : RankedLiveTestBase
         Assert.That(state!.EngineVersion, Is.EqualTo(MatchEngine.Version), "the state names the report's engine");
     }
 
+    /// <summary>Engine v13 (free-ball spec R8): a client still on v12 builds the old director timeline, so it is
+    /// refused at open and change; a v13 client plays.</summary>
+    [Test]
+    public async Task AV12Client_IsRefusedAtOpenAndChange_AndAV13ClientPlays()
+    {
+        Assert.That(MatchEngine.Version, Is.EqualTo(13), "the server's match engine is v13");
+        var tokens = await EnrolCohort();
+        await Tick();
+        RankedFixtureDto match = await AdvanceToTheirMatch(tokens[0], tokens[1]);
+        var attacking = new TacticPlan { Mentality = Mentality.Attacking };
+
+        var (open12, _, open12Body) = await OpenLive(tokens[0], match.Id, 12);
+        var (open13, state, open13Body) = await OpenLive(tokens[0], match.Id, 13);
+        var (change12, _, change12Body) = await ChangeLive(tokens[0], match.Id, 1, attacking, 12);
+        var (change13, _, change13Body) = await ChangeLive(tokens[0], match.Id, 1, attacking, 13);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(open12, Is.EqualTo(HttpStatusCode.Conflict), open12Body);
+            Assert.That(open12Body, Does.Contain("engine_version_mismatch").And.Contain("v12"));
+            Assert.That(change12, Is.EqualTo(HttpStatusCode.Conflict), change12Body);
+            Assert.That(change12Body, Does.Contain("engine_version_mismatch"));
+            Assert.That(open13, Is.EqualTo(HttpStatusCode.OK), open13Body);
+            Assert.That(state?.EngineVersion, Is.EqualTo(13), "the report runs on v13");
+            Assert.That(change13, Is.EqualTo(HttpStatusCode.OK), change13Body);
+        });
+    }
+
     /// <summary>A change is judged at a minute of the client's own director timeline and re-simulated with the
     /// server's engine (spec real-match-and-playing-styles R23): a build on another engine, or one that does
     /// not say, is refused like at open, and the match is left untouched.</summary>

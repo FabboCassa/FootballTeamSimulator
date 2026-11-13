@@ -66,7 +66,7 @@ namespace Sim.Core.Career
 
             ExpectedGoals(home, away, cfg, out double homeExpected, out double awayExpected);
 
-            int trials = cfg.World.QuickV12GoalTrials;
+            int trials = cfg.World.QuickV13GoalTrials;
             fixture.HomeGoals = DrawGoals(homeExpected, trials, rng);
             fixture.AwayGoals = DrawGoals(awayExpected, trials, rng);
             fixture.Played = true;
@@ -74,7 +74,7 @@ namespace Sim.Core.Career
 
         /// <summary>
         /// The two clamped expected-goal figures the score is drawn from: strengths through the
-        /// engine v12 calibration, then each side's tactic percentage (<see cref="QuickTacticPercent"/>).
+        /// engine v13 calibration, then each side's tactic percentage (<see cref="QuickTacticPercent"/>).
         /// Instructions alone play in 4-3-3, the identity shape.
         /// </summary>
         public static void ExpectedGoals(
@@ -93,9 +93,9 @@ namespace Sim.Core.Career
             out double homeExpected, out double awayExpected)
         {
             WorldBalance w = cfg.World;
-            double baseGoals = w.QuickV12BaseGoals;
-            double factor = w.QuickV12StrengthFactor;
-            int homeBonus = w.QuickV12HomeAdvantageStrength;
+            double baseGoals = w.QuickV13BaseGoals;
+            double factor = w.QuickV13StrengthFactor;
+            int homeBonus = w.QuickV13HomeAdvantageStrength;
 
             double homeStrengthNow = home.Strength * (100.0 + cfg.Match.HomeAdvantagePercent) / 100.0 + homeBonus;
             double difference = homeStrengthNow - away.Strength;

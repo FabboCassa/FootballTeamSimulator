@@ -16,8 +16,7 @@ namespace Sim.Core.Tests.Market
 {
     /// <summary>
     /// Acceptance tests for R14 of realistic-club-economy.md:
-    /// - The determinism run reproduces itself and has moved off the v12 golden master 0x8BAA4E49A3BD0A0F
-    ///   (the believable-match issues move it; #156 re-pins the v13 value once);
+    /// - Golden master 0x34BC888775FA83EF (engine v13, issue #190; v12 was 0x8BAA4E49A3BD0A0F) unchanged;
     /// - Two worlds from the same seed produce identical stature, finances and transfer records
     ///   after a full season with two windows;
     /// - No Math.Pow/Exp/Log or DateTime in new Market code.
@@ -25,7 +24,7 @@ namespace Sim.Core.Tests.Market
     [TestFixture]
     public class WorldEconomyDeterminismTests
     {
-        private const ulong V12CombinedHash = 0x8BAA4E49A3BD0A0FUL;
+        private const ulong GoldenCombinedHash = 0x34BC888775FA83EFUL;
         private const ulong TestSeed = 20260921_1300UL;
         private static readonly BalanceConfig Cfg = new BalanceConfig();
 
@@ -39,16 +38,14 @@ namespace Sim.Core.Tests.Market
 
         // ============================================================ 1. Golden master guard
         [Test]
-        public void GoldenMaster_CombinedHash_IsReproducible_AndMovedOffV12()
+        public void GoldenMaster_CombinedHash_IsUnchanged()
         {
-            DeterminismCheck.Result first = DeterminismCheck.Run();
-            DeterminismCheck.Result second = DeterminismCheck.Run();
+            DeterminismCheck.Result result = DeterminismCheck.Run();
 
-            Assert.That(first.MatchHashes.Count, Is.EqualTo(DeterminismCheck.DefaultMatches));
-            Assert.That(second.CombinedHash, Is.EqualTo(first.CombinedHash),
-                $"Two runs disagree ({first.CombinedHashHex} vs {second.CombinedHashHex})");
-            Assert.That(first.CombinedHash, Is.Not.EqualTo(V12CombinedHash),
-                $"Combined hash {first.CombinedHashHex} is still the v12 golden master");
+            Assert.That(result.MatchHashes.Count, Is.EqualTo(DeterminismCheck.DefaultMatches));
+            Assert.That(result.CombinedHash, Is.EqualTo(GoldenCombinedHash),
+                $"Combined hash {result.CombinedHashHex} != golden 0x{GoldenCombinedHash:X16}");
+            Assert.That(result.CombinedHashHex, Is.EqualTo("0x34BC888775FA83EF"));
         }
 
         // ============================================================ 2. Code purity (no Math.Pow/Exp/Log, DateTime, System.Random)

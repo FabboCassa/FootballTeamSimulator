@@ -56,96 +56,106 @@ namespace Sim.Core.Config
         /// <summary>Of the foreign players, the percent drawn from the same continent.</summary>
         public int SameContinentForeignPercent { get; set; } = 60;
 
-        // --- Quick resolver (background leagues), fitted to engine v12 (real-match R15, watchable-match R17) ---
+        // --- Quick resolver (background leagues), fitted to engine v13 (free-ball R8, watchable-match R17) ---
         /// <summary>
         /// Expected goals for an evenly-matched side, fitted against the full engine
-        /// (FastModelHarnessTests, 1,000 matches of a generated league): v12 gives 3.16 goals,
-        /// 45.3 / 21.1 / 33.6 home-draw-away and 0.119 goal difference per strength point (V11 gave
-        /// 2.81, 42.6 / 22.6 / 34.8 and 0.100). The V12 prefix makes a stored balance document's
-        /// older V11 (or engine-v10) Quick* figures load and be ignored instead of read into this model.
+        /// (FastModelHarnessTests, 1,000 matches of a generated league): v13 gives 2.68 goals,
+        /// 46.3 / 21.1 / 32.6 home-draw-away and 0.146 goal difference per strength point (v12 gave
+        /// 3.16, 45.3 / 21.1 / 33.6 and 0.119; V11 2.81, 42.6 / 22.6 / 34.8 and 0.100). The V13 prefix
+        /// makes a stored balance document's older V12, V11 (or engine-v10) Quick* figures load and be
+        /// ignored instead of read into this model.
         /// </summary>
-        public double QuickV12BaseGoals { get; set; } = 1.58;
+        public double QuickV13BaseGoals { get; set; } = 1.30;
 
         /// <summary>Expected goals gained per point of strength advantage (as a fraction of the base).</summary>
-        public double QuickV12StrengthFactor { get; set; } = 0.031;
+        public double QuickV13StrengthFactor { get; set; } = 0.054;
 
         /// <summary>
         /// Flat strength points added to the home side, ON TOP of MatchBalance.HomeAdvantagePercent.
         /// Negative because the engine's home edge is smaller than HomeAdvantagePercent alone gives here.
         /// </summary>
-        public int QuickV12HomeAdvantageStrength { get; set; } = -2;
+        public int QuickV13HomeAdvantageStrength { get; set; } = -3;
 
         public double QuickMinExpectedGoals { get; set; } = 0.20;
-        public double QuickMaxExpectedGoals { get; set; } = 4.0;
+
+        /// <summary>
+        /// Above every side's figure: v13's worst style shift (Tiki-taka concedes 6.69 a match against
+        /// a Balanced side of the same club, FastModelStyleHarnessTests) must not be cut off.
+        /// </summary>
+        public double QuickMaxExpectedGoals { get; set; } = 8.0;
 
         /// <summary>
         /// Bernoulli trials the goal count is drawn from (a binomial standing in for a Poisson).
         /// Deterministic, integer-friendly and free of Math.Exp, which the determinism rules forbid.
-        /// Costs two draws per trial per side.
+        /// Costs two draws per trial per side. Fewer trials narrow the spread and raise the draws:
+        /// 10 reads v13's draw share on an even match (29.6%) closer than 14. Must stay above
+        /// QuickMaxExpectedGoals.
         /// </summary>
-        public int QuickV12GoalTrials { get; set; } = 14;
+        public int QuickV13GoalTrials { get; set; } = 10;
 
         // --- Quick resolver instructions (R17) ---
         // Percent points added to a side's expected goals (GoalsFor) or to its OPPONENT's
         // (GoalsAgainst) by each instruction axis, indexed like the enums (low · neutral · high).
-        // The middle entry is the identity. Each extreme is the v12 engine's own shift against a
+        // The middle entry is the identity. Each extreme is the v13 engine's own shift against a
         // neutral side of the same club (1,000 matches a setting, FastModelHarnessTests) as a
-        // share of a side's ~1.58 goals: e.g. attacking concedes +0.62 a match, +39%.
-        public int[] QuickMentalityGoalsForPercent { get; set; } = { -1, 0, 10 };
-        public int[] QuickMentalityGoalsAgainstPercent { get; set; } = { -8, 0, 39 };
-        public int[] QuickPressingGoalsForPercent { get; set; } = { -14, 0, -6 };
-        public int[] QuickPressingGoalsAgainstPercent { get; set; } = { 9, 0, 18 };
-        public int[] QuickTempoGoalsForPercent { get; set; } = { -7, 0, 13 };
-        public int[] QuickTempoGoalsAgainstPercent { get; set; } = { -3, 0, 4 };
-        public int[] QuickWidthGoalsForPercent { get; set; } = { 4, 0, -7 };
-        public int[] QuickWidthGoalsAgainstPercent { get; set; } = { 3, 0, 5 };
+        // share of a side's ~1.21 goals: e.g. attacking concedes +0.35 a match, +29%.
+        public int[] QuickMentalityGoalsForPercent { get; set; } = { -27, 0, 22 };
+        public int[] QuickMentalityGoalsAgainstPercent { get; set; } = { -20, 0, 29 };
+        public int[] QuickPressingGoalsForPercent { get; set; } = { -10, 0, -5 };
+        public int[] QuickPressingGoalsAgainstPercent { get; set; } = { 12, 0, 41 };
+        public int[] QuickTempoGoalsForPercent { get; set; } = { 10, 0, -3 };
+        public int[] QuickTempoGoalsAgainstPercent { get; set; } = { 0, 0, 4 };
+        public int[] QuickWidthGoalsForPercent { get; set; } = { -9, 0, 1 };
+        public int[] QuickWidthGoalsAgainstPercent { get; set; } = { -4, 0, -4 };
 
         // --- Quick resolver styles and formations (real-match R24) ---
-        // The other R16 axes read the same way, each extreme the v12 engine's single-axis shift
+        // The other R16 axes read the same way, each extreme the v13 engine's single-axis shift
         // against a neutral side of the same club (1,000 matches a setting, FastModelHarnessTests).
         // DefensiveLine has five levels, Normal (index 2) the identity. Single axes do not add up to
-        // a style (the axes interact: Man-oriented press concedes +156%, far more than its parts),
+        // a style (the axes interact: on v13 Tiki-taka concedes +442%, far more than its parts),
         // so a side whose instructions are nearest a catalogue style reads that style's own entry
         // below, plus the single-axis difference of any axis it changed from the preset.
-        public int[] QuickPassingDirectnessGoalsForPercent { get; set; } = { -3, 0, 6 };
-        public int[] QuickPassingDirectnessGoalsAgainstPercent { get; set; } = { 1, 0, 5 };
-        public int[] QuickBuildUpGoalsForPercent { get; set; } = { -5, 0, 0 };
-        public int[] QuickBuildUpGoalsAgainstPercent { get; set; } = { 4, 0, 3 };
-        public int[] QuickFinalThirdGoalsForPercent { get; set; } = { 4, 0, 4 };
-        public int[] QuickFinalThirdGoalsAgainstPercent { get; set; } = { 0, 0, -2 };
-        public int[] QuickShotSelectionGoalsForPercent { get; set; } = { -11, 0, 11 };
-        public int[] QuickShotSelectionGoalsAgainstPercent { get; set; } = { -3, 0, -2 };
-        public int[] QuickDribbleGoalsForPercent { get; set; } = { 5, 0, -6 };
-        public int[] QuickDribbleGoalsAgainstPercent { get; set; } = { 8, 0, 6 };
-        public int[] QuickOnBallLostGoalsForPercent { get; set; } = { 5, 0, 3 };
-        public int[] QuickOnBallLostGoalsAgainstPercent { get; set; } = { 11, 0, 68 };
-        public int[] QuickOnBallWonGoalsForPercent { get; set; } = { 0, 0, 4 };
-        public int[] QuickOnBallWonGoalsAgainstPercent { get; set; } = { 18, 0, -7 };
-        public int[] QuickLineOfEngagementGoalsForPercent { get; set; } = { -1, 0, 0 };
-        public int[] QuickLineOfEngagementGoalsAgainstPercent { get; set; } = { 23, 0, -11 };
-        public int[] QuickDefensiveLineGoalsForPercent { get; set; } = { 0, -4, 0, -3, 1 };
-        public int[] QuickDefensiveLineGoalsAgainstPercent { get; set; } = { -32, -18, 0, 52, 97 };
-        public int[] QuickMarkingSchemeGoalsForPercent { get; set; } = { -2, 0, -5 };
-        public int[] QuickMarkingSchemeGoalsAgainstPercent { get; set; } = { -26, 0, 38 };
-        public int[] QuickPressDirectionGoalsForPercent { get; set; } = { 13, 0, -8 };
-        public int[] QuickPressDirectionGoalsAgainstPercent { get; set; } = { 204, 0, -5 };
+        public int[] QuickPassingDirectnessGoalsForPercent { get; set; } = { -2, 0, -3 };
+        public int[] QuickPassingDirectnessGoalsAgainstPercent { get; set; } = { 2, 0, 7 };
+        public int[] QuickBuildUpGoalsForPercent { get; set; } = { -2, 0, 0 };
+        public int[] QuickBuildUpGoalsAgainstPercent { get; set; } = { 5, 0, 4 };
+        public int[] QuickFinalThirdGoalsForPercent { get; set; } = { -10, 0, -3 };
+        public int[] QuickFinalThirdGoalsAgainstPercent { get; set; } = { -3, 0, 4 };
+        public int[] QuickShotSelectionGoalsForPercent { get; set; } = { -8, 0, 14 };
+        public int[] QuickShotSelectionGoalsAgainstPercent { get; set; } = { 5, 0, 1 };
+        public int[] QuickDribbleGoalsForPercent { get; set; } = { 0, 0, 2 };
+        public int[] QuickDribbleGoalsAgainstPercent { get; set; } = { 4, 0, -2 };
+        public int[] QuickOnBallLostGoalsForPercent { get; set; } = { 16, 0, -2 };
+        public int[] QuickOnBallLostGoalsAgainstPercent { get; set; } = { -2, 0, 36 };
+        public int[] QuickOnBallWonGoalsForPercent { get; set; } = { -7, 0, -6 };
+        public int[] QuickOnBallWonGoalsAgainstPercent { get; set; } = { 11, 0, -5 };
+        public int[] QuickLineOfEngagementGoalsForPercent { get; set; } = { -19, 0, 20 };
+        public int[] QuickLineOfEngagementGoalsAgainstPercent { get; set; } = { 15, 0, 9 };
+        public int[] QuickDefensiveLineGoalsForPercent { get; set; } = { -25, -14, 0, 10, 12 };
+        public int[] QuickDefensiveLineGoalsAgainstPercent { get; set; } = { -35, -26, 0, 44, 100 };
+        public int[] QuickMarkingSchemeGoalsForPercent { get; set; } = { -4, 0, -5 };
+        public int[] QuickMarkingSchemeGoalsAgainstPercent { get; set; } = { -16, 0, 37 };
+        public int[] QuickPressDirectionGoalsForPercent { get; set; } = { 7, 0, -14 };
+        public int[] QuickPressDirectionGoalsAgainstPercent { get; set; } = { 106, 0, 394 };
 
         /// <summary>
         /// Indexed by <see cref="Tactics.PlayingStyle"/> value; Balanced (0) is the identity. Each style in
         /// its first suggested formation against Balanced 4-3-3 (2,000 matches, FastModelStyleHarnessTests),
-        /// as a share of a side's goals, less that formation's own entry so the two add back up.
+        /// as a share of the fast model's own even-match goals (QuickV13BaseGoals), fitted so that the
+        /// style's goals and win/draw/loss shares land on the engine's, less that formation's own entry
+        /// so the two add back up.
         /// </summary>
-        public int[] QuickStyleGoalsForPercent { get; set; } = { 0, -18, 22, 51, 23, -2, 2, 3, 24, -2, -13, -12, -5, -11, 29 };
-        public int[] QuickStyleGoalsAgainstPercent { get; set; } = { 0, 3, 69, 100, 44, -10, 17, 25, 69, 43, -18, 20, 13, -21, 138 };
+        public int[] QuickStyleGoalsForPercent { get; set; } = { 0, -42, 18, 33, 38, -42, 0, -9, 13, -14, -16, -28, -28, -37, 48 };
+        public int[] QuickStyleGoalsAgainstPercent { get; set; } = { 0, 411, 118, 136, 101, -3, -4, 11, 46, -10, -16, 9, 12, 0, 180 };
 
         /// <summary>
         /// Indexed by <see cref="Tactics.Formation"/> value; 4-3-3 (index 0, the engine-identity shape) is 0.
         /// A Balanced side in each shape against Balanced 4-3-3 (1,000 matches, FastModelStyleHarnessTests).
         /// </summary>
         public int[] QuickFormationGoalsForPercent { get; set; } =
-            { 0, 9, 7, -1, 16, 2, -19, -19, 11, -5, 5, 5, -5, -17, -10, 4, 2, 6, -5, -7, -5, 22, 25, 4, -23, 3, -15 };
+            { 0, -24, -22, -12, -20, -1, -30, -30, -37, -11, -27, 1, -29, -19, -20, -10, -7, -23, -34, -30, -15, -38, -37, -4, -33, -8, -34 };
         public int[] QuickFormationGoalsAgainstPercent { get; set; } =
-            { 0, -4, 19, -19, -17, 18, -20, -20, -10, -16, -2, -4, -24, -11, -26, 0, -5, -20, -5, -3, 4, -8, -9, -10, -24, 8, -19 };
+            { 0, -16, -17, -12, -26, -2, -7, -7, -25, -2, -14, -10, -22, -14, -16, 11, 1, -16, -24, -19, -7, -26, -27, -14, -9, -1, -24 };
     }
 
     /// <summary>
