@@ -906,25 +906,18 @@ namespace Sim.Core.Match.Analysis
                 value < low ? low : (value > high ? high : value);
 
             /// <summary>
-            /// Integer square root (Newton). No Math.Sqrt: this number reaches a rating. Started from
-            /// the power of two just above the root rather than from the value itself, which takes
-            /// the same floor in a third of the divisions (issue #189: generation time).
+            /// Integer square root, exact: the floating root is only the first guess and the two loops
+            /// settle the floor in integers, so no rounding of it can reach a rating. Newton's divisions
+            /// cost 2% of a watched match (issue #215: generation time).
             /// </summary>
             private static int Sqrt(long value)
             {
                 if (value <= 0) return 0;
 
-                int bits = 0;
-                while (bits < 62 && value >> bits != 0) bits += 2;
-                long x = 1L << (bits / 2);
-                long y = (x + value / x) / 2;
-                while (y < x)
-                {
-                    x = y;
-                    y = (x + value / x) / 2;
-                }
-
-                return (int)x;
+                long root = (long)System.Math.Sqrt(value);
+                while (root * root > value) root--;
+                while ((root + 1) * (root + 1) <= value) root++;
+                return (int)root;
             }
         }
 

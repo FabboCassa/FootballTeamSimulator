@@ -149,11 +149,11 @@ namespace Sim.Core.Match.Movement
                 // which the side defending is a side still strung out from attacking.
                 tx = U.ClampX(tx);
                 ty = U.ClampY(ty);
-                if (!sprint && !_attacking[side] && !_keeper[k]
-                    && U.DistanceSq(_px[k], _py[k], tx, ty) > (long)_recoveryU * _recoveryU)
-                    sprint = true;
+                bool recovering = !sprint && !_attacking[side] && !_keeper[k]
+                    && U.DistanceSq(_px[k], _py[k], tx, ty) > (long)_recoveryU * _recoveryU;
+                if (recovering) sprint = true;
 
-                _sim.Steer(k, tx, ty, sprint);
+                _sim.SteerVia(k, tx, ty, sprint, -1, -1, run: recovering);
 
                 // And at a kickoff the halfway line is a WALL: the referee holds the whistle until both
                 // sides are in their own half (Law 8), so nobody may move INTO the other one — the

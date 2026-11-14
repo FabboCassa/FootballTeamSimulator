@@ -89,8 +89,12 @@ namespace Sim.Core.Config
         /// decimetres. Positive takes the line away and closes the man against the touchline (the
         /// trap of a side that forces play outside); negative stands him inside, so the side lets
         /// the flank be and waits for the ball to come back into the middle.
+        /// Forcing inside -32 since issue #215 (was -40): with the movement speed model a tiki-taka side
+        /// (which forces inside) kept 70.6% of the ball at -40 (fingerprint band 58-70) and 800 passes a
+        /// team (600-780); at -32 66.9% and 779, with the ball won back in the wide channels 16.9% forcing
+        /// inside against 19.3% neutral (1024 fixtures).
         /// </summary>
-        public int[] PressDirectionTouchlineDm { get; set; } = { 40, 0, -40 };
+        public int[] PressDirectionTouchlineDm { get; set; } = { 40, 0, -32 };
 
         /// <summary>
         /// Percent on how far a man goes to press a ball out wide (past PressWideThresholdDm from
